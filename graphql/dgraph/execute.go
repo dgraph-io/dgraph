@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
 
-	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/edgraph"
 	"github.com/dgraph-io/dgraph/v24/graphql/schema"
 	"github.com/dgraph-io/dgraph/v24/x"

@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
 
-	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/dgraph/v24/graphql/authorization"
 	"github.com/dgraph-io/dgraph/v24/graphql/dgraph"

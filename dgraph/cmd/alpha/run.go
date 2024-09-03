@@ -49,7 +49,7 @@ import (
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/edgraph"
 	"github.com/dgraph-io/dgraph/v24/ee"
 	"github.com/dgraph-io/dgraph/v24/ee/audit"

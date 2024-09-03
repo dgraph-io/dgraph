@@ -12,7 +12,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.2
 	github.com/blevesearch/bleve/v2 v2.4.2
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dgraph-io/dgo/v230 v230.0.2-0.20240808090644-31c0382ae95d
+	github.com/dgraph-io/dgo/v240 v240.0.0-rc1
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
@@ -157,7 +157,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	google.golang.org/api v0.194.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240822170219-fc7c04adadcd // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240827150818-7e3bb234dfed // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.67.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

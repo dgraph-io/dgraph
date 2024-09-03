@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/dgraph/v24/ee/acl"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
