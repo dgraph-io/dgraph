@@ -37,7 +37,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/chunker"
 	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/dgraph/v24/lex"

@@ -32,8 +32,8 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/conn"
 	"github.com/dgraph-io/dgraph/v24/posting"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"

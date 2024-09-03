@@ -60,8 +60,8 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bo "github.com/dgraph-io/badger/v4/options"
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/ristretto/z"
 )
 

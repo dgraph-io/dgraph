@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/dgraph/v24/query"
 	"github.com/dgraph-io/dgraph/v24/x"
