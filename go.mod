@@ -12,7 +12,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.2
 	github.com/blevesearch/bleve/v2 v2.4.2
 	github.com/dgraph-io/badger/v4 v4.2.0
-	github.com/dgraph-io/dgo/v240 v240.0.0-rc1
+	github.com/dgraph-io/dgo/v240 v240.0.0
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
