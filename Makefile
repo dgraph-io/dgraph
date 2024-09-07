@@ -61,7 +61,7 @@ install:
 
 .PHONY: install_oss oss_install
 install_oss oss_install:
-	$(MAKE) BUILD_TAGS=oss install
+	$(MAKE) BUILD_TAGS=oss,jemalloc install
 
 .PHONY: uninstall
 uninstall:
