@@ -1734,12 +1734,16 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 					continue
 				}
 			}
-			var predicateName string
+
+			// Wrapping predicateName with angle brackets ensures that if the predicate contains any non-Latin letters,
+			// the unique query will not fail. Additionally,
+			// it helps ensure that non-Latin predicate names are properly formatted
+			// during the automatic serialization of a structure into JSON.
+			predicateName := fmt.Sprintf("<%v>", pred.Predicate)
 			if pred.Lang != "" {
-				predicateName = fmt.Sprintf(pred.Predicate+"@%v", pred.Lang)
-			} else {
-				predicateName = pred.Predicate
+				predicateName = fmt.Sprintf("%v@%v", predicateName, pred.Lang)
 			}
+
 			uniqueVarMapKey := encodeIndex(gmuIndex, rdfIndex)
 			queryVar := fmt.Sprintf("__dgraph_uniquecheck_%v__", uniqueVarMapKey)
 			// Now, we add a query for a predicate to check if the value of the
@@ -1790,7 +1794,7 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 			if qc.req.Query == "" {
 				qc.req.Query = "{" + buildQuery.String()
 			} else {
-				qc.req.Query = strings.TrimRight(qc.req.Query, "}")
+				qc.req.Query = strings.TrimSuffix(qc.req.Query, "}")
 				qc.req.Query = qc.req.Query + buildQuery.String()
 			}
 		}

@@ -759,3 +759,63 @@ func TestConcurrency2(t *testing.T) {
 		}
 	}
 }
+
+func TestUniqueUpsertWithoutSpaceInQuery(t *testing.T) {
+	schema := `email: string @unique  @index(exact)  .`
+	dg := setUpDgraph(t)
+	require.NoError(t, dg.SetupSchema(schema))
+	rdf := `_:a <email> "test@test.io"  .`
+	query := `{UNIQS as var(func: eq(userEmail, "test@test.io")) { count: count(uid) }}`
+
+	r := &api.Request{
+		Query: query,
+		Mutations: []*api.Mutation{
+			{
+				Cond:      "@if(eq(len(UNIQS), 0))",
+				SetNquads: []byte(rdf),
+			},
+		},
+		CommitNow: true,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	txn := dg.NewTxn()
+	_, err := txn.Do(ctx, r)
+	require.NoError(t, err)
+
+	txn = dg.NewTxn()
+	_, err = txn.Do(ctx, r)
+
+	require.Error(t, err)
+}
+
+func TestUniqueWithNonLatinPredName(t *testing.T) {
+	dg := setUpDgraph(t)
+	require.NoError(t, dg.SetupSchema(`<ईमेल#$%&>: string @unique @lang @index(exact)  .`))
+
+	rdf := `_:a <ईमेल#$%&@hi> "example@email.com" .	`
+	_, err := dg.Mutate(&api.Mutation{
+		SetNquads: []byte(rdf),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+	query := `{
+		q(func: eq(<ईमेल#$%&>@hi, "example@email.com")) {
+			<ईमेल#$%&>@hi
+		}
+    }`
+	resp, err := dg.Query(query)
+	require.NoError(t, err)
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Json, &data))
+	require.Equal(t, data["q"].([]interface{})[0].(map[string]interface{})["ईमेल#$%&@hi"].(string), "example@email.com")
+
+	_, err = dg.Mutate(&api.Mutation{
+		SetNquads: []byte(rdf),
+		CommitNow: true,
+	})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value [example@email.com] for predicate [ईमेल#$%&]")
+}
