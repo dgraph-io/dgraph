@@ -64,7 +64,7 @@ endif
 
 # jemalloc stuff
 HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a && echo "jemalloc")
-JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2"
+JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2"
 
 # go install variables
 HAS_SHA256SUM = $(shell which sha256sum)
@@ -107,7 +107,7 @@ jemalloc:
 		echo "Downloading jemalloc" ; \
 		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
 		tar xjf ./jemalloc.tar.bz2 ; \
-		cd jemalloc-5.2.1 ; \
+		cd jemalloc-5.3.0 ; \
 		./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'; \
 		make ; \
 		if [ "$(USER_ID)" = "0" ]; then \
@@ -117,4 +117,3 @@ jemalloc:
 			sudo make install ; \
 		fi \
 	fi
-

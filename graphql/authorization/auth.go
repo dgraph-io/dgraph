@@ -29,11 +29,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
-	"gopkg.in/square/go-jose.v2"
 
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
