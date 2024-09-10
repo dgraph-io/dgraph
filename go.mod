@@ -65,7 +65,7 @@ require (
 	golang.org/x/term v0.24.0
 	golang.org/x/text v0.18.0
 	golang.org/x/tools v0.24.0
-	google.golang.org/grpc v1.66.0
+	google.golang.org/grpc v1.66.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
