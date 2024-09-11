@@ -53,7 +53,7 @@ require (
 	github.com/twpayne/go-geom v1.5.7
 	github.com/viterin/vek v0.4.2
 	github.com/xdg/scram v1.0.5
-	go.etcd.io/etcd/raft/v3 v3.5.15
+	go.etcd.io/etcd/raft/v3 v3.5.16
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.27.0
