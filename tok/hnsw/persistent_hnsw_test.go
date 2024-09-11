@@ -47,7 +47,7 @@ var createpersistentHNSWTests = []createpersistentHNSWTest[float64]{
 		efConstruction:    1,
 		pred:              "a",
 		indexType:         "b",
-		expectedIndexType: Euclidian,
+		expectedIndexType: Euclidean,
 		floatBits:         64,
 	},
 	{
@@ -55,8 +55,8 @@ var createpersistentHNSWTests = []createpersistentHNSWTest[float64]{
 		efSearch:          1,
 		efConstruction:    1,
 		pred:              "a",
-		indexType:         Euclidian,
-		expectedIndexType: Euclidian,
+		indexType:         Euclidean,
+		expectedIndexType: Euclidean,
 		floatBits:         64,
 	},
 	{
@@ -275,7 +275,7 @@ var flatPhs = []*persistentHNSW[float64]{
 		vecKey:         ConcatStrings("0-a", VecKeyword),
 		vecDead:        ConcatStrings("0-a", VecDead),
 		floatBits:      64,
-		simType:        GetSimType[float64](Euclidian, 64),
+		simType:        GetSimType[float64](Euclidean, 64),
 		nodeAllEdges:   make(map[uint64][][]uint64),
 	},
 	{

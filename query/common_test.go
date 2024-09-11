@@ -380,7 +380,7 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// 		alive
 	// 		user_profile
 	// 	}
-	// 	user_profile                   : float32vector @index(hnsw(metric:"euclidian")) .`
+	// 	user_profile                   : float32vector @index(hnsw(metric:"euclidean")) .`
 	// } else {
 	// 	ts = testSchema + `type User {
 	// 		name
