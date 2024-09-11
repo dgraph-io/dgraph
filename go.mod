@@ -23,7 +23,7 @@ require (
 	github.com/docker/docker v27.2.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/getsentry/sentry-go v0.28.1
+	github.com/getsentry/sentry-go v0.29.0
 	github.com/go-jose/go-jose/v4 v4.0.4
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gogo/protobuf v1.3.2
@@ -37,7 +37,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/graph-gophers/graphql-go v1.5.0
-	github.com/hashicorp/vault/api v1.14.0
+	github.com/hashicorp/vault/api v1.15.0
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v1.5.0
@@ -53,18 +53,18 @@ require (
 	github.com/twpayne/go-geom v1.5.7
 	github.com/viterin/vek v0.4.2
 	github.com/xdg/scram v1.0.5
-	go.etcd.io/etcd/raft/v3 v3.5.15
+	go.etcd.io/etcd/raft/v3 v3.5.16
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.27.0
-	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e
+	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/mod v0.21.0
 	golang.org/x/net v0.29.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.25.0
 	golang.org/x/term v0.24.0
 	golang.org/x/text v0.18.0
-	golang.org/x/tools v0.24.0
+	golang.org/x/tools v0.25.0
 	google.golang.org/grpc v1.66.1
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -75,13 +75,13 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/blevesearch/bleve_index_api v1.1.11 // indirect
+	github.com/blevesearch/bleve_index_api v1.1.12 // indirect
 	github.com/blevesearch/geo v0.1.20 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect
 	github.com/blevesearch/segment v0.9.1 // indirect
 	github.com/blevesearch/snowballstem v0.9.0 // indirect
 	github.com/blevesearch/upsidedown_store_api v1.0.2 // indirect
-	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chewxy/math32 v1.11.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -99,7 +99,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
-	github.com/google/pprof v0.0.0-20240903155634-a8630aee4ab9 // indirect
+	github.com/google/pprof v0.0.0-20240910150728-a0b0bb1d4134 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
