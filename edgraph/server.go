@@ -458,8 +458,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
-		// recreate the admin account after a drop data operation
-		InitializeAcl(nil)
+
+		// Since all data has been dropped, we need to recreate the admin account in the respective namespace.
+		upsertGuardianAndGroot(nil, namespace)
 		return empty, err
 	}
 
