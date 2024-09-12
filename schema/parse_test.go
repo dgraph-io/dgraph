@@ -53,7 +53,7 @@ name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
 coordinates: float32vector .
-indexvector: float32vector @index(hnsw(metric:"euclidian")) .
+indexvector: float32vector @index(hnsw(metric:"euclidean")) .
 `
 
 func TestSchema(t *testing.T) {
@@ -90,7 +90,7 @@ func TestSchema(t *testing.T) {
 					Options: []*pb.OptionPair{
 						{
 							Key:   "metric",
-							Value: "euclidian",
+							Value: "euclidean",
 						},
 					},
 				},

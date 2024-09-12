@@ -1154,7 +1154,7 @@ func searchValidation(
 //
 //	<searchArg> := <searchType> [ <openParen> <searchOptions> <closeParen> ]
 //
-//	hnsw(metric: euclidian, exponent: 6)
+//	hnsw(metric: euclidean, exponent: 6)
 //	hnsw
 //	hnsw(exponent: 3)
 func parseSearchType(searchArg string) string {
@@ -1175,7 +1175,7 @@ func parseSearchType(searchArg string) string {
 // <searchOption> := <OptionName><COLON><SPACE><OptionValue>
 // Examples:
 //
-//	hnsw(metric: euclidian, exponent: 6)
+//	hnsw(metric: euclidean, exponent: 6)
 //	hnsw
 //	hnsw(exponent: 3)
 func parseSearchOptions(searchArg string) (map[string]string, bool) {

@@ -34,7 +34,7 @@ import (
 
 const (
 	testSchema = `
-	project_discription_v: float32vector @index(hnsw(exponent: "5", metric: "euclidian")) .`
+	project_discription_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
 
 	testSchemaWithoutIndex = `project_discription_v: float32vector .`
 )

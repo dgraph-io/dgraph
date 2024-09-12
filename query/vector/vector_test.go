@@ -412,7 +412,7 @@ func TestInvalidVectorIndex(t *testing.T) {
 
 func TestVectorIndexRebuildWhenChange(t *testing.T) {
 	dropPredicate("vtest")
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
 
 	numVectors := 9000
 	vectorSize := 100
@@ -421,7 +421,7 @@ func TestVectorIndexRebuildWhenChange(t *testing.T) {
 	require.NoError(t, addTriplesToCluster(randomVectors))
 
 	startTime := time.Now()
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "6", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "6", "euclidean"))
 
 	dur := time.Since(startTime)
 	// Easy way to check that the index was actually rebuilt
@@ -430,7 +430,7 @@ func TestVectorIndexRebuildWhenChange(t *testing.T) {
 
 func TestVectorInQueryArgument(t *testing.T) {
 	dropPredicate("vtest")
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
 
 	numVectors := 100
 	vectorSize := 4
@@ -456,7 +456,7 @@ func TestVectorInQueryArgument(t *testing.T) {
 func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
 	testVectorMutationSameLength(t)
 	dropPredicate("vtest")
 
@@ -489,7 +489,7 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 			DropAttr: pred,
 		})
 		dropPredicate(pred)
-		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 		numVectors := 10000
 		vectorSize := 1000
 
@@ -514,8 +514,8 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidian"))
-	testVectorMutationDiffrentLength(t, "can not compute euclidian distance on vectors of different lengths")
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
+	testVectorMutationDiffrentLength(t, "can not compute euclidean distance on vectors of different lengths")
 	dropPredicate("vtest")
 
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "cosine"))
@@ -532,7 +532,7 @@ func TestVectorReindex(t *testing.T) {
 
 	pred := "vtest"
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 
 	numVectors := 100
 	vectorSize := 4
@@ -555,7 +555,7 @@ func TestVectorReindex(t *testing.T) {
 	_, err := querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
 	require.NotNil(t, err)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 	vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
 	require.NoError(t, err)
 	require.Contains(t, allVectors, vector)
@@ -605,7 +605,7 @@ func TestVectorDelete(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 
 	numVectors := 1000
 	rdf, vectors := generateRandomVectors(numVectors, 10, "vtest")
@@ -661,7 +661,7 @@ func TestVectorUpdate(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 
 	numVectors := 1000
 	rdf, vectors := generateRandomVectors(1000, 10, "vtest")
@@ -694,7 +694,7 @@ func TestVectorUpdate(t *testing.T) {
 func TestVectorWithoutQuote(t *testing.T) {
 	pred := "test-ve"
 	dropPredicate(pred)
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 
 	setJson := `
 {
@@ -738,7 +738,7 @@ func TestVectorTwoTxnWithoutCommit(t *testing.T) {
 	pred := "vtest"
 	dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidian"))
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
 
 	rdf, vectors := generateRandomVectors(5, 5, "vtest")
 	txn1 := client.NewTxn()

@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	Euclidian            = "euclidian"
+	Euclidean            = "euclidean"
 	Cosine               = "cosine"
 	DotProd              = "dotproduct"
 	plError              = "\nerror fetching posting list for data key: "
@@ -121,8 +121,8 @@ func cosineSimilarity[T c.Float](a, b []T, floatBits int) (T, error) {
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
-func euclidianDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
-	return applyDistanceFunction(a, b, floatBits, "euclidian distance", vek32.Distance, vek.Distance)
+func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
+	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
 }
 
 // Used for distance, since shorter distance is better
@@ -225,8 +225,8 @@ type SimilarityType[T c.Float] struct {
 
 func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	switch {
-	case indexType == Euclidian:
-		return SimilarityType[T]{indexType: Euclidian, distanceScore: euclidianDistanceSq[T],
+	case indexType == Euclidean:
+		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
 	case indexType == Cosine:
 		return SimilarityType[T]{indexType: Cosine, distanceScore: cosineSimilarity[T],
@@ -235,7 +235,7 @@ func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 		return SimilarityType[T]{indexType: DotProd, distanceScore: dotProduct[T],
 			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T]}
 	default:
-		return SimilarityType[T]{indexType: Euclidian, distanceScore: euclidianDistanceSq[T],
+		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
 	}
 }
