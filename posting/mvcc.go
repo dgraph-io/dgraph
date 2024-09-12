@@ -347,7 +347,6 @@ func ResetCache() {
 	globalCache.Lock()
 	globalCache.items = make(map[string]*CachePL)
 	globalCache.Unlock()
-	lCache.Clear()
 }
 
 func NewCachePL() *CachePL {
