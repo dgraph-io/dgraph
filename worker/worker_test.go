@@ -172,12 +172,12 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 func TestVectorSchema(t *testing.T) {
 	dg := initClusterTest(t, `
 	neighbour: [uid] .
-	vectortest: float32vector @index(hnsw(metric: "euclidian")) .`)
+	vectortest: float32vector @index(hnsw(metric: "euclidean")) .`)
 
 	resp, err := testutil.RetryQuery(dg, "schema {}")
 	require.NoError(t, err)
 
-	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidian\")"],"index_specs":[{"name":"hnsw","options":[{"key":"metric","value":"euclidian"}]}]}]`))
+	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidean\")"],"index_specs":[{"name":"hnsw","options":[{"key":"metric","value":"euclidean"}]}]}]`))
 }
 
 func TestProcessTask(t *testing.T) {

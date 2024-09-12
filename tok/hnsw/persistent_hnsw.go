@@ -91,11 +91,11 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 		}
 
 		if !o.Specifies(EfConstructionOpt) {
-			o.SetOpt(EfConstructionOpt, 6*exponent)
+			o.SetOpt(EfConstructionOpt, 50*exponent)
 		}
 
 		if !o.Specifies(EfSearchOpt) {
-			o.SetOpt(EfConstructionOpt, 9*exponent)
+			o.SetOpt(EfSearchOpt, 30*exponent)
 		}
 	}
 
@@ -104,11 +104,11 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 	if err != nil {
 		return err
 	}
-	ph.efConstruction, _, err = opt.GetOpt(o, EfConstructionOpt, 18)
+	ph.efConstruction, _, err = opt.GetOpt(o, EfConstructionOpt, 150)
 	if err != nil {
 		return err
 	}
-	ph.efSearch, _, err = opt.GetOpt(o, EfSearchOpt, 27)
+	ph.efSearch, _, err = opt.GetOpt(o, EfSearchOpt, 90)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 		}
 		ph.simType = okSimType
 	} else {
-		ph.simType = SimilarityType[T]{indexType: Euclidian, distanceScore: euclidianDistanceSq[T],
+		ph.simType = SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
 	}
 	return nil

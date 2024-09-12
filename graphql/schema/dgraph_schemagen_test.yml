@@ -148,7 +148,7 @@ schemas:
         dt4: DateTime @search(by: [day])
         dt5: DateTime @search(by: [hour])
         vf1: [Float!] @embedding @search(by: ["hnsw"])
-        vf2: [Float!] @embedding @search(by: ["hnsw(exponent: 4, metric: euclidian)"])
+        vf2: [Float!] @embedding @search(by: ["hnsw(exponent: 4, metric: euclidean)"])
         vf3: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
         vf4: [Float!] @embedding @search(by: ["hnsw(metric: dotproduct, exponent: 4)"])
         e: E @search
@@ -219,7 +219,7 @@ schemas:
       X.dt4: dateTime @index(day) .
       X.dt5: dateTime @index(hour) .
       X.vf1: float32vector @index(hnsw) .
-      X.vf2: float32vector @index(hnsw(exponent: "4", metric: "euclidian")) .
+      X.vf2: float32vector @index(hnsw(exponent: "4", metric: "euclidean")) .
       X.vf3: float32vector @index(hnsw(metric: "cosine")) .
       X.vf4: float32vector @index(hnsw(exponent: "4", metric: "dotproduct")) .
       X.e: string @index(hash) .

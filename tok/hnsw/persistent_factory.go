@@ -81,7 +81,7 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 		AddIntOption(EfConstructionOpt).
 		AddIntOption(EfSearchOpt)
 	getSimFunc := func(optValue string) (any, error) {
-		if optValue != Euclidian && optValue != Cosine && optValue != DotProd {
+		if optValue != Euclidean && optValue != Cosine && optValue != DotProd {
 			return nil, errors.New(fmt.Sprintf("Can't create a vector index for %s", optValue))
 		}
 		return GetSimType[T](optValue, hf.floatBits), nil
