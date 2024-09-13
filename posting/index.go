@@ -243,7 +243,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	if hasCountIndex {
 		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
-			return emptyCountParams, ErrTsTooOld
+			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
 	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
@@ -505,7 +505,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	case hasCountIndex:
 		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
-			return val, false, emptyCountParams, ErrTsTooOld
+			return val, false, emptyCountParams, errors.Wrapf(ErrTsTooOld, "Add mutation count index")
 		}
 	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
