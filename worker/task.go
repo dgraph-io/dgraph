@@ -854,7 +854,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				len := pl.Length(args.q.ReadTs, 0)
 				if len == -1 {
-					return posting.ErrTsTooOld
+					return errors.Wrapf(posting.ErrTsTooOld, "While reading posting list length")
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold[0]) {

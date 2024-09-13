@@ -195,7 +195,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 2 {
+			if elem := m[hash]; currTs-elem >= 10 {
 				// Key not present or Key present but last roll up was more than 2 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
