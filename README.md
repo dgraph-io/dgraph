@@ -33,7 +33,7 @@ Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/main/query-languag
 
 ## Status
 
-Dgraph is at [version v23.1.0][rel] and is production-ready. Apart from the vast open source community, it is being used in
+Dgraph is at [version v24.0.2][rel] and is production-ready. Apart from the vast open source community, it is being used in
 production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser). A hosted version of Dgraph is available at [https://cloud.dgraph.io](https://cloud.dgraph.io).
 
