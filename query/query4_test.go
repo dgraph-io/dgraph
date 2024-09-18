@@ -1850,3 +1850,64 @@ func TestBigFloatConnectingFilters(t *testing.T) {
 	expectedRes := `{"data":{"me":[{"uid":"0x666"}]}}`
 	require.JSONEq(t, js, expectedRes)
 }
+
+func TestMultiplesSortingOrderWithVarAndPredicate(t *testing.T) {
+	s1 := testSchema + "\n" + `type Hostel {
+              hosteslName: String! 
+              sections
+              }
+
+             type Section {
+             section_id
+              hostel
+               }
+			hosteslName: string @index(exact) .
+			section_id: string @index(exact) .
+			sections: [uid] @count .
+			hostel:uid .` + "\n"
+
+	setSchema(s1)
+	triples := `
+		_:hostel1 <name> "Hostel Alpha" .
+		_:hostel1 <sections> _:section1 .
+		_:hostel1 <sections> _:section2 .
+
+		_:section1 <section_id> "S1" .
+		_:section2 <section_id> "S2" .
+
+		_:hostel2 <name> "Hostel Beta" .
+		_:hostel2 <sections> _:section3 .
+
+		_:section3 <section_id> "S3" .
+
+		_:hostel3 <name> "Hostel Gamma" .
+		_:hostel3 <sections> _:section4 .
+		_:hostel3 <sections> _:section5 .
+		_:hostel3 <sections> _:section6 .
+
+		_:section4 <section_id> "S4" .
+		_:section5 <section_id> "S5" .
+		_:section6 <section_id> "S6" .
+	`
+	addTriplesToCluster(triples)
+
+	query := `{
+			var(func: has(name)) {
+				SECTIONS_COUNT as count(sections)
+			}
+
+			allHostels(func: has(name), orderdesc:
+			val(SECTIONS_COUNT), orderasc: name) {
+				uid
+				name
+				sections {
+				section_id
+				}
+				totalSections: val(SECTIONS_COUNT)
+			}
+			}`
+
+	// should return error
+	_, err := processQuery(context.Background(), t, query)
+	require.ErrorContains(t, err, "Val() is not allowed in multiple sorting. Got: [SECTIONS_COUNT]")
+}
