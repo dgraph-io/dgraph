@@ -1433,7 +1433,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 					n as name
 					a as age
 				}
-				q2(func: uid(f), orderdesc: val(a), orderasc: name) {
+				q2(func: uid(f), orderdesc: val(a)) {
 					name
 					val(n)
 					val(a)
