@@ -145,6 +145,8 @@ they form a Raft group and provide synchronous replication.
 		Flag("percentage",
 			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
 				"PstoreBlockCache,PstoreIndexCache)").
+		Flag("keep-updates",
+			"Should carry updates in cache or not (bool)").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -633,6 +635,7 @@ func run() {
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	cachePercentage := cache.GetString("percentage")
+	keepUpdates := cache.GetBool("keep-updates")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
@@ -655,6 +658,7 @@ func run() {
 		WALDir:          Alpha.Conf.GetString("wal"),
 		CacheMb:         totalCache,
 		CachePercentage: cachePercentage,
+		KeepUpdates:     keepUpdates,
 
 		MutationsMode:      worker.AllowMutations,
 		AuthToken:          security.GetString("token"),
@@ -782,7 +786,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore, postingListCacheSize)
+	posting.Init(worker.State.Pstore, postingListCacheSize, keepUpdates)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 

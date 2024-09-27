@@ -105,8 +105,9 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
 func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vt.delegate.StartTs)
 
-	if value == nil {
-		//fmt.Println("DIFF", val, err, nil, badger.ErrKeyNotFound)
+	// When the posting is deleted, we find the key in the badger, but no postings in it. This should also
+	// return ErrKeyNotFound as that is what we except in the later functions.
+	if value == nil || len(value.Postings) == 0 {
 		return nil, ErrNoValue
 	}
 
