@@ -153,6 +153,8 @@ func TestPostingListRead(t *testing.T) {
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, []byte{}, BitEmptyPosting, 6))
 	require.NoError(t, writer.Flush())
+	// Delete the key from cache as we have just updated it
+	globalCache.Del(z.MemHash(key))
 	assertLength(7, 0)
 
 	addEdgeToUID(t, attr, 1, 4, 7, 8)
@@ -165,6 +167,7 @@ func TestPostingListRead(t *testing.T) {
 	writer = NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, data, BitCompletePosting, 10))
 	require.NoError(t, writer.Flush())
+	globalCache.Del(z.MemHash(key))
 	assertLength(10, 0)
 
 	addEdgeToUID(t, attr, 1, 5, 11, 12)

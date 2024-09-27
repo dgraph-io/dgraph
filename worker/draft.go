@@ -358,7 +358,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		// TODO: Revisit this when we work on posting cache. Clear entire cache.
 		// We don't want to drop entire cache, just due to one namespace.
-		// posting.ResetCache()
+		posting.ResetCache()
 		return nil
 	}
 
