@@ -133,6 +133,8 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		return err
 	}
 
+	RemoveCacheFor(key)
+
 	globalCache.Lock()
 	val, ok := globalCache.items[string(key)]
 	if ok {
@@ -344,9 +346,20 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func ResetCache() {
+	if lCache != nil {
+		lCache.Clear()
+	}
 	globalCache.Lock()
 	globalCache.items = make(map[string]*CachePL)
 	globalCache.Unlock()
+}
+
+// RemoveCacheFor will delete the list corresponding to the given key.
+func RemoveCacheFor(key []byte) {
+	// TODO: investigate if this can be done by calling Set with a nil value.
+	if lCache != nil {
+		lCache.Del(key)
+	}
 }
 
 func NewCachePL() *CachePL {
@@ -537,7 +550,33 @@ func ShouldGoInCache(pk x.ParsedKey) bool {
 	return (!pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type"))
 }
 
+func PostingListCacheEnabled() bool {
+	return lCache != nil
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	if PostingListCacheEnabled() {
+		l, ok := lCache.Get(key)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			l.RLock()
+			if l.mutationMap != nil {
+				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+				for ts, pl := range l.mutationMap {
+					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			l.RUnlock()
+			return lCopy, nil
+		}
+	}
+
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
@@ -602,6 +641,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		}
 		l.RUnlock()
 		globalCache.Unlock()
+	}
+
+	if PostingListCacheEnabled() {
+		lCache.Set(key, l, 0)
 	}
 
 	return l, nil
