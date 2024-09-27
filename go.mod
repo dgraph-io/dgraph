@@ -1,5 +1,7 @@
 module github.com/dgraph-io/dgraph/v24
 
+replace github.com/dgraph-io/ristretto => /home/harshil/Projects/ristretto/
+
 go 1.22.6
 
 require (
