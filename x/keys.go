@@ -307,7 +307,7 @@ func (p ParsedKey) String() string {
 	} else if p.IsCountOrCountRev() {
 		return fmt.Sprintf("UID: %v, Attr: %v, IsCount/Ref: true, Count: %v", p.Uid, p.Attr, p.Count)
 	} else {
-		return fmt.Sprintf("UID: %v, Attr: %v, Data key", p.Uid, p.Attr)
+		return fmt.Sprintf("UID: %v, Attr: %v, Data key, prefix; %v, byte: %v", p.Uid, p.Attr, p.bytePrefix, p.ByteType)
 	}
 }
 

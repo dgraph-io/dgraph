@@ -1417,6 +1417,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
+	//fmt.Println("====Query Resp", qc.req.Query, qc.req.StartTs, qc.req, string(resp.Json))
 	return resp, gqlErrs
 }
 

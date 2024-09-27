@@ -218,11 +218,28 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 		return err
 	}
 
-	x.AssertTrue(plist != nil)
 	if err = plist.addMutation(ctx, txn, edge); err != nil {
 		return err
 	}
-	ostats.Record(ctx, x.NumEdges.M(1))
+
+	//mpost := NewPosting(edge)
+	//mpost.StartTs = txn.StartTs
+	//if mpost.PostingType != pb.Posting_REF {
+	//	edge.ValueId = fingerprintEdge(edge)
+	//	mpost.Uid = edge.ValueId
+	//}
+
+	////fmt.Println("ADDING MUTATION", plist.mutationMap, key, edge)
+	//txn.addConflictKey(indexConflicKey(key, edge))
+
+	//plist.Lock()
+	//defer plist.Unlock()
+	//if err != plist.updateMutationLayer(mpost, false) {
+	//	return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
+	//		hex.EncodeToString(plist.key), mpost)
+	//}
+
+	//ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
 }
 
