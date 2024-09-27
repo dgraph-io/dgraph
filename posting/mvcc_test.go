@@ -19,6 +19,7 @@ package posting
 import (
 	"context"
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -90,12 +91,66 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 	// Read key at timestamp 10. Make sure cache is not updated by this, as there is a later read.
 	l, err := GetNoStore(key, 10)
 	require.NoError(t, err)
-	require.Equal(t, l.mutationMap.len(), 0)
+	require.Equal(t, l.mutationMap.listLen(10), 0)
 
 	// Read at 20 should show the value
 	l1, err := GetNoStore(key, 20)
 	require.NoError(t, err)
-	require.Equal(t, l1.mutationMap.len(), 1)
+	require.Equal(t, l1.mutationMap.listLen(20), 1)
+}
+
+func BenchmarkTestCache(b *testing.B) {
+	//lCache, _ = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
+	//	// Use 5% of cache memory for storing counters.
+	//	NumCounters: int64(1000 * (1 << 20) * 0.05 * 2),
+	//	MaxCost:     int64(1000 * (1 << 20) * 0.95),
+	//	BufferItems: 64,
+	//	Metrics:     true,
+	//	Cost: func(val *List) int64 {
+	//		return 0
+	//	},
+	//})
+
+	attr := x.GalaxyAttr("cache")
+	keys := make([][]byte, 0)
+	N := 10000
+	txn := Oracle().RegisterStartTs(1)
+
+	for i := 1; i < N; i++ {
+		key := x.DataKey(attr, uint64(i))
+		keys = append(keys, key)
+		edge := &pb.DirectedEdge{
+			ValueId: 2,
+			Attr:    attr,
+			Entity:  1,
+			Op:      pb.DirectedEdge_SET,
+		}
+		l, _ := GetNoStore(key, 1)
+		// No index entries added here as we do not call AddMutationWithIndex.
+		txn.cache.SetIfAbsent(string(l.key), l)
+		err := l.addMutation(context.Background(), txn, edge)
+		if err != nil {
+			panic(err)
+		}
+	}
+	txn.Update()
+	writer := NewTxnWriter(pstore)
+	err := txn.CommitToDisk(writer, 2)
+	if err != nil {
+		panic(err)
+	}
+	writer.Flush()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			key := keys[rand.Intn(N-1)]
+			_, err = getNew(key, pstore, math.MaxUint64)
+			if err != nil {
+				panic(err)
+			}
+		}
+	})
+
 }
 
 func TestRollupTimestamp(t *testing.T) {
@@ -154,6 +209,8 @@ func TestPostingListRead(t *testing.T) {
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, []byte{}, BitEmptyPosting, 6))
 	require.NoError(t, writer.Flush())
+	// Delete the key from cache as we have just updated it
+	memoryLayer.Del(z.MemHash(key))
 	assertLength(7, 0)
 
 	addEdgeToUID(t, attr, 1, 4, 7, 8)
@@ -166,6 +223,7 @@ func TestPostingListRead(t *testing.T) {
 	writer = NewTxnWriter(pstore)
 	require.NoError(t, writer.SetAt(key, data, BitCompletePosting, 10))
 	require.NoError(t, writer.Flush())
+	memoryLayer.Del(z.MemHash(key))
 	assertLength(10, 0)
 
 	addEdgeToUID(t, attr, 1, 5, 11, 12)
