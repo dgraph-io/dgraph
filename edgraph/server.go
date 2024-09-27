@@ -246,6 +246,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
 	}
+
 	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err
@@ -1578,7 +1579,7 @@ func parseRequest(ctx context.Context, qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*dql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu, qc)
+			gmu, err := ParseMutationObject(mu, qc.graphql)
 			if err != nil {
 				return err
 			}
@@ -1929,12 +1930,12 @@ func hasPoormansAuth(ctx context.Context) error {
 	return nil
 }
 
-// parseMutationObject tries to consolidate fields of the api.Mutation into the
+// ParseMutationObject tries to consolidate fields of the api.Mutation into the
 // corresponding field of the returned dql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // dql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the dql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, error) {
+func ParseMutationObject(mu *api.Mutation, isGraphql bool) (*dql.Mutation, error) {
 	res := &dql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
@@ -1978,7 +1979,7 @@ func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, err
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del, qc); err != nil {
+	if err := validateNQuads(res.Set, res.Del, isGraphql); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -2014,8 +2015,7 @@ func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
 	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
-
+func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -2030,7 +2030,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
-		if err := validateForGraphql(nq, qc.graphql); err != nil {
+		if err := validateForGraphql(nq, isGraphql); err != nil {
 			return err
 		}
 	}
@@ -2045,7 +2045,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateForGraphql(nq, qc.graphql); err != nil {
+		if err := validateForGraphql(nq, isGraphql); err != nil {
 			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
