@@ -31,9 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/worker"
 )
 
 var (

@@ -14,9 +14,9 @@
 package cmd
 
 import (
-	acl "github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/ee/audit"
-	"github.com/dgraph-io/dgraph/ee/backup"
+	acl "github.com/dgraph-io/dgraph/v24/ee/acl"
+	"github.com/dgraph-io/dgraph/v24/ee/audit"
+	"github.com/dgraph-io/dgraph/v24/ee/backup"
 )
 
 func init() {

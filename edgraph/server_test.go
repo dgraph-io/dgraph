@@ -26,11 +26,11 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/chunker"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {

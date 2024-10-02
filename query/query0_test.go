@@ -27,9 +27,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphtest"
+	"github.com/dgraph-io/dgraph/v24/dql"
 )
 
 func TestGetUID(t *testing.T) {
@@ -3545,6 +3545,46 @@ func TestEqFilterWithoutIndex(t *testing.T) {
 	js := processQueryNoErr(t, test.query)
 	require.JSONEq(t, js, test.result)
 
+}
+
+func TestCondCondition(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected string
+	}{
+		{
+			`Test Cond`,
+			`{
+			   var(func: uid(0x3ff)) {
+                             columnUid as uid
+                             ~DispatchBoard.column { o as order }
+                             cards as count(~DispatchBoard.column)
+                           }
+
+			   var() {
+                             lastPosition as max(val(o))
+                             cardCount as max(val(cards))
+                             nextPosition as math(cond(cardCount==0, 0, lastPosition+1))
+                           }
+
+                           q(func: uid(columnUid)) {
+                             val(lastPosition)
+                             val(cardCount)
+                             val(nextPosition)
+                             uid
+                           }
+			 }`,
+			`{"data":{"q": [{"uid": "0x3ff"}] }}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := processQueryNoErr(t, tc.query)
+			require.JSONEq(t, tc.expected, result)
+		})
+	}
 }
 
 func TestMatchingWithPagination(t *testing.T) {

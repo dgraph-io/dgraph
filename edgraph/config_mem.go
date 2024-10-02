@@ -7,7 +7,7 @@
 package edgraph
 
 import (
-	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/v24/worker"
 )
 
 // #include <unistd.h>

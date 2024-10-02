@@ -24,9 +24,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func getUserAndGroup(conf *viper.Viper) (userId string, groupId string, err error) {

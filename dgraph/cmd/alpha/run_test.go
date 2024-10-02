@@ -44,14 +44,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/query"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type defaultContextKey int

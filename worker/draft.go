@@ -41,13 +41,13 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/conn"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/raftwal"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -1236,7 +1236,7 @@ func (n *node) Run() {
 
 			timer.Start()
 			_, span := otrace.StartSpan(n.ctx, "Alpha.RunLoop",
-				otrace.WithSampler(otrace.ProbabilitySampler(0.001)))
+				otrace.WithSampler(otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio"))))
 
 			if rd.SoftState != nil {
 				groups().triggerMembershipSync()

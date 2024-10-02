@@ -39,14 +39,15 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -326,7 +327,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string) error {
 }
 
 func hasTestFiles(pkg string) bool {
-	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
+	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/v24/", "", 1)
 	dir = filepath.Join(*baseDir, dir)
 
 	hasTests := false
@@ -529,7 +530,7 @@ func (o *outputCatcher) Print() {
 		if dur.dur < time.Second {
 			continue
 		}
-		pkg := strings.Replace(dur.pkg, "github.com/dgraph-io/dgraph/", "", 1)
+		pkg := strings.Replace(dur.pkg, "github.com/dgraph-io/dgraph/v24/", "", 1)
 		fmt.Printf("[%6s]%s[%d] %s took: %s\n", dur.ts.Sub(baseTs).Round(time.Second),
 			strings.Repeat("   ", int(dur.threadId)), dur.threadId, pkg,
 			dur.dur.Round(time.Second))
@@ -547,14 +548,14 @@ type task struct {
 
 // for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
-	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/", "", 1)
+	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/v24/", "", 1)
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
 func getPackages() []task {
 	has := func(list []string, in string) bool {
 		for _, l := range list {
-			if len(l) > 0 && strings.Contains(in+"/", "github.com/dgraph-io/dgraph/"+l+"/") {
+			if len(l) > 0 && strings.Contains(in+"/", "github.com/dgraph-io/dgraph/v24/"+l+"/") {
 				return true
 			}
 		}
@@ -664,13 +665,13 @@ func removeAllTestContainers() {
 			err := cli.ContainerStop(ctxb, c.ID, o)
 			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
-			err = cli.ContainerRemove(ctxb, c.ID, types.ContainerRemoveOptions{})
+			err = cli.ContainerRemove(ctxb, c.ID, container.RemoveOptions{})
 			fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
 		}(c)
 	}
 	wg.Wait()
 
-	networks, err := cli.NetworkList(ctxb, types.NetworkListOptions{})
+	networks, err := cli.NetworkList(ctxb, network.ListOptions{})
 	x.Check(err)
 	for _, n := range networks {
 		if strings.HasPrefix(n.Name, getGlobalPrefix()) {
@@ -994,7 +995,7 @@ func run() error {
 	}()
 	signal.Notify(sdCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/...")
+	// pkgs, err := packages.Load(nil, "github.com/dgraph-io/dgraph/v24/...")
 	go func() {
 		defer close(testCh)
 		valid := getPackages()

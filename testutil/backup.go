@@ -31,12 +31,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgraph/ee"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgraph/v24/ee"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // KeyFile is set to the path of the file containing the key. Used for testing purposes only.

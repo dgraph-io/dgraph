@@ -43,22 +43,22 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/dql"
-	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/telemetry"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/chunker"
+	"github.com/dgraph-io/dgraph/v24/conn"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	gqlSchema "github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/query"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/telemetry"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/types/facets"
+	"github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (
@@ -246,6 +246,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
 	}
+
 	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err
@@ -458,8 +459,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
 		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
-		// recreate the admin account after a drop data operation
-		InitializeAcl(nil)
+
+		// Since all data has been dropped, we need to recreate the admin account in the respective namespace.
+		upsertGuardianAndGroot(nil, namespace)
 		return empty, err
 	}
 
@@ -555,6 +557,7 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
+
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
@@ -1344,7 +1347,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		graphql:  isGraphQL,
 		gqlField: req.gqlField,
 	}
-	if rerr = parseRequest(qc); rerr != nil {
+	if rerr = parseRequest(ctx, qc); rerr != nil {
 		return
 	}
 
@@ -1565,7 +1568,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 }
 
 // parseRequest parses the incoming request
-func parseRequest(qc *queryContext) error {
+func parseRequest(ctx context.Context, qc *queryContext) error {
 	start := time.Now()
 	defer func() {
 		qc.latency.Parsing = time.Since(start)
@@ -1577,7 +1580,7 @@ func parseRequest(qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*dql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := parseMutationObject(mu, qc)
+			gmu, err := ParseMutationObject(mu, qc.graphql)
 			if err != nil {
 				return err
 			}
@@ -1585,7 +1588,7 @@ func parseRequest(qc *queryContext) error {
 			qc.gmuList = append(qc.gmuList, gmu)
 		}
 
-		if err := addQueryIfUnique(qc); err != nil {
+		if err := addQueryIfUnique(ctx, qc); err != nil {
 			return err
 		}
 
@@ -1698,19 +1701,38 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 }
 
 // addQueryIfUnique adds dummy queries in the request for checking whether predicate is unique in the db
-func addQueryIfUnique(qc *queryContext) error {
+func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
 
-	ctx := context.WithValue(context.Background(), schema.IsWrite, false)
+	ctx := context.WithValue(qctx, schema.IsWrite, false)
+	namespace, err := x.ExtractNamespace(ctx)
+	if err != nil {
+		// It's okay to ignore this here. If namespace is not set, it could mean either there is no
+		// authorization or it's trying to be bypassed. So the namespace is either 0 or the mutation would fail.
+		glog.Errorf("Error while extracting namespace, assuming default %s", err)
+		namespace = 0
+	}
+	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	var buildQuery strings.Builder
 	for gmuIndex, gmu := range qc.gmuList {
 		for rdfIndex, pred := range gmu.Set {
-			predSchema, _ := schema.State().Get(ctx, x.NamespaceAttr(pred.Namespace, pred.Predicate))
-			if !predSchema.Unique {
-				continue
+			if isGalaxyQuery {
+				// The caller should make sure that the directed edges contain the namespace we want
+				// to insert into.
+				namespace = pred.Namespace
+			}
+			if pred.Predicate != "dgraph.xid" {
+				// [TODO] Don't check if it's dgraph.xid. It's a bug as this node might not be aware
+				// of the schema for the given predicate. This is a bug issue for dgraph.xid hence
+				// we are bypassing it manually until the bug is fixed.
+				predSchema, ok := schema.State().Get(ctx, x.NamespaceAttr(namespace, pred.Predicate))
+				if !ok || !predSchema.Unique {
+					continue
+				}
 			}
 			var predicateName string
 			if pred.Lang != "" {
@@ -1909,12 +1931,12 @@ func hasPoormansAuth(ctx context.Context) error {
 	return nil
 }
 
-// parseMutationObject tries to consolidate fields of the api.Mutation into the
+// ParseMutationObject tries to consolidate fields of the api.Mutation into the
 // corresponding field of the returned dql.Mutation. For example, the 3 fields,
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // dql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the dql.Mutation#Del field.
-func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, error) {
+func ParseMutationObject(mu *api.Mutation, isGraphql bool) (*dql.Mutation, error) {
 	res := &dql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
@@ -1958,7 +1980,7 @@ func parseMutationObject(mu *api.Mutation, qc *queryContext) (*dql.Mutation, err
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del, qc); err != nil {
+	if err := validateNQuads(res.Set, res.Del, isGraphql); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -1994,8 +2016,7 @@ func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
 	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
-
+func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -2010,7 +2031,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
-		if err := validateForGraphql(nq, qc.graphql); err != nil {
+		if err := validateForGraphql(nq, isGraphql); err != nil {
 			return err
 		}
 	}
@@ -2025,7 +2046,7 @@ func validateNQuads(set, del []*api.NQuad, qc *queryContext) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateForGraphql(nq, qc.graphql); err != nil {
+		if err := validateForGraphql(nq, isGraphql); err != nil {
 			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes

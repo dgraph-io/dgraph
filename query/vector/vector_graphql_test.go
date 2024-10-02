@@ -24,7 +24,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -191,7 +191,7 @@ func TestVectorSchema(t *testing.T) {
 	require.Error(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
 }
 
-func TestVectorGraphQlEuclidianIndexMutationAndQuery(t *testing.T) {
+func TestVectorGraphQlEuclideanIndexMutationAndQuery(t *testing.T) {
 	require.NoError(t, client.DropAll())
 	hc, err := dc.HTTPClient()
 	require.NoError(t, err)

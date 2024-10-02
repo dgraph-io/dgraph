@@ -20,9 +20,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/ee/acl"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/ee/acl"
+	"github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func generateJWT(namespace uint64, userId string, groupIds []string, expiry int64) string {
@@ -115,10 +115,11 @@ func TestGetRefreshJwt(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	worker.Config.AclJwtAlg = jwt.SigningMethodHS256
 	x.WorkerConfig.AclJwtAlg = jwt.SigningMethodHS256
 	x.WorkerConfig.AclPublicKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
-
 	worker.Config.AccessJwtTtl = 20 * time.Second
 	worker.Config.RefreshJwtTtl = 20 * time.Second
 	worker.Config.AclSecretKey = x.Sensitive("6ABBAA2014CFF00289D20D20DA296F67")
+	m.Run()
 }

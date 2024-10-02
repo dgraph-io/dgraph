@@ -20,9 +20,9 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/edgraph"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {

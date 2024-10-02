@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type nameType struct {
@@ -52,8 +52,9 @@ age:int .
 name: string .
  address: string .
 <http://scalar.com/helloworld/> : string .
+amount: bigfloat .
 coordinates: float32vector .
-indexvector: float32vector @index(hnsw(metric:"euclidian")) .
+indexvector: float32vector @index(hnsw(metric:"euclidean")) .
 `
 
 func TestSchema(t *testing.T) {
@@ -75,6 +76,10 @@ func TestSchema(t *testing.T) {
 			Predicate: x.GalaxyAttr("age"),
 			ValueType: pb.Posting_INT,
 		}},
+		{x.GalaxyAttr("amount"), &pb.SchemaUpdate{
+			Predicate: x.GalaxyAttr("amount"),
+			ValueType: pb.Posting_BIGFLOAT,
+		}},
 		{x.GalaxyAttr("coordinates"), &pb.SchemaUpdate{
 			Predicate: x.GalaxyAttr("coordinates"),
 			ValueType: pb.Posting_VFLOAT,
@@ -90,7 +95,7 @@ func TestSchema(t *testing.T) {
 					Options: []*pb.OptionPair{
 						{
 							Key:   "metric",
-							Value: "euclidian",
+							Value: "euclidean",
 						},
 					},
 				},
@@ -101,6 +106,10 @@ func TestSchema(t *testing.T) {
 	typ, err := State().TypeOf(x.GalaxyAttr("age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
+
+	typ, err = State().TypeOf(x.GalaxyAttr("amount"))
+	require.NoError(t, err)
+	require.Equal(t, types.BigFloatID, typ)
 
 	typ, err = State().TypeOf(x.GalaxyAttr("coordinates"))
 	require.NoError(t, err)

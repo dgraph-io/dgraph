@@ -18,19 +18,26 @@ package types
 
 import (
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
 )
 
-const nanoSecondsInSec = 1000000000
-const dateFormatY = "2006" // time.longYear
-const dateFormatYM = "2006-01"
-const dateFormatYMD = "2006-01-02"
-const dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
-const dateTimeFormat = "2006-01-02T15:04:05"
+const (
+	dateFormatY       = "2006" // time.longYear
+	dateFormatYM      = "2006-01"
+	dateFormatYMD     = "2006-01-02"
+	dateFormatYMDZone = "2006-01-02 15:04:05 -0700 MST"
+	dateTimeFormat    = "2006-01-02T15:04:05"
+)
+
+const (
+	nanoSecondsInSec  = 1000000000
+	BigFloatPrecision = 200
+)
 
 // Note: These ids are stored in the posting lists to indicate the type
 // of the data. The order *cannot* be changed without breaking existing
@@ -65,6 +72,8 @@ const (
 	VFloatID = TypeID(pb.Posting_VFLOAT)
 	// UndefinedID represents the undefined type.
 	UndefinedID = TypeID(100)
+	// BigFloatID represents the arbitrary precision type.
+	BigFloatID = TypeID(pb.Posting_BIGFLOAT)
 )
 
 var typeNameMap = map[string]TypeID{
@@ -78,6 +87,7 @@ var typeNameMap = map[string]TypeID{
 	"uid":           UidID,
 	"string":        StringID,
 	"password":      PasswordID,
+	"bigfloat":      BigFloatID,
 	"float32vector": VFloatID,
 }
 
@@ -112,6 +122,8 @@ func (t TypeID) Name() string {
 		return "string"
 	case PasswordID:
 		return "password"
+	case BigFloatID:
+		return "bigfloat"
 	case VFloatID:
 		return "float32vector"
 	}
@@ -177,6 +189,11 @@ func ValueForType(id TypeID) Val {
 	case DateTimeID:
 		var t time.Time
 		return Val{DateTimeID, &t}
+
+	case BigFloatID:
+		var b big.Float
+		b.SetPrec(BigFloatPrecision)
+		return Val{BigFloatID, &b}
 
 	case StringID:
 		var s string

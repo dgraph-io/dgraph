@@ -2,10 +2,10 @@ In Dgraph, we have the abiltity to specify an @index directive for the type
 vfloat. Here, we want to expand that capability to allow us to specify something
 like:
 
-myAttribute @index("hnsw-euclidian","maxNeighbors":"5","maxLevels":"5","exponent":"6")
+myAttribute @index("hnsw-euclidean","maxNeighbors":"5","maxLevels":"5","exponent":"6")
 
 Roughly, this should be read as:
-I want to specify an HNSW-type vector index using euclidian distance as a metric
+I want to specify an HNSW-type vector index using euclidean distance as a metric
 with maxNeighbors, maxLevels, and exponent being declared as written, and with
 all other parameters taking on default values.  (In the case of specifying an
 exponent, this should affect the defaults for the other options, but that is
@@ -20,10 +20,10 @@ types". Hence, we get the AllowedOptions class, which specifies a set of
 named options and corresponding parsers for the given name.
 
 Now, if we want to populate an Options instance based on the content of
-myAttribute @index(hnsw(metric:"euclidian",exponent:"6")),
+myAttribute @index(hnsw(metric:"euclidean",exponent:"6")),
 
 we collect the key-value pairs:
-   "metric":"euclidian"
+   "metric":"euclidean"
    "exponent":"6"
 
 And we can now invoke:

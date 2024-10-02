@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -1169,7 +1169,7 @@ func searchValidation(
 //
 //	<searchArg> := <searchType> [ <openParen> <searchOptions> <closeParen> ]
 //
-//	hnsw(metric: euclidian, exponent: 6)
+//	hnsw(metric: euclidean, exponent: 6)
 //	hnsw
 //	hnsw(exponent: 3)
 func parseSearchType(searchArg string) string {
@@ -1190,7 +1190,7 @@ func parseSearchType(searchArg string) string {
 // <searchOption> := <OptionName><COLON><SPACE><OptionValue>
 // Examples:
 //
-//	hnsw(metric: euclidian, exponent: 6)
+//	hnsw(metric: euclidean, exponent: 6)
 //	hnsw
 //	hnsw(exponent: 3)
 func parseSearchOptions(searchArg string) (map[string]string, bool) {
@@ -1466,6 +1466,94 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
 	return errs
+}
+
+// defaultDirectiveValidation will prevents use of @default on:
+// Types with @remote directive
+// Fields of type ID
+// Fields that are not scalar types (Int, Float, String, Boolean, DateTime) or an enum
+// Fields that are list types (ie `[String])
+// Fields with @id, @custom, @lambda
+func defaultDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.Sensitive) gqlerror.List {
+	if typ.Directives.ForName(remoteDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on a @remote type",
+			typ.Name, field.Name)}
+	}
+	if !isScalar(field.Type.Name()) && sch.Types[field.Type.Name()].Kind != ast.Enum {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with non-scalar type %s",
+			typ.Name, field.Name, field.Type.Name())}
+	}
+	if field.Type.Elem != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with list type [%s]",
+			typ.Name, field.Name, field.Type.Name())}
+	}
+	if field.Directives.ForName(idDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with @id directive",
+			typ.Name, field.Name)}
+	}
+	if isID(field) {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with type ID",
+			typ.Name, field.Name)}
+	}
+	if field.Directives.ForName(customDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with @custom directive",
+			typ.Name, field.Name)}
+	}
+	if field.Directives.ForName(lambdaDirective) != nil {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: cannot use @default directive on field with @lambda directive",
+			typ.Name, field.Name)}
+	}
+	for _, arg := range dir.Arguments {
+		fieldType := field.Type.Name()
+		value := arg.Value.Children.ForName("value").Raw
+		if value == "$now" && fieldType != "DateTime" {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @default directive provides value \"%s\" which cannot be used with %s",
+				typ.Name, field.Name, value, fieldType)}
+		}
+		if fieldType == "Int" {
+			if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+				return []*gqlerror.Error{gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: @default directive provides value \"%s\" which cannot be used with %s",
+					typ.Name, field.Name, value, fieldType)}
+			}
+		}
+		if fieldType == "Float" {
+			if _, err := strconv.ParseFloat(value, 64); err != nil {
+				return []*gqlerror.Error{gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s: @default directive provides value \"%s\" which cannot be used with %s",
+					typ.Name, field.Name, value, fieldType)}
+			}
+		}
+		if fieldType == "Boolean" && value != "true" && value != "false" {
+			return []*gqlerror.Error{gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @default directive provides value \"%s\" which cannot be used with %s",
+				typ.Name, field.Name, value, fieldType)}
+		}
+	}
+	return nil
 }
 
 func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.List {

@@ -22,10 +22,10 @@ import (
 
 	"github.com/golang/glog"
 
-	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
+	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/edgraph"
+	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
 )
 
 type loginInput struct {

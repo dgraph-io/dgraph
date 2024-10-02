@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/testutil"
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
@@ -50,7 +50,7 @@ func TestAccessWithCaCert(t *testing.T) {
 func TestCurlAccessWithCaCert(t *testing.T) {
 	// curl over plaintext should fail
 	curlPlainTextArgs := []string{
-		"https://" + testutil.SockAddrHttp + "/alter",
+		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlPlainTextArgs, &testutil.CurlFailureConfig{
@@ -59,7 +59,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 	})
 
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

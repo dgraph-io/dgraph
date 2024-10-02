@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

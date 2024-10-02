@@ -40,10 +40,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // socket addr = IP address and port number
@@ -54,14 +54,18 @@ var (
 	TestDataDirectory string
 	Instance          string
 	MinioInstance     string
+	// SockAddr is the address to the gRPC endpoint of the alpha used during tests with localhost
+	SockAddrLocalhost string
 	// SockAddr is the address to the gRPC endpoint of the alpha used during tests.
 	SockAddr string
 	// SockAddrHttp is the address to the HTTP of alpha used during tests.
-	SockAddrHttp string
+	SockAddrHttp          string
+	SockAddrHttpLocalhost string
 	// SockAddrZero is the address to the gRPC endpoint of the zero used during tests.
 	SockAddrZero string
 	// SockAddrZeroHttp is the address to the HTTP endpoint of the zero used during tests.
-	SockAddrZeroHttp string
+	SockAddrZeroHttp      string
+	SockAddrZeroLocalhost string
 
 	// SockAddrAlpha4 is the address to the gRPC endpoint of the alpha4 used during restore tests.
 	SockAddrAlpha4 string
@@ -104,10 +108,13 @@ func init() {
 	TestDataDirectory = os.Getenv("TEST_DATA_DIRECTORY")
 	MinioInstance = ContainerAddr("minio", 9001)
 	Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
+	SockAddrLocalhost = ContainerAddrLocalhost("alpha1", 9080)
 	SockAddr = ContainerAddr("alpha1", 9080)
 	SockAddrHttp = ContainerAddr("alpha1", 8080)
+	SockAddrHttpLocalhost = ContainerAddrLocalhost("alpha1", 8080)
 
 	SockAddrZero = ContainerAddr("zero1", 5080)
+	SockAddrZeroLocalhost = ContainerAddrLocalhost("zero1", 5080)
 	SockAddrZeroHttp = ContainerAddr("zero1", 6080)
 
 	SockAddrAlpha4 = ContainerAddr("alpha4", 9080)

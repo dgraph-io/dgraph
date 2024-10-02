@@ -18,19 +18,14 @@ package posting
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"sync"
-	"time"
-
-	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok/index"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -41,7 +36,6 @@ const (
 var (
 	pstore *badger.DB
 	closer *z.Closer
-	lCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -51,35 +45,9 @@ func Init(ps *badger.DB, cacheSize int64) {
 	go x.MonitorMemoryMetrics(closer)
 
 	// Initialize cache.
-	if cacheSize == 0 {
-		return
-	}
-
-	var err error
-	lCache, err = ristretto.NewCache(&ristretto.Config{
-		// Use 5% of cache memory for storing counters.
-		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
-		MaxCost:     int64(float64(cacheSize) * 0.95),
-		BufferItems: 64,
-		Metrics:     true,
-		Cost: func(val interface{}) int64 {
-			return 0
-		},
-	})
-	x.Check(err)
-	go func() {
-		m := lCache.Metrics
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			// Record the posting list cache hit ratio
-			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-		}
-	}()
 }
 
 func UpdateMaxCost(maxCost int64) {
-	lCache.UpdateMaxCost(maxCost)
 }
 
 // Cleanup waits until the closer has finished processing.
@@ -143,9 +111,17 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr erro
 }
 
 func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
-	val, err := pl.ValueWithLockHeld(vc.delegate.startTs)
-	rval = val.Value
-	return rval, err
+	value := pl.findStaticValue(vc.delegate.startTs)
+
+	if value == nil {
+		return nil, ErrNoValue
+	}
+
+	if hasDeleteAll(value.Postings[0]) || value.Postings[0].Op == Del {
+		return nil, ErrNoValue
+	}
+
+	return value.Postings[0].Value, nil
 }
 
 func NewViLocalCache(delegate *LocalCache) *viLocalCache {
@@ -242,8 +218,7 @@ func (lc *LocalCache) Find(pred []byte, filter func([]byte) bool) (uint64, error
 			}
 
 			if filter(vals.Value.([]byte)) {
-				result.Uids = append(result.Uids, pk.Uid)
-				break
+				return pk.Uid, nil
 			}
 
 			continue
@@ -281,22 +256,21 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 }
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
+	skey := string(key)
 	getNewPlistNil := func() (*List, error) {
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
 			return getNew(key, pstore, lc.startTs)
 		}
+		if l, ok := lc.plists[skey]; ok {
+			return l, nil
+		}
 		return nil, nil
 	}
 
 	if l, err := getNewPlistNil(); l != nil || err != nil {
 		return l, err
-	}
-
-	skey := string(key)
-	if pl := lc.getNoStore(skey); pl != nil {
-		return pl, nil
 	}
 
 	var pl *List
@@ -321,6 +295,77 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	}
 	lc.RUnlock()
 	return lc.SetIfAbsent(skey, pl), nil
+}
+
+// GetSinglePosting retrieves the cached version of the first item in the list associated with the
+// given key. This is used for retrieving the value of a scalar predicats.
+func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
+	// This would return an error if there is some data in the local cache, but we couldn't read it.
+	getListFromLocalCache := func() (*pb.PostingList, error) {
+		lc.RLock()
+
+		pl := &pb.PostingList{}
+		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			err := pl.Unmarshal(delta)
+			lc.RUnlock()
+			return pl, err
+		}
+
+		l := lc.plists[string(key)]
+		lc.RUnlock()
+
+		if l != nil {
+			return l.StaticValue(lc.startTs)
+		}
+
+		return nil, nil
+	}
+
+	getPostings := func() (*pb.PostingList, error) {
+		pl, err := getListFromLocalCache()
+		// If both pl and err are empty, that means that there was no data in local cache, hence we should
+		// read the data from badger.
+		if pl != nil || err != nil {
+			return pl, err
+		}
+
+		pl = &pb.PostingList{}
+		txn := pstore.NewTransactionAt(lc.startTs, false)
+		defer txn.Discard()
+
+		item, err := txn.Get(key)
+		if err != nil {
+			return nil, err
+		}
+
+		err = item.Value(func(val []byte) error {
+			return pl.Unmarshal(val)
+		})
+
+		return pl, err
+	}
+
+	pl, err := getPostings()
+	if err == badger.ErrKeyNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter and remove STAR_ALL and OP_DELETE Postings
+	idx := 0
+	for _, postings := range pl.Postings {
+		if hasDeleteAll(postings) {
+			return nil, nil
+		}
+		if postings.Op != Del {
+			pl.Postings[idx] = postings
+			idx++
+		}
+	}
+	pl.Postings = pl.Postings[:idx]
+	return pl, nil
 }
 
 // Get retrieves the cached version of the list associated with the given key.

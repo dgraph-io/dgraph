@@ -28,10 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
+	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/graphql/test"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // Tests that result completion and GraphQL error propagation are working properly.

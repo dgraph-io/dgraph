@@ -19,13 +19,14 @@ package query
 import (
 	"bytes"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type aggregator struct {
@@ -119,12 +120,10 @@ func applyAdd(a, b, c *types.Val) error {
 	switch vBase {
 	case INT:
 		aVal, bVal := a.Value.(int64), b.Value.(int64)
-
 		if (aVal > 0 && bVal > math.MaxInt64-aVal) ||
 			(aVal < 0 && bVal < math.MinInt64-aVal) {
 			return ErrorIntOverflow
 		}
-
 		c.Value = aVal + bVal
 
 	case FLOAT:
@@ -148,6 +147,11 @@ func applyAdd(a, b, c *types.Val) error {
 		}
 		c.Value = cVal
 
+	case BIGFLOAT:
+		aVal, bVal := a.Value.(big.Float), b.Value.(big.Float)
+		aVal.Add(&aVal, &bVal)
+		c.Value = aVal
+
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func +", a.Tid)
 	}
@@ -159,12 +163,10 @@ func applySub(a, b, c *types.Val) error {
 	switch vBase {
 	case INT:
 		aVal, bVal := a.Value.(int64), b.Value.(int64)
-
 		if (bVal < 0 && aVal > math.MaxInt64+bVal) ||
 			(bVal > 0 && aVal < math.MinInt64+bVal) {
 			return ErrorIntOverflow
 		}
-
 		c.Value = aVal - bVal
 
 	case FLOAT:
@@ -187,6 +189,11 @@ func applySub(a, b, c *types.Val) error {
 			cVal[i] = aVal[i] - bVal[i]
 		}
 		c.Value = cVal
+
+	case BIGFLOAT:
+		aVal, bVal := a.Value.(big.Float), b.Value.(big.Float)
+		aVal.Sub(&aVal, &bVal)
+		c.Value = aVal
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func -", a.Tid)
@@ -211,7 +218,6 @@ func applyMul(a, b, c *types.Val) error {
 		aVal, bVal := a.Value.(int64), b.Value.(int64)
 		c.Tid = types.IntID
 		c.Value = aVal * bVal
-
 		if aVal == 0 || bVal == 0 {
 			return nil
 		} else if c.Value.(int64)/bVal != aVal {
@@ -253,6 +259,11 @@ func applyMul(a, b, c *types.Val) error {
 			cVal[i] = aVal[i] * float32(bVal)
 		}
 		c.Tid = types.VFloatID
+
+	case BIGFLOAT:
+		aVal, bVal := a.Value.(big.Float), b.Value.(big.Float)
+		aVal.Mul(&aVal, &bVal)
+		c.Value = aVal
 
 	case DEFAULT:
 		return invalidTypeError(lValType, rValType, "*")
@@ -298,6 +309,14 @@ func applyDiv(a, b, c *types.Val) error {
 		}
 		c.Value = cVal
 		c.Tid = types.VFloatID
+	case BIGFLOAT:
+		aVal, bVal := a.Value.(big.Float), b.Value.(big.Float)
+		var zero big.Float
+		if bVal.Cmp(&zero) == 0 {
+			return ErrorDivisionByZero
+		}
+		aVal.Quo(&aVal, &bVal)
+		c.Value = aVal
 	case DEFAULT:
 		return invalidTypeError(numeratorType, getValType(b), "/")
 	}
@@ -477,6 +496,11 @@ func applyNeg(a, res *types.Val) error {
 		res.Value = resVal
 		res.Tid = types.VFloatID
 
+	case BIGFLOAT:
+		value := a.Value.(big.Float)
+		neg := big.NewFloat(0).SetPrec(types.BigFloatPrecision).Neg(&value)
+		res.Value = *neg
+
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func u-", a.Tid)
 	}
@@ -499,6 +523,11 @@ func applySqrt(a, res *types.Val) error {
 		}
 		res.Value = math.Sqrt(a.Value.(float64))
 
+	case BIGFLOAT:
+		value := a.Value.(big.Float)
+		rt := big.NewFloat(0).SetPrec(types.BigFloatPrecision).Sqrt(&value)
+		res.Value = *rt
+
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func sqrt", a.Tid)
 	}
@@ -514,6 +543,11 @@ func applyFloor(a, res *types.Val) error {
 	case FLOAT:
 		res.Value = math.Floor(a.Value.(float64))
 
+	case BIGFLOAT:
+		value := a.Value.(big.Float)
+		f, _ := value.Float64()
+		res.Value = *big.NewFloat(math.Floor(f)).SetPrec(types.BigFloatPrecision)
+
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for func floor", a.Tid)
 	}
@@ -528,6 +562,11 @@ func applyCeil(a, res *types.Val) error {
 
 	case FLOAT:
 		res.Value = math.Ceil(a.Value.(float64))
+
+	case BIGFLOAT:
+		value := a.Value.(big.Float)
+		f, _ := value.Float64()
+		res.Value = *big.NewFloat(math.Ceil(f)).SetPrec(types.BigFloatPrecision)
 
 	case DEFAULT:
 		return errors.Errorf("Wrong type %v encountered for fun ceil", a.Tid)
@@ -595,6 +634,7 @@ const (
 	FLOAT
 	VFLOAT
 	DEFAULT
+	BIGFLOAT
 )
 
 func getValType(v *types.Val) valType {
@@ -606,6 +646,8 @@ func getValType(v *types.Val) valType {
 		vBase = FLOAT
 	case types.VFloatID:
 		vBase = VFLOAT
+	case types.BigFloatID:
+		vBase = BIGFLOAT
 	default:
 		vBase = DEFAULT
 	}
@@ -655,6 +697,10 @@ func (ag *aggregator) matchType(left, right *types.Val) error {
 			if _, found := mixedScalarVectOps[ag.name]; !found {
 				return invalidTypeError(leftType, rightType, ag.name)
 			}
+		} else if rightType == BIGFLOAT {
+			var bf big.Float
+			left.Value = bf.SetPrec(types.BigFloatPrecision).SetInt64(left.Value.(int64))
+			left.Tid = types.BigFloatID
 		}
 		// rightType must be either FLOAT or VFLOAT. In either case, we
 		// must cast the left type to a FLOAT.
@@ -665,6 +711,10 @@ func (ag *aggregator) matchType(left, right *types.Val) error {
 			if _, found := mixedScalarVectOps[ag.name]; !found {
 				return invalidTypeError(leftType, rightType, ag.name)
 			}
+		} else if rightType == BIGFLOAT {
+			var bf big.Float
+			left.Value = bf.SetPrec(types.BigFloatPrecision).SetFloat64(left.Value.(float64))
+			left.Tid = types.BigFloatID
 		} else {
 			// We can assume here: rightType == INT
 			right.Tid = types.FloatID
@@ -675,6 +725,17 @@ func (ag *aggregator) matchType(left, right *types.Val) error {
 			right.Tid = types.FloatID
 			right.Value = float64(right.Value.(int64))
 		}
+	case BIGFLOAT:
+		if rightType == FLOAT {
+			var bf big.Float
+			right.Value = *bf.SetPrec(types.BigFloatPrecision).SetFloat64(right.Value.(float64))
+			right.Tid = types.BigFloatID
+		} else if rightType == INT {
+			var bf big.Float
+			right.Value = *bf.SetPrec(types.BigFloatPrecision).SetInt64(right.Value.(int64))
+			right.Tid = types.BigFloatID
+		}
+
 		// We can assume that if rightType is not INT then it must
 		// be FLOAT, in which case, there is no further step needed.
 	default:
@@ -789,8 +850,11 @@ func (ag *aggregator) Apply(val types.Val) error {
 			for i := 0; i < len(bVal); i++ {
 				accumVal[i] += bVal[i]
 			}
+		case va.Tid == types.BigFloatID && vb.Tid == types.BigFloatID:
+			lhs := va.Value.(big.Float)
+			rhs := vb.Value.(big.Float)
+			va.Value = *new(big.Float).SetPrec(types.BigFloatPrecision).Add(&lhs, &rhs)
 		}
-		// Skipping the else case since that means the pair cannot be summed.
 		res = va
 	default:
 		x.Fatalf("Unhandled aggregator function %v", ag.name)
@@ -820,6 +884,15 @@ func (ag *aggregator) divideByCount() {
 	if ag.name != "avg" || ag.count == 0 || ag.result.Value == nil {
 		return
 	}
+
+	if ag.result.Tid == types.BigFloatID {
+		val := ag.result.Value.(big.Float)
+		val.Quo(&val, new(big.Float).SetPrec(types.BigFloatPrecision).SetInt64(int64(ag.count)))
+		ag.result.Tid = types.BigFloatID
+		ag.result.Value = val
+		return
+	}
+
 	var v float64
 	switch ag.result.Tid {
 	case types.IntID:

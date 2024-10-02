@@ -17,6 +17,7 @@
 package types
 
 import (
+	"math/big"
 	"sort"
 	"time"
 
@@ -24,8 +25,8 @@ import (
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type sortBase struct {
@@ -94,7 +95,7 @@ func (s byValue) Less(i, j int) bool {
 // IsSortable returns true, if tid is sortable. Otherwise it returns false.
 func IsSortable(tid TypeID) bool {
 	switch tid {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID, BigFloatID:
 		return true
 	default:
 		return false
@@ -187,7 +188,7 @@ func Less(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, UidID, IntID, FloatID, StringID, DefaultID:
+	case DateTimeID, UidID, IntID, FloatID, StringID, DefaultID, BigFloatID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, errors.Errorf("Compare not supported for type: %v", a.Tid)
@@ -214,6 +215,11 @@ func less(a, b Val, cl *collate.Collator) bool {
 			return cl.CompareString(a.Safe().(string), b.Safe().(string)) < 0
 		}
 		return (a.Safe().(string)) < (b.Safe().(string))
+	case BigFloatID:
+		var lValue, rValue big.Float
+		lValue = a.Value.(big.Float)
+		rValue = b.Value.(big.Float)
+		return lValue.Cmp(&rValue) == -1
 	}
 	return false
 }
@@ -243,7 +249,7 @@ func Equal(a, b Val) (bool, error) {
 	}
 	typ := a.Tid
 	switch typ {
-	case DateTimeID, IntID, FloatID, StringID, DefaultID, BoolID:
+	case DateTimeID, IntID, FloatID, StringID, DefaultID, BoolID, BigFloatID:
 		// Don't do anything, we can sort values of this type.
 	default:
 		return false, errors.Errorf("Equal not supported for type: %v", a.Tid)
@@ -276,6 +282,10 @@ func equal(a, b Val) bool {
 		aVal, aOk := a.Value.(bool)
 		bVal, bOk := b.Value.(bool)
 		return aOk && bOk && aVal == bVal
+	case BigFloatID:
+		aVal := a.Value.(big.Float)
+		bVal := b.Value.(big.Float)
+		return aVal.Cmp(&bVal) == 0
 	}
 	return false
 }

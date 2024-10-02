@@ -34,11 +34,11 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var (

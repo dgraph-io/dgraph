@@ -21,8 +21,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/chunker"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type localFiles struct {

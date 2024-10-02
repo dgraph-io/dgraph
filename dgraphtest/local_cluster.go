@@ -17,6 +17,7 @@
 package dgraphtest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	docker "github.com/docker/docker/client"
@@ -42,10 +44,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // cluster's network struct
@@ -140,6 +142,7 @@ func (c *LocalCluster) init() error {
 		}
 	}
 
+	c.zeros = c.zeros[:0]
 	for i := 0; i < c.conf.numZeros; i++ {
 		zo := &zero{id: i}
 		zo.containerName = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
@@ -147,6 +150,7 @@ func (c *LocalCluster) init() error {
 		c.zeros = append(c.zeros, zo)
 	}
 
+	c.alphas = c.alphas[:0]
 	for i := 0; i < c.conf.numAlphas; i++ {
 		aa := &alpha{id: i}
 		aa.containerName = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
@@ -264,7 +268,7 @@ func (c *LocalCluster) destroyContainers() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	ro := types.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
 	for _, zo := range c.zeros {
 		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
 			return errors.Wrapf(err, "error removing zero [%v]", zo.cname())
@@ -280,6 +284,37 @@ func (c *LocalCluster) destroyContainers() error {
 	return nil
 }
 
+func (c *LocalCluster) printPortMappings() error {
+	containers, err := c.dcli.ContainerList(context.Background(), container.ListOptions{})
+	if err != nil {
+		return errors.Wrap(err, "error listing docker containers")
+	}
+
+	var result bytes.Buffer
+	for _, container := range containers {
+		result.WriteString(fmt.Sprintf("ID: %s, Image: %s, Command: %s, Status: %s\n",
+			container.ID[:10], container.Image, container.Command, container.Status))
+
+		result.WriteString("Port Mappings:\n")
+		info, err := c.dcli.ContainerInspect(context.Background(), container.ID)
+		if err != nil {
+			return errors.Wrapf(err, "error inspecting container [%v]", container.ID)
+		}
+
+		for port, bindings := range info.NetworkSettings.Ports {
+			if len(bindings) == 0 {
+				continue
+			}
+			result.WriteString(fmt.Sprintf("  %s:%s\n", port.Port(), bindings))
+		}
+		result.WriteString("\n")
+	}
+
+	log.Printf("[INFO] ======== CONTAINERS' PORT MAPPINGS ========")
+	log.Println(result.String())
+	return nil
+}
+
 func (c *LocalCluster) Cleanup(verbose bool) {
 	if c == nil {
 		return
@@ -291,6 +326,9 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 		}
 		if err := c.printInspectContainers(); err != nil {
 			log.Printf("[WARNING] error printing inspect container output: %v", err)
+		}
+		if err := c.printPortMappings(); err != nil {
+			log.Printf("[WARNING] error printing port mappings: %v", err)
 		}
 	}
 
@@ -319,6 +357,26 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	}
 }
 
+func (c *LocalCluster) cleanupDocker() error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	// Prune containers
+	contsReport, err := c.dcli.ContainersPrune(ctx, filters.Args{})
+	if err != nil {
+		log.Fatalf("[ERROR] Error pruning containers: %v", err)
+	}
+	log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
+
+	// Prune networks
+	netsReport, err := c.dcli.NetworksPrune(ctx, filters.Args{})
+	if err != nil {
+		log.Fatalf("[ERROR] Error pruning networks: %v", err)
+	}
+	log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
+
+	return nil
+}
+
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
 	startAll := func() error {
@@ -336,27 +394,35 @@ func (c *LocalCluster) Start() error {
 		return c.HealthCheck(false)
 	}
 
-	var err error
-	// sometimes health check doesn't work due to unmapped ports. We dont know why this happens,
-	// but checking it 4 times before failing the test.
-	for i := 0; i < 4; i++ {
+	// sometimes health check doesn't work due to unmapped ports. We dont
+	// know why this happens, but checking it 3 times before failing the test.
+	retry := 0
+	for {
+		retry++
 
-		if err = startAll(); err == nil {
+		if err := startAll(); err == nil {
 			return nil
+		} else if retry == 3 {
+			return err
+		} else {
+			log.Printf("[WARNING] saw the err, trying again: %v", err)
 		}
-		log.Printf("[WARNING] Saw the error :%v, trying again", err)
+
 		if err1 := c.Stop(); err1 != nil {
-			log.Printf("[WARNING] error while stopping :%v", err)
+			log.Printf("[WARNING] error while stopping :%v", err1)
 		}
 		c.Cleanup(true)
+
+		if err := c.cleanupDocker(); err != nil {
+			log.Printf("[ERROR] while cleaning old dockers %v", err)
+		}
+
 		c.conf.prefix = fmt.Sprintf("dgraphtest-%d", rand.NewSource(time.Now().UnixNano()).Int63()%1000000)
 		if err := c.init(); err != nil {
-			c.Cleanup(true)
+			log.Printf("[ERROR] error while init, returning: %v", err)
 			return err
 		}
 	}
-
-	return err
 }
 
 func (c *LocalCluster) StartZero(id int) error {
@@ -376,7 +442,7 @@ func (c *LocalCluster) StartAlpha(id int) error {
 func (c *LocalCluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	if err := c.dcli.ContainerStart(ctx, dc.cid(), types.ContainerStartOptions{}); err != nil {
+	if err := c.dcli.ContainerStart(ctx, dc.cid(), container.StartOptions{}); err != nil {
 		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
 	dc.changeStatus(true)
@@ -486,6 +552,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 	if err != nil {
 		return errors.Wrap(err, "error getting health URL")
 	}
+
 	for i := 0; i < 60; i++ {
 		time.Sleep(waitDurBeforeRetry)
 
@@ -770,7 +837,7 @@ func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	url := "localhost:" + pubPort + endpoint
+	url := "0.0.0.0:" + pubPort + endpoint
 	return url, nil
 }
 
@@ -929,7 +996,7 @@ func (c *LocalCluster) getLogs(containerID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	opts := types.ContainerLogsOptions{
+	opts := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Details:    true,

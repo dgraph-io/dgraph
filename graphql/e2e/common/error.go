@@ -34,13 +34,13 @@ import (
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	admin2 "github.com/dgraph-io/dgraph/graphql/admin"
-	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/test"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	admin2 "github.com/dgraph-io/dgraph/v24/graphql/admin"
+	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/graphql/test"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (

@@ -27,10 +27,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type queryRewriter struct{}
@@ -666,7 +666,7 @@ func rewriteAsSimilarByIdQuery(
 	topK := query.ArgValue(schema.SimilarTopKArgName)
 	similarByField := typ.Field(similarBy)
 	metric := similarByField.EmbeddingSearchMetric()
-	distanceFormula := "math(sqrt((v2 - v1) dot (v2 - v1)))" // default - euclidian
+	distanceFormula := "math(sqrt((v2 - v1) dot (v2 - v1)))" // default - euclidean
 
 	if metric == schema.SimilarSearchMetricDotProduct {
 		distanceFormula = "math((1.0 - (v1 dot v2)) /2.0)"
@@ -762,7 +762,7 @@ func rewriteAsSimilarByIdQuery(
 		result = append(result, distance)
 	}
 
-	// order the result by euclidian distance, For example,
+	// order the result by euclidean distance, For example,
 	//	 querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
 	//	     Product.id : Product.id
 	//	     Product.description : Product.description
@@ -826,7 +826,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 
 	similarByField := typ.Field(similarBy)
 	metric := similarByField.EmbeddingSearchMetric()
-	distanceFormula := "math(sqrt((v2 - $search_vector) dot (v2 - $search_vector)))" // default = euclidian
+	distanceFormula := "math(sqrt((v2 - $search_vector) dot (v2 - $search_vector)))" // default = euclidean
 
 	if metric == schema.SimilarSearchMetricDotProduct {
 		distanceFormula = "math(( 1.0 - (($search_vector) dot v2)) /2.0)"
@@ -867,7 +867,7 @@ func rewriteAsSimilarByEmbeddingQuery(
 		},
 	}
 
-	// Compute the euclidian distance between the neighbor
+	// Compute the euclidean distance between the neighbor
 	// and the search vector
 	dgQuery[0].Children = []*dql.GraphQuery{
 		{

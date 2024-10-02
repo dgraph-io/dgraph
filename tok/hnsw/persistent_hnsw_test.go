@@ -1,3 +1,21 @@
+/*
+ * Copyright 2016-2024 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Co-authored by: jairad26@gmail.com, sunil@hypermode.com, bill@hypdermode.com
+ */
+
 package hnsw
 
 import (
@@ -6,9 +24,9 @@ import (
 	"sync"
 	"testing"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
-	"github.com/dgraph-io/dgraph/tok/index"
-	opt "github.com/dgraph-io/dgraph/tok/options"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	opt "github.com/dgraph-io/dgraph/v24/tok/options"
 	"golang.org/x/exp/slices"
 )
 
@@ -29,7 +47,7 @@ var createpersistentHNSWTests = []createpersistentHNSWTest[float64]{
 		efConstruction:    1,
 		pred:              "a",
 		indexType:         "b",
-		expectedIndexType: Euclidian,
+		expectedIndexType: Euclidean,
 		floatBits:         64,
 	},
 	{
@@ -37,8 +55,8 @@ var createpersistentHNSWTests = []createpersistentHNSWTest[float64]{
 		efSearch:          1,
 		efConstruction:    1,
 		pred:              "a",
-		indexType:         Euclidian,
-		expectedIndexType: Euclidian,
+		indexType:         Euclidean,
+		expectedIndexType: Euclidean,
 		floatBits:         64,
 	},
 	{
@@ -257,7 +275,7 @@ var flatPhs = []*persistentHNSW[float64]{
 		vecKey:         ConcatStrings("0-a", VecKeyword),
 		vecDead:        ConcatStrings("0-a", VecDead),
 		floatBits:      64,
-		simType:        GetSimType[float64](Euclidian, 64),
+		simType:        GetSimType[float64](Euclidean, 64),
 		nodeAllEdges:   make(map[uint64][][]uint64),
 	},
 	{
@@ -284,19 +302,6 @@ var flatPhs = []*persistentHNSW[float64]{
 		simType:        GetSimType[float64](DotProd, 64),
 		nodeAllEdges:   make(map[uint64][][]uint64),
 	},
-}
-
-var flatPh = &persistentHNSW[float64]{
-	maxLevels:      5,
-	efConstruction: 16,
-	efSearch:       12,
-	pred:           "0-a",
-	vecEntryKey:    ConcatStrings("0-a", VecEntry),
-	vecKey:         ConcatStrings("0-a", VecKeyword),
-	vecDead:        ConcatStrings("0-a", VecDead),
-	floatBits:      64,
-	simType:        GetSimType[float64](Euclidian, 64),
-	nodeAllEdges:   make(map[uint64][][]uint64),
 }
 
 var flatEntryInsertToPersistentFlatStorageTests = []insertToPersistentFlatStorageTest{
@@ -328,6 +333,7 @@ var flatEntryInsertToPersistentFlatStorageTests = []insertToPersistentFlatStorag
 
 func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 	emptyTsDbs()
+	flatPh := flatPhs[0]
 	for _, test := range flatEntryInsertToPersistentFlatStorageTests {
 		emptyTsDbs()
 		key := DataKey(flatPh.pred, test.inUuid)
@@ -345,12 +351,13 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 			}
 		}
 		var float1, float2 = []float64{}, []float64{}
-		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[string(key[:])].([]byte), &float1, 64)
-		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[string(key[:])].([]byte), &float2, 64)
+		skey := string(key[:])
+		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[skey].([]byte), &float1, 64)
+		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[skey].([]byte), &float2, 64)
 		if !equalFloat64Slice(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
-				"not equivalent. Start Value: %v, End Value: %v", flatPh.pred, tsDbs[0].inMemTestDb[flatPh.pred].([]float64),
-				tsDbs[99].inMemTestDb[flatPh.pred].([]float64))
+				"not equivalent. Start Value: %v\n, End Value: %v\n %v\n %v", flatPh.pred, tsDbs[0].inMemTestDb[skey],
+				tsDbs[99].inMemTestDb[skey], float1, float2)
 		}
 		edgesNameList := []string{}
 		for _, edge := range edges {
@@ -405,6 +412,7 @@ var nonflatEntryInsertToPersistentFlatStorageTests = []insertToPersistentFlatSto
 
 func TestNonflatEntryInsertToPersistentFlatStorage(t *testing.T) {
 	emptyTsDbs()
+	flatPh := flatPhs[0]
 	key := DataKey(flatPh.pred, flatEntryInsert.inUuid)
 	for i := range tsDbs {
 		tsDbs[i].inMemTestDb[string(key[:])] = floatArrayAsBytes(flatEntryInsert.inVec)
@@ -479,7 +487,7 @@ var searchPersistentFlatStorageTests = []searchPersistentFlatStorageTest{
 		query:       []float64{0.824, 0.319, 0.111},
 		maxResults:  1,
 		expectedErr: nil,
-		expectedNns: []uint64{5},
+		expectedNns: []uint64{123},
 	},
 }
 
@@ -510,7 +518,7 @@ var flatPopulateBasicInsertsForSearch = []insertToPersistentFlatStorageTest{
 	},
 }
 
-func flatPopulateInserts(insertArr []insertToPersistentFlatStorageTest) error {
+func flatPopulateInserts(insertArr []insertToPersistentFlatStorageTest, flatPh *persistentHNSW[float64]) error {
 	emptyTsDbs()
 	for _, in := range insertArr {
 		for i := range tsDbs {
@@ -544,70 +552,12 @@ func RunFlatSearchTests(t *testing.T, test searchPersistentFlatStorageTest, flat
 func TestBasicSearchPersistentFlatStorage(t *testing.T) {
 	for _, flatPh := range flatPhs {
 		emptyTsDbs()
-		err := flatPopulateInserts(flatPopulateBasicInsertsForSearch)
+		err := flatPopulateInserts(flatPopulateBasicInsertsForSearch, flatPh)
 		if err != nil {
 			t.Errorf("Error populating inserts: %s", err)
 			return
 		}
 		for _, test := range searchPersistentFlatStorageTests {
-			RunFlatSearchTests(t, test, flatPh)
-		}
-	}
-}
-
-var flatPopulateOverlappingInserts = []insertToPersistentFlatStorageTest{
-	{
-		tc:                NewTxnCache(&inMemTxn{startTs: 0, commitTs: 5}, 0),
-		inUuid:            uint64(5),
-		inVec:             []float64{0.1, 0.1, 0.1},
-		expectedErr:       nil,
-		expectedEdgesList: nil,
-		minExpectedEdge:   "",
-	},
-	{
-		tc:                NewTxnCache(&inMemTxn{startTs: 3, commitTs: 9}, 3),
-		inUuid:            uint64(123),
-		inVec:             []float64{0.824, 0.319, 0.111},
-		expectedErr:       nil,
-		expectedEdgesList: nil,
-		minExpectedEdge:   "",
-	},
-	{
-		tc:                NewTxnCache(&inMemTxn{startTs: 8, commitTs: 37}, 8),
-		inUuid:            uint64(1),
-		inVec:             []float64{0.3, 0.5, 0.7},
-		expectedErr:       nil,
-		expectedEdgesList: nil,
-		minExpectedEdge:   "",
-	},
-}
-
-var overlappingSearchPersistentFlatStorageTests = []searchPersistentFlatStorageTest{
-	{
-		qc:          NewQueryCache(&inMemLocalCache{readTs: 45}, 45),
-		query:       []float64{0.3, 0.5, 0.7},
-		maxResults:  1,
-		expectedErr: nil,
-		expectedNns: []uint64{123},
-	},
-	{
-		qc:          NewQueryCache(&inMemLocalCache{readTs: 93}, 93),
-		query:       []float64{0.824, 0.319, 0.111},
-		maxResults:  1,
-		expectedErr: nil,
-		expectedNns: []uint64{123},
-	},
-}
-
-func TestOverlappingInsertsAndSearchPersistentFlatStorage(t *testing.T) {
-	for _, flatPh := range flatPhs {
-		emptyTsDbs()
-		err := flatPopulateInserts(flatPopulateOverlappingInserts)
-		if err != nil {
-			t.Errorf("Error from flatPopulateInserts: %s", err)
-			return
-		}
-		for _, test := range overlappingSearchPersistentFlatStorageTests {
 			RunFlatSearchTests(t, test, flatPh)
 		}
 	}

@@ -31,7 +31,7 @@ jobs:
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
@@ -72,7 +72,7 @@ jobs:
       - name: Tar Archive for Dgraph Linux Build
         run: cd dgraph && tar -zcvf dgraph-linux-amd64.tar.gz dgraph
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             badger/badger-checksum-linux-amd64.sha256
@@ -97,7 +97,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-amd64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 dgraph/standalone:latest-amd64 || true
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
@@ -126,7 +126,7 @@ jobs:
         with:
           go-version: ${{ env.GOVERSION }}
       - name: Install protobuf-compiler
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf
         run: |
           cd ./protos
@@ -167,7 +167,7 @@ jobs:
       - name: Tar Archive for Dgraph Linux Build
         run: cd dgraph && tar -zcvf dgraph-linux-arm64.tar.gz dgraph
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: |
             badger/badger-checksum-linux-arm64.sha256
@@ -192,7 +192,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/standalone:latest-arm64 || true
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
@@ -227,7 +227,7 @@ jobs:
           echo "making a new release for dgraph "$DGRAPH_RELEASE_VERSION
           echo "DGRAPH_RELEASE_VERSION=$DGRAPH_RELEASE_VERSION" >> $GITHUB_ENV
       - name: Login to DockerHub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}

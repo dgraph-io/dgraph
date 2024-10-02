@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/dgraphtest"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphtest"
 )
 
 type SystestTestSuite struct {

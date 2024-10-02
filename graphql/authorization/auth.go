@@ -29,11 +29,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
-	"gopkg.in/square/go-jose.v2"
 
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 )
@@ -513,7 +513,7 @@ func (a *AuthMeta) FetchJWK(i int) error {
 
 func (a *AuthMeta) refreshJWK(i int) error {
 	var err error
-	for i := 0; i < 3; i++ {
+	for n := 0; n < 3; n++ {
 		err = a.FetchJWK(i)
 		if err == nil {
 			return nil

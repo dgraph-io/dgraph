@@ -25,7 +25,7 @@ import (
 
 	"github.com/spf13/cast"
 
-	"github.com/dgraph-io/dgraph/dql"
+	"github.com/dgraph-io/dgraph/v24/dql"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"

@@ -31,9 +31,9 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -195,7 +195,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		currTs := time.Now().Unix()
 		for _, key := range *batch {
 			hash := z.MemHash(key)
-			if elem := m[hash]; currTs-elem >= 2 {
+			if elem := m[hash]; currTs-elem >= 10 {
 				// Key not present or Key present but last roll up was more than 2 sec ago.
 				// Add/Update map and rollup.
 				m[hash] = currTs
@@ -347,7 +347,6 @@ func ResetCache() {
 	globalCache.Lock()
 	globalCache.items = make(map[string]*CachePL)
 	globalCache.Unlock()
-	lCache.Clear()
 }
 
 func NewCachePL() *CachePL {
@@ -535,7 +534,7 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 }
 
 func ShouldGoInCache(pk x.ParsedKey) bool {
-	return !pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type")
+	return (!pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type"))
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {

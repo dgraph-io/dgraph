@@ -25,9 +25,9 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/raftwal"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -77,7 +77,7 @@ func InitServerState() {
 	State.FinishCh = make(chan struct{})
 	State.needTs = make(chan tsReq, 100)
 
-	State.initStorage()
+	State.InitStorage()
 	go State.fillTimestampRequests()
 
 	groupId, err := x.ReadGroupIdFile(Config.PostingDir)
@@ -103,7 +103,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	return opt
 }
 
-func (s *ServerState) initStorage() {
+func (s *ServerState) InitStorage() {
 	var err error
 
 	if x.WorkerConfig.EncryptionKey != nil {

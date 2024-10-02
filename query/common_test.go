@@ -28,9 +28,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func setSchema(schema string) {
@@ -75,7 +75,7 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
-func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+func processQueryRDF(ctx context.Context, query string) (string, error) {
 	txn := client.NewTxn()
 	defer func() { _ = txn.Discard(ctx) }()
 
@@ -345,6 +345,19 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
+
+DispatchBoard.column: uid @reverse .
+order: int .
+
+type DispatchBoardColumn {
+  name
+}
+
+type DispatchBoardCard {
+  DispatchBoard.column
+  order
+}
+
 `
 
 func populateCluster(dc dgraphapi.Cluster) {
@@ -367,7 +380,7 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// 		alive
 	// 		user_profile
 	// 	}
-	// 	user_profile                   : float32vector @index(hnsw(metric:"euclidian")) .`
+	// 	user_profile                   : float32vector @index(hnsw(metric:"euclidean")) .`
 	// } else {
 	// 	ts = testSchema + `type User {
 	// 		name
@@ -892,6 +905,16 @@ func populateCluster(dc dgraphapi.Cluster) {
 
 		<40> <name2> "Alice" .
 		<41> <age2> "20" .
+
+		<1023> <dgraph.type> "DispatchBoardColumn" .
+                <1024> <dgraph.type> "DispatchBoardColumn" .
+                <1025> <dgraph.type> "DispatchBoardCard" .
+                <1026> <dgraph.type> "DispatchBoardCard" .
+
+                <1025> <DispatchBoard.column> <1023> .
+                <1025> <order> "0" .
+                <1026> <DispatchBoard.column> <1023> .
+                <1026> <order> "1" .
 	`)
 	x.Panic(err)
 

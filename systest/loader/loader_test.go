@@ -27,9 +27,9 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
@@ -43,7 +43,7 @@ func TestLoaderXidmap(t *testing.T) {
 		// internal-port
 		true))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
@@ -71,8 +71,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -82,8 +82,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddr,
-		"--zero", testutil.SockAddrZero,
+		"--alpha", testutil.SockAddrLocalhost,
+		"--zero", testutil.SockAddrZeroLocalhost,
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

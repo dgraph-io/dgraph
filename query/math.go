@@ -20,7 +20,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/v24/types"
 )
 
 type mathTree struct {
@@ -82,6 +82,25 @@ func processBinary(mNode *mathTree) error {
 			return err
 		}
 		return nil
+	}
+
+	// If mpl or mpr have 0 and just 0 in it, that means it's an output of aggregation somewhere.
+	// This value would need to be applied to all.
+	checkAggrResult := func(value map[uint64]types.Val) (types.Val, bool) {
+		if len(value) != 1 {
+			return types.Val{}, false
+		}
+
+		val, ok := value[0]
+		return val, ok
+	}
+
+	if val, ok := checkAggrResult(mpl); ok {
+		cl = val
+		mpl = nil
+	} else if val, ok := checkAggrResult(mpr); ok {
+		cr = val
+		mpr = nil
 	}
 
 	if len(mpl) != 0 || len(mpr) != 0 {

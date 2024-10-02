@@ -21,9 +21,9 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

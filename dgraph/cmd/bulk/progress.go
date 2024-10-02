@@ -23,7 +23,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 

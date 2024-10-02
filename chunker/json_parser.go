@@ -30,11 +30,11 @@ import (
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/types/facets"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/simdjson-go"
 )
 
@@ -230,7 +230,7 @@ func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 			return nil
 		}
 
-		if vf, err := types.ParseVFloat(v); err == nil {
+		if vf, err := types.ParseVFloat(v); err == nil && len(vf) != 0 {
 			nq.ObjectValue = &api.Value{Val: &api.Value_Vfloat32Val{Vfloat32Val: types.FloatArrayAsBytes(vf)}}
 			return nil
 		}

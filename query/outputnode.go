@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,14 +36,14 @@ import (
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/algo"
-	gqlSchema "github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/algo"
+	gqlSchema "github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/task"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/types/facets"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -691,6 +692,9 @@ func valToBytes(v types.Val) ([]byte, error) {
 		return marshalTimeJson(t)
 	case types.GeoID:
 		return geojson.Marshal(v.Value.(geom.T))
+	case types.BigFloatID:
+		b := v.Value.(big.Float)
+		return b.MarshalText()
 	case types.UidID:
 		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
 	case types.PasswordID:

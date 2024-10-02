@@ -36,13 +36,13 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/graphql/admin"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/query"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/edgraph"
+	"github.com/dgraph-io/dgraph/v24/graphql/admin"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/query"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func allowed(method string) bool {

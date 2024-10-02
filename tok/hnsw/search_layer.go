@@ -1,8 +1,26 @@
+/*
+ * Copyright 2016-2024 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Co-authored by: jairad26@gmail.com, sunil@hypermode.com, bill@hypdermode.com
+ */
+
 package hnsw
 
 import (
-	c "github.com/dgraph-io/dgraph/tok/constraints"
-	"github.com/dgraph-io/dgraph/tok/index"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
 
 	"fmt"
 )
@@ -11,7 +29,7 @@ type searchLayerResult[T c.Float] struct {
 	// neighbors represents the candidates with the best scores so far.
 	neighbors []minPersistentHeapElement[T]
 	// visited represents elements seen (so we don't try to re-visit).
-	visited []minPersistentHeapElement[T]
+	visited map[uint64]minPersistentHeapElement[T]
 	path    []uint64
 	metrics map[string]uint64
 	level   int
@@ -29,7 +47,7 @@ type searchLayerResult[T c.Float] struct {
 func newLayerResult[T c.Float](level int) *searchLayerResult[T] {
 	return &searchLayerResult[T]{
 		neighbors: []minPersistentHeapElement[T]{},
-		visited:   []minPersistentHeapElement[T]{},
+		visited:   make(map[uint64]minPersistentHeapElement[T]),
 		path:      []uint64{},
 		metrics:   make(map[string]uint64),
 		level:     level,
@@ -38,7 +56,8 @@ func newLayerResult[T c.Float](level int) *searchLayerResult[T] {
 
 func (slr *searchLayerResult[T]) setFirstPathNode(n minPersistentHeapElement[T]) {
 	slr.neighbors = []minPersistentHeapElement[T]{n}
-	slr.visited = []minPersistentHeapElement[T]{n}
+	slr.visited = make(map[uint64]minPersistentHeapElement[T])
+	slr.visited[n.index] = n
 	slr.path = []uint64{n.index}
 }
 
@@ -86,17 +105,13 @@ func (slr *searchLayerResult[T]) bestNeighbor() minPersistentHeapElement[T] {
 	return slr.neighbors[0]
 }
 
-func (slr *searchLayerResult[T]) nodeVisited(n minPersistentHeapElement[T]) bool {
-	for _, visitedNode := range slr.visited {
-		if visitedNode.index == n.index {
-			return true
-		}
-	}
-	return false
+func (slr *searchLayerResult[T]) indexVisited(n uint64) bool {
+	_, ok := slr.visited[n]
+	return ok
 }
 
 func (slr *searchLayerResult[T]) addToVisited(n minPersistentHeapElement[T]) {
-	slr.visited = append(slr.visited, n)
+	slr.visited[n.index] = n
 }
 
 func (slr *searchLayerResult[T]) updateFinalMetrics(r *index.SearchPathResult) {

@@ -26,9 +26,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func (asuite *AclTestSuite) TestInvalidGetUser() {
@@ -437,6 +437,37 @@ func (asuite *AclTestSuite) TestWrongPermission() {
 
 	require.Error(t, err, "Setting permission to -1 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
+}
+
+func (asuite *AclTestSuite) TestACLNamespaceEdge() {
+	t := asuite.T()
+	gc, cleanup, err := asuite.dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	json := `
+	{
+    "set": [
+        {
+            "dgraph.xid": "groot",
+            "dgraph.password": "password",
+            "dgraph.type": "dgraph.type.User",
+            "dgraph.user.group": {
+                "dgraph.xid": "guardians",
+                "dgraph.type": "dgraph.type.Group",
+                "namespace": 1
+            },
+            "namespace": 1
+        }
+    ]
+}`
+
+	mu := &api.Mutation{SetJson: []byte(json), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "could not insert duplicate value") // Could be gaurdian or groot
 }
 
 func (asuite *AclTestSuite) TestACLDuplicateGrootUser() {

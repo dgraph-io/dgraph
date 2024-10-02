@@ -25,8 +25,10 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -36,12 +38,12 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/tok/hnsw"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -241,7 +243,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	if hasCountIndex {
 		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
-			return emptyCountParams, ErrTsTooOld
+			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
 	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
@@ -503,7 +505,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	case hasCountIndex:
 		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
-			return val, false, emptyCountParams, ErrTsTooOld
+			return val, false, emptyCountParams, errors.Wrapf(ErrTsTooOld, "Add mutation count index")
 		}
 	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
@@ -647,6 +649,202 @@ type rebuilder struct {
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
+}
+
+func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
+	stream := pstore.NewStreamAt(r.startTs)
+	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
+	stream.Prefix = r.prefix
+	stream.NumGo = 16
+	txn := NewTxn(r.startTs)
+	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
+		// We should return quickly if the context is no longer valid.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		pk, err := x.Parse(key)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not parse key %s", hex.Dump(key))
+		}
+
+		l := new(List)
+		l.key = key
+		l.plist = new(pb.PostingList)
+
+		found := false
+
+		for it.Valid() {
+			item := it.Item()
+			if !bytes.Equal(item.Key(), l.key) {
+				break
+			}
+			l.maxTs = x.Max(l.maxTs, item.Version())
+			if item.IsDeletedOrExpired() {
+				// Don't consider any more versions.
+				break
+			}
+
+			found = true
+			switch item.UserMeta() {
+			case BitEmptyPosting:
+				l.minTs = item.Version()
+			case BitCompletePosting:
+				if err := unmarshalOrCopy(l.plist, item); err != nil {
+					return nil, err
+				}
+				l.minTs = item.Version()
+
+				// No need to do Next here. The outer loop can take care of skipping
+				// more versions of the same key.
+			case BitDeltaPosting:
+				err := item.Value(func(val []byte) error {
+					pl := &pb.PostingList{}
+					if err := pl.Unmarshal(val); err != nil {
+						return err
+					}
+					pl.CommitTs = item.Version()
+					for _, mpost := range pl.Postings {
+						// commitTs, startTs are meant to be only in memory, not
+						// stored on disk.
+						mpost.CommitTs = item.Version()
+					}
+					if l.mutationMap == nil {
+						l.mutationMap = make(map[uint64]*pb.PostingList)
+					}
+					l.mutationMap[pl.CommitTs] = pl
+					return nil
+				})
+				if err != nil {
+					return nil, err
+				}
+			default:
+				return nil, errors.Errorf(
+					"Unexpected meta: %d for key: %s", item.UserMeta(), hex.Dump(key))
+			}
+			if found {
+				break
+			}
+		}
+
+		if _, err := r.fn(pk.Uid, l, txn); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	stream.Send = func(buf *z.Buffer) error {
+		// TODO. Make an in memory txn with disk backing for more data than memory.
+		return nil
+	}
+
+	start := time.Now()
+	if err := stream.Orchestrate(ctx); err != nil {
+		return err
+	}
+
+	if os.Getenv("DEBUG_SHOW_HNSW_TREE") != "" {
+		printTreeStats(txn)
+	}
+
+	txn.Update()
+	writer := NewTxnWriter(pstore)
+
+	defer func() {
+		glog.V(1).Infof("Rebuilding index for predicate %s: building index took: %v\n",
+			r.attr, time.Since(start))
+	}()
+
+	ResetCache()
+
+	return x.ExponentialRetry(int(x.Config.MaxRetries),
+		20*time.Millisecond, func() error {
+			err := txn.CommitToDisk(writer, r.startTs)
+			if err == badger.ErrBannedKey {
+				glog.Errorf("Error while writing to banned namespace.")
+				return nil
+			}
+			return err
+		})
+}
+
+func printTreeStats(txn *Txn) {
+	txn.cache.Lock()
+
+	numLevels := 20
+	numNodes := make([]int, numLevels)
+	numConnections := make([]int, numLevels)
+
+	var temp [][]uint64
+	for key, pl := range txn.cache.plists {
+		pk, _ := x.Parse([]byte(key))
+		if strings.HasSuffix(pk.Attr, "__vector_") {
+			data := pl.getPosting(txn.cache.startTs)
+			if data == nil || len(data.Postings) == 0 {
+				continue
+			}
+
+			err := decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
+			if err != nil {
+				fmt.Println("Error while decoding", err)
+			}
+
+			for i := 0; i < len(temp); i++ {
+				if len(temp[i]) > 0 {
+					numNodes[i] += 1
+				}
+				numConnections[i] += len(temp[i])
+			}
+
+		}
+	}
+
+	for i := 0; i < numLevels; i++ {
+		fmt.Printf("%d, ", numNodes[i])
+	}
+	fmt.Println("")
+	for i := 0; i < numLevels; i++ {
+		fmt.Printf("%d, ", numConnections[i])
+	}
+	fmt.Println("")
+	for i := 0; i < numLevels; i++ {
+		if numNodes[i] == 0 {
+			fmt.Printf("0, ")
+			continue
+		}
+		fmt.Printf("%d, ", numConnections[i]/numNodes[i])
+	}
+	fmt.Println("")
+
+	txn.cache.Unlock()
+}
+
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	offset := 0
+	// Read number of rows
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
+	offset += 8
+
+	*matrix = make([][]uint64, rows)
+
+	for i := 0; i < int(rows); i++ {
+		// Read row length
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
+		offset += 8
+
+		(*matrix)[i] = make([]uint64, rowLen)
+		for j := 0; j < int(rowLen); j++ {
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
+			offset += 8
+		}
+	}
+
+	return nil
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
@@ -1020,14 +1218,22 @@ func (rb *IndexRebuild) needsTokIndexRebuild() *indexRebuildInfo {
 	prevFactoryNames := make(map[string]struct{})
 	prevFactories := make(map[string]*pb.VectorIndexSpec)
 	for _, t := range old.IndexSpecs {
-		prevFactoryNames[t.Name] = struct{}{}
-		prevFactories[t.Name] = t
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		prevFactoryNames[name] = struct{}{}
+		prevFactories[name] = t
 	}
 	currFactoryNames := make(map[string]struct{})
 	currFactories := make(map[string]*pb.VectorIndexSpec)
 	for _, t := range rb.CurrentSchema.IndexSpecs {
-		currFactoryNames[t.Name] = struct{}{}
-		currFactories[t.Name] = t
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		currFactoryNames[name] = struct{}{}
+		currFactories[name] = t
 	}
 
 	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
@@ -1175,6 +1381,8 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		factorySpecs = []*tok.FactoryCreateSpec{factorySpec}
 	}
 
+	runForVectors := (len(factorySpecs) != 0)
+
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
@@ -1200,7 +1408,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
 				default:
-					edges = append(edges, newEdges...)
+					if !runForVectors {
+						edges = append(edges, newEdges...)
+					}
 					return err
 				}
 			}
@@ -1209,6 +1419,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			return []*pb.DirectedEdge{}, err
 		}
 		return edges, err
+	}
+	if len(factorySpecs) != 0 {
+		return builder.RunWithoutTemp(ctx)
 	}
 	return builder.Run(ctx)
 }
@@ -1327,13 +1540,37 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 	prevIndex := old.Directive == pb.SchemaUpdate_INDEX &&
 		old.ValueType == pb.Posting_VFLOAT
 
+	prevFactoryNames := make(map[string]struct{})
+	prevFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range old.IndexSpecs {
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		prevFactoryNames[name] = struct{}{}
+		prevFactories[name] = t
+	}
+
+	currFactoryNames := make(map[string]struct{})
+	currFactories := make(map[string]*pb.VectorIndexSpec)
+	for _, t := range rb.CurrentSchema.IndexSpecs {
+		spec, err := tok.GetFactoryCreateSpecFromSpec(t)
+		x.AssertTruef(err == nil, "Error while building index spec %s", err)
+		name := spec.Name()
+
+		currFactoryNames[name] = struct{}{}
+		currFactories[name] = t
+	}
+
+	newFactoryNames, deletedFactoryNames := x.Diff(currFactoryNames, prevFactoryNames)
+
 	// If the schema directive did not change, return indexNoop.
-	if currIndex == prevIndex {
+	if currIndex == prevIndex && len(newFactoryNames) == 0 && len(deletedFactoryNames) == 0 {
 		return indexNoop
 	}
 
 	// If the current schema requires an index, index should be rebuilt.
-	if currIndex {
+	if currIndex || len(newFactoryNames) != 0 {
 		return indexRebuild
 	}
 	// Otherwise, index should only be deleted.

@@ -34,19 +34,19 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/conn"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	ctask "github.com/dgraph-io/dgraph/task"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/tok/hnsw"
-	"github.com/dgraph-io/dgraph/tok/index"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/algo"
+	"github.com/dgraph-io/dgraph/v24/conn"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	ctask "github.com/dgraph-io/dgraph/v24/task"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/types/facets"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -312,7 +312,7 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case aggregatorFn, passwordFn:
+	case aggregatorFn, passwordFn, similarToFn:
 		return true, nil
 	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
@@ -325,7 +325,7 @@ func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error)
 	case uidInFn, compareScalarFn:
 		// Operate on uid postings
 		return false, nil
-	case notAFunction, similarToFn:
+	case notAFunction:
 		return typ.IsScalar(), nil
 	}
 	return false, errors.Errorf("Unhandled case in fetchValuePostings for fn: %s", srcFn.fname)
@@ -420,6 +420,14 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
+	// These are certain special cases where we can get away with reading only the latest value
+	// Lang doesn't work because we would be storing various different languages at various
+	// time. So when we go to read the latest value, we might get a different language.
+	// Similarly with DoCount and ExpandAll and Facets. List types are also not supported
+	// because list is stored by time, and we combine all the list items at various timestamps.
+	hasLang := schema.State().HasLang(q.Attr)
+	getMultiplePosting := q.DoCount || q.ExpandAll || listType || hasLang || q.FacetParam != nil
+
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
@@ -434,49 +442,75 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			key := x.DataKey(q.Attr, q.UidList.Uids[i])
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := qs.cache.Get(key)
-			if err != nil {
-				return err
-			}
 
-			// If count is being requested, there is no need to populate value and facets matrix.
-			if q.DoCount {
-				count, err := countForValuePostings(args, pl, facetsTree, listType)
-				if err != nil && err != posting.ErrNoValue {
-					return err
-				}
-				out.Counts = append(out.Counts, uint32(count))
-				// Add an empty UID list to make later processing consistent.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
-				continue
-			}
+			var vals []types.Val
+			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
-			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
-			switch {
-			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
-				// This branch is taken when the value does not exist in the pl or
-				// the number of values retrieved is zero (there could still be facets).
-				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
-				// LangMatrix so that all these data structure have predictable layouts.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
-				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
-				out.ValueMatrix = append(out.ValueMatrix,
-					&pb.ValueList{Values: []*pb.TaskValue{}})
-				if q.ExpandAll {
-					// To keep the cardinality same as that of ValueMatrix.
-					out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
-				}
-				continue
-			case err != nil:
-				return err
-			}
-
-			if q.ExpandAll {
-				langTags, err := pl.GetLangTags(args.q.ReadTs)
+			if !getMultiplePosting {
+				pl, err := qs.cache.GetSinglePosting(key)
 				if err != nil {
 					return err
 				}
-				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
+				if pl == nil || len(pl.Postings) == 0 {
+					out.UidMatrix = append(out.UidMatrix, &pb.List{})
+					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+					out.ValueMatrix = append(out.ValueMatrix,
+						&pb.ValueList{Values: []*pb.TaskValue{}})
+					continue
+				}
+				vals = make([]types.Val, len(pl.Postings))
+				for i, p := range pl.Postings {
+					vals[i] = types.Val{
+						Tid:   types.TypeID(p.ValType),
+						Value: p.Value,
+					}
+				}
+			} else {
+				pl, err := qs.cache.Get(key)
+				if err != nil {
+					return err
+				}
+
+				// If count is being requested, there is no need to populate value and facets matrix.
+				if q.DoCount {
+					count, err := countForValuePostings(args, pl, facetsTree, listType)
+					if err != nil && err != posting.ErrNoValue {
+						return err
+					}
+					out.Counts = append(out.Counts, uint32(count))
+					// Add an empty UID list to make later processing consistent.
+					out.UidMatrix = append(out.UidMatrix, &pb.List{})
+					continue
+				}
+
+				vals, fcs, err = retrieveValuesAndFacets(args, pl, facetsTree, listType)
+
+				switch {
+				case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
+					// This branch is taken when the value does not exist in the pl or
+					// the number of values retrieved is zero (there could still be facets).
+					// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+					// LangMatrix so that all these data structure have predictable layouts.
+					out.UidMatrix = append(out.UidMatrix, &pb.List{})
+					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+					out.ValueMatrix = append(out.ValueMatrix,
+						&pb.ValueList{Values: []*pb.TaskValue{}})
+					if q.ExpandAll {
+						// To keep the cardinality same as that of ValueMatrix.
+						out.LangMatrix = append(out.LangMatrix, &pb.LangList{})
+					}
+					continue
+				case err != nil:
+					return err
+				}
+
+				if q.ExpandAll {
+					langTags, err := pl.GetLangTags(args.q.ReadTs)
+					if err != nil {
+						return err
+					}
+					out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
+				}
 			}
 
 			uidList := new(pb.List)
@@ -820,7 +854,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				len := pl.Length(args.q.ReadTs, 0)
 				if len == -1 {
-					return posting.ErrTsTooOld
+					return errors.Wrapf(posting.ErrTsTooOld, "While reading posting list length")
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold[0]) {

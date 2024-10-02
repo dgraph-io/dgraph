@@ -24,8 +24,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.

@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
 )
 
 const sizeOfBucket = 144

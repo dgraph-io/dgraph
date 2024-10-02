@@ -28,8 +28,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 func GalaxySchemaKey(attr string) []byte {

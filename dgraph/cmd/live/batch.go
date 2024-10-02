@@ -34,14 +34,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/dgraph/xidmap"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/tok"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/dgraph-io/dgraph/v24/xidmap"
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.
@@ -160,7 +160,9 @@ func (l *loader) infinitelyRetry(req *request) {
 		if i >= 10*time.Second {
 			i = 10 * time.Second
 		}
+		l.deregister(req)
 		time.Sleep(i)
+		l.addConflictKeys(req)
 	}
 }
 
@@ -306,6 +308,11 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		return keys, nil
 	}
 
+	val := sid
+	if pred.Upsert {
+		val = 0
+	}
+
 	errs := make([]string, 0)
 	for _, tokName := range pred.Tokenizer {
 		token, ok := tok.GetTokenizer(tokName)
@@ -329,7 +336,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		}
 
 		for _, t := range toks {
-			keys = append(keys, farm.Fingerprint64(x.IndexKey(attr, t))^sid)
+			keys = append(keys, farm.Fingerprint64(x.IndexKey(attr, t))^val)
 		}
 
 	}
@@ -352,6 +359,15 @@ func (l *loader) conflictKeysForReq(req *request) []uint64 {
 		keys = append(keys, conflicts...)
 	}
 	return keys
+}
+
+//lint:ignore U1000 Ignore unused function temporarily for debugging
+func (l *loader) print(req *request) {
+	m := make(map[string]struct{})
+	for _, i := range req.Set {
+		m[i.Predicate] = struct{}{}
+	}
+	fmt.Println(m)
 }
 
 func (l *loader) addConflictKeys(req *request) bool {

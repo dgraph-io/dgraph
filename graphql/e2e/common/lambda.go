@@ -29,7 +29,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/v24/testutil"
 )
 
 func lambdaOnTypeField(t *testing.T) {

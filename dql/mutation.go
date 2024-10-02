@@ -21,10 +21,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var (
@@ -74,6 +74,8 @@ func TypeValFrom(val *api.Value) types.Val {
 		return types.Val{Tid: types.FloatID, Value: val.GetDoubleVal()}
 	case *api.Value_GeoVal:
 		return types.Val{Tid: types.GeoID, Value: val.GetGeoVal()}
+	case *api.Value_BigfloatVal:
+		return types.Val{Tid: types.BigFloatID, Value: val.GetBigfloatVal()}
 	case *api.Value_DatetimeVal:
 		return types.Val{Tid: types.DateTimeID, Value: val.GetDatetimeVal()}
 	case *api.Value_PasswordVal:
@@ -96,7 +98,7 @@ func byteVal(nq NQuad) ([]byte, types.TypeID, error) {
 	p := TypeValFrom(nq.ObjectValue)
 	// These three would have already been marshalled to bytes by the client or
 	// in parse function.
-	if p.Tid == types.GeoID || p.Tid == types.DateTimeID {
+	if p.Tid == types.GeoID || p.Tid == types.DateTimeID || p.Tid == types.BigFloatID {
 		return p.Value.([]byte), p.Tid, nil
 	}
 

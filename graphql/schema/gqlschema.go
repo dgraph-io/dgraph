@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
@@ -49,6 +49,7 @@ const (
 	remoteResponseDirective = "remoteResponse"
 	lambdaDirective         = "lambda"
 	lambdaOnMutateDirective = "lambdaOnMutate"
+	defaultDirective        = "default"
 
 	generateDirective       = "generate"
 	generateQueryArg        = "query"
@@ -197,6 +198,10 @@ input CustomHTTP {
 	skipIntrospection: Boolean
 }
 
+input DgraphDefault {
+	value: String
+}
+
 type Point {
 	longitude: Float!
 	latitude: Float!
@@ -281,6 +286,7 @@ directive @search(by: [String!]) on FIELD_DEFINITION
 directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
+directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
@@ -313,6 +319,7 @@ directive @search(by: [String!]) on FIELD_DEFINITION
 directive @embedding on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id(interface: Boolean) on FIELD_DEFINITION
+directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITION
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
@@ -577,6 +584,7 @@ var directiveValidators = map[string]directiveValidator{
 	remoteDirective:         ValidatorNoOp,
 	deprecatedDirective:     ValidatorNoOp,
 	lambdaDirective:         lambdaDirectiveValidation,
+	defaultDirective:        defaultDirectiveValidation,
 	lambdaOnMutateDirective: ValidatorNoOp,
 	generateDirective:       ValidatorNoOp,
 	apolloKeyDirective:      ValidatorNoOp,
@@ -1296,7 +1304,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[
 		return
 	}
 
-	nonIDFields := getNonIDFields(schema, defn, providesTypeMap)
+	nonIDFields := getPatchFields(schema, defn, providesTypeMap)
 	if len(nonIDFields) == 0 {
 		// The user might just have an predicate with reverse edge id field and nothing else.
 		// We don't generate patch type in that case.
@@ -2434,7 +2442,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 	return &newFld
 }
 
-func getNonIDFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
+func getPatchFields(schema *ast.Schema, defn *ast.Definition, providesTypeMap map[string]bool) ast.FieldList {
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
@@ -2516,12 +2524,19 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition,
 			continue
 		}
 
-		// see also comment in getNonIDFields
+		// see also comment in getPatchFields
 		if schema.Types[fld.Type.Name()].Kind == ast.Interface &&
 			(!hasID(schema.Types[fld.Type.Name()]) && !hasXID(schema.Types[fld.Type.Name()])) {
 			continue
 		}
-		fldList = append(fldList, createField(schema, fld))
+
+		// if the field has a @default(add) value it is optional in add input
+		var field = createField(schema, fld)
+		if getDefaultValue(fld, "add") != nil {
+			field.Type.NonNull = false
+		}
+
+		fldList = append(fldList, field)
 	}
 
 	pd := getPasswordField(defn)

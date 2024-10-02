@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.0.2] - 2024-08-16
+[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.1...v24.0.2
+
+
+
+- **Fixed**
+  
+	- fix(core): Fix namespace used by unique query https://github.com/dgraph-io/dgraph/pull/9119 
+	- fix(core): Fix regression in computing cond variables  https://github.com/dgraph-io/dgraph/pull/9126
+  	- fix(live): Fix derigster while retrying  https://github.com/dgraph-io/dgraph/pull/9121
+   
+
+- **Chore**
+	- chore(deps): bump certifi from 2023.7.22 to 2024.7.4 in /contrib/config/marketplace/aws/tests https://github.com/dgraph-io/dgraph/pull/9110
+	- chore(deps): bump idna from 2.9 to 3.7 in /contrib/config/marketplace/aws/tests  https://github.com/dgraph-io/dgraph/pull/9072
+
+
+- **Perf**
+	- perf(query): Read just the latest value for scalar types https://github.com/dgraph-io/dgraph/pull/8966
+  - perf(vector): Add heap to neighbour edges https://github.com/dgraph-io/dgraph/pull/9122
+
+## [v24.0.1] - 2024-07-30
+[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v24.0.1
+
+> **Warning**
+> After upgrading to v24.0.1, vector index needs to be rebuilt as underlying data has changed.
+
+- **Fixed**
+  
+	- fix(core): Fix regression in parsing json empty string #9108
+	- fix(upgrade): fix failing upgrade tests #9042
+	- fix(ci): fixing health endpoint issue #9116
+	- Fix(graphql): issue with local variable squashing intended JWK index by @matthewmcneely in #9114
+
+- **Chore**
+	- chore(deps): bump urllib3 from 1.26.18 to 1.26.19 /contrib/config/marketplace/aws/tests #9103
+	- chore(deps): bump requests from 2.31.0 to 2.32.0 /contrib/config/marketplace/aws/tests #9090
+
+
+- **Perf**
+	- perf(vector): updated marshalling of vector #9109
+
+
 ## [v24.0.0] - 2024-06-06
 [v24.0.0]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v23.1.0
 
@@ -73,6 +116,18 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 	- chore(deps): bump urllib3 from 1.26.5 to 1.26.18 in /contrib/config/marketplace/aws/tests in #9018
 	- chore(deps): bump google.golang.org/grpc from 1.56.2 to 1.56.3 in #9024
 	- chore(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0in #9051[
+
+## [23.1.1] - 2024-04-26
+[v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
+
+### Fixed
+
+- **Core Dgraph**
+    - perf(core): Fix performance issue in type filter (#9065)
+
+
+- **CI & Testing**
+    - ci/cd optimizations (#9069)
 
 ## [v23.1.0] - 2023-08-17
 [v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0

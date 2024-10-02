@@ -30,11 +30,11 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/codec"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -122,6 +122,70 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 	// is to roll them up periodically, now being done by draft.go.
 	// For the PLs in memory, we roll them up after we do the disk rollup.
 	return nil
+}
+
+func TestGetSinglePosting(t *testing.T) {
+	key := x.DataKey(x.GalaxyAttr("GetSinglePosting"), 123)
+	txn := NewTxn(5)
+	l, err := txn.Get(key)
+	require.NoError(t, err)
+
+	create_pl := func(startTs uint64) *pb.PostingList {
+		return &pb.PostingList{
+			Postings: []*pb.Posting{
+				{
+					Uid:      1,
+					Op:       1,
+					StartTs:  startTs,
+					CommitTs: startTs,
+				},
+			},
+			CommitTs: startTs,
+		}
+	}
+
+	res, err := l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res == nil, true)
+
+	l.plist = create_pl(1)
+
+	res, err = l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	res, err = l.StaticValue(4)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	l.mutationMap = make(map[uint64]*pb.PostingList)
+	l.mutationMap[3] = create_pl(3)
+	l.maxTs = 3
+
+	res, err = l.StaticValue(1)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(1))
+
+	res, err = l.StaticValue(3)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	res, err = l.StaticValue(4)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	// Create txn from 4->6. It could be stored as 4 or 6 in the map.
+	l.mutationMap[4] = create_pl(6)
+	l.mutationMap[4].Postings[0].StartTs = 4
+	l.maxTs = 6
+
+	res, err = l.StaticValue(5)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+
+	res, err = l.StaticValue(6)
+	require.NoError(t, err)
+	require.Equal(t, res.Postings[0].StartTs, uint64(4))
 }
 
 func TestAddMutation(t *testing.T) {
@@ -448,6 +512,54 @@ func TestAddMutation_mrjn1(t *testing.T) {
 	}
 	addMutationHelper(t, ol, edge, Del, txn)
 	require.Equal(t, 0, ol.Length(txn.StartTs, 0))
+}
+
+func TestReadSingleValue(t *testing.T) {
+	defer setMaxListSize(maxListSize)
+	maxListSize = math.MaxInt32
+
+	// We call pl.Iterate and then stop iterating in the first loop when we are reading
+	// single values. This test confirms that the two functions, getFirst from this file
+	// and GetSingeValueForKey works without an issue.
+
+	key := x.DataKey(x.GalaxyAttr("value"), 1240)
+	ol, err := getNew(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	N := int(10000)
+	for i := 2; i <= N; i += 2 {
+		edge := &pb.DirectedEdge{
+			Value: []byte("ho hey there" + strconv.Itoa(i)),
+		}
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		kData := ol.getMutation(uint64(i))
+		writer := NewTxnWriter(pstore)
+		if err := writer.SetAt(key, kData, BitDeltaPosting, uint64(i)); err != nil {
+			require.NoError(t, err)
+		}
+		writer.Flush()
+
+		if i%10 == 0 {
+			// Do frequent rollups, and store data in old timestamp
+			kvs, err := ol.Rollup(nil, txn.StartTs-3)
+			require.NoError(t, err)
+			require.NoError(t, writePostingListToDisk(kvs))
+			ol, err = getNew(key, ps, math.MaxUint64)
+			require.NoError(t, err)
+		}
+
+		j := 2
+		if j < int(ol.minTs) {
+			j = int(ol.minTs)
+		}
+		for ; j < i+6; j++ {
+			tx := NewTxn(uint64(j))
+			k, err := tx.cache.GetSinglePosting(key)
+			require.NoError(t, err)
+			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
+		}
+	}
 }
 
 func TestRollupMaxTsIsSet(t *testing.T) {

@@ -27,9 +27,9 @@ import (
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok/index"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var o *oracle
@@ -103,9 +103,18 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
 }
 
 func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
-	val, err := pl.ValueWithLockHeld(vt.delegate.StartTs)
-	rval = val.Value
-	return rval, err
+	value := pl.findStaticValue(vt.delegate.StartTs)
+
+	if value == nil {
+		//fmt.Println("DIFF", val, err, nil, badger.ErrKeyNotFound)
+		return nil, ErrNoValue
+	}
+
+	if hasDeleteAll(value.Postings[0]) || value.Postings[0].Op == Del {
+		return nil, ErrNoValue
+	}
+
+	return value.Postings[0].Value, nil
 }
 
 func (vt *viTxn) AddMutation(ctx context.Context, key []byte, t *index.KeyValue) error {

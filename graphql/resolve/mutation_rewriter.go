@@ -27,16 +27,18 @@ import (
 
 	"github.com/pkg/errors"
 
-	dgoapi "github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dql"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
+	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/dgraph-io/dgraph/v24/graphql/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (
-	MutationQueryVar        = "x"
-	MutationQueryVarUID     = "uid(x)"
-	updateMutationCondition = `gt(len(x), 0)`
+	MutationQueryVar          = "x"
+	MutationQueryVarUID       = "uid(x)"
+	updateMutationCondition   = `gt(len(x), 0)`
+	defaultDirectiveUpdateAct = "update"
+	defaultDirectiveAddAct    = "add"
 )
 
 // Enum passed on to rewriteObject function.
@@ -1588,6 +1590,8 @@ func rewriteObject(
 		}
 	}
 
+	action := defaultDirectiveUpdateAct
+
 	// This is not an XID reference. This is also not a UID reference.
 	// This is definitely a new node.
 	// Create new node
@@ -1636,6 +1640,19 @@ func rewriteObject(
 		// "_:Project2" . myUID will store the variable generated to reference this node.
 		newObj["dgraph.type"] = dgraphTypes
 		newObj["uid"] = myUID
+		action = defaultDirectiveAddAct
+	}
+
+	// Now we know whether this is a new node or not, we can set @default(add/update) fields
+	for _, field := range typ.Fields() {
+		var pred = field.DgraphPredicate()
+		if newObj[pred] != nil {
+			continue
+		}
+		var value = field.GetDefaultValue(action)
+		if value != nil {
+			newObj[pred] = value
+		}
 	}
 
 	// Add Inverse Link if necessary

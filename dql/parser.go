@@ -26,10 +26,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/lex"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 const (
@@ -2948,6 +2948,17 @@ loop:
 				}
 			}
 			if isSortkey(key) {
+
+				// we dont support variable + predicate sorting
+				for _, order := range gq.Order {
+					for _, needVar := range gq.NeedsVar {
+						if needVar.Name == order.Attr {
+							return nil, it.Errorf("Val() is not allowed in multiple sorting."+
+								" Got: [%v]", needVar.Name)
+						}
+					}
+				}
+
 				if order[val] {
 					return nil, it.Errorf("Sorting by an attribute: [%s] can only be done once", val)
 				}

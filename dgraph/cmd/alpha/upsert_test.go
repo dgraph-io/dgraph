@@ -28,10 +28,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type QueryResult struct {
@@ -1712,12 +1712,45 @@ upsert {
 	require.Contains(t, err.Error(), "Invalid input: U at lexText")
 }
 
+func TestBigFloat(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+name: string @index(exact) .
+branch: string .
+amount: bigfloat .`))
+
+	m1 := `
+{
+  set {
+    _:user1 <name> "user1" .
+    _:user1 <amount> "10.00000000000000000001" .
+  }
+}`
+
+	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
+	require.NoError(t, err)
+
+	q1 := `
+{
+  q(func: has(name)) {
+    name
+    amount
+  }
+}`
+
+	res, _, err := queryWithTs(queryInp{body: q1, typ: "application/dql"})
+	require.NoError(t, err)
+
+	expectedRes := `{"data":{"q":[{"name":"user1","amount":10.00000000000000000001}]}}`
+	require.EqualValues(t, expectedRes, res)
+}
+
 func SetupBankExample(t *testing.T) string {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`
 name: string @index(exact) .
 branch: string .
-amount: float .`))
+amount: bigfloat .`))
 
 	m1 := `
 {
@@ -1746,6 +1779,20 @@ amount: float .`))
 	require.NoError(t, err)
 
 	return expectedRes
+}
+
+func TestBigFloatInvalidInput(t *testing.T) {
+	SetupBankExample(t)
+	m1 := `
+{
+  set {
+    _:user4 <name> "user4" .
+    _:user4 <amount> "100.000.0" .
+  }
+}`
+
+	_, err := mutationWithTs(mutationInp{body: m1, typ: "application/rdf", commitNow: true})
+	require.Contains(t, err.Error(), `cannot unmarshal "100.000.0" into a *big.Float`)
 }
 
 func TestUpsertSanityCheck(t *testing.T) {
@@ -1859,20 +1906,20 @@ func TestUpsertBulkUpdateValue(t *testing.T) {
 	// Resetting the val in upsert to check if the
 	// values are not switched and the interest is added
 	m1 := `
-upsert {
-  query {
-    u as var(func: has(amount)) {
-      amt as amount
-      updated_amt as math(amt+1)
+  upsert {
+    query {
+      u as var(func: has(amount)) {
+        amt as amount
+        updated_amt as math(amt+1.123456789101112)
+      }
     }
-  }
 
-  mutation {
-    set {
-      uid(u) <amount> val(updated_amt) .
+    mutation {
+      set {
+        uid(u) <amount> val(updated_amt) .
+      }
     }
   }
-}
   `
 
 	q1 := `
@@ -1891,13 +1938,13 @@ upsert {
   "data": {
     "q": [{
        "name": "user3",
-       "amount": 1001.000000
+       "amount": 1001.123456789101112
      }, {
        "name": "user1",
-       "amount": 11.000000
+       "amount": 11.123456789101112
      }, {
        "name": "user2",
-       "amount": 101.000000
+       "amount": 101.123456789101112
      }]
    }
 }`

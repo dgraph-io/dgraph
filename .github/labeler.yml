@@ -1,49 +1,82 @@
 area/graphql:
-  - graphql/**/*
+- changed-files:
+  - any-glob-to-any-file: graphql/**
+
 area/documentation:
-  - "**/*.md"
-  - "**/*.pdf"
-  - "**/*.tex"
+- changed-files:
+  - any-glob-to-any-file:
+    - '**/*.md'
+    - '**/*.pdf'
+    - '**/*.tex'
+
 area/bulk-loader:
-  - dgraph/cmd/bulk/**/*
+- changed-files:
+  - any-glob-to-any-file: dgraph/cmd/bulk/**
+
 area/live-loader:
-  - dgraph/cmd/live/**/*
+- changed-files:
+  - any-glob-to-any-file: dgraph/cmd/live/**
+
 area/querylang:
-  - dql/**/*
+- changed-files:
+  - any-glob-to-any-file: dql/**
+
 area/integrations:
-  - contrib/**/*
-  - .github/**/*
-  - .travis/**/*
+- changed-files:
+  - any-glob-to-any-file:
+    - contrib/**
+    - .github/**
+    - .travis/**
+
 area/testing/jepsen:
-  - contrib/jepsen/**/*
+- changed-files:
+  - any-glob-to-any-file: contrib/jepsen/**
+
 area/enterprise:
-  - ee/**/*
+- changed-files:
+  - any-glob-to-any-file: ee/**
+
 area/enterprise/backup:
-  - ee/backup/**/*
+- changed-files:
+  - any-glob-to-any-file: ee/backup/**
+
 area/enterprise/acl:
-  - ee/acl/**/*
+- changed-files:
+  - any-glob-to-any-file: ee/acl/**
+  
 area/schema:
-  - schema/**/*
+- changed-files:
+  - any-glob-to-any-file: schema/**
+
 area/testing:
-  - systest/**/*
-  - "**/*test.go"
-  - graphql/e2e/**/*
-  - "**/*test.yaml"
-  - t/**/*
-  - testutil/**/*
-  - tlstest/**/*
+- changed-files:
+  - any-glob-to-any-file:
+    - systest/**
+    - '**/*test.go'
+    - graphql/e2e/**
+    - '**/*test.yaml'
+    - t/**
+    - testutil/**
+    - tlstest/**
+
 area/core:
-  - protos/**/*
-  - posting/**/*
-  - raftwal/**/*
-  - query/**/*
-  - schema/**/*
-  - protos/**/*
-  - x/**/*
-  - xidmap/**/*
-  - worker/**/*
-  - graphql/**/*
+- changed-files:
+  - any-glob-to-any-file:
+    - protos/**
+    - posting/**
+    - raftwal/**
+    - query/**
+    - schema/**
+    - protos/**
+    - x/**
+    - xidmap/**
+    - worker/**
+    - graphql/**
+
 go:
-  - "**/*.go"
+- changed-files:
+  - any-glob-to-any-file: '**/*.go'
+
 python:
-  - "**/*.py"
+- changed-files:
+  - any-glob-to-any-file: '**/*.py'

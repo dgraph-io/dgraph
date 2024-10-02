@@ -30,13 +30,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/testutil"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var ts uint64
@@ -172,12 +172,12 @@ func initClusterTest(t *testing.T, schemaStr string) *dgo.Dgraph {
 func TestVectorSchema(t *testing.T) {
 	dg := initClusterTest(t, `
 	neighbour: [uid] .
-	vectortest: float32vector @index(hnsw(metric: "euclidian")) .`)
+	vectortest: float32vector @index(hnsw(metric: "euclidean")) .`)
 
 	resp, err := testutil.RetryQuery(dg, "schema {}")
 	require.NoError(t, err)
 
-	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidian\")"],"index_specs":[{"name":"hnsw","options":[{"key":"metric","value":"euclidian"}]}]}]`))
+	x.AssertTrue(strings.Contains(string(resp.Json), `{"predicate":"vectortest","type":"float32vector","tokenizer":["hnsw(\"metric\":\"euclidean\")"],"index_specs":[{"name":"hnsw","options":[{"key":"metric","value":"euclidean"}]}]}]`))
 }
 
 func TestProcessTask(t *testing.T) {

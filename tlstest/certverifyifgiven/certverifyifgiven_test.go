@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/testutil"
 )
 
 func TestAccessWithoutClientCert(t *testing.T) {
@@ -22,7 +22,7 @@ func TestAccessWithoutClientCert(t *testing.T) {
 		// server-name
 		"node"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
@@ -39,14 +39,14 @@ func TestAccessWithClientCert(t *testing.T) {
 		// client-key
 		"../tls/client.acl.key"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttp + "/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -59,7 +59,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt",
 		"--cert", "../tls/client.acl.crt",
 		"--key", "../tls/client.acl.key",
-		"https://" + testutil.SockAddrHttp + "/alter",
+		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

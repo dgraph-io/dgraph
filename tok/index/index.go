@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2024 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Co-authored by: jai@hypermode.com, sunil@hypermode.com, bill@hypdermode.com
  */
 
 package index
@@ -19,8 +21,8 @@ package index
 import (
 	"context"
 
-	c "github.com/dgraph-io/dgraph/tok/constraints"
-	opts "github.com/dgraph-io/dgraph/tok/options"
+	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
+	opts "github.com/dgraph-io/dgraph/v24/tok/options"
 )
 
 // IndexFactory is responsible for being able to create, find, and remove

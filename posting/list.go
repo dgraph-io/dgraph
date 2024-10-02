@@ -31,14 +31,14 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/dgraph-io/dgraph/algo"
-	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
-	"github.com/dgraph-io/dgraph/tok/index"
-	"github.com/dgraph-io/dgraph/types"
-	"github.com/dgraph-io/dgraph/types/facets"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/algo"
+	"github.com/dgraph-io/dgraph/v24/codec"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/tok/index"
+	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/dgraph-io/dgraph/v24/types/facets"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/z"
 )
 
@@ -542,6 +542,16 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	txn.addConflictKey(GetConflictKey(pk, l.key, t))
+	return nil
+}
+
+// getMutation returns a marshaled version of posting list mutation stored internally.
+func (l *List) getPosting(startTs uint64) *pb.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	if pl, ok := l.mutationMap[startTs]; ok {
+		return pl
+	}
 	return nil
 }
 
@@ -1268,7 +1278,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
-			return out, ErrTsTooOld
+			return out, errors.Wrapf(ErrTsTooOld, "While reading UIDs")
 		}
 		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 		l.RUnlock()
@@ -1391,6 +1401,58 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 	})
 	return tags, errors.Wrapf(err, "cannot retrieve language tags from list with key %s",
 		hex.EncodeToString(l.key))
+}
+
+func (l *List) StaticValue(readTs uint64) (*pb.PostingList, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	return l.findStaticValue(readTs), nil
+}
+
+func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
+	l.AssertRLock()
+
+	if l.mutationMap == nil {
+		// If mutation map is empty, check if there is some data, and return it.
+		if l.plist != nil && len(l.plist.Postings) > 0 {
+			return l.plist
+		}
+		return nil
+	}
+
+	// Return readTs is if it's present in the mutation. It's going to be the latest value.
+	mutation, ok := l.mutationMap[readTs]
+	if ok {
+		return mutation
+	}
+
+	// If maxTs < readTs then we need to read maxTs
+	if l.maxTs < readTs {
+		mutation, ok = l.mutationMap[l.maxTs]
+		if ok {
+			return mutation
+		}
+	}
+
+	// This means that maxTs > readTs. Go through the map to find the closest value to readTs
+	mutation = nil
+	ts_found := uint64(0)
+	for _, mutation_i := range l.mutationMap {
+		ts := mutation_i.CommitTs
+		if ts <= readTs && ts > ts_found {
+			ts_found = ts
+			mutation = mutation_i
+		}
+	}
+
+	if mutation != nil {
+		return mutation
+	}
+
+	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
+	// means we need to return l.plist
+	return l.plist
 }
 
 // Value returns the default value from the posting list. The default value is

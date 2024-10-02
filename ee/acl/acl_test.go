@@ -24,11 +24,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v230"
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphtest"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 var (
@@ -1433,7 +1433,7 @@ func (asuite *AclTestSuite) TestValQueryWithACLPermissions() {
 					n as name
 					a as age
 				}
-				q2(func: uid(f), orderdesc: val(a), orderasc: name) {
+				q2(func: uid(f), orderdesc: val(a)) {
 					name
 					val(n)
 					val(a)

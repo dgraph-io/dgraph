@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphtest"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 type AclTestSuite struct {
@@ -55,7 +55,7 @@ func (asuite *AclTestSuite) Upgrade() {
 
 func TestACLSuite(t *testing.T) {
 	for _, uc := range dgraphtest.AllUpgradeCombos(true) {
-		log.Printf("running upgrade tests for confg: %+v", uc)
+		log.Printf("running upgrade tests for config: %+v", uc)
 		aclSuite := AclTestSuite{uc: uc}
 		suite.Run(t, &aclSuite)
 		if t.Failed() {

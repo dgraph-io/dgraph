@@ -29,7 +29,7 @@ import (
 	"github.com/golang/glog"
 	geojson "github.com/paulmach/go.geojson"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/v24/x"
 )
 
 // TODO: Reconsider if we need this binary.

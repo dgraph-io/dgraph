@@ -25,16 +25,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v230/protos/api"
-	"github.com/dgraph-io/dgraph/dgraphapi"
-	"github.com/dgraph-io/dgraph/dgraphtest"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/dgraphtest"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/stretchr/testify/require"
 )
 
 const (
 	testSchema = `
-	project_discription_v: float32vector @index(hnsw(exponent: "5", metric: "euclidian")) .`
+	project_discription_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
 
 	testSchemaWithoutIndex = `project_discription_v: float32vector .`
 )
