@@ -880,3 +880,30 @@
       }
     }
 
+- name: "Delete selection by nested filter"
+  gqlquery: |
+    mutation {
+      deleteNested_X(filter: {y: {s: {eq: "-"}}}) {
+        numUids
+      }
+    }
+  variables:
+  jwtvar:
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },{
+           "Nested_Z.x": {"uid": "uid(x)"},
+           "uid": "uid(Nested_Y_3)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteNested_X(func: type(Nested_X)) @filter((uid(deleteNested_X_y))) {
+        uid
+        Nested_Y_3 as Nested_X.y
+      }
+      var(func: type(Nested_Y)) @filter(eq(Nested_Y.s, "-")) {
+        deleteNested_X_y as Nested_Z.x
+      }
+    }
