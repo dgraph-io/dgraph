@@ -35,7 +35,7 @@ func BytesAsFloatArray(encoded []byte) []float32 {
 		return []float32{}
 	}
 	retVal := make([]float32, resultLen)
-	for i := 0; i < resultLen; i++ {
+	for i := range resultLen {
 		retVal[i] = *(*float32)(unsafe.Pointer(&encoded[0]))
 		encoded = encoded[4:]
 	}
@@ -49,7 +49,7 @@ func BytesAsFloatArray(encoded []byte) []float32 {
 func FloatArrayAsBytes(v []float32) []byte {
 	retVal := make([]byte, 4*len(v))
 	offset := retVal
-	for i := 0; i < len(v); i++ {
+	for i := range v {
 		bits := math.Float32bits(v[i])
 		binary.LittleEndian.PutUint32(offset, bits)
 		offset = offset[4:]

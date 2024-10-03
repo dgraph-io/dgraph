@@ -142,7 +142,7 @@ func sortWithoutIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 			ts.Order[0].Attr))
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		select {
 		case <-ctx.Done():
 			return resultWithError(ctx.Err())
@@ -187,7 +187,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	n := len(ts.UidMatrix)
 	out := make([]intersectedList, n)
 	values := make([][]types.Val, 0, n) // Values corresponding to uids in the uid matrix.
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// offsets[i] is the offset for i-th posting list. It gets decremented as we
 		// iterate over buckets.
 		out[i].offset = int(ts.Offset)
@@ -694,7 +694,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 	} // end for loop over UID lists in UID matrix.
 
 	// Check out[i] sizes for all i.
-	for i := 0; i < len(ts.UidMatrix); i++ { // Iterate over UID lists.
+	for i := range ts.UidMatrix { // Iterate over UID lists.
 		// We need to reduce multiSortOffset while checking the count as we might have included
 		// some extra uids earlier for the multi-sort case.
 		if len(out[i].ulist.Uids)-int(out[i].multiSortOffset) < count {
@@ -779,7 +779,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 	// nullsList is the list of UIDs for which value doesn't exist.
 	var nullsList []uint64
 	var nullVals [][]types.Val
-	for i := 0; i < lenList; i++ {
+	for i := range lenList {
 		select {
 		case <-ctx.Done():
 			return multiSortVals, ctx.Err()

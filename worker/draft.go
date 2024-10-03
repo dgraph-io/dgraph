@@ -539,7 +539,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return process(m.Edges)
 	}
 	errCh := make(chan error, numGo)
-	for i := 0; i < numGo; i++ {
+	for i := range numGo {
 		start := i * width
 		end := start + width
 		if end > len(m.Edges) {
@@ -553,7 +553,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
 	// a deadlock with runMutation.
 	var errs error
-	for i := 0; i < numGo; i++ {
+	for range numGo {
 		if err := <-errCh; err != nil {
 			if errs == nil {
 				errs = errors.New("Got error while running mutation")

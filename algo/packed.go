@@ -333,7 +333,7 @@ func IndexOfPacked(u *pb.UidPack, uid uint64) int {
 	}
 
 	index += uidx
-	for i := 0; i < decoder.BlockIdx(); i++ {
+	for i := range decoder.BlockIdx() {
 		index += int(u.Blocks[i].GetNumUids())
 	}
 

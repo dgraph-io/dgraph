@@ -218,7 +218,7 @@ func GetSchemaOverNetwork(ctx context.Context, schema *pb.SchemaRequest) (
 
 	// wait for all the goroutines to reply back.
 	// we return if an error was returned or the parent called ctx.Done()
-	for i := 0; i < len(schemaMap); i++ {
+	for range schemaMap {
 		select {
 		case r := <-results:
 			if r.err != nil {

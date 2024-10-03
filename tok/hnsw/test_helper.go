@@ -288,7 +288,7 @@ func equalUint64Slice(a, b []uint64) bool {
 func floatArrayAsBytes(v []float64) []byte {
 	retVal := make([]byte, 8*len(v))
 	offset := retVal
-	for i := 0; i < len(v); i++ {
+	for i := range v {
 		bits := math.Float64bits(v[i])
 		binary.LittleEndian.PutUint64(offset, bits)
 		offset = offset[8:]

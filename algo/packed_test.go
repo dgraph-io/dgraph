@@ -320,12 +320,12 @@ func TestSubSorted6Packed(t *testing.T) {
 
 func TestIndexOfPacked1(t *testing.T) {
 	encoder := codec.Encoder{BlockSize: 10}
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		encoder.Add(uint64(i))
 	}
 	pack := encoder.Done()
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		require.Equal(t, i, IndexOfPacked(pack, uint64(i)))
 	}
 	require.Equal(t, -1, IndexOfPacked(pack, 1000))
@@ -333,7 +333,7 @@ func TestIndexOfPacked1(t *testing.T) {
 
 func TestIndexOfPacked2(t *testing.T) {
 	encoder := codec.Encoder{BlockSize: 10}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		encoder.Add(uint64(i))
 	}
 	pack := encoder.Done()

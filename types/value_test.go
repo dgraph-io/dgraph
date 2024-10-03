@@ -76,7 +76,7 @@ func TestFloatArrayTranslation(t *testing.T) {
 		asBytes := FloatArrayAsBytes(tc)
 		asFloat32 := BytesAsFloatArray(asBytes)
 		require.Equal(t, len(tc), len(asFloat32))
-		for i := 0; i < len(tc); i++ {
+		for i := range tc {
 			require.Equal(t, tc[i], asFloat32[i])
 		}
 	}

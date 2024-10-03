@@ -74,7 +74,7 @@ func main() {
 	case "mutate":
 		var errCount int64
 		var mutateCount int64
-		for i := 0; i < *conc; i++ {
+		for range *conc {
 			go func() {
 				for {
 					err := mutate(c)
@@ -94,7 +94,7 @@ func main() {
 	case "query":
 		var errCount int64
 		var queryCount int64
-		for i := 0; i < *conc; i++ {
+		for range *conc {
 			go func() {
 				for {
 					err := showNode(c)

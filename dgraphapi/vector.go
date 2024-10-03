@@ -27,7 +27,7 @@ import (
 
 func GenerateRandomVector(size int) []float32 {
 	vector := make([]float32, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		vector[i] = rand.Float32() * 10
 	}
 	return vector

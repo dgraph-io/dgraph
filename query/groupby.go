@@ -218,7 +218,7 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 		}
 		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
+			for i := range child.uidMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				// Ignore uids which are not part of srcUid.
 				if algo.IndexOf(ul, srcUid) < 0 {
@@ -300,7 +300,7 @@ func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGra
 		}
 		if len(child.DestUIDs.GetUids()) > 0 {
 			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
+			for i := range child.uidMatrix {
 				srcUid := child.SrcUIDs.Uids[i]
 				ul := child.uidMatrix[i]
 				for _, uid := range ul.Uids {

@@ -292,7 +292,7 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 
 func (c *CustomClaims) validateAudience() error {
 	// If there's no audience claim, ignore
-	if c.Audience == nil || len(c.Audience) == 0 {
+	if len(c.Audience) == 0 {
 		return nil
 	}
 
@@ -353,7 +353,7 @@ func GetJwtToken(ctx context.Context) string {
 func (a *AuthMeta) validateThroughJWKUrl(jwtStr string) (*jwt.Token, error) {
 	var err error
 	var token *jwt.Token
-	for i := 0; i < len(a.JWKUrls); i++ {
+	for i := range a.JWKUrls {
 		if a.isExpired(i) {
 			err = a.refreshJWK(i)
 			if err != nil {
@@ -441,7 +441,7 @@ func (a *AuthMeta) FetchJWKs() error {
 		return errors.Errorf("No JWKUrl supplied")
 	}
 
-	for i := 0; i < len(a.JWKUrls); i++ {
+	for i := range a.JWKUrls {
 		err := a.FetchJWK(i)
 		if err != nil {
 			return err
@@ -513,7 +513,7 @@ func (a *AuthMeta) FetchJWK(i int) error {
 
 func (a *AuthMeta) refreshJWK(i int) error {
 	var err error
-	for n := 0; n < 3; n++ {
+	for range 3 {
 		err = a.FetchJWK(i)
 		if err == nil {
 			return nil

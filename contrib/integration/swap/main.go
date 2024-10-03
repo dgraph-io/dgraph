@@ -104,7 +104,7 @@ func main() {
 	done := make(chan struct{})
 	go func() {
 		pending := make(chan struct{}, *concurr)
-		for i := 0; i < *numSwaps; i++ {
+		for range *numSwaps {
 			pending <- struct{}{}
 			go func() {
 				swapSentences(c,
@@ -114,7 +114,7 @@ func main() {
 				<-pending
 			}()
 		}
-		for i := 0; i < *concurr; i++ {
+		for range *concurr {
 			pending <- struct{}{}
 		}
 		close(done)
@@ -343,7 +343,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		}
 	}
 	sort.Strings(gotSentences)
-	for i := 0; i < len(sentences); i++ {
+	for i := range sentences {
 		if sentences[i] != gotSentences[i] {
 			fmt.Printf("Sentence doesn't match. Wanted: %q. Got: %q\n", sentences[i], gotSentences[i])
 			fmt.Printf("All sentences: %v\n", sentences)

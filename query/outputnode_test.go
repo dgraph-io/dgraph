@@ -40,11 +40,11 @@ func TestEncodeMemory(t *testing.T) {
 	//	}
 	var wg sync.WaitGroup
 
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for range runtime.NumCPU() {
 		enc := newEncoder()
 		n := enc.newNode(0)
 		require.NotNil(t, n)
-		for i := 0; i < 15000; i++ {
+		for i := range 15000 {
 			require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 				types.ValueForType(types.StringID)))
 			enc.AddListChild(n,
@@ -53,7 +53,7 @@ func TestEncodeMemory(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 1000; j++ {
+			for range 1000 {
 				enc.buf.Reset()
 				require.NoError(t, enc.encode(n))
 			}
@@ -74,24 +74,24 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	enc := newEncoder()
 	n := enc.newNode(enc.idForAttr("root"))
 	require.NotNil(t, n)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		require.NoError(t, enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 			types.ValueForType(types.StringID)))
 		child1 := enc.newNode(enc.idForAttr("child1"))
 		enc.AddListChild(n, child1)
-		for j := 0; j < 100; j++ {
+		for j := range 100 {
 			require.NoError(t, enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
 				types.ValueForType(types.StringID)))
 		}
 		child2 := enc.newNode(enc.idForAttr("child2"))
 		enc.AddListChild(n, child2)
-		for j := 0; j < 100; j++ {
+		for j := range 100 {
 			require.NoError(t, enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
 				types.ValueForType(types.StringID)))
 		}
 		child3 := enc.newNode(enc.idForAttr("child3"))
 		enc.AddListChild(n, child3)
-		for j := 0; j < 100; j++ {
+		for j := range 100 {
 			require.NoError(t, enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
 				types.ValueForType(types.StringID)))
 		}
@@ -181,7 +181,7 @@ func BenchmarkFastJsonNodeEmpty(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		enc := newEncoder()
 		var fj fastJsonNode
-		for i := 0; i < 2e6; i++ {
+		for range 2000000 {
 			fj = enc.newNode(0)
 		}
 		_ = fj
@@ -199,7 +199,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 	}
 
 	// Add only two children for now.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		var ch fastJsonNode
 		if level == maxlevel-1 {
 			val, err := valToBytes(testVal)

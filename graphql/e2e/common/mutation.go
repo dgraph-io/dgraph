@@ -1321,7 +1321,7 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string, 
 
 func filterInUpdate(t *testing.T) {
 	countries := make([]country, 0, 4)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		country := addCountry(t, postExecutor)
 		country.Name = "updatedValue"
 		countries = append(countries, *country)
@@ -1395,7 +1395,7 @@ func filterInUpdate(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, len(result.UpdateCountry.Country), test.Expected)
-			for i := 0; i < test.Expected; i++ {
+			for i := range test.Expected {
 				require.Equal(t, result.UpdateCountry.Country[i].Name, "updatedValue")
 			}
 
@@ -3395,7 +3395,7 @@ func parallelMutations(t *testing.T) {
 	// Each goroutine adds num different new nodes.
 	executeMutation := func(wg *sync.WaitGroup, num int) {
 		defer wg.Done()
-		for i := 0; i < num; i++ {
+		for i := range num {
 			addStateParams := &GraphQLParams{
 				Query: fmt.Sprintf(`mutation {
             			addState(input: [{xcode: "NewS%d", name: "State%d"}]) {
@@ -3414,13 +3414,13 @@ func parallelMutations(t *testing.T) {
 
 	// Nodes to be added per each goroutine
 	num := 5
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		wg.Add(1)
 		go executeMutation(&wg, num)
 	}
 	wg.Wait()
 
-	for i := 0; i < num; i++ {
+	for i := range num {
 		getStateParams := &GraphQLParams{
 			Query: fmt.Sprintf(`query {
 					queryState(filter: { xcode: { eq: "NewS%d"}}) {

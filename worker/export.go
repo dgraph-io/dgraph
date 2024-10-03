@@ -1048,7 +1048,7 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 	}
 
 	var allFiles ExportedFiles
-	for i := 0; i < len(gids); i++ {
+	for range gids {
 		pair := <-ch
 		if pair.error != nil {
 			rerr := errors.Wrapf(pair.error, "Export failed at readTs %d", readTs)

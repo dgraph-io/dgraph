@@ -72,7 +72,7 @@ func TestQueriesFor21Million(t *testing.T) {
 			// The test query and expected result are separated by a delimiter.
 			bodies := strings.SplitN(contents, "\n---\n", 2)
 			// Dgraph can get into unhealthy state sometime. So, add retry for every query.
-			for retry := 0; retry < 3; retry++ {
+			for retry := range 3 {
 				// If a query takes too long to run, it probably means dgraph is stuck and there's
 				// no point in waiting longer or trying more tests.
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

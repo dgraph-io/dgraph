@@ -969,7 +969,7 @@ func run() error {
 	closer := z.NewCloser(N)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
-	for i := 0; i < N; i++ {
+	for range N {
 		go func() {
 			if err := runTests(testCh, closer); err != nil {
 				errCh <- err

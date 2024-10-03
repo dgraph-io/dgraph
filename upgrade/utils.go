@@ -183,7 +183,7 @@ func getQueryResult(dg *dgo.Dgraph, query string, queryResPtr interface{}) error
 	var resp *api.Response
 	var err error
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -210,7 +210,7 @@ func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 	mutation.CommitNow = true
 
 	var err error
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -234,7 +234,7 @@ func alterWithClient(dg *dgo.Dgraph, operation *api.Operation) error {
 	}
 
 	var err error
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 

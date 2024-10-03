@@ -377,7 +377,7 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 
 	// Calculates best entry for last level (maxLevels-1) by searching each
 	// layer and using new best entry.
-	for level := 0; level < ph.maxLevels-1; level++ {
+	for level := range ph.maxLevels - 1 {
 		if isEqual(startVec, query) {
 			break
 		}
@@ -453,7 +453,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 
 	ph.visitedUids.ClearAll()
 
-	for level := 0; level < inLevel; level++ {
+	for level := range inLevel {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
 		err := ph.getVecFromUid(entry, tc, &startVec)
 		if err != nil {
@@ -490,7 +490,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 		entry = layerResult.bestNeighbor().index
 
 		nns := layerResult.neighbors
-		for i := 0; i < len(nns); i++ {
+		for i := range nns {
 			nnUidArray = append(nnUidArray, nns[i].index)
 			if inboundEdgesAllLayersMap[nns[i].index] == nil {
 				inboundEdgesAllLayersMap[nns[i].index] = make([][]uint64, ph.maxLevels)
@@ -504,7 +504,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 		}
 	}
 	edge, err := ph.addNeighbors(ctx, tc, inUuid, outboundEdgesAllLayers)
-	for i := 0; i < len(nnUidArray); i++ {
+	for i := range nnUidArray {
 		edge, err := ph.addNeighbors(
 			ctx, tc, nnUidArray[i], inboundEdgesAllLayersMap[nnUidArray[i]])
 		if err != nil {

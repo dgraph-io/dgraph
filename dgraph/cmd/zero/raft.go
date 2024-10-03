@@ -451,7 +451,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		}
 	}
 
-	if p.Tablets != nil && len(p.Tablets) > 0 {
+	if len(p.Tablets) > 0 {
 		if err := n.handleBulkTabletProposal(p.Tablets); err != nil {
 			span.Annotatef(nil, "While applying bulk tablet proposal: %v", err)
 			glog.Errorf("While applying bulk tablet proposal: %v", err)

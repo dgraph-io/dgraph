@@ -92,8 +92,7 @@ func TestParseDataKeyWithStartUid(t *testing.T) {
 }
 
 func TestIndexKey(t *testing.T) {
-	var uid uint64
-	for uid = 0; uid < 1001; uid++ {
+	for uid := range 1001 {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
@@ -108,9 +107,8 @@ func TestIndexKey(t *testing.T) {
 }
 
 func TestIndexKeyWithStartUid(t *testing.T) {
-	var uid uint64
 	startUid := uint64(math.MaxUint64)
-	for uid = 0; uid < 1001; uid++ {
+	for uid := range 1001 {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		sterm := fmt.Sprintf("term:%d", uid)
 
@@ -164,8 +162,8 @@ func TestReverseKeyWithStartUid(t *testing.T) {
 }
 
 func TestCountKey(t *testing.T) {
-	var count uint32
-	for count = 0; count < 1001; count++ {
+
+	for count := range uint32(1001) {
 		sattr := fmt.Sprintf("attr:%d", count)
 
 		key := CountKey(GalaxyAttr(sattr), count, true)
@@ -179,9 +177,8 @@ func TestCountKey(t *testing.T) {
 }
 
 func TestCountKeyWithStartUid(t *testing.T) {
-	var count uint32
 	startUid := uint64(math.MaxUint64)
-	for count = 0; count < 1001; count++ {
+	for count := range uint32(1001) {
 		sattr := fmt.Sprintf("attr:%d", count)
 
 		key := CountKey(GalaxyAttr(sattr), count, true)
@@ -199,8 +196,7 @@ func TestCountKeyWithStartUid(t *testing.T) {
 }
 
 func TestSchemaKey(t *testing.T) {
-	var uid uint64
-	for uid = 0; uid < 1001; uid++ {
+	for uid := range 1001 {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := SchemaKey(GalaxyAttr(sattr))
@@ -213,8 +209,7 @@ func TestSchemaKey(t *testing.T) {
 }
 
 func TestTypeKey(t *testing.T) {
-	var uid uint64
-	for uid = 0; uid < 1001; uid++ {
+	for uid := range 1001 {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := TypeKey(GalaxyAttr(sattr))

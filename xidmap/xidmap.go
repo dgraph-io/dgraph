@@ -116,7 +116,7 @@ func New(opts XidMapOptions) *XidMap {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
 		xm.writer = opts.DB.NewWriteBatch()
 
-		for i := 0; i < 16; i++ {
+		for range 16 {
 			xm.wg.Add(1)
 			go xm.dbWriter()
 		}

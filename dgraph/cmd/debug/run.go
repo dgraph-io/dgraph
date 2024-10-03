@@ -365,7 +365,7 @@ func jepsen(db *badger.DB) {
 	showAllPostingsAt(db, ts)
 	seekTotal(db, ts-1)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		// Get a few previous commits.
 		_, ts = getMinMax(db, ts-1)
 		showAllPostingsAt(db, ts)

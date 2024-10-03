@@ -75,7 +75,7 @@ func TestProposal(t *testing.T) {
 	wg.Add(loop)
 	go n.run(&wg)
 
-	for i := 0; i < loop; i++ {
+	for i := range loop {
 		data := []byte(fmt.Sprintf("hey-%d", i))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

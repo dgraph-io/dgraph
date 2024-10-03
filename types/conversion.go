@@ -69,7 +69,7 @@ func ParseVFloat(s string) ([]float32, error) {
 		// Splitting based on comma-separation.
 		values := strings.Split(trimmed, ",")
 		result := make([]float32, len(values))
-		for i := 0; i < len(values); i++ {
+		for i := range values {
 			trimmedVal := strings.TrimSpace(values[i])
 			val, err := strconv.ParseFloat(trimmedVal, 32)
 			if err != nil {
@@ -81,7 +81,7 @@ func ParseVFloat(s string) ([]float32, error) {
 	}
 	values := strings.Split(trimmed, " ")
 	result := make([]float32, 0, len(values))
-	for i := 0; i < len(values); i++ {
+	for i := range values {
 		if len(values[i]) == 0 {
 			// skip if we have an empty string. This can naturally
 			// occur if input s was "[1.0     2.0]"

@@ -783,7 +783,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	// Wait for all the goroutines to reply back.
 	// We return if an error was returned or the parent called ctx.Done()
 	var e error
-	for i := 0; i < len(mutationMap); i++ {
+	for range mutationMap {
 		res := <-resCh
 		if res.err != nil {
 			e = res.err

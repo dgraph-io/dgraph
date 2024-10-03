@@ -175,7 +175,7 @@ func createCAPair(opt *options) error {
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
 func createNodePair(opt *options) error {
-	if opt.nodes == nil || len(opt.nodes) == 0 {
+	if len(opt.nodes) == 0 {
 		return nil
 	}
 

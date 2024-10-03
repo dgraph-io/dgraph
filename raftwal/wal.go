@@ -114,7 +114,7 @@ func (l *wal) truncateEntriesUntil(lastIdx uint64) {
 			continue
 		}
 
-		for idx := 0; idx < maxNumEntries; idx++ {
+		for idx := range maxNumEntries {
 			entry := file.getEntry(idx)
 			if entry.Index() >= lastIdx {
 				return

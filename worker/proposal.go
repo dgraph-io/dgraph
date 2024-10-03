@@ -39,7 +39,7 @@ const baseTimeout time.Duration = 4 * time.Second
 
 func newTimeout(retry int) time.Duration {
 	timeout := baseTimeout
-	for i := 0; i < retry; i++ {
+	for range retry {
 		timeout *= 2
 	}
 	return timeout
@@ -307,7 +307,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		return propose(newTimeout(i))
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := proposeWithLimit(i); err != errInternalRetry {
 			return err
 		}

@@ -108,7 +108,7 @@ func runBenchmark() {
 	x.Check(err)
 
 	var triples []string
-	for i := uint64(0); i < opt.numMutations; i++ {
+	for i := range opt.numMutations {
 		uid := fmt.Sprintf("_:uid%d", i)
 		triple := fmt.Sprintf("%s <text> \"%s\"@en .", uid, opt.text)
 		triples = append(triples, triple)

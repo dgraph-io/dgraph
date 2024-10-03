@@ -108,7 +108,7 @@ func (c1 *DCloudCluster) AssignUids(client *dgo.Dgraph, num uint64) error {
 	genData := func() []byte {
 		var rdfs bytes.Buffer
 		_, _ = rdfs.WriteString("_:root <test_cloud> \"root\" .\n")
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			rdfs.WriteString(fmt.Sprintf("_:%v <test_cloud> \"0\" .\n", i))
 		}
 		return rdfs.Bytes()

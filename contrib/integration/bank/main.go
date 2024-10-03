@@ -374,7 +374,7 @@ func main() {
 	s.createAccounts(clients[0])
 
 	var wg sync.WaitGroup
-	for i := 0; i < *conc; i++ {
+	for range *conc {
 		for _, dg := range clients {
 			wg.Add(1)
 			go s.loop(dg, &wg)

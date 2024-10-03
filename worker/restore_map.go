@@ -787,7 +787,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 
 	numGo := 8
 	g, ctx := errgroup.WithContext(mapper.closer.Ctx())
-	for i := 0; i < numGo; i++ {
+	for range numGo {
 		g.Go(func() error {
 			return mapper.processReqCh(ctx)
 		})

@@ -249,7 +249,7 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 
 func RetryAlter(dg *dgo.Dgraph, op *api.Operation) error {
 	var err error
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err = dg.Alter(context.Background(), op)
 		if err == nil || !strings.Contains(err.Error(), "opIndexing is already running") {
 			return err

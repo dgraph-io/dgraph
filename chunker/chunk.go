@@ -97,7 +97,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 func (*rdfChunker) Chunk(r *bufio.Reader) (*bytes.Buffer, error) {
 	batch := new(bytes.Buffer)
 	batch.Grow(1 << 20)
-	for lineCount := 0; lineCount < 1e5; lineCount++ {
+	for range 100000 {
 		slc, err := r.ReadSlice('\n')
 		if err == io.EOF {
 			if _, err := batch.Write(slc); err != nil {

@@ -1136,7 +1136,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			continue
 		}
 
-		for i := 0; i < len(curNode.uidMatrix); i++ {
+		for i := range curNode.uidMatrix {
 			ul := curNode.uidMatrix[i]
 			srcUid := curNode.SrcUIDs.Uids[i]
 			curVal, ok := newMap[srcUid]
@@ -1146,7 +1146,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
 				return nil, errors.Errorf("Encountered non int/float type for summing")
 			}
-			for j := 0; j < len(ul.Uids); j++ {
+			for j := range ul.Uids {
 				dstUid := ul.Uids[j]
 				ag := aggregator{name: "sum"}
 				if err := ag.Apply(curVal); err != nil {
@@ -1171,7 +1171,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 func (sg *SubGraph) transformVars(doneVars map[string]varValue, path []*SubGraph) error {
 	mNode := sg.MathExp
 	mvarList := mNode.extractVarNodes()
-	for i := 0; i < len(mvarList); i++ {
+	for i := range mvarList {
 		mt := mvarList[i]
 		curNode := doneVars[mt.Var]
 		newMap, err := curNode.transformTo(path)
@@ -1302,7 +1302,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path []*SubGraph,
 	parent *SubGraph) error {
-	for idx := 0; idx < len(sg.Children); idx++ {
+	for idx := range sg.Children {
 		child := sg.Children[idx]
 		path = append(path, sg)
 		err := child.populatePostAggregation(doneVars, path, sg)
@@ -1403,7 +1403,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		if len(child.Params.Cascade.Fields) > 0 &&
 			(child.Params.Cascade.First != 0 || child.Params.Cascade.Offset != 0) {
 
-			for i := 0; i < len(child.uidMatrix); i++ {
+			for i := range child.uidMatrix {
 				start, end := x.PageRange(child.Params.Cascade.First,
 					child.Params.Cascade.Offset, len(child.uidMatrix[i].Uids))
 				child.uidMatrix[i].Uids = child.uidMatrix[i].Uids[start:end]
@@ -1955,7 +1955,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, errors.Wrapf(err, "While expanding subgraph")
 	}
 	out := make([]*SubGraph, 0, len(sg.Children))
-	for i := 0; i < len(sg.Children); i++ {
+	for i := range sg.Children {
 		child := sg.Children[i]
 
 		if child.Params.Expand == "" {
@@ -2355,7 +2355,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	childChan := make(chan error, len(sg.Children))
-	for i := 0; i < len(sg.Children); i++ {
+	for i := range sg.Children {
 		child := sg.Children[i]
 		child.Params.ParentVars = make(map[string]varValue)
 		for k, v := range sg.Params.ParentVars {
@@ -2408,7 +2408,7 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 
 	sg.updateUidMatrix()
-	for i := 0; i < len(sg.uidMatrix); i++ {
+	for i := range sg.uidMatrix {
 		// Apply the offsets.
 		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
@@ -2547,7 +2547,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 			values[i] = make([]types.Val, len(sg.Params.FacetsOrder))
 		}
 
-		for j := 0; j < len(ul.Uids); j++ {
+		for j := range ul.Uids {
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			uids = append(uids, uid)
@@ -2593,7 +2593,7 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 
 	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
 		// Apply the pagination.
-		for i := 0; i < len(sg.uidMatrix); i++ {
+		for i := range sg.uidMatrix {
 			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 			// We also have to paginate the facetsMatrix for safety.
@@ -2614,7 +2614,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		return errors.Errorf("Variable: [%s] used before definition.", sg.Params.Order[0].Attr)
 	}
 
-	for i := 0; i < len(sg.uidMatrix); i++ {
+	for i := range sg.uidMatrix {
 		ul := sg.uidMatrix[i]
 		uids := make([]uint64, 0, len(ul.Uids))
 		values := make([][]types.Val, 0, len(ul.Uids))
@@ -2638,7 +2638,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 
 	if sg.Params.Count != 0 || sg.Params.Offset != 0 {
 		// Apply the pagination.
-		for i := 0; i < len(sg.uidMatrix); i++ {
+		for i := range sg.uidMatrix {
 			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
 			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 		}
@@ -2781,7 +2781,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	loopStart := time.Now()
 	queries := req.DqlQuery.Query
 	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
-	for i := 0; i < len(queries); i++ {
+	for i := range queries {
 		gq := queries[i]
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
@@ -2835,7 +2835,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		var idxList []int
 		// If we have N blocks in a query, it can take a maximum of N iterations for all of them
 		// to be executed.
-		for idx := 0; idx < len(req.Subgraphs); idx++ {
+		for idx := range req.Subgraphs {
 			if hasExecuted[idx] {
 				continue
 			}
@@ -2887,7 +2887,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 
 		var ferr error
 		// Wait for the execution that was started in this iteration.
-		for i := 0; i < len(idxList); i++ {
+		for range idxList {
 			if err = <-errChan; err != nil {
 				ferr = err
 				continue
@@ -2910,7 +2910,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// Apply pagination at the root after @cascade.
 			if len(sg.Params.Cascade.Fields) > 0 && (sg.Params.Cascade.First != 0 || sg.Params.Cascade.Offset != 0) {
 				sg.updateUidMatrix()
-				for i := 0; i < len(sg.uidMatrix); i++ {
+				for i := range sg.uidMatrix {
 					start, end := x.PageRange(sg.Params.Cascade.First,
 						sg.Params.Cascade.Offset, len(sg.uidMatrix[i].Uids))
 					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]

@@ -152,7 +152,7 @@ func queryTokensGeo(qt QueryType, g geom.T, maxDistance float64) ([]string, *Geo
 
 	case *geom.MultiPolygon:
 		// We get a loop for each polygon.
-		for i := 0; i < v.NumPolygons(); i++ {
+		for i := range v.NumPolygons() {
 			l, err := loopFromPolygon(v.Polygon(i))
 			if err != nil {
 				return nil, nil, err
@@ -277,7 +277,7 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 	case *geom.MultiPolygon:
 		// We check each polygon in the multipolygon should be within some loop of q.loops.
 		if len(q.loops) > 0 {
-			for i := 0; i < geometry.NumPolygons(); i++ {
+			for i := range geometry.NumPolygons() {
 				s2loop, err := loopFromPolygon(geometry.Polygon(i))
 				if err != nil {
 					return false
@@ -293,7 +293,7 @@ func (q GeoQueryData) isWithin(g geom.T) bool {
 }
 
 func multiPolygonContainsLoop(g *geom.MultiPolygon, l *s2.Loop) bool {
-	for i := 0; i < g.NumPolygons(); i++ {
+	for i := range g.NumPolygons() {
 		p := g.Polygon(i)
 		s2loop, err := loopFromPolygon(p)
 		if err != nil {
@@ -331,7 +331,7 @@ func (q GeoQueryData) contains(g geom.T) bool {
 		return true
 	case *geom.MultiPolygon:
 		if q.pt != nil {
-			for j := 0; j < v.NumPolygons(); j++ {
+			for j := range v.NumPolygons() {
 				if polygonContainsCoord(v.Polygon(j), q.pt) {
 					return true
 				}
@@ -358,7 +358,7 @@ func (q GeoQueryData) contains(g geom.T) bool {
 }
 
 func polygonContainsCoord(v *geom.Polygon, pt *s2.Point) bool {
-	for i := 0; i < v.NumLinearRings(); i++ {
+	for i := range v.NumLinearRings() {
 		r := v.LinearRing(i)
 		ll := s2.LatLngFromPoint(*pt)
 		p := []float64{ll.Lng.Degrees(), ll.Lat.Degrees()}
@@ -397,7 +397,7 @@ func (q GeoQueryData) intersects(g geom.T) bool {
 		return false
 	case *geom.MultiPolygon:
 		// We must compare all polygons in g with those in the query.
-		for i := 0; i < v.NumPolygons(); i++ {
+		for i := range v.NumPolygons() {
 			l, err := loopFromPolygon(v.Polygon(i))
 			if err != nil {
 				return false

@@ -289,7 +289,7 @@ func run() {
 
 	// Delete and recreate the output dirs to ensure they are empty.
 	x.Check(os.RemoveAll(opt.OutDir))
-	for i := 0; i < opt.ReduceShards; i++ {
+	for i := range opt.ReduceShards {
 		dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
 		x.Check(os.MkdirAll(dir, 0700))
 		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)

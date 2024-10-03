@@ -54,7 +54,7 @@ func TestUidPack(t *testing.T) {
 	require.Equal(t, 0, ApproxLen(&pb.UidPack{}))
 	require.Equal(t, 0, len(Decode(&pb.UidPack{}, 0)))
 
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		size := rand.Intn(10e6)
 		if size < 0 {
 			size = 1e6
@@ -86,7 +86,7 @@ func TestBufferUidPack(t *testing.T) {
 	require.Equal(t, 0, buf.LenNoPadding())
 	require.NoError(t, buf.Release())
 
-	for i := 0; i < 13; i++ {
+	for range 13 {
 		size := rand.Intn(10e6)
 		if size < 0 {
 			size = 1e6
@@ -335,7 +335,7 @@ func TestEncoding(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	var lengths = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
 
-	for tc := 0; tc < len(lengths); tc++ {
+	for tc := range lengths {
 		ints := make([]uint64, lengths[tc])
 
 		for i := 0; i < 50 && i < lengths[tc]; i++ {

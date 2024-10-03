@@ -142,7 +142,7 @@ func applyAdd(a, b, c *types.Val) error {
 			return ErrorVectorsNotMatch
 		}
 		cVal := make([]float32, len(aVal))
-		for i := 0; i < len(aVal); i++ {
+		for i := range aVal {
 			cVal[i] = aVal[i] + bVal[i]
 		}
 		c.Value = cVal
@@ -185,7 +185,7 @@ func applySub(a, b, c *types.Val) error {
 			return ErrorVectorsNotMatch
 		}
 		cVal := make([]float32, len(aVal))
-		for i := 0; i < len(aVal); i++ {
+		for i := range aVal {
 			cVal[i] = aVal[i] - bVal[i]
 		}
 		c.Value = cVal
@@ -233,7 +233,7 @@ func applyMul(a, b, c *types.Val) error {
 		case VFLOAT:
 			bVal := b.Value.([]float32)
 			cVal := make([]float32, len(bVal))
-			for i := 0; i < len(bVal); i++ {
+			for i := range bVal {
 				cVal[i] = float32(aVal) * bVal[i]
 			}
 			c.Value = cVal
@@ -255,7 +255,7 @@ func applyMul(a, b, c *types.Val) error {
 		if math.IsInf(float64(float32(bVal)), 0) {
 			return ErrorFloat32Overflow
 		}
-		for i := 0; i < len(aVal); i++ {
+		for i := range aVal {
 			cVal[i] = aVal[i] * float32(bVal)
 		}
 		c.Tid = types.VFloatID
@@ -304,7 +304,7 @@ func applyDiv(a, b, c *types.Val) error {
 		}
 		aVal := a.Value.([]float32)
 		cVal := make([]float32, len(aVal))
-		for i := 0; i < len(aVal); i++ {
+		for i := range aVal {
 			cVal[i] = aVal[i] / float32(denom)
 		}
 		c.Value = cVal
@@ -428,7 +428,7 @@ func applyDot(a, b, c *types.Val) error {
 	}
 	c.Tid = types.FloatID
 	var cVal float64
-	for i := 0; i < len(aVal); i++ {
+	for i := range aVal {
 		cVal += (float64)(aVal[i]) * (float64)(bVal[i])
 	}
 	c.Value = cVal
@@ -847,7 +847,7 @@ func (ag *aggregator) Apply(val types.Val) error {
 			if len(bVal) != len(accumVal) {
 				return ErrorVectorsNotMatch
 			}
-			for i := 0; i < len(bVal); i++ {
+			for i := range bVal {
 				accumVal[i] += bVal[i]
 			}
 		case va.Tid == types.BigFloatID && vb.Tid == types.BigFloatID:
@@ -902,7 +902,7 @@ func (ag *aggregator) divideByCount() {
 	case types.VFloatID:
 		arr := ag.result.Value.([]float32)
 		res := make([]float32, len(arr))
-		for i := 0; i < len(arr); i++ {
+		for i := range arr {
 			res[i] = arr[i] / float32(ag.count)
 		}
 		ag.result.Value = res
