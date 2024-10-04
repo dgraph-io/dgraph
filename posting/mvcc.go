@@ -377,6 +377,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	for key, delta := range txn.cache.deltas {
+		RemoveCacheFor([]byte(key))
 		pk, _ := x.Parse([]byte(key))
 		if !ShouldGoInCache(pk) {
 			continue
