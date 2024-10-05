@@ -165,3 +165,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )
+
+retract v24.0.3 // should have been a minor release instead of a patch
