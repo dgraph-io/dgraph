@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -652,16 +652,21 @@ func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 	}
 	bk := parsedKey.ToBackupKey()
 
-	out := tl.alloc.Allocate(bk.Size())
-	n, err := bk.MarshalToSizedBuffer(out)
-	return out[:n], err
+	out := tl.alloc.Allocate(proto.Size(bk))
+	return x.MarshalToSizedBuffer(out, bk)
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {
-	if err := binary.Write(w, binary.LittleEndian, uint64(list.Size())); err != nil {
+	size := proto.Size(list)
+
+	// Ensure the size is non-negative and fits within uint64 bounds
+	if size < 0 {
+		return fmt.Errorf("proto.Size returned a negative value: %d", size)
+	}
+	if err := binary.Write(w, binary.LittleEndian, uint64(size)); err != nil {
 		return err
 	}
-	buf, err := list.Marshal()
+	buf, err := proto.Marshal(list)
 	if err != nil {
 		return err
 	}

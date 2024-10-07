@@ -37,6 +37,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/badger/v4/y"
@@ -214,7 +215,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	}
 
 	// Write the header to the map file.
-	headerBuf, err := header.Marshal()
+	headerBuf, err := proto.Marshal(header)
 	x.Check(err)
 	var lenBuf [4]byte
 	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(headerBuf)))
@@ -290,7 +291,7 @@ func (m *mapper) Flush() error {
 
 func fromBackupKey(key []byte) ([]byte, uint64, error) {
 	backupKey := &pb.BackupKey{}
-	if err := backupKey.Unmarshal(key); err != nil {
+	if err := proto.Unmarshal(key, backupKey); err != nil {
 		return nil, 0, errors.Wrapf(err, "while reading backup key %s", hex.Dump(key))
 	}
 	return x.FromBackupKey(backupKey), backupKey.Namespace, nil
@@ -309,12 +310,12 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 
 	toBuffer := func(kv *bpb.KV, version uint64) error {
 		key := y.KeyWithTs(kv.Key, version)
-		sz := kv.Size()
+		sz := proto.Size(kv)
 		b := buf.SliceAllocate(2 + len(key) + sz)
 
 		binary.BigEndian.PutUint16(b[0:2], uint16(len(key)))
 		x.AssertTrue(copy(b[2:], key) == len(key))
-		_, err := kv.MarshalToSizedBuffer(b[2+len(key):])
+		_, err := x.MarshalToSizedBuffer(b[2+len(key):], kv)
 		return err
 	}
 
@@ -378,14 +379,14 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			}
 
 			backupPl := &pb.BackupPostingList{}
-			if err := backupPl.Unmarshal(kv.Value); err != nil {
+			if err := proto.Unmarshal(kv.Value, backupPl); err != nil {
 				return errors.Wrapf(err, "while reading backup posting list")
 			}
 
 			pl := posting.FromBackupPostingList(backupPl)
 			defer codec.FreePack(pl.Pack)
 
-			shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
+			shouldSplit := proto.Size(pl) >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
 			if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 				// This covers two cases.
 				// 1. The list is not big enough to be split.
@@ -429,14 +430,14 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				// If the backup was taken on old version, we need to append the namespace to
 				// the fields of TypeUpdate.
 				var update pb.TypeUpdate
-				if err := update.Unmarshal(kv.Value); err != nil {
+				if err := proto.Unmarshal(kv.Value, &update); err != nil {
 					return err
 				}
 				update.TypeName = x.GalaxyAttr(update.TypeName)
 				for _, sch := range update.Fields {
 					sch.Predicate = x.GalaxyAttr(sch.Predicate)
 				}
-				kv.Value, err = update.Marshal()
+				kv.Value, err = proto.Marshal(&update)
 				return err
 			}
 			changeFormat := func() error {
@@ -446,18 +447,18 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				var err error
 				if parsedKey.IsSchema() {
 					var update pb.SchemaUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
+					if err := proto.Unmarshal(kv.Value, &update); err != nil {
 						return err
 					}
 					if update.Predicate, err = x.AttrFrom2103(update.Predicate); err != nil {
 						return err
 					}
-					kv.Value, err = update.Marshal()
+					kv.Value, err = proto.Marshal(&update)
 					return err
 				}
 				if parsedKey.IsType() {
 					var update pb.TypeUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
+					if err := proto.Unmarshal(kv.Value, &update); err != nil {
 						return err
 					}
 					if update.TypeName, err = x.AttrFrom2103(update.TypeName); err != nil {
@@ -468,7 +469,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 							return err
 						}
 					}
-					kv.Value, err = update.Marshal()
+					kv.Value, err = proto.Marshal(&update)
 					return err
 				}
 				return nil
@@ -510,19 +511,19 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			transformNamespaceToZero := func(parsedKey x.ParsedKey) error {
 				if parsedKey.IsSchema() {
 					var update pb.SchemaUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
+					if err := proto.Unmarshal(kv.Value, &update); err != nil {
 						return err
 					}
 					_, attr := x.ParseNamespaceAttr(update.Predicate)
 					update.Predicate = x.NamespaceAttr(0, attr)
-					kv.Value, err = update.Marshal()
+					kv.Value, err = proto.Marshal(&update)
 					if err != nil {
 						return err
 					}
 				}
 				if parsedKey.IsType() {
 					var update pb.TypeUpdate
-					if err := update.Unmarshal(kv.Value); err != nil {
+					if err := proto.Unmarshal(kv.Value, &update); err != nil {
 						return err
 					}
 					_, attr := x.ParseNamespaceAttr(update.TypeName)
@@ -532,7 +533,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 						sch.Predicate = x.NamespaceAttr(0, attr)
 					}
 
-					kv.Value, err = update.Marshal()
+					kv.Value, err = proto.Marshal(&update)
 					if err != nil {
 						return err
 					}
@@ -552,7 +553,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			// If the backup was taken on old version, we need to set unique to true for xid predicates.
 			if parsedKey.IsSchema() {
 				var update pb.SchemaUpdate
-				if err := update.Unmarshal(kv.Value); err != nil {
+				if err := proto.Unmarshal(kv.Value, &update); err != nil {
 					return err
 				}
 
@@ -560,7 +561,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 					update.Unique = true
 				}
 
-				kv.Value, err = update.Marshal()
+				kv.Value, err = proto.Marshal(&update)
 				if err != nil {
 					return err
 				}
@@ -608,7 +609,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 		}
 		return req.lbuf.SliceIterate(func(s []byte) error {
 			list.Reset()
-			if err := list.Unmarshal(s); err != nil {
+			if err := proto.Unmarshal(s, &list); err != nil {
 				return err
 			}
 			for _, kv := range list.GetKv() {

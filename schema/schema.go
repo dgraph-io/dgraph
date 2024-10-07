@@ -25,9 +25,9 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
@@ -554,7 +554,7 @@ func Load(predicate string) error {
 	}
 	var s pb.SchemaUpdate
 	err = item.Value(func(val []byte) error {
-		x.Check(s.Unmarshal(val))
+		x.Check(proto.Unmarshal(val, &s))
 		return nil
 	})
 	if err != nil {
@@ -617,7 +617,7 @@ func loadFromDB(ctx context.Context, loadType int) error {
 				if len(val) == 0 {
 					s = pb.SchemaUpdate{Predicate: pk.Attr, ValueType: pb.Posting_DEFAULT}
 				}
-				x.Checkf(s.Unmarshal(val), "Error while loading schema from db")
+				x.Checkf(proto.Unmarshal(val, &s), "Error while loading schema from db")
 				State().Set(pk.Attr, &s)
 				return nil
 			})
@@ -628,7 +628,7 @@ func loadFromDB(ctx context.Context, loadType int) error {
 				if len(val) == 0 {
 					t = pb.TypeUpdate{TypeName: pk.Attr}
 				}
-				x.Checkf(t.Unmarshal(val), "Error while loading types from db")
+				x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
 				State().SetType(pk.Attr, &t)
 				return nil
 			})
@@ -871,8 +871,16 @@ func compareSchemaUpdates(original, update *pb.SchemaUpdate) []string {
 	vOriginal := reflect.ValueOf(*original)
 	vUpdate := reflect.ValueOf(*update)
 
+	// Iterate through the fields of the original schema
 	for i := range vOriginal.NumField() {
-		fieldName := vOriginal.Type().Field(i).Name
+		field := vOriginal.Type().Field(i)
+
+		// Skip unexported fields
+		if !field.IsExported() {
+			continue
+		}
+
+		fieldName := field.Name
 		valueOriginal := vOriginal.Field(i)
 		valueUpdate := vUpdate.Field(i)
 
