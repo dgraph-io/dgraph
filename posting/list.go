@@ -26,8 +26,8 @@ import (
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/badger/v4/y"
@@ -568,7 +568,7 @@ func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
 	if pl, ok := l.mutationMap[startTs]; ok {
-		data, err := pl.Marshal()
+		data, err := proto.Marshal(pl)
 		x.Check(err)
 		return data
 	}
@@ -577,7 +577,7 @@ func (l *List) getMutation(startTs uint64) []byte {
 
 func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 	pl := new(pb.PostingList)
-	x.Check(pl.Unmarshal(data))
+	x.Check(proto.Unmarshal(data, pl))
 	pl.CommitTs = commitTs
 	for _, p := range pl.Postings {
 		p.CommitTs = commitTs
@@ -598,7 +598,7 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 
 func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
-	x.Check(pl.Unmarshal(data))
+	x.Check(proto.Unmarshal(data, pl))
 
 	l.Lock()
 	if l.mutationMap == nil {
@@ -1047,8 +1047,7 @@ func (l *List) ToBackupPostingList(
 	bl.CommitTs = ol.CommitTs
 	bl.Splits = ol.Splits
 
-	val := alloc.Allocate(bl.Size())
-	n, err := bl.MarshalToSizedBuffer(val)
+	val, err := x.MarshalToSizedBuffer(alloc.Allocate(proto.Size(bl)), bl)
 	if err != nil {
 		return nil, err
 	}
@@ -1056,7 +1055,7 @@ func (l *List) ToBackupPostingList(
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
 	kv.Version = out.newMinTs
-	kv.Value = val[:n]
+	kv.Value = val
 	if isPlistEmpty(ol) {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 	} else {
@@ -1095,13 +1094,12 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		plist.Pack.AllocRef = 0
 	}
 
-	out := alloc.Allocate(plist.Size())
-	n, err := plist.MarshalToSizedBuffer(out)
+	out, err := x.MarshalToSizedBuffer(alloc.Allocate(proto.Size(plist)), plist)
 	x.Check(err)
 	if plist.Pack != nil {
 		plist.Pack.AllocRef = ref
 	}
-	kv.Value = out[:n]
+	kv.Value = out
 	kv.UserMeta = alloc.Copy([]byte{BitCompletePosting})
 	return kv
 }
@@ -1690,7 +1688,7 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 
 // shouldSplit returns true if the given plist should be split in two.
 func shouldSplit(plist *pb.PostingList) bool {
-	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+	return proto.Size(plist) >= maxListSize && len(plist.Pack.Blocks) > 1
 }
 
 func (out *rollupOutput) updateSplits() {

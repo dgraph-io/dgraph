@@ -37,6 +37,7 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/conn"
 	"github.com/dgraph-io/dgraph/v24/ee/audit"
@@ -149,9 +150,10 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.ZeroProposal) er
 		defer n.Proposals.Delete(key)
 		span.Annotatef(nil, "Proposing with key: %d. Timeout: %v", key, timeout)
 
-		data := make([]byte, 8+proposal.Size())
+		sz := proto.Size(proposal)
+		data := make([]byte, 8+sz)
 		binary.BigEndian.PutUint64(data[:8], key)
-		sz, err := proposal.MarshalToSizedBuffer(data[8:])
+		_, err := x.MarshalToSizedBuffer(data[8:], proposal)
 		if err != nil {
 			return err
 		}
@@ -387,7 +389,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	data, err := snap.Marshal()
+	data, err := proto.Marshal(snap)
 	x.Check(err)
 
 	for {
@@ -406,7 +408,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 
 	var p pb.ZeroProposal
 	key := binary.BigEndian.Uint64(e.Data[:8])
-	if err := p.Unmarshal(e.Data[8:]); err != nil {
+	if err := proto.Unmarshal(e.Data[8:], &p); err != nil {
 		return key, err
 	}
 	span := otrace.FromContext(n.Proposals.Ctx(key))
@@ -527,7 +529,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 
 	} else if len(cc.Context) > 0 {
 		var rc pb.RaftContext
-		x.Check(rc.Unmarshal(cc.Context))
+		x.Check(proto.Unmarshal(cc.Context, &rc))
 		go n.Connect(rc.Id, rc.Addr)
 
 		m := &pb.Member{
@@ -628,7 +630,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 				continue
 			}
 			var proposal pb.ZeroProposal
-			if err = proposal.Unmarshal(entry.Data[8:]); err != nil {
+			if err = proto.Unmarshal(entry.Data[8:], &proposal); err != nil {
 				return false, errors.Wrapf(err, "error unmarshlling wal entry: [%x]", entry.Data[8:])
 			}
 			if len(proposal.Cid) > 0 {
@@ -654,7 +656,7 @@ func (n *node) initAndStartNode() error {
 			n.SetConfState(&sp.Metadata.ConfState)
 
 			var zs pb.ZeroSnapshot
-			x.Check(zs.Unmarshal(sp.Data))
+			x.Check(proto.Unmarshal(sp.Data, &zs))
 			n.server.SetMembershipState(zs.State)
 			for _, id := range sp.Metadata.ConfState.Voters {
 				n.Connect(id, zs.State.Zeros[id].Addr)
@@ -707,7 +709,7 @@ func (n *node) initAndStartNode() error {
 
 	default:
 		glog.Infof("Starting a brand new node")
-		data, err := n.RaftContext.Marshal()
+		data, err := proto.Marshal(n.RaftContext)
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
@@ -863,7 +865,7 @@ func (n *node) calculateAndProposeSnapshot() error {
 				continue
 			}
 			var p pb.ZeroProposal
-			if err := p.Unmarshal(entry.Data[8:]); err != nil {
+			if err := proto.Unmarshal(entry.Data[8:], &p); err != nil {
 				span.Annotatef(nil, "Error: %v", err)
 				return err
 			}
@@ -1000,7 +1002,7 @@ func (n *node) Run() {
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var zs pb.ZeroSnapshot
-				x.Check(zs.Unmarshal(rd.Snapshot.Data))
+				x.Check(proto.Unmarshal(rd.Snapshot.Data, &zs))
 				n.server.SetMembershipState(zs.State)
 			}
 
@@ -1025,7 +1027,7 @@ func (n *node) Run() {
 					if took := time.Since(start); took > time.Second {
 						var p pb.ZeroProposal
 						// Raft commits empty entry on becoming a leader.
-						if err := p.Unmarshal(entry.Data[8:]); err == nil {
+						if err := proto.Unmarshal(entry.Data[8:], &p); err == nil {
 							glog.V(2).Infof("Proposal took %s to apply: %+v\n",
 								took.Round(time.Second), p)
 						}

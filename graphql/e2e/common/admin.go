@@ -17,7 +17,6 @@
 package common
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -25,7 +24,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -33,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -320,6 +319,7 @@ func health(t *testing.T) {
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Ongoing"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "MaxAssigned"),
 		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreUnexported(pb.HealthInfo{}),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -448,20 +448,43 @@ func adminState(t *testing.T) {
 	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
+	type Member struct {
+		Id              uint64 `json:"id"`
+		GroupId         uint32 `json:"groupId"`
+		Addr            string `json:"addr"`
+		Leader          bool   `json:"leader"`
+		AmDead          bool   `json:"amDead"`
+		LastUpdate      uint64 `json:"lastUpdate"`
+		ClusterInfoOnly bool   `json:"clusterInfoOnly"`
+		Learner         bool   `json:"learner"`
+		ForceGroupId    bool   `json:"forceGroupId"`
+	}
+
+	type Tablet struct {
+		GroupId           uint32 `json:"groupId"`
+		Predicate         string `json:"predicate"`
+		Force             bool   `json:"force"`
+		OnDiskBytes       int64  `json:"onDiskBytes"`
+		Remove            bool   `json:"remove"`
+		ReadOnly          bool   `json:"readOnly"`
+		MoveTs            uint64 `json:"moveTs"`
+		UncompressedBytes int64  `json:"uncompressedBytes"`
+	}
+
 	var result struct {
 		State struct {
 			Groups []struct {
 				Id         uint32
-				Members    []*pb.Member
-				Tablets    []*pb.Tablet
+				Members    []Member
+				Tablets    []Tablet
 				SnapshotTs uint64
 			}
-			Zeros     []*pb.Member
+			Zeros     []Member
 			MaxUID    uint64
 			MaxTxnTs  uint64
 			MaxNsID   uint64
 			MaxRaftId uint64
-			Removed   []*pb.Member
+			Removed   []Member
 			Cid       string
 			License   struct {
 				User     string
@@ -470,6 +493,29 @@ func adminState(t *testing.T) {
 				MaxNodes uint64
 			}
 		}
+	}
+
+	validateMember := func(expected *pb.Member, actual Member) {
+		require.Equal(t, expected.Id, actual.Id)
+		require.Equal(t, expected.GroupId, actual.GroupId)
+		require.Equal(t, expected.Addr, actual.Addr)
+		require.Equal(t, expected.Leader, actual.Leader)
+		require.Equal(t, expected.AmDead, actual.AmDead)
+		require.Equal(t, expected.LastUpdate, actual.LastUpdate)
+		require.Equal(t, expected.ClusterInfoOnly, actual.ClusterInfoOnly)
+		require.Equal(t, expected.ForceGroupId, actual.ForceGroupId)
+		require.Equal(t, expected.Learner, actual.Learner)
+	}
+
+	validateTablet := func(expected *pb.Tablet, actual Tablet) {
+		require.Equal(t, expected.GroupId, actual.GroupId)
+		require.Equal(t, expected.Predicate, actual.Predicate)
+		require.Equal(t, expected.Force, actual.Force)
+		require.Equal(t, expected.OnDiskBytes, actual.OnDiskBytes)
+		require.Equal(t, expected.Remove, actual.Remove)
+		require.Equal(t, expected.ReadOnly, actual.ReadOnly)
+		require.Equal(t, expected.MoveTs, actual.MoveTs)
+		require.Equal(t, expected.UncompressedBytes, actual.UncompressedBytes)
 	}
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
@@ -485,7 +531,7 @@ func adminState(t *testing.T) {
 	}()
 	stateRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
+	require.NoError(t, protojson.Unmarshal(stateRes, &state))
 
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)
@@ -495,14 +541,14 @@ func adminState(t *testing.T) {
 			require.Contains(t, expectedGroup.Members, member.Id)
 			expectedMember := expectedGroup.Members[member.Id]
 
-			require.Equal(t, expectedMember, member)
+			validateMember(expectedMember, member)
 		}
 
 		for _, tablet := range group.Tablets {
 			require.Contains(t, expectedGroup.Tablets, tablet.Predicate)
 			expectedTablet := expectedGroup.Tablets[tablet.Predicate]
 
-			require.Equal(t, expectedTablet, tablet)
+			validateTablet(expectedTablet, tablet)
 		}
 
 		require.Equal(t, expectedGroup.SnapshotTs, group.SnapshotTs)
@@ -511,7 +557,7 @@ func adminState(t *testing.T) {
 		require.Contains(t, state.Zeros, zero.Id)
 		expectedZero := state.Zeros[zero.Id]
 
-		require.Equal(t, expectedZero, zero)
+		validateMember(expectedZero, zero)
 	}
 	require.Equal(t, state.MaxUID, result.State.MaxUID)
 	require.Equal(t, state.MaxTxnTs, result.State.MaxTxnTs)

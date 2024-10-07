@@ -28,6 +28,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -77,7 +78,7 @@ func batchAndProposeKeyValues(ctx context.Context, kvs chan *pb.KVS) error {
 		buf := z.NewBufferSlice(kvPayload.GetData())
 		err := buf.SliceIterate(func(s []byte) error {
 			kv := &bpb.KV{}
-			x.Check(kv.Unmarshal(s))
+			x.Check(proto.Unmarshal(s, kv))
 			if len(pk.Attr) == 0 {
 				// This only happens once.
 				var err error

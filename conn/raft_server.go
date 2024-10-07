@@ -128,6 +128,7 @@ func (p *proposals) Done(key uint64, err error) {
 type RaftServer struct {
 	m    sync.RWMutex
 	node *Node
+	pb.UnimplementedRaftServer
 }
 
 // UpdateNode safely updates the node.

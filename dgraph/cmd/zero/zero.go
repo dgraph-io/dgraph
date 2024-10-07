@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/conn"
@@ -79,6 +79,7 @@ type Server struct {
 	blockCommitsOn *sync.Map
 
 	checkpointPerGroup map[uint32]uint64
+	pb.UnimplementedZeroServer
 }
 
 // Init initializes the zero server.
@@ -264,7 +265,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 func (s *Server) MarshalMembershipState() ([]byte, error) {
 	s.Lock()
 	defer s.Unlock()
-	return s.state.Marshal()
+	return proto.Marshal(s.state)
 }
 
 func (s *Server) membershipState() *pb.MembershipState {

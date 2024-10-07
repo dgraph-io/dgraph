@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240"
@@ -330,11 +331,11 @@ func updateGQLSchemaOffline(db *badger.DB, cors [][]byte) error {
 
 	// Append the cors at the end of GraphQL schema.
 	pl := pb.PostingList{}
-	if err = pl.Unmarshal(entry.Value); err != nil {
+	if err := proto.Unmarshal(entry.Value, &pl); err != nil {
 		return err
 	}
 	pl.Postings[0].Value = append(pl.Postings[0].Value, corsBytes...)
-	entry.Value, err = pl.Marshal()
+	entry.Value, err = proto.Marshal(&pl)
 	if err != nil {
 		return err
 	}
@@ -355,7 +356,7 @@ func getCors(db *badger.DB) ([][]byte, error) {
 			return err
 		}
 		pl := pb.PostingList{}
-		if err := pl.Unmarshal(val); err != nil {
+		if err := proto.Unmarshal(val, &pl); err != nil {
 			return err
 		}
 		for _, p := range pl.Postings {
@@ -413,7 +414,7 @@ func fixPersistedQuery(db *badger.DB) error {
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"sha256"},
 	}
-	data, err := su.Marshal()
+	data, err := proto.Marshal(&su)
 	if err != nil {
 		return err
 	}
@@ -430,7 +431,7 @@ func fixPersistedQuery(db *badger.DB) error {
 		TypeName: x.GalaxyAttr("dgraph.graphql.persisted_query"),
 		Fields:   []*pb.SchemaUpdate{&su},
 	}
-	data, err = tu.Marshal()
+	data, err = proto.Marshal(&tu)
 	if err != nil {
 		return err
 	}

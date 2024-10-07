@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/v24/edgraph"
@@ -667,7 +668,7 @@ func newAdminResolver(
 
 		// Unmarshal the incoming posting list.
 		pl := &pb.PostingList{}
-		err := pl.Unmarshal(kv.GetValue())
+		err := proto.Unmarshal(kv.GetValue(), pl)
 		if err != nil {
 			glog.Errorf("Unable to unmarshal the posting list for graphql schema update %s", err)
 			return
@@ -1080,7 +1081,7 @@ func response(code, msg string) map[string]interface{} {
 type DestinationFields struct {
 	Destination  string
 	AccessKey    string
-	SecretKey    pb.Sensitive
-	SessionToken pb.Sensitive
+	SecretKey    string
+	SessionToken string
 	Anonymous    bool
 }

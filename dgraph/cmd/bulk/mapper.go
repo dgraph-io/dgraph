@@ -32,6 +32,7 @@ import (
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/chunker"
@@ -90,7 +91,7 @@ type MapEntry []byte
 // }
 
 func mapEntrySize(key []byte, p *pb.Posting) int {
-	return 8 + 4 + 4 + len(key) + p.Size() // UID + keySz + postingSz + len(key) + size(p)
+	return 8 + 4 + 4 + len(key) + proto.Size(p) // UID + keySz + postingSz + len(key) + size(p)
 }
 
 func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
@@ -100,14 +101,14 @@ func marshalMapEntry(dst []byte, uid uint64, key []byte, p *pb.Posting) {
 	binary.BigEndian.PutUint64(dst[0:8], uid)
 	binary.BigEndian.PutUint32(dst[8:12], uint32(len(key)))
 
-	psz := p.Size()
+	psz := proto.Size(p)
 	binary.BigEndian.PutUint32(dst[12:16], uint32(psz))
 
 	n := copy(dst[16:], key)
 
 	if psz > 0 {
 		pbuf := dst[16+n:]
-		_, err := p.MarshalToSizedBuffer(pbuf[:psz])
+		_, err := x.MarshalToSizedBuffer(pbuf, p)
 		x.Check(err)
 	}
 
@@ -205,8 +206,8 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 		x.Check(err)
 	}
 
-	// Write the header to the map file.
-	headerBuf, err := header.Marshal()
+	// Write the header to the map file.s
+	headerBuf, err := proto.Marshal(header)
 	x.Check(err)
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))

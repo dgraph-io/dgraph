@@ -97,7 +97,6 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-
 	msg := fmt.Sprintf("Export queued with ID %#x", taskId)
 	data := response("Success", msg)
 	data["taskId"] = fmt.Sprintf("%#x", taskId)
