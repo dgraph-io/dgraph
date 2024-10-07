@@ -56,6 +56,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bo "github.com/dgraph-io/badger/v4/options"
@@ -1359,6 +1360,11 @@ func ToHex(i uint64, rdf bool) []byte {
 	}
 
 	return out
+}
+
+func MarshalToSizedBuffer(buf []byte, m proto.Message) ([]byte, error) {
+	buf = buf[:0]
+	return proto.MarshalOptions{}.MarshalAppend(buf, m)
 }
 
 // RootTemplate defines the help template for dgraph command.

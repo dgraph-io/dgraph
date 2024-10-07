@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/posting"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
@@ -29,10 +30,10 @@ import (
 )
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {
-	proposal := pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
-	data := make([]byte, 8+proposal.Size())
-	sz, err := proposal.MarshalToSizedBuffer(data)
-	x.Check(err)
+	proposal := &pb.Proposal{Mutations: &pb.Mutations{StartTs: startTs}}
+	sz := proto.Size(proposal)
+	data := make([]byte, 8+sz)
+	x.Check2(x.MarshalToSizedBuffer(data[8:], proposal))
 	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }
@@ -40,10 +41,10 @@ func getEntryForMutation(index, startTs uint64) raftpb.Entry {
 func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	delta := &pb.OracleDelta{}
 	delta.Txns = append(delta.Txns, &pb.TxnStatus{StartTs: startTs, CommitTs: commitTs})
-	proposal := pb.Proposal{Delta: delta}
-	data := make([]byte, 8+proposal.Size())
-	sz, err := proposal.MarshalToSizedBuffer(data)
-	x.Check(err)
+	proposal := &pb.Proposal{Delta: delta}
+	sz := proto.Size(proposal)
+	data := make([]byte, 8+sz)
+	x.Check2(x.MarshalToSizedBuffer(data[8:], proposal))
 	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
 }

@@ -26,6 +26,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/raftwal"
@@ -53,13 +54,13 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	var err error
 	if isZero {
 		var zpr pb.ZeroProposal
-		if err = zpr.Unmarshal(es.Data[8:]); err == nil {
+		if err = proto.Unmarshal(es.Data[8:], &zpr); err == nil {
 			printZeroProposal(&buf, &zpr)
 			return
 		}
 	} else {
 		var pr pb.Proposal
-		if err = pr.Unmarshal(es.Data[8:]); err == nil {
+		if err = proto.Unmarshal(es.Data[8:], &pr); err == nil {
 			printAlphaProposal(&buf, &pr, pending)
 			return
 		}
@@ -82,9 +83,9 @@ func printBasic(store RaftStore) (uint64, uint64) {
 		fmt.Printf("Snapshot Metadata: %+v\n", snap.Metadata)
 		var ds pb.Snapshot
 		var zs pb.ZeroSnapshot
-		if err := ds.Unmarshal(snap.Data); err == nil {
+		if err := proto.Unmarshal(snap.Data, &ds); err == nil {
 			fmt.Printf("Snapshot Alpha: %+v\n", ds)
-		} else if err := zs.Unmarshal(snap.Data); err == nil {
+		} else if err := proto.Unmarshal(snap.Data, &zs); err == nil {
 			for gid, group := range zs.State.GetGroups() {
 				fmt.Printf("\nGROUP: %d\n", gid)
 				for _, member := range group.GetMembers() {
@@ -151,7 +152,7 @@ func overwriteSnapshot(store *raftwal.DiskStorage) error {
 
 	var dsnap pb.Snapshot
 	if len(snap.Data) > 0 {
-		x.Check(dsnap.Unmarshal(snap.Data))
+		x.Check(proto.Unmarshal(snap.Data, &dsnap))
 	}
 	fmt.Printf("Previous snapshot: %+v\n", dsnap)
 
@@ -190,7 +191,7 @@ func overwriteSnapshot(store *raftwal.DiskStorage) error {
 	dsnap.ReadTs = uint64(readTs)
 
 	fmt.Printf("Setting snapshot to: %+v\n", dsnap)
-	data, err := dsnap.Marshal()
+	data, err := proto.Marshal(&dsnap)
 	x.Check(err)
 	if err = store.CreateSnapshot(dsnap.Index, &cs, data); err != nil {
 		fmt.Printf("Created snapshot with error: %v\n", err)
