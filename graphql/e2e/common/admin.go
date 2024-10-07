@@ -17,7 +17,6 @@
 package common
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -25,7 +24,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -33,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	jsonpb "google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -485,7 +484,7 @@ func adminState(t *testing.T) {
 	}()
 	stateRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NoError(t, jsonpb.Unmarshal(bytes.NewReader(stateRes), &state))
+	require.NoError(t, jsonpb.Unmarshal(stateRes, &state))
 
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)

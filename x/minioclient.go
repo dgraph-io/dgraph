@@ -11,8 +11,6 @@ import (
 	minio "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
 	"github.com/pkg/errors"
-
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
 )
 
 const (
@@ -31,8 +29,8 @@ const (
 // If these credentials are missing the default credentials will be used.
 type MinioCredentials struct {
 	AccessKey    string
-	SecretKey    pb.Sensitive
-	SessionToken pb.Sensitive
+	SecretKey    string
+	SessionToken string
 	Anonymous    bool
 }
 

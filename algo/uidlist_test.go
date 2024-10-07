@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/codec"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
@@ -450,7 +451,7 @@ func BenchmarkListIntersectRatio(b *testing.B) {
 			compressedUids := codec.Encode(v1, 256)
 
 			fmt.Printf("len: %d, compressed: %d, bytes/int: %f\n",
-				len(v1), compressedUids.Size(), float64(compressedUids.Size())/float64(len(v1)))
+				len(v1), proto.Size(compressedUids), float64(proto.Size(compressedUids))/float64(len(v1)))
 			b.Run(fmt.Sprintf(":IntersectWith:ratio=%d:size=%d:overlap=%.2f:", r, sz, overlap),
 				func(b *testing.B) {
 					for k := 0; k < b.N; k++ {

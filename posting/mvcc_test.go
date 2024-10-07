@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
@@ -73,7 +74,7 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 		CommitTs: 15,
 		Op:       1,
 	}}
-	delta, err := p.Marshal()
+	delta, err := proto.Marshal(p)
 	require.NoError(t, err)
 
 	// Write delta to disk and call update
@@ -159,7 +160,7 @@ func TestPostingListRead(t *testing.T) {
 	assertLength(9, 1)
 
 	var empty pb.PostingList
-	data, err := empty.Marshal()
+	data, err := proto.Marshal(&empty)
 	require.NoError(t, err)
 
 	writer = NewTxnWriter(pstore)

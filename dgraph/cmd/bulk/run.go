@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v24/ee"
@@ -325,7 +326,7 @@ func run() {
 		}
 
 		var bulkMeta pb.BulkMeta
-		if err = bulkMeta.Unmarshal(bulkMetaData); err != nil {
+		if err = proto.Unmarshal(bulkMetaData, &bulkMeta); err != nil {
 			fmt.Fprintln(os.Stderr, "Error deserializing bulk meta file")
 			os.Exit(1)
 		}
@@ -343,7 +344,7 @@ func run() {
 			SchemaMap: loader.schema.schemaMap,
 			Types:     loader.schema.types,
 		}
-		bulkMetaData, err := bulkMeta.Marshal()
+		bulkMetaData, err := proto.Marshal(&bulkMeta)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error serializing bulk meta file")
 			os.Exit(1)

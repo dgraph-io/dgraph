@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -402,7 +402,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 
 		if commitTs != 0 && val.list != nil {
 			p := new(pb.PostingList)
-			x.Check(p.Unmarshal(delta))
+			x.Check(proto.Unmarshal(delta, p))
 			val.list.setMutationAfterCommit(txn.StartTs, commitTs, delta)
 		}
 		globalCache.Unlock()
@@ -420,7 +420,7 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 			// empty pl
 			return nil
 		}
-		return plist.Unmarshal(val)
+		return proto.Unmarshal(val, plist)
 	})
 }
 
@@ -491,7 +491,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
-				if err := pl.Unmarshal(val); err != nil {
+				if err := proto.Unmarshal(val, pl); err != nil {
 					return err
 				}
 				pl.CommitTs = item.Version()

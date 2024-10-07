@@ -29,6 +29,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/golang/snappy"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
@@ -109,7 +110,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 
 	x.Check2(io.ReadFull(reader, headerBuf))
 	header := &pb.MapHeader{}
-	err = header.Unmarshal(headerBuf)
+	err = proto.Unmarshal(headerBuf, header)
 	x.Check(err)
 
 	itr := &mapIterator{

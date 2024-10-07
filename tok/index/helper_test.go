@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 	"github.com/viterin/vek/vek32"
+	"google.golang.org/protobuf/proto"
 )
 
 // GenerateMatrix generates a 2D slice of uint64 with varying lengths for each row.
@@ -198,12 +199,12 @@ func decodeUint64MatrixUnsafe(data []byte) ([][]uint64, error) {
 
 func encodeUint64MatrixWithProtobuf(protoMatrix *pb.SortResult) ([]byte, error) {
 	// Convert the matrix to the protobuf structure
-	return protoMatrix.Marshal()
+	return proto.Marshal(protoMatrix)
 }
 
 func decodeUint64MatrixWithProtobuf(data []byte, protoMatrix *pb.SortResult) error {
 	// Unmarshal the protobuf data into the protobuf structure
-	return protoMatrix.Unmarshal(data)
+	return proto.Unmarshal(data, protoMatrix)
 }
 
 // Combined benchmark function
