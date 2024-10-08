@@ -124,6 +124,13 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 	if err != nil {
 		glog.V(3).Info(errors.Wrap(err, "unable to send webhook event"))
 	}
+
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			glog.Errorf("Error while closing response body: %v", err)
+		}
+	}()
+
 	if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
 		glog.V(3).Info(errors.Errorf("got unsuccessful status from webhook: %s", resp.Status))
 	}
