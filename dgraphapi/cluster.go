@@ -548,7 +548,7 @@ loop:
 	// and the "loop" will not be able to detect this case. The "loop2" below ensures
 	// by looking into the logs that the restore process has in fact been started and completed.
 loop2:
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		time.Sleep(waitDurBeforeRetry)
 
 		alphasLogs, err := c.AlphasLogs()

@@ -218,7 +218,7 @@ func run(conf *viper.Viper) {
 
 	// Run things serially first, if conc > 1.
 	if conc > 1 {
-		for i := 0; i < conc; i++ {
+		for range conc {
 			err := processOne(0)
 			x.Check(err)
 			num--
@@ -241,7 +241,7 @@ func run(conf *viper.Viper) {
 		}
 	}
 
-	for i := 0; i < conc; i++ {
+	for i := range conc {
 		wg.Add(1)
 		go f(i + 1)
 	}

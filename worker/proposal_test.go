@@ -55,7 +55,7 @@ func proposeAndWaitEmulator(l *rateLimiter, r *rand.Rand, maxRetry int, sleep bo
 		return propose(newTimeout(i))
 	}
 
-	for i := 0; i < maxRetry; i++ {
+	for i := range maxRetry {
 		if err := runPropose(i); err != errInternalRetry {
 			return err
 		}
@@ -91,7 +91,7 @@ func TestLimiterDeadlock(t *testing.T) {
 	}()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		wg.Add(1)
 		go func(no int) {
 			defer wg.Done()

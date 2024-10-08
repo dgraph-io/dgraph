@@ -150,7 +150,7 @@ func (t *tasks) Enqueue(req interface{}) (uint64, error) {
 	}
 
 	// Wait for upto 3 seconds to check for errors.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		time.Sleep(time.Second)
 
 		t.logMu.Lock()

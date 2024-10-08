@@ -46,8 +46,8 @@ func matchStrings(uids *pb.List, values [][]types.Val, filter *stringFilter) *pb
 		return rv
 	}
 
-	for i := 0; i < len(values); i++ {
-		for j := 0; j < len(values[i]); j++ {
+	for i := range values {
+		for j := range values[i] {
 			if filter.match(values[i][j], filter) {
 				rv.Uids = append(rv.Uids, uids.Uids[i])
 				break

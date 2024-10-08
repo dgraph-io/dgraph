@@ -598,7 +598,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	totalWeight = dist[cur].cost
 	// The length of the path can be greater than numHops hence we loop over the dist map till we
 	// reach sg.Params.From node. See test TestShortestPathWithDepth/depth_2_numpaths_1
-	for i := 0; i < len(dist); i++ {
+	for range dist {
 		result = append(result, cur)
 		if cur == sg.Params.From {
 			break
@@ -612,7 +612,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	l := len(result)
 	// Reverse the list.
-	for i := 0; i < l/2; i++ {
+	for i := range l / 2 {
 		result[i], result[l-i-1] = result[l-i-1], result[i]
 	}
 	// Put the path in DestUIDs of the root.
@@ -638,7 +638,7 @@ func createPathSubgraph(ctx context.Context, dist map[uint64]nodeInfo, totalWeig
 	shortestSg.uidMatrix = []*pb.List{{Uids: []uint64{curUid}}}
 
 	curNode := shortestSg
-	for i := 0; i < len(result)-1; i++ {
+	for i := range len(result) - 1 {
 		curUid := result[i]
 		childUid := result[i+1]
 		node := new(SubGraph)

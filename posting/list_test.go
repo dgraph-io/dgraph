@@ -1150,7 +1150,7 @@ func TestLargePlistSplit(t *testing.T) {
 	require.NoError(t, err)
 	b = make([]byte, 10<<20)
 	_, _ = rand.Read(b)
-	for i := 0; i < 63; i++ {
+	for i := range 63 {
 		edge := &pb.DirectedEdge{
 			Entity:  uint64(1 << uint32(i)),
 			ValueId: uint64(i),

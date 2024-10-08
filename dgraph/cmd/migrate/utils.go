@@ -110,7 +110,7 @@ func getColumnValues(columns []string, dataTypes []dataType,
 	}
 
 	valuePtrs := make([]interface{}, 0, len(columns))
-	for i := 0; i < len(columns); i++ {
+	for i := range columns {
 		switch dataTypes[i] {
 		case stringType:
 			valuePtrs = append(valuePtrs, new([]byte)) // the value can be nil

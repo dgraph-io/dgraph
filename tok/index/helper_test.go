@@ -280,7 +280,7 @@ func dotProductT[T c.Float](a, b []T, floatBits int) {
 	if len(a) != len(b) {
 		return
 	}
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		dotProduct += a[i] * b[i]
 	}
 }
@@ -374,7 +374,7 @@ func littleEndianBytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, float
 	if resultLen == 0 {
 		return
 	}
-	for i := 0; i < resultLen; i++ {
+	for range resultLen {
 		// Assume LittleEndian for encoding since this is
 		// the assumption elsewhere when reading from client.
 		// See dgraph-io/dgo/protos/api.pb.go

@@ -871,7 +871,7 @@ func compareSchemaUpdates(original, update *pb.SchemaUpdate) []string {
 	vOriginal := reflect.ValueOf(*original)
 	vUpdate := reflect.ValueOf(*update)
 
-	for i := 0; i < vOriginal.NumField(); i++ {
+	for i := range vOriginal.NumField() {
 		fieldName := vOriginal.Type().Field(i).Name
 		valueOriginal := vOriginal.Field(i)
 		valueUpdate := vUpdate.Field(i)

@@ -78,7 +78,7 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		n, err := lw.Write(msg)
 		require.NoError(t, err)
 		require.Equal(t, n, len(msg)+20, "write length is not equal")
@@ -131,9 +131,9 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				n, err := lw.Write(msg)
 				require.NoError(t, err)
 				require.Equal(t, n, len(msg), "write length is not equal")

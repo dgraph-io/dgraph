@@ -506,7 +506,7 @@ func (t TrigramTokenizer) Tokens(v interface{}) ([]string, error) {
 	l := len(value) - 2
 	if l > 0 {
 		tokens := make([]string, l)
-		for i := 0; i < l; i++ {
+		for i := range l {
 			tokens[i] = value[i : i+3]
 		}
 		tokens = x.RemoveDuplicates(tokens)

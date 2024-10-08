@@ -37,3 +37,4 @@ linters:
     - staticcheck
     - unconvert
     - unused
+    - intrange

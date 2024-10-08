@@ -100,7 +100,7 @@ func doUpserts(c *dgo.Dgraph) {
 	var wg sync.WaitGroup
 	wg.Add(len(accounts) * *concurr)
 	for _, acct := range accounts {
-		for i := 0; i < *concurr; i++ {
+		for range *concurr {
 			go func(acct account) {
 				upsert(c, acct)
 				wg.Done()

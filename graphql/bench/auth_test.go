@@ -356,7 +356,7 @@ func BenchmarkOneLevelMutation(b *testing.B) {
 
 	items := 10000
 	var cusines Cuisines
-	for i := 0; i < items; i++ {
+	for i := range items {
 		r := Cuisine{
 			Name:   fmt.Sprintf("Test_Cuisine_%d", i),
 			Type:   "TypeCuisineAuth",

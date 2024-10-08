@@ -280,7 +280,7 @@ func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, erro
 }
 
 func retryProbeGraphQL(authority string, header http.Header) *ProbeGraphQLResp {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		resp, err := probeGraphQL(authority, header)
 		if err == nil && resp.Healthy {
 			return resp
@@ -304,7 +304,7 @@ func RetryProbeGraphQL(t *testing.T, authority string, header http.Header) *Prob
 // If it can't make the assertion with enough retries, it fails the test.
 func AssertSchemaUpdateCounterIncrement(t *testing.T, authority string, oldCounter uint64, header http.Header) {
 	var newCounter uint64
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if newCounter = RetryProbeGraphQL(t, authority,
 			header).SchemaUpdateCounter; newCounter == oldCounter+1 {
 			return
@@ -1295,7 +1295,7 @@ func CheckGraphQLStarted(url string) error {
 	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
 	// there's no guarantee that GraphQL is available by now.  So we
 	// need to try and connect and potentially retry a few times.
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		_, err = hasCurrentGraphQLSchema(url)
 		if err == nil {
 			return nil

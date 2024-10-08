@@ -68,7 +68,7 @@ func intersects(l *s2.Loop, loop *s2.Loop) bool {
 
 func findVertex(a *s2.Loop, p s2.Point) int {
 	pts := a.Vertices()
-	for i := 0; i < len(pts); i++ {
+	for i := range pts {
 		if pts[i].ApproxEqual(p) {
 			return i
 		}
@@ -152,7 +152,7 @@ func convertToGeom(str string) (geom.T, error) {
 	validate := func(g geom.T) (geom.T, error) {
 		switch v := g.(type) {
 		case *geom.MultiPolygon:
-			for i := 0; i < v.NumPolygons(); i++ {
+			for i := range v.NumPolygons() {
 				if err := closed(v.Polygon(i)); err != nil {
 					return nil, err
 				}

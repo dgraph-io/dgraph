@@ -95,7 +95,7 @@ func TestRaceCreateOrReplace(t *testing.T) {
 
 	var wg sync.WaitGroup
 	run := func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			vIndex, err := f.CreateOrReplace(test.pred, opts, 32)
 			if err != nil {
 				t.Errorf("Error creating index: %s for test case %d (%+v)",
@@ -109,7 +109,7 @@ func TestRaceCreateOrReplace(t *testing.T) {
 		wg.Done()
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
 		go run()
 	}

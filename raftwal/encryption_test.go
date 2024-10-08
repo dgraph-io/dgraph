@@ -82,7 +82,7 @@ func TestLogRotate(t *testing.T) {
 	// Write enough entries to fill ~1.5x logfiles, causing a rotation.
 	const totalEntries = (maxNumEntries * 3) / 2
 	totalBytes := 0
-	for i := 0; i < totalEntries; i++ {
+	for i := range totalEntries {
 		entry := makeEntry(i)
 		require.NoError(t, el.AddEntries([]raftpb.Entry{entry}))
 		totalBytes += len(entry.Data)
@@ -125,7 +125,7 @@ func TestLogGrow(t *testing.T) {
 
 		// 5KB * 30000 is ~ 150MB, this will cause the log file to grow.
 		var entries []raftpb.Entry
-		for i := 0; i < numEntries; i++ {
+		for i := range numEntries {
 			data := make([]byte, 5<<10)
 			rand.Read(data)
 			entry := raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}

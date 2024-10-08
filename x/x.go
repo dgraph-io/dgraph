@@ -1071,7 +1071,7 @@ func GetDgraphClient(conf *viper.Viper, login bool) (*dgo.Dgraph, CloseFunc) {
 
 	for _, d := range ds {
 		var conn *grpc.ClientConn
-		for i := 0; i < retries; i++ {
+		for range retries {
 			conn, err = SetupConnection(d, tlsCfg, false, dialOpts...)
 			if err == nil {
 				break

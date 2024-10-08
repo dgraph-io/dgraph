@@ -143,7 +143,7 @@ func (c *LocalCluster) init() error {
 	}
 
 	c.zeros = c.zeros[:0]
-	for i := 0; i < c.conf.numZeros; i++ {
+	for i := range c.conf.numZeros {
 		zo := &zero{id: i}
 		zo.containerName = fmt.Sprintf(zeroNameFmt, c.conf.prefix, zo.id)
 		zo.aliasName = fmt.Sprintf(zeroAliasNameFmt, zo.id)
@@ -151,7 +151,7 @@ func (c *LocalCluster) init() error {
 	}
 
 	c.alphas = c.alphas[:0]
-	for i := 0; i < c.conf.numAlphas; i++ {
+	for i := range c.conf.numAlphas {
 		aa := &alpha{id: i}
 		aa.containerName = fmt.Sprintf(alphaNameFmt, c.conf.prefix, aa.id)
 		aa.aliasName = fmt.Sprintf(alphaLNameFmt, aa.id)
@@ -380,12 +380,12 @@ func (c *LocalCluster) cleanupDocker() error {
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
 	startAll := func() error {
-		for i := 0; i < c.conf.numZeros; i++ {
+		for i := range c.conf.numZeros {
 			if err := c.StartZero(i); err != nil {
 				return err
 			}
 		}
-		for i := 0; i < c.conf.numAlphas; i++ {
+		for i := range c.conf.numAlphas {
 			if err := c.StartAlpha(i); err != nil {
 				return err
 			}
@@ -553,7 +553,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 		return errors.Wrap(err, "error getting health URL")
 	}
 
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		time.Sleep(waitDurBeforeRetry)
 
 		endpoint, err = url(c)
@@ -610,7 +610,7 @@ func (c *LocalCluster) waitUntilLogin() error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		err := client.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword)
 		if err == nil {
 			log.Printf("[INFO] login succeeded")
@@ -633,7 +633,7 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		}
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// we do this because before v21, we used to propose the initial schema to the cluster.
 		// This results in schema being applied and indexes being built which could delay alpha
 		// starting to serve graphql schema.

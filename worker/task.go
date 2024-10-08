@@ -585,7 +585,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	} // End of calculate function.
 
 	var g errgroup.Group
-	for i := 0; i < numGo; i++ {
+	for i := range numGo {
 		start := i * width
 		end := start + width
 		if end > srcFn.n {
@@ -943,7 +943,7 @@ func (qs *queryState) handleUidPostings(
 		return nil
 	} // End of calculate function.
 
-	for i := 0; i < numGo; i++ {
+	for i := range numGo {
 		start := i * width
 		end := start + width
 		if end > srcFn.n {
@@ -953,7 +953,7 @@ func (qs *queryState) handleUidPostings(
 			errCh <- calculate(start, end)
 		}(start, end)
 	}
-	for i := 0; i < numGo; i++ {
+	for range numGo {
 		if err := <-errCh; err != nil {
 			return err
 		}
@@ -1309,7 +1309,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
+	for i := range arg.out.UidMatrix {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 
@@ -1439,7 +1439,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	switch {
 	case arg.srcFn.fname == eq:
 		// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
-		for row := 0; row < len(arg.srcFn.tokens); row++ {
+		for row := range arg.srcFn.tokens {
 			compareFunc := func(dst types.Val) bool {
 				return types.CompareVals(arg.srcFn.fname, dst, arg.srcFn.eqTokens[row])
 			}
@@ -1555,7 +1555,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		}
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
+	for i := range arg.out.UidMatrix {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 
@@ -1602,7 +1602,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	}
 
 	errCh := make(chan error, numGo)
-	for i := 0; i < numGo; i++ {
+	for i := range numGo {
 		start := i * width
 		end := start + width
 		if end > len(uids.Uids) {
@@ -1612,7 +1612,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			errCh <- filter(idx, start, end)
 		}(i, start, end)
 	}
-	for i := 0; i < numGo; i++ {
+	for range numGo {
 		if err := <-errCh; err != nil {
 			return err
 		}
@@ -1624,7 +1624,7 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	if span != nil && numGo > 1 {
 		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
 	}
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
+	for i := range arg.out.UidMatrix {
 		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
 	}
 	return nil
@@ -1705,7 +1705,7 @@ func (qs *queryState) filterStringFunction(arg funcArgs) error {
 		filtered = matchStrings(filtered, values, &filter)
 	}
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
+	for i := range arg.out.UidMatrix {
 		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
 	}
 	return nil

@@ -79,7 +79,7 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	}
 
 	tryWith := func(host string) error {
-		for i := 0; i < 60; i++ {
+		for range 60 {
 			resp, err := http.Get("http://" + host + ":" + port + "/health")
 			var body []byte
 			if resp != nil && resp.Body != nil {
@@ -147,7 +147,7 @@ func (in ContainerInstance) login() error {
 }
 
 func (in ContainerInstance) bestEffortTryLogin() error {
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		err := in.login()
 		if err == nil {
 			return nil
@@ -316,7 +316,7 @@ func CheckHealthContainer(socketAddrHttp string) error {
 	var err error
 	var resp *http.Response
 	url := "http://" + socketAddrHttp + "/health"
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		resp, err = http.Get(url)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			return nil

@@ -712,7 +712,7 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 
 	if len(res.Query) != 0 {
 		res.QueryVars = make([]*Vars, 0, len(res.Query))
-		for i := 0; i < len(res.Query); i++ {
+		for i := range res.Query {
 			qu := res.Query[i]
 			// Try expanding fragments using fragment map.
 			if err := qu.expandFragments(fmap); err != nil {
@@ -790,7 +790,7 @@ func checkDependency(vl []*Vars) error {
 			defines, needs)
 	}
 
-	for i := 0; i < len(defines); i++ {
+	for i := range defines {
 		if defines[i] != needs[i] {
 			return errors.Errorf("Variables are not used properly. \nDefined:%v\nUsed:%v\n",
 				defines, needs)
@@ -3038,7 +3038,7 @@ func godeep(it *lex.ItemIterator, gq *GraphQuery) error {
 		case itemPeriod:
 			// looking for ...
 			dots := 1
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				if it.Next() && it.Item().Typ == itemPeriod {
 					dots++
 				}

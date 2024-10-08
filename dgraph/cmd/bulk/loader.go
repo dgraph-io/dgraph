@@ -144,7 +144,7 @@ func newLoader(opt *options) *loader {
 		mappers: make([]*mapper, opt.NumGoroutines),
 		zero:    zero,
 	}
-	for i := 0; i < opt.NumGoroutines; i++ {
+	for i := range opt.NumGoroutines {
 		ld.mappers[i] = newMapper(st)
 	}
 	go ld.prog.report()

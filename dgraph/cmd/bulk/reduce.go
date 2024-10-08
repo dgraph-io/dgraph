@@ -61,7 +61,7 @@ func (r *reducer) run() error {
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
 	thr := y.NewThrottle(r.opt.NumReducers)
-	for i := 0; i < r.opt.ReduceShards; i++ {
+	for i := range r.opt.ReduceShards {
 		if err := thr.Do(); err != nil {
 			return err
 		}
@@ -465,7 +465,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
 	encoderCloser := z.NewCloser(cpu)
-	for i := 0; i < cpu; i++ {
+	for range cpu {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
 		go r.encode(encoderCh, encoderCloser)
@@ -500,7 +500,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		// Append nil for the last entries.
 		partitionKeys = append(partitionKeys, nil)
 
-		for i := 0; i < len(partitionKeys); i++ {
+		for i := range partitionKeys {
 			pkey := partitionKeys[i]
 			for _, itr := range mapItrs {
 				itr.Next(cbuf, pkey)

@@ -90,7 +90,7 @@ func indexCells(g geom.T) (parents, cover s2.CellUnion, err error) {
 	case *geom.MultiPolygon:
 		var cover s2.CellUnion
 		// Convert each polygon to loop. Get cover for each and append to cover.
-		for i := 0; i < v.NumPolygons(); i++ {
+		for i := range v.NumPolygons() {
 			p := v.Polygon(i)
 			l, err := loopFromPolygon(p)
 			if err != nil {
@@ -161,7 +161,7 @@ func isClockwise(r *geom.LinearRing) bool {
 	// The algorithm is described here https://en.wikipedia.org/wiki/Shoelace_formula
 	var a float64
 	n := r.NumCoords()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		p1 := r.Coord(i)
 		p2 := r.Coord((i + 1) % n)
 		a += (p2.X() - p1.X()) * (p1.Y() + p2.Y())
@@ -174,7 +174,7 @@ func loopFromRing(r *geom.LinearRing, reverse bool) *s2.Loop {
 	// aren't allowed to repeat and the loop is assumed to be closed, so we skip the last point.
 	n := r.NumCoords()
 	pts := make([]s2.Point, n-1)
-	for i := 0; i < n-1; i++ {
+	for i := range n - 1 {
 		var c geom.Coord
 		if reverse {
 			c = r.Coord(n - 1 - i)

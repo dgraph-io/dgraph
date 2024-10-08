@@ -85,7 +85,7 @@ func (e *Encoder) packBlock() {
 	buf := make([]byte, 17)
 	tmpUids := make([]uint32, 4)
 	for {
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			if i >= len(e.uids) {
 				// Padding with '0' because Encode4 encodes only in batch of 4.
 				tmpUids[i] = 0
@@ -199,7 +199,7 @@ func (d *Decoder) UnpackBlock() []uint64 {
 
 		groupvarint.Decode4(tmpUids, encData)
 		encData = encData[groupvarint.BytesUsed[encData[0]]:]
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			sum = last + uint64(tmpUids[i])
 			d.uids = append(d.uids, sum)
 			last = sum

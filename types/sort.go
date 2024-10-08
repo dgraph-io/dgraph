@@ -127,7 +127,7 @@ func SortTopN(v [][]Val, ul *[]uint64, desc []bool, lang string, n int) error {
 	toBeSorted := byValue{b}
 
 	nul := 0
-	for i := 0; i < len(*ul); i++ {
+	for i := range *ul {
 		if toBeSorted.isNil(i) {
 			continue
 		}

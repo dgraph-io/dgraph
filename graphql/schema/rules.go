@@ -130,7 +130,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 		fieldsToReport := make(map[string][]string)
 		interfaces := typ.Interfaces
 
-		for i := 0; i < len(interfaces); i++ {
+		for i := range interfaces {
 			intr1 := interfaces[i]
 			interfacePreds1 := interfacePreds[intr1]
 			for j := i + 1; j < len(interfaces); j++ {

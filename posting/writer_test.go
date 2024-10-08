@@ -34,7 +34,7 @@ var val = make([]byte, 128)
 func BenchmarkWriter(b *testing.B) {
 	createKVList := func() bpb.KVList {
 		var KVList bpb.KVList
-		for i := 0; i < 5000000; i++ {
+		for i := range 5000000 {
 			n := &bpb.KV{Key: []byte(fmt.Sprint(i)), Value: val, Version: 5}
 			KVList.Kv = append(KVList.Kv, n)
 		}

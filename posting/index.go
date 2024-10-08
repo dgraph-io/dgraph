@@ -790,7 +790,7 @@ func printTreeStats(txn *Txn) {
 				fmt.Println("Error while decoding", err)
 			}
 
-			for i := 0; i < len(temp); i++ {
+			for i := range temp {
 				if len(temp[i]) > 0 {
 					numNodes[i] += 1
 				}
@@ -800,15 +800,15 @@ func printTreeStats(txn *Txn) {
 		}
 	}
 
-	for i := 0; i < numLevels; i++ {
+	for i := range numLevels {
 		fmt.Printf("%d, ", numNodes[i])
 	}
 	fmt.Println("")
-	for i := 0; i < numLevels; i++ {
+	for i := range numLevels {
 		fmt.Printf("%d, ", numConnections[i])
 	}
 	fmt.Println("")
-	for i := 0; i < numLevels; i++ {
+	for i := range numLevels {
 		if numNodes[i] == 0 {
 			fmt.Printf("0, ")
 			continue
@@ -832,13 +832,13 @@ func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
 
 	*matrix = make([][]uint64, rows)
 
-	for i := 0; i < int(rows); i++ {
+	for i := range rows {
 		// Read row length
 		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
 		offset += 8
 
 		(*matrix)[i] = make([]uint64, rowLen)
-		for j := 0; j < int(rowLen); j++ {
+		for j := range rowLen {
 			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
 			offset += 8
 		}
@@ -1589,7 +1589,7 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead)))
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword)))
 
-	for i := 0; i < hnsw.VectorIndexMaxLevels; i++ {
+	for i := range hnsw.VectorIndexMaxLevels {
 		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
 	}
 

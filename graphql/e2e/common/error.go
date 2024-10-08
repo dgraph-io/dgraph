@@ -109,7 +109,7 @@ func graphQLCompletionOn(t *testing.T) {
 				return result.QueryCountry[i].Name < result.QueryCountry[j].Name
 			})
 
-			for i := 0; i < 4; i++ {
+			for i := range 4 {
 				require.NotNil(t, result.QueryCountry[i])
 				require.Equal(t, result.QueryCountry[i].Name, expected.QueryCountry[i].Name)
 			}

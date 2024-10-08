@@ -2833,7 +2833,7 @@ func getAsPathParamValue(val interface{}) string {
 func getAsInterfaceSliceInPath(slice []interface{}) string {
 	var b strings.Builder
 	size := len(slice)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		b.WriteString(getAsPathParamValue(slice[i]))
 		if i != size-1 {
 			b.WriteString(",")
@@ -3177,7 +3177,7 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 		return
 	}
 	writer.WriteString("{\n")
-	for i := 0; i < len(field.SelectionSet); i++ {
+	for i := range field.SelectionSet {
 		castedField := field.SelectionSet[i].(*ast.Field)
 		writer.WriteString(castedField.Name)
 

@@ -156,7 +156,7 @@ func benchmarkUnpack(trials int, chunks *chunks) int {
 	for i, c := range chunks.data {
 		out := codec.Decode(packed[i], 0)
 
-		for j := 0; j < len(c); j++ {
+		for j := range c {
 			if c[j] != out[j] {
 				x.Fatalf("Something wrong %+v \n%+v\n %+v\n", len(c), len(out), j)
 			}

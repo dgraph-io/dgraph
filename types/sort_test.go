@@ -72,7 +72,7 @@ func TestQuickSelect(t *testing.T) {
 	k := 10
 	getList := func() [][]Val {
 		strs := make([]string, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			strs[i] = fmt.Sprintf("%d", rand.Intn(100000))
 		}
 
@@ -90,7 +90,7 @@ func TestQuickSelect(t *testing.T) {
 	list := getList()
 	require.NoError(t, SortTopN(list, &ul.Uids, []bool{false}, "", k))
 
-	for i := 0; i < k; i++ {
+	for i := range k {
 		for j := k; j < n; j++ {
 			require.Equal(t, list[i][0].Value.(int64) <= list[j][0].Value.(int64), true)
 		}
@@ -102,7 +102,7 @@ func BenchmarkSortQuickSort(b *testing.B) {
 	n := 1000000
 	getList := func() [][]Val {
 		strs := make([]string, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			strs[i] = StringWithCharset(10)
 		}
 
