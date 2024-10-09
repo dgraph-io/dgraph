@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/v24/ee"
@@ -362,7 +363,7 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 	kv := &bpb.KV{}
 	err := buf.SliceIterate(func(s []byte) error {
 		kv.Reset()
-		if err := kv.Unmarshal(s); err != nil {
+		if err := proto.Unmarshal(s, kv); err != nil {
 			return errors.Wrap(err, "processKvBuf failed to unmarshal kv")
 		}
 		pk, err := x.Parse(kv.Key)
@@ -377,7 +378,7 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 		}
 		if pk.IsData() {
 			pl := &pb.PostingList{}
-			if err := pl.Unmarshal(kv.Value); err != nil {
+			if err := proto.Unmarshal(kv.Value, pl); err != nil {
 				return errors.Wrap(err, "processKvBuf failed to Unmarshal pl")
 			}
 			l := posting.NewList(kv.Key, pl, kv.Version)

@@ -26,12 +26,12 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
 	cregexp "github.com/google/codesearch/regexp"
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"

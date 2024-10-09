@@ -31,10 +31,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
+	jsonpb "google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/dql"
@@ -600,7 +600,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	op := &api.Operation{}
-	if err := jsonpb.UnmarshalString(string(b), op); err != nil {
+	if err := jsonpb.Unmarshal(b, op); err != nil {
 		op.Schema = string(b)
 	}
 
