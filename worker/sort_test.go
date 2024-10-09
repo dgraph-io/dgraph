@@ -17,10 +17,66 @@
 package worker
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"testing"
 
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/v24/posting"
+	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/stretchr/testify/require"
 )
+
+func BenchmarkAddMutationWithIndex(b *testing.B) {
+	gr = new(groupi)
+	gr.gid = 1
+	gr.tablets = make(map[string]*pb.Tablet)
+	addTablets := func(attrs []string, gid uint32, namespace uint64) {
+		for _, attr := range attrs {
+			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
+		}
+	}
+
+	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
+		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
+		1, x.GalaxyNamespace)
+	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
+	addTablets([]string{"name"}, 1, 0x2)
+
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("benchmarkadd: string @index(term) ."), 1)
+	fmt.Println(err)
+	if err != nil {
+		panic(err)
+	}
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("benchmarkadd")
+
+	for i := 0; i < b.N; i++ {
+		edge := &pb.DirectedEdge{
+			Value:  []byte("david"),
+			Attr:   attr,
+			Entity: 1,
+			Op:     pb.DirectedEdge_SET,
+		}
+
+		x.Check(runMutation(ctx, edge, txn))
+	}
+}
 
 func TestRemoveDuplicates(t *testing.T) {
 	toSet := func(uids []uint64) map[uint64]struct{} {
