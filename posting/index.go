@@ -110,82 +110,85 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		return []*pb.DirectedEdge{}, errors.New("invalid UID with value 0")
 	}
 
-	inKey := x.DataKey(info.edge.Attr, uid)
-	pl, err := txn.Get(inKey)
-	if err != nil {
-		return []*pb.DirectedEdge{}, err
-	}
-	data, err := pl.AllValues(txn.StartTs)
-	if err != nil {
-		return []*pb.DirectedEdge{}, err
-	}
-
-	if info.op == pb.DirectedEdge_DEL &&
-		len(data) > 0 && data[0].Tid == types.VFloatID {
-		// TODO look into better alternatives
-		//      The issue here is that we will create dead nodes in the Vector Index
-		//      assuming an HNSW index type. What we should do instead is invoke
-		//      index.Remove(<key to dead index value>). However, we currently do
-		//      not support this in VectorIndex code!!
-		// if a delete & dealing with vfloats, add this to dead node in persistent store.
-		// What we should do instead is invoke the factory.Remove(key) operation.
-		deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
-		deadKey := x.DataKey(deadAttr, 1)
-		pl, err := txn.Get(deadKey)
+	if len(info.factorySpecs) > 0 {
+		inKey := x.DataKey(info.edge.Attr, uid)
+		pl, err := txn.Get(inKey)
 		if err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
-		var deadNodes []uint64
-		deadData, _ := pl.Value(txn.StartTs)
-		if deadData.Value == nil {
-			deadNodes = append(deadNodes, uid)
-		} else {
-			deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+		data, err := pl.AllValues(txn.StartTs)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+
+		if info.op == pb.DirectedEdge_DEL &&
+			len(data) > 0 && data[0].Tid == types.VFloatID {
+			// TODO look into better alternatives
+			//      The issue here is that we will create dead nodes in the Vector Index
+			//      assuming an HNSW index type. What we should do instead is invoke
+			//      index.Remove(<key to dead index value>). However, we currently do
+			//      not support this in VectorIndex code!!
+			// if a delete & dealing with vfloats, add this to dead node in persistent store.
+			// What we should do instead is invoke the factory.Remove(key) operation.
+			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+			deadKey := x.DataKey(deadAttr, 1)
+			pl, err := txn.Get(deadKey)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
-			deadNodes = append(deadNodes, uid)
+			var deadNodes []uint64
+			deadData, _ := pl.Value(txn.StartTs)
+			if deadData.Value == nil {
+				deadNodes = append(deadNodes, uid)
+			} else {
+				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+				deadNodes = append(deadNodes, uid)
+			}
+			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
+			if marshalErr != nil {
+				return []*pb.DirectedEdge{}, marshalErr
+			}
+			edge := &pb.DirectedEdge{
+				Entity:    1,
+				Attr:      deadAttr,
+				Value:     deadNodesBytes,
+				ValueType: pb.Posting_ValType(0),
+			}
+			if err := pl.addMutation(ctx, txn, edge); err != nil {
+				return nil, err
+			}
 		}
-		deadNodesBytes, marshalErr := json.Marshal(deadNodes)
-		if marshalErr != nil {
-			return []*pb.DirectedEdge{}, marshalErr
-		}
-		edge := &pb.DirectedEdge{
-			Entity:    1,
-			Attr:      deadAttr,
-			Value:     deadNodesBytes,
-			ValueType: pb.Posting_ValType(0),
-		}
-		if err := pl.addMutation(ctx, txn, edge); err != nil {
-			return nil, err
+
+		// TODO: As stated earlier, we need to validate that it is okay to assume
+		//       that we care about just data[0].
+		//       Similarly, the current assumption is that we have at most one
+		//       Vector Index, but this assumption may break later.
+		if info.op == pb.DirectedEdge_SET &&
+			len(data) > 0 && data[0].Tid == types.VFloatID &&
+			len(info.factorySpecs) > 0 {
+			// retrieve vector from inUuid save as inVec
+			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+			indexer, err := info.factorySpecs[0].CreateIndex(attr)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			edges, err := indexer.Insert(ctx, tc, uid, inVec)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			pbEdges := []*pb.DirectedEdge{}
+			for _, e := range edges {
+				pbe := indexEdgeToPbEdge(e)
+				pbEdges = append(pbEdges, pbe)
+			}
+			return pbEdges, nil
 		}
 	}
 
-	// TODO: As stated earlier, we need to validate that it is okay to assume
-	//       that we care about just data[0].
-	//       Similarly, the current assumption is that we have at most one
-	//       Vector Index, but this assumption may break later.
-	if info.op == pb.DirectedEdge_SET &&
-		len(data) > 0 && data[0].Tid == types.VFloatID &&
-		len(info.factorySpecs) > 0 {
-		// retrieve vector from inUuid save as inVec
-		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
-		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-		indexer, err := info.factorySpecs[0].CreateIndex(attr)
-		if err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-		edges, err := indexer.Insert(ctx, tc, uid, inVec)
-		if err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-		pbEdges := []*pb.DirectedEdge{}
-		for _, e := range edges {
-			pbe := indexEdgeToPbEdge(e)
-			pbEdges = append(pbEdges, pbe)
-		}
-		return pbEdges, nil
-	}
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
