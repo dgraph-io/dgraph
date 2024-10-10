@@ -558,6 +558,18 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 			//fmt.Println("====Setting cache list", commitTs, pk, p, val.list.mutationMap)
 		}
 
+		if val.list != nil {
+			deltaCount := len(val.list.mutationMap)
+			if deltaCount > 0 {
+				// If deltaCount is high, send it to high priority channel instead.
+				if deltaCount > 500 {
+					IncrRollup.addKeyToBatch([]byte(key), 0)
+				} else {
+					IncrRollup.addKeyToBatch([]byte(key), 1)
+				}
+			}
+		}
+
 		globalCache.UnlockKey(keyHash)
 	}
 }
@@ -701,7 +713,7 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 }
 
 func ShouldGoInCache(pk x.ParsedKey) bool {
-	return true
+	return !pk.IsData()
 }
 
 func PostingListCacheEnabled() bool {
@@ -736,9 +748,10 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	}
 
 	pk, _ := x.Parse(key)
-	keyHash := z.MemHash(key)
+	var keyHash uint64
 
 	if ShouldGoInCache(pk) {
+		keyHash = z.MemHash(key)
 		globalCache.LockKey(keyHash)
 		cacheItem, ok := globalCache.get(keyHash)
 		if !ok {
@@ -761,6 +774,15 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				//allV, _ := lCopy.AllValues(readTs)
 				//uids, _ := lCopy.Uids(ListOptions{ReadTs: readTs})
 				//fmt.Println("====Getting cache", readTs, pk, lCopy.mutationMap, allV, uids)
+				deltaCount := len(lCopy.mutationMap)
+				if deltaCount > 0 {
+					// If deltaCount is high, send it to high priority channel instead.
+					if deltaCount > 500 {
+						IncrRollup.addKeyToBatch(key, 0)
+					} else {
+						IncrRollup.addKeyToBatch(key, 1)
+					}
+				}
 				return lCopy, nil
 			}
 		}
