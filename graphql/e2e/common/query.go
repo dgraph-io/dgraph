@@ -88,6 +88,7 @@ func touchedUidsHeader(t *testing.T) {
 	client := http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	// confirm that the header value is a non-negative integer
 	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
@@ -116,6 +117,7 @@ func cacheControlHeader(t *testing.T) {
 	client := http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	// confirm that the header value is a non-negative integer
 	require.Equal(t, "public,max-age=5", resp.Header.Get("Cache-Control"))
