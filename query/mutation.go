@@ -38,7 +38,7 @@ import (
 func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
 	// In expandEdges, for non * type prredicates, we prepend the namespace directly and for
 	// * type predicates, we fetch the predicates and prepend the namespace.
-	edges, err := expandEdges(ctx, m)
+	edges, err := ExpandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
@@ -57,7 +57,7 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+func ExpandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
