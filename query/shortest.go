@@ -225,6 +225,9 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 							rch <- err
 							return
 						}
+						if canSkipRing(adjacencyMap, toUID, fromUID) {
+							continue
+						}
 
 						// TODO - This simplify overrides the adjacency matrix. What happens if the
 						// cost along the second attribute is more than that along the first.
@@ -723,4 +726,13 @@ func createkroutesubgraph(ctx context.Context, kroutes []route) []*SubGraph {
 		res = append(res, shortestSg)
 	}
 	return res
+}
+
+func canSkipRing(adjacencyMap map[uint64]map[uint64]mapItem, k, v uint64) bool {
+	if adjacencyMap[k] != nil {
+		if _, ok := adjacencyMap[k][v]; ok {
+			return true
+		}
+	}
+	return false
 }
