@@ -154,9 +154,9 @@ func AddItem(t *testing.T, minSuffixVal int, maxSuffixVal int, jwtToken string, 
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		require.NoError(t, err)
-
 		var data interface{}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+		require.NoError(t, resp.Body.Close())
 	}
 }
 
@@ -189,8 +189,8 @@ func CheckItemExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
-
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
@@ -229,6 +229,7 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
@@ -265,6 +266,7 @@ func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlph
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	var data interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))

@@ -798,6 +798,11 @@ func matchExportCount(opts matchExport) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			glog.Errorf("Error while closing response body: %v", err)
+		}
+	}()
 
 	b, err = io.ReadAll(resp.Body)
 	if err != nil {

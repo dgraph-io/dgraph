@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
 	"github.com/dgraph-io/dgraph/v24/graphql/schema"
@@ -68,11 +69,15 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 
 	dialer := websocket.DefaultDialer
 	dialer.EnableCompression = true
-	conn, _, err := dialer.Dial(url, header)
+	conn, resp, err := dialer.Dial(url, header)
 	if err != nil {
 		return nil, err
 	}
-
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			glog.Errorf("Error while closing response body: %v", err)
+		}
+	}()
 	// Initialize subscription.
 	init := operationMessage{
 		Type:    initMsg,

@@ -70,6 +70,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 		resp, err := http.Get("http://" + HttpSocket + "/health")
 		require.NoError(t, err)
 		buf, err := io.ReadAll(resp.Body)
+		require.NoError(t, resp.Body.Close())
 		require.NoError(t, err)
 		sbuf := string(buf)
 		if !strings.Contains(sbuf, "opRestore") {

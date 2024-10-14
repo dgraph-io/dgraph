@@ -43,6 +43,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
 	"github.com/dgraph-io/dgraph/v24/contrib/jepsen/browser"
@@ -216,7 +217,12 @@ func jepsenServe() error {
 	// Check if the page is already up
 	checkServing := func() error {
 		url := jepsenURL()
-		_, err := http.Get(url) // nolint:gosec
+		resp, err := http.Get(url) // nolint:gosec
+		defer func() {
+			if err = resp.Body.Close(); err != nil {
+				glog.Errorf("Error while closing response body: %v", err)
+			}
+		}()
 		return err
 	}
 	if err := checkServing(); err == nil {

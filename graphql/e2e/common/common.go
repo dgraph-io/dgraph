@@ -252,7 +252,6 @@ type GqlSchema struct {
 }
 
 func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, error) {
-
 	request, err := http.NewRequest("GET", "http://"+authority+"/probe/graphql", nil)
 	if err != nil {
 		return nil, err
@@ -263,6 +262,11 @@ func probeGraphQL(authority string, header http.Header) (*ProbeGraphQLResp, erro
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			glog.Errorf("Error while closing response body: %v", err)
+		}
+	}()
 
 	probeResp := ProbeGraphQLResp{}
 	if resp.StatusCode == http.StatusOK {
@@ -592,6 +596,7 @@ func safelyDropAll(t *testing.T, withGroot bool) {
 func updateGQLSchemaUsingAdminSchemaEndpt(t *testing.T, authority, schema string) string {
 	resp, err := http.Post("http://"+authority+"/admin/schema", "", strings.NewReader(schema))
 	require.NoError(t, err)
+	defer func() { require.NoError(t, resp.Body.Close()) }()
 
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
