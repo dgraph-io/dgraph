@@ -974,3 +974,43 @@ type Home @auth(
     favouriteMember: HomeMember
 }
 # union testing - end
+
+"""
+This types are used to validate nested filting.
+"""
+type Nested_X @auth(
+    query: { rule: """
+    query {
+        queryNested_X(filter: {y: {s: {eq: "y"}}}){
+            __typename
+        }
+    }
+    """}
+) {
+  b: Boolean @search
+  y: Nested_Y @hasInverse(field: x) @search
+}
+
+type Nested_Y implements Nested_Z @auth(
+    query: {
+        or: [
+            { rule: "{ $rbac: { eq: \"positive\" } }" }
+            { and: [
+                { rule: "{ $rbac: { eq: \"uncertain\" } }" }
+                { rule: """
+                    query {
+                        queryNested_Y(filter: {x: {b: true}}){
+                            __typename
+                        }
+                    }
+                    """
+                }
+            ]
+        }]
+    }) {
+  s: String @search(by: [hash])
+}
+
+interface Nested_Z {
+  x: Nested_X @search
+}

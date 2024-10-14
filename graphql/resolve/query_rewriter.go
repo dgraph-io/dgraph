@@ -157,7 +157,7 @@ func (qr *queryRewriter) Rewrite(
 	case schema.SimilarByEmbeddingQuery:
 		return rewriteAsSimilarByEmbeddingQuery(gqlQuery, authRw), nil
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery, authRw), nil
+		return rewriteAsQuery(gqlQuery, authRw, gqlQuery.Alias()), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery, authRw)
 	case schema.AggregateQuery:
@@ -257,7 +257,8 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*dql.GraphQuery 
 
 	// Add filter
 	filter, _ := query.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery[0], mainType, filter)
+	_, varQry := addFilter(dgQuery[0], mainType, filter, authRw, query.Alias())
+	dgQuery = append(dgQuery, varQry...)
 
 	dgQuery = authRw.addAuthQueries(mainType, dgQuery, rbac)
 
@@ -451,7 +452,8 @@ func addUID(dgQuery *dql.GraphQuery) {
 func rewriteAsQueryByIds(
 	field schema.Field,
 	uids []uint64,
-	authRw *authRewriter) []*dql.GraphQuery {
+	authRw *authRewriter,
+	queryName string) []*dql.GraphQuery {
 	if field == nil {
 		return nil
 	}
@@ -475,7 +477,8 @@ func rewriteAsQueryByIds(
 		addUIDFunc(dgQuery[0], intersection(ids, uids))
 	}
 
-	addArgumentsToField(dgQuery[0], field)
+	includedQueries := addArgumentsToField(dgQuery[0], field, authRw, queryName)
+	dgQuery = append(dgQuery, includedQueries...)
 
 	// The function getQueryByIds is called for passwordQuery or fetching query result types
 	// after making a mutation. In both cases, we want the selectionSet to use the `query` auth
@@ -501,11 +504,15 @@ func rewriteAsQueryByIds(
 
 // addArgumentsToField adds various different arguments to a field, such as
 // filter, order and pagination.
-func addArgumentsToField(dgQuery *dql.GraphQuery, field schema.Field) {
+func addArgumentsToField(dgQuery *dql.GraphQuery,
+	field schema.Field,
+	auth *authRewriter,
+	queryName string) []*dql.GraphQuery {
 	filter, _ := field.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(dgQuery, field.Type(), filter)
+	_, varQry := addFilter(dgQuery, field.Type(), filter, auth, queryName)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
+	return varQry
 }
 
 func addTopLevelTypeFilter(query *dql.GraphQuery, field schema.Field) {
@@ -545,7 +552,7 @@ func rewriteAsGet(
 	}
 
 	if len(xidArgToVal) == 0 {
-		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth)
+		dgQuery = rewriteAsQueryByIds(query, []uint64{uid}, auth, query.Alias())
 
 		// Add the type filter to the top level get query. When the auth has been written into the
 		// query the top level get query may be present in query's children.
@@ -774,7 +781,7 @@ func rewriteAsSimilarByIdQuery(
 		},
 		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
 	}
-	addArgumentsToField(sortQuery, query)
+	addArgumentsToField(sortQuery, query, auth, query.Alias())
 
 	dgQuery = append(dgQuery, aggQuery, similarQuery, sortQuery)
 	return dgQuery
@@ -803,7 +810,7 @@ func rewriteAsSimilarByIdQuery(
 func rewriteAsSimilarByEmbeddingQuery(
 	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
 
-	dgQuery := rewriteAsQuery(query, auth)
+	dgQuery := rewriteAsQuery(query, auth, query.Alias())
 
 	// Remember dgQuery[0].Children as result type for the last block
 	// in the rewritten query
@@ -951,13 +958,15 @@ func addCommonRules(
 	return []*dql.GraphQuery{dgQuery}, rbac
 }
 
-func rewriteAsQuery(field schema.Field, authRw *authRewriter) []*dql.GraphQuery {
+func rewriteAsQuery(field schema.Field, authRw *authRewriter, queryName string) []*dql.GraphQuery {
 	dgQuery, rbac := addCommonRules(field, field.Type(), authRw)
 	if rbac == schema.Negative {
 		return dgQuery
 	}
 
-	addArgumentsToField(dgQuery[0], field)
+	varQry := addArgumentsToField(dgQuery[0], field, authRw, queryName)
+	dgQuery = append(dgQuery, varQry...)
+
 	selectionAuth := addSelectionSetFrom(dgQuery[0], field, authRw)
 	// we don't need to query uid for auth queries, as they always have at least one field in their
 	// selection set.
@@ -1321,14 +1330,15 @@ func (authRw *authRewriter) rewriteRuleNode(
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
 		varName := authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
-		r1 := rewriteAsQuery(qry, authRw)
+		r1 := rewriteAsQuery(qry, authRw, varName)
 		r1[0].Var = varName
 		r1[0].Attr = "var"
 		if len(r1[0].Cascade) == 0 {
 			r1[0].Cascade = append(r1[0].Cascade, "__all__")
 		}
 
-		return []*dql.GraphQuery{r1[0]}, &dql.FilterTree{
+		// return all queries, including the nested var queries.
+		return r1, &dql.FilterTree{
 			Func: &dql.Function{
 				Name: "uid",
 				Args: []dql.Arg{{Value: varName}},
@@ -1465,7 +1475,7 @@ func buildAggregateFields(
 	// Filter for aggregate Fields. This is added to all count aggregate fields
 	// and mainField
 	fieldFilter, _ := f.ArgValue("filter").(map[string]interface{})
-	_ = addFilter(mainField, constructedForType, fieldFilter)
+	_, varQry := addFilter(mainField, constructedForType, fieldFilter, auth, f.Alias())
 
 	// Add type filter in case the Dgraph predicate for which the aggregate
 	// field belongs to is a reverse edge
@@ -1489,7 +1499,7 @@ func buildAggregateFields(
 				Attr:  "count(" + constructedForDgraphPredicate + ")",
 			}
 			// Add filter to count aggregation field.
-			_ = addFilter(aggregateChild, constructedForType, fieldFilter)
+			addFilter(aggregateChild, constructedForType, fieldFilter, auth, f.Alias())
 
 			// Add type filter in case the Dgraph predicate for which the aggregate
 			// field belongs to is a reverse edge
@@ -1597,6 +1607,7 @@ func buildAggregateFields(
 	// not added to them.
 	aggregateChildren = append(aggregateChildren, otherAggregateChildren...)
 	retAuthQueries = append(retAuthQueries, fieldAuth...)
+	retAuthQueries = append(retAuthQueries, varQry...)
 	return aggregateChildren, retAuthQueries
 }
 
@@ -1681,9 +1692,12 @@ func addSelectionSetFrom(
 
 		filter, _ := f.ArgValue("filter").(map[string]interface{})
 		// if this field has been filtered out by the filter, then don't add it in DQL query
-		if includeField := addFilter(child, f.Type(), filter); !includeField {
+		includeField, varQry := addFilter(child, f.Type(), filter, auth, f.Alias())
+		if !includeField {
 			continue
 		}
+
+		authQueries = append(authQueries, varQry...)
 
 		// Add type filter in case the Dgraph predicate is a reverse edge
 		if strings.HasPrefix(f.DgraphPredicate(), "~") {
@@ -1889,9 +1903,16 @@ func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []u
 // addFilter adds a filter to the input DQL query. It returns false if the field for which the
 // filter was specified should not be included in the DQL query.
 // Currently, it would only be false for a union field when no memberTypes are queried.
-func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}) bool {
+func addFilter(q *dql.GraphQuery,
+	typ schema.Type,
+	filter map[string]interface{},
+	auth *authRewriter,
+	queryName string) (bool, []*dql.GraphQuery) {
+
+	varQry := []*dql.GraphQuery{}
+
 	if len(filter) == 0 {
-		return true
+		return true, varQry
 	}
 
 	// There are two cases here.
@@ -1913,18 +1934,19 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	}
 
 	if typ.IsUnion() {
-		if filter, includeField := buildUnionFilter(typ, filter); includeField {
+		if filter, varq, includeField := buildUnionFilter(typ, filter, auth, queryName); includeField {
 			q.Filter = filter
+			varQry = varq
 		} else {
-			return false
+			return false, varQry
 		}
 	} else {
-		q.Filter = buildFilter(typ, filter)
+		q.Filter, varQry = buildFilter(typ, filter, auth, queryName)
 	}
 	if filterAtRoot {
 		addTypeFilter(q, typ)
 	}
-	return true
+	return true, varQry
 }
 
 // buildFilter builds a Dgraph dql.FilterTree from a GraphQL 'filter' arg.
@@ -1935,6 +1957,8 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 // filter: { title: { anyofterms: "GraphQL" }, isPublished: true, ... }
 // or
 // filter: { title: { anyofterms: "GraphQL" }, and: { not: { ... } } }
+// or
+// filter: { <nested-field>: { ... }, ... }
 // etc
 //
 // typ is the GraphQL type we are filtering on, and is needed to turn for example
@@ -1953,8 +1977,12 @@ func addFilter(q *dql.GraphQuery, typ schema.Type, filter map[string]interface{}
 // ATM those will probably generate junk that might cause a Dgraph error.  And
 // bubble back to the user as a GraphQL error when the query fails. Really,
 // they should fail query validation and never get here.
-func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree {
+func buildFilter(typ schema.Type,
+	filter map[string]interface{},
+	auth *authRewriter,
+	queryName string) (*dql.FilterTree, []*dql.GraphQuery) {
 
+	var varQry []*dql.GraphQuery
 	var ands []*dql.FilterTree
 	var or *dql.FilterTree
 	// Get a stable ordering so we generate the same thing each time.
@@ -1970,6 +1998,10 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 		if filter[field] == nil {
 			continue
 		}
+
+		// derive variable name for nested objects
+		qn := queryName + "_" + field
+
 		switch field {
 
 		// In 'and', 'or' and 'not' cases, filter[field] must be a map[string]interface{}
@@ -1988,12 +2020,14 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 			// ... and: [{}]
 			switch v := filter[field].(type) {
 			case map[string]interface{}:
-				ft := buildFilter(typ, v)
+				ft, qs := buildFilter(typ, v, auth, qn)
 				ands = append(ands, ft)
+				varQry = append(varQry, qs...)
 			case []interface{}:
 				for _, obj := range v {
-					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ft, qs := buildFilter(typ, obj.(map[string]interface{}), auth, qn)
 					ands = append(ands, ft)
+					varQry = append(varQry, qs...)
 				}
 			}
 		case "or":
@@ -2008,12 +2042,15 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 			// ... or: [{}]
 			switch v := filter[field].(type) {
 			case map[string]interface{}:
-				or = buildFilter(typ, v)
+				cond, qs := buildFilter(typ, v, auth, qn)
+				or = cond
+				varQry = append(varQry, qs...)
 			case []interface{}:
 				ors := make([]*dql.FilterTree, 0, len(v))
 				for _, obj := range v {
-					ft := buildFilter(typ, obj.(map[string]interface{}))
+					ft, qs := buildFilter(typ, obj.(map[string]interface{}), auth, qn)
 					ors = append(ors, ft)
+					varQry = append(varQry, qs...)
 				}
 				or = &dql.FilterTree{
 					Child: ors,
@@ -2025,13 +2062,85 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 			//                       we are here ^^
 			// ->
 			// @filter(anyofterms(Post.title, "GraphQL") AND NOT eq(Post.isPublished, true))
-			not := buildFilter(typ, filter[field].(map[string]interface{}))
+			not, qs := buildFilter(typ, filter[field].(map[string]interface{}), auth, qn)
 			ands = append(ands,
 				&dql.FilterTree{
 					Op:    "not",
 					Child: []*dql.FilterTree{not},
 				})
+			varQry = append(varQry, qs...)
 		default:
+			// Handle nested object filtering
+			//
+			// filter: { <nested-field>: { ... }, ... }
+			//     we are here ^^
+			// ->
+			// var() @filter(<nested-field-filter>){
+			// 		nested_field_name as <inverse field>
+			// }
+			// root() @filter(var(nested_field_name))
+			fd := typ.Field(field)
+			if fd != nil && fd.HasSearchDirective() {
+
+				if inv := fd.Inverse(); inv != nil {
+
+					fil, qs := buildFilter(fd.Type(), filter[field].(map[string]interface{}), auth, qn)
+					varQry = append(varQry, qs...)
+
+					// add the uids of the nested object
+					ands = append(ands, &dql.FilterTree{
+						Op: "and",
+						Child: []*dql.FilterTree{{
+							Func: &dql.Function{
+								Name: "uid",
+								Args: []dql.Arg{{Value: qn}},
+							},
+						}},
+					})
+
+					// generate filter var query for nested object
+					nestedQry := &dql.GraphQuery{
+						Attr: "var",
+						Func: &dql.Function{
+							Name: "type",
+							Args: []dql.Arg{{Value: fd.Type().Name()}},
+						},
+						Filter: fil,
+						Children: []*dql.GraphQuery{{
+							Attr: inv.DgraphPredicate(),
+							Var:  qn,
+						}},
+					}
+
+					// add auth queries to nested field
+					nestedQrys := []*dql.GraphQuery{nestedQry}
+
+					if !auth.isWritingAuth {
+						wr := &authRewriter{
+							authVariables: auth.authVariables,
+							varGen:        auth.varGen,
+							selector:      auth.selector,
+							parentVarName: qn + "Root",
+							isWritingAuth: auth.isWritingAuth,
+						}
+
+						rbac := wr.evaluateStaticRules(fd.Type())
+						if rbac == schema.Uncertain {
+							nestedQrys = wr.addAuthQueries(fd.Type(), nestedQrys, rbac)
+						} else if rbac == schema.Negative {
+							nestedQry.Attr = "var()"
+							nestedQry.Var = qn
+							nestedQry.Func = nil
+							nestedQry.Filter = nil
+							nestedQry.Children = nil
+						}
+					}
+
+					varQry = append(varQry, nestedQrys...)
+					continue
+				}
+			}
+
 			//// It's a base case like:
 			//// title: { anyofterms: "GraphQL" } ->  anyofterms(Post.title: "GraphQL")
 			//// numLikes: { between : { min : 10,  max:100 }}
@@ -2048,7 +2157,9 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 					// the filters with null values will be ignored in query rewriting.
 					if fn == "eq" {
 						hasFilterMap := map[string]interface{}{"not": map[string]interface{}{"has": []interface{}{field}}}
-						ands = append(ands, buildFilter(typ, hasFilterMap))
+						ft, qs := buildFilter(typ, hasFilterMap, auth, qn)
+						ands = append(ands, ft)
+						varQry = append(varQry, qs...)
 					}
 					continue
 				}
@@ -2192,7 +2303,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 
 	var andFt *dql.FilterTree
 	if len(ands) == 0 {
-		return or
+		return or, varQry
 	} else if len(ands) == 1 {
 		andFt = ands[0]
 	} else if len(ands) > 1 {
@@ -2203,13 +2314,13 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 	}
 
 	if or == nil {
-		return andFt
+		return andFt, varQry
 	}
 
 	return &dql.FilterTree{
 		Op:    "or",
 		Child: []*dql.FilterTree{andFt, or},
-	}
+	}, varQry
 }
 
 func buildHasFilterList(typ schema.Type, fieldsSlice []interface{}) []*dql.FilterTree {
@@ -2271,12 +2382,17 @@ func buildMultiPolygon(multipolygon map[string]interface{}, buf *bytes.Buffer) {
 	x.Check2(buf.WriteString("]"))
 }
 
-func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.FilterTree, bool) {
+func buildUnionFilter(typ schema.Type,
+	filter map[string]interface{},
+	auth *authRewriter,
+	queryName string) (*dql.FilterTree, []*dql.GraphQuery, bool) {
+
+	var varQry []*dql.GraphQuery
 	memberTypesList, ok := filter["memberTypes"].([]interface{})
 	// if memberTypes was specified to be an empty list like: { memberTypes: [], ...},
 	// then we don't need to include the field, on which the filter was specified, in the query.
 	if ok && len(memberTypesList) == 0 {
-		return nil, false
+		return nil, varQry, false
 	}
 
 	ft := &dql.FilterTree{
@@ -2294,11 +2410,13 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.Filt
 			memberTypeFt = &dql.FilterTree{Func: buildTypeFunc(memberType.DgraphName())}
 		} else {
 			// else we need to query only the nodes which match the filter for that member type
+			ft, qs := buildFilter(memberType, memberTypeFilter, auth, queryName)
+			varQry = qs
 			memberTypeFt = &dql.FilterTree{
 				Op: "and",
 				Child: []*dql.FilterTree{
 					{Func: buildTypeFunc(memberType.DgraphName())},
-					buildFilter(memberType, memberTypeFilter),
+					ft,
 				},
 			}
 		}
@@ -2306,7 +2424,7 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.Filt
 	}
 
 	// return true because we want to include the field with filter in query
-	return ft, true
+	return ft, varQry, true
 }
 
 func maybeQuoteArg(fn string, arg interface{}) string {
