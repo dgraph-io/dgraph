@@ -872,7 +872,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = newMutableMap()
 	}
 	l.mutationMap.set(startTs, pl)
-
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -903,6 +902,7 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 // If greater than zero, this timestamp must thus be greater than l.minTs.
 func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
+	// either way, effective ts is returning ts.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
 			// Has been committed and below the readTs.
@@ -1099,6 +1099,7 @@ func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb
 	var count int
 	var found bool
 	var post *pb.Posting
+
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			post = p
