@@ -312,8 +312,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		}
 	} else {
 		pl = &List{
-			key:   key,
-			plist: new(pb.PostingList),
+			key:         key,
+			plist:       new(pb.PostingList),
+			mutationMap: newMutableMap(),
 		}
 	}
 
