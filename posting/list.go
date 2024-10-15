@@ -70,14 +70,34 @@ const (
 	BitEmptyPosting byte = 0x10
 )
 
+type MutableMap struct {
+	oldList map[uint64]*pb.PostingList
+	curList *pb.PostingList
+	curTime uint64
+}
+
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
 	key         []byte
 	plist       *pb.PostingList
-	mutationMap map[uint64]*pb.PostingList
+	mutationMap *MutableMap
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
+}
+
+func newMutableMapSize(n int) *MutableMap {
+	return &MutableMap{
+		oldList: make(map[uint64]*pb.PostingList, n),
+		curTime: 0,
+	}
+}
+
+func newMutableMap() *MutableMap {
+	return &MutableMap{
+		oldList: make(map[uint64]*pb.PostingList),
+		curTime: 0,
+	}
 }
 
 func indexEdgeToPbEdge(t *index.KeyValue) *pb.DirectedEdge {
@@ -96,7 +116,7 @@ func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
 	return &List{
 		key:         key,
 		plist:       plist,
-		mutationMap: make(map[uint64]*pb.PostingList),
+		mutationMap: newMutableMap(),
 		minTs:       minTs,
 	}
 }
@@ -337,6 +357,15 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
 
+func (mm *MutableMap) set(ts uint64, pl *pb.PostingList) {
+	if mm.curTime != 0 {
+		x.AssertTrue(mm.curTime == ts)
+	}
+
+	mm.curTime = ts
+	mm.curList = pl
+}
+
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
@@ -347,20 +376,26 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		if l.mutationMap == nil {
-			l.mutationMap = make(map[uint64]*pb.PostingList)
+			l.mutationMap = newMutableMap()
 		}
-		l.mutationMap[mpost.StartTs] = plist
+		l.mutationMap.set(mpost.StartTs, plist)
 		return nil
 	}
 
-	plist, ok := l.mutationMap[mpost.StartTs]
-	if !ok {
-		plist = &pb.PostingList{}
-		if l.mutationMap == nil {
-			l.mutationMap = make(map[uint64]*pb.PostingList)
-		}
-		l.mutationMap[mpost.StartTs] = plist
+	if l.mutationMap == nil {
+		l.mutationMap = newMutableMap()
 	}
+
+	if l.mutationMap.curTime != 0 {
+		x.AssertTrue(l.mutationMap.curTime == mpost.StartTs)
+	}
+
+	l.mutationMap.curTime = mpost.StartTs
+	if l.mutationMap.curList == nil {
+		l.mutationMap.curList = &pb.PostingList{}
+	}
+
+	plist := l.mutationMap.curList
 
 	if singleUidUpdate {
 		// This handles the special case when adding a value to predicates of type uid.
@@ -400,7 +435,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 
 		// Update the mutation map with the new plist. Return here since the code below
 		// does not apply for predicates of type uid.
-		l.mutationMap[mpost.StartTs] = newPlist
+		l.mutationMap.set(mpost.StartTs, newPlist)
 		return nil
 	}
 
@@ -545,21 +580,29 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	return nil
 }
 
-// getMutation returns a marshaled version of posting list mutation stored internally.
-func (l *List) getPosting(startTs uint64) *pb.PostingList {
-	l.RLock()
-	defer l.RUnlock()
-	if pl, ok := l.mutationMap[startTs]; ok {
+func (mm *MutableMap) get(startTs uint64) *pb.PostingList {
+	if mm.curTime == startTs {
+		return mm.curList
+	}
+	if pl, ok := mm.oldList[startTs]; ok {
 		return pl
 	}
 	return nil
 }
 
 // getMutation returns a marshaled version of posting list mutation stored internally.
+func (l *List) getPosting(startTs uint64) *pb.PostingList {
+	l.RLock()
+	defer l.RUnlock()
+	return l.mutationMap.get(startTs)
+}
+
+// getMutation returns a marshaled version of posting list mutation stored internally.
 func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
-	if pl, ok := l.mutationMap[startTs]; ok {
+	pl := l.mutationMap.get(startTs)
+	if pl != nil {
 		data, err := pl.Marshal()
 		x.Check(err)
 		return data
@@ -567,7 +610,7 @@ func (l *List) getMutation(startTs uint64) []byte {
 	return nil
 }
 
-func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
+func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte, refresh bool) {
 	pl := new(pb.PostingList)
 	x.Check(pl.Unmarshal(data))
 	pl.CommitTs = commitTs
@@ -579,9 +622,21 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, data []byte) {
 
 	l.Lock()
 	if l.mutationMap == nil {
-		l.mutationMap = make(map[uint64]*pb.PostingList)
+		l.mutationMap = newMutableMap()
 	}
-	l.mutationMap[startTs] = pl
+
+	if refresh {
+		newMap := make(map[uint64]*pb.PostingList, l.mutationMap.Len())
+		for k, v := range l.mutationMap.oldList {
+			newMap[k] = proto.Clone(v).(*pb.PostingList)
+		}
+		newMap[commitTs] = pl
+		l.mutationMap.oldList = newMap
+	} else {
+		l.mutationMap.oldList[commitTs] = pl
+
+	}
+
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -594,9 +649,9 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 
 	l.Lock()
 	if l.mutationMap == nil {
-		l.mutationMap = make(map[uint64]*pb.PostingList)
+		l.mutationMap = newMutableMap()
 	}
-	l.mutationMap[startTs] = pl
+	l.mutationMap.set(startTs, pl)
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -642,14 +697,26 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// First pick up the postings.
 	var deleteBelowTs uint64
 	var posts []*pb.Posting
-	for startTs, plist := range l.mutationMap {
-		// Pick up the transactions which are either committed, or the one which is ME.
-		effectiveTs := effective(startTs, plist.CommitTs)
-		if effectiveTs > deleteBelowTs {
+	if l.mutationMap != nil {
+		for startTs, plist := range l.mutationMap.oldList {
+			// Pick up the transactions which are either committed, or the one which is ME.
+			effectiveTs := effective(startTs, plist.CommitTs)
+			if effectiveTs > deleteBelowTs {
+				// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
+				for _, mpost := range plist.Postings {
+					if hasDeleteAll(mpost) {
+						deleteBelowTs = effectiveTs
+						continue
+					}
+					posts = append(posts, mpost)
+				}
+			}
+		}
+		if l.mutationMap.curList != nil && l.mutationMap.curTime > deleteBelowTs {
 			// We're above the deleteBelowTs marker. We wouldn't reach here if effectiveTs is zero.
-			for _, mpost := range plist.Postings {
+			for _, mpost := range l.mutationMap.curList.Postings {
 				if hasDeleteAll(mpost) {
-					deleteBelowTs = effectiveTs
+					deleteBelowTs = l.mutationMap.curTime
 					continue
 				}
 				posts = append(posts, mpost)
@@ -825,7 +892,7 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 	length := codec.ExactLen(l.plist.Pack)
 	found := len(uids) > 0 && uids[0] == uid
 
-	for _, plist := range l.mutationMap {
+	runPlist := func(plist *pb.PostingList) {
 		for _, mpost := range plist.Postings {
 			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
 				if hasDeleteAll(mpost) {
@@ -843,6 +910,16 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 				}
 
 			}
+		}
+	}
+
+	if l.mutationMap != nil {
+		for _, plist := range l.mutationMap.oldList {
+			runPlist(plist)
+		}
+
+		if l.mutationMap.curList != nil {
+			runPlist(l.mutationMap.curList)
 		}
 	}
 
@@ -1216,7 +1293,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		parts: make(map[uint64]*pb.PostingList),
 	}
 
-	if len(out.plist.Splits) > 0 || len(l.mutationMap) > 0 {
+	if len(out.plist.Splits) > 0 || (l.mutationMap != nil && l.mutationMap.Len() > 0) {
 		// In case there were splits, this would read all the splits from
 		// Badger.
 		if err := l.encode(out, readTs, split); err != nil {
@@ -1256,11 +1333,22 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	return out, nil
 }
 
+func (mm *MutableMap) Len() int {
+	length := 0
+	if mm.curList != nil {
+		length += 1
+	}
+	if mm.oldList != nil {
+		return length + len(mm.oldList)
+	}
+	return length
+}
+
 // ApproxLen returns an approximate count of the UIDs in the posting list.
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
-	return len(l.mutationMap) + codec.ApproxLen(l.plist.Pack)
+	return l.mutationMap.Len() + codec.ApproxLen(l.plist.Pack)
 }
 
 // Uids returns the UIDs given some query params.
@@ -1273,9 +1361,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
+	length := 0
+	if l.mutationMap != nil {
+		length = l.mutationMap.Len()
+	}
+	res := make([]uint64, 0, length+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
+	if length == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
 			return out, errors.Wrapf(ErrTsTooOld, "While reading UIDs")
@@ -1422,15 +1514,15 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	}
 
 	// Return readTs is if it's present in the mutation. It's going to be the latest value.
-	mutation, ok := l.mutationMap[readTs]
-	if ok {
+	mutation := l.mutationMap.curList
+	if mutation != nil {
 		return mutation
 	}
 
 	// If maxTs < readTs then we need to read maxTs
 	if l.maxTs < readTs {
-		mutation, ok = l.mutationMap[l.maxTs]
-		if ok {
+		mutation = l.mutationMap.get(l.maxTs)
+		if mutation != nil {
 			return mutation
 		}
 	}
@@ -1438,7 +1530,7 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	// This means that maxTs > readTs. Go through the map to find the closest value to readTs
 	mutation = nil
 	ts_found := uint64(0)
-	for _, mutation_i := range l.mutationMap {
+	for _, mutation_i := range l.mutationMap.oldList {
 		ts := mutation_i.CommitTs
 		if ts <= readTs && ts > ts_found {
 			ts_found = ts

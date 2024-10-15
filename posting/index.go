@@ -715,9 +715,9 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 						mpost.CommitTs = item.Version()
 					}
 					if l.mutationMap == nil {
-						l.mutationMap = make(map[uint64]*pb.PostingList)
+						l.mutationMap = newMutableMap()
 					}
-					l.mutationMap[pl.CommitTs] = pl
+					l.mutationMap.oldList[pl.CommitTs] = pl
 					return nil
 				})
 				if err != nil {
