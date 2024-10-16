@@ -96,24 +96,11 @@ func addMutationHelper(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32, 
 
 func (l *List) commitMutation(startTs, commitTs uint64) error {
 	l.Lock()
-	defer l.Unlock()
-
-	plist, ok := l.mutationMap[startTs]
-	if !ok {
-		// It was already committed, might be happening due to replay.
-		return nil
-	}
-	if commitTs == 0 {
-		// Abort mutation.
-		delete(l.mutationMap, startTs)
-		return nil
-	}
+	plist := l.mutationMap.get(startTs)
+	l.Unlock()
+	l.setMutationAfterCommit(startTs, commitTs, plist, true)
 
 	// We have a valid commit.
-	plist.CommitTs = commitTs
-	for _, mpost := range plist.Postings {
-		mpost.CommitTs = commitTs
-	}
 
 	// In general, a posting list shouldn't try to mix up it's job of keeping
 	// things in memory, with writing things to disk. A separate process can
@@ -158,8 +145,8 @@ func TestGetSinglePosting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, res.Postings[0].StartTs, uint64(1))
 
-	l.mutationMap = make(map[uint64]*pb.PostingList)
-	l.mutationMap[3] = create_pl(3)
+	l.mutationMap = newMutableMap()
+	l.mutationMap.oldList[3] = create_pl(3)
 	l.maxTs = 3
 
 	res, err = l.StaticValue(1)
@@ -175,17 +162,17 @@ func TestGetSinglePosting(t *testing.T) {
 	require.Equal(t, res.Postings[0].StartTs, uint64(3))
 
 	// Create txn from 4->6. It could be stored as 4 or 6 in the map.
-	l.mutationMap[4] = create_pl(6)
-	l.mutationMap[4].Postings[0].StartTs = 4
+	l.mutationMap.oldList[4] = create_pl(6)
+	l.mutationMap.oldList[4].Postings[0].StartTs = 4
 	l.maxTs = 6
 
 	res, err = l.StaticValue(5)
 	require.NoError(t, err)
-	require.Equal(t, res.Postings[0].StartTs, uint64(3))
+	require.Equal(t, uint64(3), res.Postings[0].StartTs)
 
 	res, err = l.StaticValue(6)
 	require.NoError(t, err)
-	require.Equal(t, res.Postings[0].StartTs, uint64(4))
+	require.Equal(t, uint64(4), res.Postings[0].StartTs)
 }
 
 func TestAddMutation(t *testing.T) {
@@ -337,11 +324,14 @@ func TestAddMutation_DelSet(t *testing.T) {
 	edge = &pb.DirectedEdge{
 		Value: []byte("newcars"),
 	}
+	ol1, err := GetNoStore(key, math.MaxUint64)
+	require.NoError(t, err)
 	txn = &Txn{StartTs: 2}
-	addMutationHelper(t, ol, edge, Set, txn)
-	require.NoError(t, ol.commitMutation(2, uint64(3)))
-	require.EqualValues(t, 1, ol.Length(3, 0))
-	checkValue(t, ol, "newcars", 3)
+	addMutationHelper(t, ol1, edge, Set, txn)
+	require.NoError(t, ol1.commitMutation(2, uint64(3)))
+	require.EqualValues(t, 1, ol1.Length(3, 0))
+	checkValue(t, ol1, "newcars", 3)
+	// TODO
 }
 
 func TestAddMutation_DelRead(t *testing.T) {
@@ -533,7 +523,7 @@ func TestReadSingleValue(t *testing.T) {
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
-		kData := ol.getMutation(uint64(i))
+		kData := ol.getMutation(uint64(i) + 1)
 		writer := NewTxnWriter(pstore)
 		if err := writer.SetAt(key, kData, BitDeltaPosting, uint64(i)); err != nil {
 			require.NoError(t, err)
