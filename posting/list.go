@@ -838,9 +838,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	l.mutationMap.iterate(func(ts uint64, plist *pb.PostingList) {
 		// ts will be plist.CommitTs for commited transactions
 		// ts will be readTs for mutations that are me
-		for _, mpost := range plist.Postings {
-			posts = append(posts, mpost)
-		}
+		posts = append(posts, plist.Postings...)
 	}, readTs)
 
 	// Sort all the postings by UID (inc order), then by commit/startTs in dec order.
@@ -1775,8 +1773,6 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 		pos, ok = l.mutationMap.uidsH[uid]
 		if ok {
 			return true, pos, nil
-		} else {
-			return false, nil, nil
 		}
 		posI, ok := l.mutationMap.uidMap[uid]
 		if ok {
