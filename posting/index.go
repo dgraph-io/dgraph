@@ -521,7 +521,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	switch {
 	case hasCountIndex:
-		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
+		countBefore, found, currPost = l.getPostingAndLengthNoSort(txn.StartTs, 0, getUID(t))
 		if countBefore == -1 {
 			return val, false, emptyCountParams, errors.Wrapf(ErrTsTooOld, "Add mutation count index")
 		}
@@ -726,15 +726,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 						return err
 					}
 					pl.CommitTs = item.Version()
-					for _, mpost := range pl.Postings {
-						// commitTs, startTs are meant to be only in memory, not
-						// stored on disk.
-						mpost.CommitTs = item.Version()
-					}
 					if l.mutationMap == nil {
-						l.mutationMap = make(map[uint64]*pb.PostingList)
+						l.mutationMap = newMutableLayer()
 					}
-					l.mutationMap[pl.CommitTs] = pl
+					l.mutationMap.insertCommittedPostings(pl)
 					return nil
 				})
 				if err != nil {

@@ -403,7 +403,7 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 		if commitTs != 0 && val.list != nil {
 			p := new(pb.PostingList)
 			x.Check(proto.Unmarshal(delta, p))
-			val.list.setMutationAfterCommit(txn.StartTs, commitTs, delta)
+			val.list.setMutationAfterCommit(txn.StartTs, commitTs, p, true)
 		}
 		globalCache.Unlock()
 	}
@@ -495,15 +495,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					return err
 				}
 				pl.CommitTs = item.Version()
-				for _, mpost := range pl.Postings {
-					// commitTs, startTs are meant to be only in memory, not
-					// stored on disk.
-					mpost.CommitTs = item.Version()
-				}
 				if l.mutationMap == nil {
-					l.mutationMap = make(map[uint64]*pb.PostingList)
+					l.mutationMap = newMutableLayer()
+					l.mutationMap.length = 0
+					l.mutationMap.deleteAllMarker = 0
 				}
-				l.mutationMap[pl.CommitTs] = pl
+				l.mutationMap.insertCommittedPostings(pl)
 				return nil
 			})
 			if err != nil {
@@ -534,10 +531,7 @@ func copyList(l *List) *List {
 		key:   l.key,
 		plist: l.plist,
 	}
-	lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-	for k, v := range l.mutationMap {
-		lCopy.mutationMap[k] = proto.Clone(v).(*pb.PostingList)
-	}
+	lCopy.mutationMap = l.mutationMap.clone()
 	return lCopy
 }
 
@@ -571,12 +565,7 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 				plist: l.plist,
 			}
 			l.RLock()
-			if l.mutationMap != nil {
-				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-				for ts, pl := range l.mutationMap {
-					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-				}
-			}
+			lCopy.mutationMap = l.mutationMap.clone()
 			l.RUnlock()
 			return lCopy, nil
 		}

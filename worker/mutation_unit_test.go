@@ -64,7 +64,7 @@ func TestReverseEdge(t *testing.T) {
 	pl, err := txn.Get(x.DataKey(attr, 1))
 	require.NoError(t, err)
 	pl.RLock()
-	c, _, _ := pl.GetLength(5)
+	c := pl.GetLength(5)
 	pl.RUnlock()
 	require.Equal(t, c, 0)
 }

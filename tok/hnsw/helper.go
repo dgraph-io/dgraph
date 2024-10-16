@@ -296,7 +296,7 @@ func getDataFromKeyWithCacheType(keyString string, uid uint64, c index.CacheType
 	key := DataKey(keyString, uid)
 	data, err := c.Get(key)
 	if err != nil {
-		return nil, errors.New(err.Error() + plError + keyString + " with uid" + strconv.FormatUint(uid, 10))
+		return nil, errors.New(err.Error() + plError + keyString + " with uid " + strconv.FormatUint(uid, 10))
 	}
 	return data, nil
 }
@@ -373,7 +373,7 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		if strings.Contains(err.Error(), plError) {
 			// no vector. Return empty array of floats
 			index.BytesAsFloatArray([]byte{}, vec, ph.floatBits)
-			return errors.New("Nil vector returned")
+			return errors.New(fmt.Sprintf("Nil vector returned %s", err.Error()))
 		}
 		return err
 	}
