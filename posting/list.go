@@ -161,23 +161,31 @@ func (mm *MutableMap) len() int {
 	return length
 }
 
-func (mm *MutableMap) populateDeleteAll() {
+func (mm *MutableMap) populateDeleteAll(readTs uint64) uint64 {
 	if mm == nil {
-		return
+		return 0
 	}
 	if mm.deleteMarker != math.MaxUint64 {
-		return
+		// I need to calculate deleteMarker again. I can't use the one from cache
+		if readTs >= mm.deleteMarker {
+			return mm.deleteMarker
+		}
 	}
 	deleteMarker := uint64(0)
+	deleteMarkerUnderTs := uint64(0)
 	mm._iterate(func(ts uint64, pl *pb.PostingList) {
 		for _, pl := range pl.Postings {
 			if hasDeleteAll(pl) {
-				deleteMarker = pl.CommitTs
+				deleteMarker = x.Max(deleteMarker, pl.CommitTs)
+				if pl.CommitTs <= readTs {
+					deleteMarkerUnderTs = x.Max(deleteMarkerUnderTs, pl.CommitTs)
+				}
 			}
 		}
 	})
 
 	mm.deleteMarker = deleteMarker
+	return deleteMarkerUnderTs
 }
 
 func (mm *MutableMap) _iterate(f func(ts uint64, pl *pb.PostingList)) {
@@ -189,7 +197,9 @@ func (mm *MutableMap) _iterate(f func(ts uint64, pl *pb.PostingList)) {
 		if mm.curTime != 0 && ts > mm.curTime {
 			break
 		}
-		f(ts, pl)
+		if pl.CommitTs == ts || ts == mm.curTime {
+			f(ts, pl)
+		}
 	}
 
 	if mm.curList != nil {
@@ -199,14 +209,14 @@ func (mm *MutableMap) _iterate(f func(ts uint64, pl *pb.PostingList)) {
 
 // Before iterating, we have to figure out where the last delete marker is
 // Then gather the posts that would be above the marker
-func (mm *MutableMap) iterate(f func(ts uint64, pl *pb.PostingList)) {
+func (mm *MutableMap) iterate(f func(ts uint64, pl *pb.PostingList), readTs uint64) {
 	if mm == nil {
 		return
 	}
 
-	mm.populateDeleteAll()
+	deleteMarker := mm.populateDeleteAll(readTs)
 	mm._iterate(func(ts uint64, pl *pb.PostingList) {
-		if ts > mm.deleteMarker {
+		if ts > deleteMarker {
 			f(ts, pl)
 		}
 	})
@@ -831,7 +841,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 		for _, mpost := range plist.Postings {
 			posts = append(posts, mpost)
 		}
-	})
+	}, readTs)
 
 	// Sort all the postings by UID (inc order), then by commit/startTs in dec order.
 	sort.Slice(posts, func(i, j int) bool {
@@ -998,8 +1008,7 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 		}
 	}
 
-	l.mutationMap.populateDeleteAll()
-	if l.mutationMap.getDeleteMarker() == 0 {
+	if l.mutationMap.populateDeleteAll(readTs) == 0 {
 		length += codec.ExactLen(l.plist.Pack)
 	}
 
@@ -1584,7 +1593,7 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	}
 
 	// If maxTs < readTs then we need to read maxTs
-	if l.maxTs < readTs {
+	if l.maxTs <= readTs {
 		if mutation := l.mutationMap.get(l.maxTs); mutation != nil {
 			return mutation
 		}
@@ -1599,7 +1608,7 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 			ts_found = ts
 			mutation = mutation_i
 		}
-	})
+	}, readTs)
 	if mutation != nil {
 		return mutation
 	}
@@ -1776,17 +1785,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 			return false, nil, nil
 		}
 	}
-
-	err = l.iterate(readTs, uid-1, func(p *pb.Posting) error {
-		if p.Uid == uid {
-			pos = p
-			found = true
-		}
-		return ErrStopIteration
-	})
-
-	return found, pos, errors.Wrapf(err,
-		"cannot retrieve posting for UID %d from list with key %s", uid, hex.EncodeToString(l.key))
+	return false, nil, nil
 }
 
 // Facets gives facets for the posting representing value.

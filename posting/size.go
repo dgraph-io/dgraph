@@ -75,7 +75,7 @@ func (l *List) DeepSize() uint64 {
 	// adding the size of all the entries in the map.
 	l.mutationMap.iterate(func(ts uint64, v *pb.PostingList) {
 		size += calculatePostingListSize(v)
-	})
+	}, math.MaxUint64)
 
 	return size
 }
