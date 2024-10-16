@@ -128,6 +128,9 @@ func (mm *MutableMap) clone() *MutableMap {
 }
 
 func (mm *MutableMap) set(ts uint64, pl *pb.PostingList) {
+	if mm == nil {
+		return
+	}
 	if mm.curTime != 0 {
 		x.AssertTrue(mm.curTime == ts)
 	}
@@ -138,6 +141,9 @@ func (mm *MutableMap) set(ts uint64, pl *pb.PostingList) {
 }
 
 func (mm *MutableMap) get(startTs uint64) *pb.PostingList {
+	if mm == nil {
+		return nil
+	}
 	if mm.curTime == startTs {
 		return mm.curList
 	}
