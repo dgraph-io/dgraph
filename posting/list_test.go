@@ -512,16 +512,16 @@ func TestReadSingleValue(t *testing.T) {
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	N := int(10000)
-	for i := 2; i <= N; i += 2 {
+	for i := uint64(2); i <= uint64(N); i += 2 {
 		edge := &pb.DirectedEdge{
-			Value: []byte("ho hey there" + strconv.Itoa(i)),
+			Value: []byte("ho hey there" + strconv.Itoa(int(i))),
 		}
-		txn := Txn{StartTs: uint64(i)}
+		txn := Txn{StartTs: i}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
-		kData := ol.getMutation(uint64(i) + 1)
+		require.NoError(t, ol.commitMutation(i, i+1))
+		kData := ol.getMutation(i + 1)
 		writer := NewTxnWriter(pstore)
-		if err := writer.SetAt(key, kData, BitDeltaPosting, uint64(i)); err != nil {
+		if err := writer.SetAt(key, kData, BitDeltaPosting, i); err != nil {
 			require.NoError(t, err)
 		}
 		writer.Flush()
@@ -535,15 +535,15 @@ func TestReadSingleValue(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		j := 2
-		if j < int(ol.minTs) {
-			j = int(ol.minTs)
+		j := uint64(2)
+		if j < ol.minTs {
+			j = ol.minTs
 		}
 		for ; j < i+6; j++ {
-			tx := NewTxn(uint64(j))
+			tx := NewTxn(j)
 			k, err := tx.cache.GetSinglePosting(key)
 			require.NoError(t, err)
-			checkValue(t, ol, string(k.Postings[0].Value), uint64(j))
+			checkValue(t, ol, string(k.Postings[0].Value), j)
 		}
 	}
 }
