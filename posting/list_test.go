@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -511,10 +512,10 @@ func TestReadSingleValue(t *testing.T) {
 	key := x.DataKey(x.GalaxyAttr("value"), 1240)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
-	N := int(10000)
-	for i := uint64(2); i <= uint64(N); i += 2 {
+	N := uint64(10000)
+	for i := uint64(2); i <= N; i += 2 {
 		edge := &pb.DirectedEdge{
-			Value: []byte("ho hey there" + strconv.Itoa(int(i))),
+			Value: []byte(fmt.Sprintf("ho hey there%d", i)),
 		}
 		txn := Txn{StartTs: i}
 		addMutationHelper(t, ol, edge, Set, &txn)
