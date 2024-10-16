@@ -236,7 +236,10 @@ func (mm *MutableMap) insertOldPosting(pl *pb.PostingList) {
 				mm.deleteMarker = mpost.CommitTs
 			}
 		}
-		mm.uidsH[mpost.Uid] = mpost
+		// We insert old postings in reverse order. So we only need to read the first update to an UID
+		if _, ok := mm.uidsH[mpost.Uid]; !ok {
+			mm.uidsH[mpost.Uid] = mpost
+		}
 	}
 	mm.oldList[pl.CommitTs] = pl
 }
@@ -1783,9 +1786,29 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 		posI, ok := l.mutationMap.uidMap[uid]
 		if ok {
 			return true, l.mutationMap.curList.Postings[posI], nil
-		} else {
+		}
+
+		if l.mutationMap.populateDeleteAll(readTs) > 0 {
 			return false, nil, nil
 		}
+	}
+
+	var pitr pIterator
+	err = pitr.seek(l, 0, 0)
+	if err != nil {
+		return false, nil, errors.Wrapf(err, "cannot initialize iterator when calling List.iterate")
+	}
+
+	valid, err := pitr.valid()
+	if err != nil {
+		return false, nil, errors.Wrapf(err, "cannot initialize iterator when calling List.iterate")
+	}
+	if valid {
+		pp := pitr.posting()
+		if pp.Uid == uid {
+			return true, pp, nil
+		}
+		return false, nil, nil
 	}
 	return false, nil, nil
 }

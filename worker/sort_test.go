@@ -30,6 +30,78 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSingleUid(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("benchmarkadd: string @index(exact) @unique ."), 1)
+	fmt.Println(err)
+	if err != nil {
+		panic(err)
+	}
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("benchmarkadd")
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("david"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("blush"),
+		Attr:   attr,
+		Entity: 2,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 7))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(7)
+
+	txn = posting.Oracle().RegisterStartTs(9)
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("david"),
+		Attr:   attr,
+		Entity: 2,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("blush"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer = posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 11))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(11)
+
+	txn = posting.Oracle().RegisterStartTs(12)
+	l, err := txn.Get(x.IndexKey(attr, string([]byte{2, 100, 97, 118, 105, 100})))
+	require.NoError(t, err)
+	uids, err := l.Uids(posting.ListOptions{ReadTs: 12})
+
+	require.NoError(t, err)
+	fmt.Println("UIDS:", uids)
+}
+
 func BenchmarkAddMutationWithIndex(b *testing.B) {
 	gr = new(groupi)
 	gr.gid = 1
