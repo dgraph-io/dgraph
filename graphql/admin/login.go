@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 
 	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/edgraph"
@@ -50,7 +51,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 	}
 
 	jwt := &dgoapi.Jwt{}
-	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
+	if err := proto.Unmarshal(resp.GetJson(), jwt); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
