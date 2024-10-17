@@ -872,7 +872,7 @@ func compareSchemaUpdates(original, update *pb.SchemaUpdate) []string {
 	vUpdate := reflect.ValueOf(*update)
 
 	// Iterate through the fields of the original schema
-	for i := 0; i < vOriginal.NumField(); i++ {
+	for i := range vOriginal.NumField() {
 		field := vOriginal.Type().Field(i)
 
 		// Skip unexported fields
