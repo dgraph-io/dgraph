@@ -545,6 +545,8 @@ func TestReadSingleValue(t *testing.T) {
 			kvs, err := ol.Rollup(nil, txn.StartTs-3)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Delete item from global cache before reading, as we are not updating the cache in the test
+			globalCache.Del(z.MemHash(key))
 			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
