@@ -179,7 +179,7 @@ jobs:
           make docker-image-standalone DGRAPH_VERSION=${{ env.DGRAPH_RELEASE_VERSION }}-arm64
           [[ "${{ inputs.latest }}" = true ]] && docker tag dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 dgraph/standalone:latest-arm64 || true
 
-  dgraph-docker-manifest:
+  dgraph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
     runs-on: warp-ubuntu-latest-x64-16x
     steps:
