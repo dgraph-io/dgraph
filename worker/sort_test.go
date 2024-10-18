@@ -102,22 +102,57 @@ func TestSingleUid(t *testing.T) {
 	fmt.Println("UIDS:", uids)
 }
 
-func BenchmarkAddMutationWithIndex(b *testing.B) {
-	gr = new(groupi)
-	gr.gid = 1
-	gr.tablets = make(map[string]*pb.Tablet)
-	addTablets := func(attrs []string, gid uint32, namespace uint64) {
-		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
-		}
+func TestLangExact(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("testLang: string @index(term) @lang ."), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("testLang")
+
+	edge := &pb.DirectedEdge{
+		Value:  []byte("english"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+		Lang:   "en",
 	}
 
-	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
-		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
-		1, x.GalaxyNamespace)
-	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
-	addTablets([]string{"name"}, 1, 0x2)
+	x.Check(runMutation(ctx, edge, txn))
 
+	edge = &pb.DirectedEdge{
+		Value:  []byte("hindi"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+		Lang:   "hi",
+	}
+
+	x.Check(runMutation(ctx, edge, txn))
+
+	pl, err := txn.Get(x.DataKey(attr, 1))
+	x.Check(err)
+
+	fmt.Println(pl.Value(5))
+
+	pl.Iterate(5, 0, func(p *pb.Posting) error {
+		fmt.Println("INSIDE MAIN ITERATE", p)
+		return nil
+	})
+}
+
+func BenchmarkAddMutationWithIndex(b *testing.B) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
