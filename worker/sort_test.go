@@ -30,22 +30,130 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkAddMutationWithIndex(b *testing.B) {
-	gr = new(groupi)
-	gr.gid = 1
-	gr.tablets = make(map[string]*pb.Tablet)
-	addTablets := func(attrs []string, gid uint32, namespace uint64) {
-		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
-		}
+func TestSingleUid(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("benchmarkadd: string @index(exact) @unique ."), 1)
+	fmt.Println(err)
+	if err != nil {
+		panic(err)
+	}
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("benchmarkadd")
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("david"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("blush"),
+		Attr:   attr,
+		Entity: 2,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 7))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(7)
+
+	txn = posting.Oracle().RegisterStartTs(9)
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("david"),
+		Attr:   attr,
+		Entity: 2,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		Value:  []byte("blush"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer = posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 11))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(11)
+
+	txn = posting.Oracle().RegisterStartTs(12)
+	l, err := txn.Get(x.IndexKey(attr, string([]byte{2, 100, 97, 118, 105, 100})))
+	require.NoError(t, err)
+	uids, err := l.Uids(posting.ListOptions{ReadTs: 12})
+
+	require.NoError(t, err)
+	fmt.Println("UIDS:", uids)
+}
+
+func TestLangExact(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("testLang: string @index(term) @lang ."), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("testLang")
+
+	edge := &pb.DirectedEdge{
+		Value:  []byte("english"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+		Lang:   "en",
 	}
 
-	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
-		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
-		1, x.GalaxyNamespace)
-	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
-	addTablets([]string{"name"}, 1, 0x2)
+	x.Check(runMutation(ctx, edge, txn))
 
+	edge = &pb.DirectedEdge{
+		Value:  []byte("hindi"),
+		Attr:   attr,
+		Entity: 1,
+		Op:     pb.DirectedEdge_SET,
+		Lang:   "hi",
+	}
+
+	x.Check(runMutation(ctx, edge, txn))
+
+	pl, err := txn.Get(x.DataKey(attr, 1))
+	x.Check(err)
+
+	fmt.Println(pl.Value(5))
+
+	err = pl.Iterate(5, 0, func(p *pb.Posting) error {
+		fmt.Println("INSIDE MAIN ITERATE", p)
+		return nil
+	})
+	x.Check(err)
+}
+
+func BenchmarkAddMutationWithIndex(b *testing.B) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
