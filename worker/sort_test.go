@@ -146,7 +146,7 @@ func TestLangExact(t *testing.T) {
 
 	fmt.Println(pl.Value(5))
 
-	err := pl.Iterate(5, 0, func(p *pb.Posting) error {
+	err = pl.Iterate(5, 0, func(p *pb.Posting) error {
 		fmt.Println("INSIDE MAIN ITERATE", p)
 		return nil
 	})
