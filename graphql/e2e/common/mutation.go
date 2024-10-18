@@ -311,6 +311,7 @@ func ignoreOpts() []cmp.Option {
 		cmpopts.IgnoreFields(category{}, "ID"),
 		cmpopts.IgnoreFields(teacher{}, "ID"),
 		cmpopts.IgnoreFields(student{}, "ID"),
+		cmpopts.IgnoreUnexported(),
 	}
 }
 
