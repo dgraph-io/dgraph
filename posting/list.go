@@ -138,6 +138,7 @@ func (mm *MutableMap) set(ts uint64, pl *pb.PostingList) {
 	mm.curTime = ts
 	mm.curList = pl
 	mm.uidMap = nil
+	mm.deleteMarker = math.MaxUint64
 }
 
 func (mm *MutableMap) get(startTs uint64) *pb.PostingList {
@@ -182,9 +183,9 @@ func (mm *MutableMap) populateDeleteAll(readTs uint64) uint64 {
 	mm._iterate(func(ts uint64, pl *pb.PostingList) {
 		for _, pl := range pl.Postings {
 			if hasDeleteAll(pl) {
-				deleteMarker = x.Max(deleteMarker, pl.CommitTs)
-				if pl.CommitTs <= readTs {
-					deleteMarkerUnderTs = x.Max(deleteMarkerUnderTs, pl.CommitTs)
+				deleteMarker = x.Max(deleteMarker, ts)
+				if ts <= readTs {
+					deleteMarkerUnderTs = x.Max(deleteMarkerUnderTs, ts)
 				}
 			}
 		}
@@ -222,7 +223,7 @@ func (mm *MutableMap) iterate(f func(ts uint64, pl *pb.PostingList), readTs uint
 
 	deleteMarker := mm.populateDeleteAll(readTs)
 	mm._iterate(func(ts uint64, pl *pb.PostingList) {
-		if ts > deleteMarker {
+		if ts >= deleteMarker {
 			f(ts, pl)
 		}
 	})
