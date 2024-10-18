@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -693,7 +692,6 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 }
 
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	fmt.Println("Adding Mutation", t)
 	l.AssertLock()
 
 	if txn.ShouldAbort() {
@@ -723,7 +721,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 
 	x.PrintMutationEdge(t, pk, txn.StartTs)
-	fmt.Println("Adding Mutation", t, l.mutationMap)
 
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
@@ -825,10 +822,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.RLock()
 	defer l.RUnlock()
-	fmt.Println("IN ITERATE", l.plist)
-	if l.mutationMap != nil {
-		fmt.Println("IN ITERATE", l.mutationMap.oldList)
-	}
 	return l.iterate(readTs, afterUid, f)
 }
 
@@ -1785,7 +1778,6 @@ func (l *List) findValue(readTs, uid uint64) (rval types.Val, found bool, err er
 
 func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass UID - 1
-	fmt.Println("FIND POSTING", l.mutationMap, l.plist, uid)
 	var ok bool
 	if l.mutationMap != nil {
 		pos, ok = l.mutationMap.uidsH[uid]
@@ -1814,7 +1806,6 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	}
 	if valid {
 		pp := pitr.posting()
-		fmt.Println("FIND POSTING", l.mutationMap, l.plist, uid, pp)
 		if pp.Uid == uid {
 			return true, pp, nil
 		}

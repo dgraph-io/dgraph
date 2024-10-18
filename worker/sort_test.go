@@ -146,10 +146,11 @@ func TestLangExact(t *testing.T) {
 
 	fmt.Println(pl.Value(5))
 
-	pl.Iterate(5, 0, func(p *pb.Posting) error {
+	err := pl.Iterate(5, 0, func(p *pb.Posting) error {
 		fmt.Println("INSIDE MAIN ITERATE", p)
 		return nil
 	})
+	x.Check(err)
 }
 
 func BenchmarkAddMutationWithIndex(b *testing.B) {
