@@ -19,13 +19,15 @@ package posting
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
+	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v4"
@@ -64,12 +66,6 @@ type CachePL struct {
 	lastUpdate uint64
 }
 
-type GlobalCache struct {
-	sync.RWMutex
-
-	items map[string]*CachePL
-}
-
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
@@ -84,10 +80,12 @@ var (
 		priorityKeys: make([]*pooledKeys, 2),
 	}
 
-	globalCache = &GlobalCache{items: make(map[string]*CachePL, 100)}
+	memoryLayer = initMemoryLayer()
+	numShards   = 256
 )
 
 func init() {
+	runtime.SetCPUProfileRate(200)
 	x.AssertTrue(len(IncrRollup.priorityKeys) == 2)
 	for i := range IncrRollup.priorityKeys {
 		IncrRollup.priorityKeys[i] = &pooledKeys{
@@ -133,13 +131,9 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	}
 
 	RemoveCacheFor(key)
-
-	globalCache.Lock()
-	val, ok := globalCache.items[string(key)]
-	if ok {
-		val.list = nil
-	}
-	globalCache.Unlock()
+	//pk, _ := x.Parse(key)
+	//fmt.Println("====Setting cache delete rollup", ts, pk)
+	memoryLayer.Del(z.MemHash(key))
 	// TODO Update cache with rolled up results
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
@@ -191,6 +185,8 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 	defer cleanupTick.Stop()
 	forceRollupTick := time.NewTicker(500 * time.Millisecond)
 	defer forceRollupTick.Stop()
+	deleteCacheTick := time.NewTicker(10 * time.Second)
+	defer deleteCacheTick.Stop()
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
@@ -221,6 +217,8 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 					delete(m, hash)
 				}
 			}
+		case <-deleteCacheTick.C:
+			memoryLayer.deleteOldItems(ir.getNewTs(false))
 		case <-forceRollupTick.C:
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
@@ -348,9 +346,7 @@ func ResetCache() {
 	if lCache != nil {
 		lCache.Clear()
 	}
-	globalCache.Lock()
-	globalCache.items = make(map[string]*CachePL)
-	globalCache.Unlock()
+	memoryLayer.Clear()
 }
 
 // RemoveCacheFor will delete the list corresponding to the given key.
@@ -361,12 +357,197 @@ func RemoveCacheFor(key []byte) {
 	}
 }
 
+type MemoryLayer struct {
+	shards []*lockedMap
+}
+
+func initMemoryLayer() *MemoryLayer {
+	sm := &MemoryLayer{
+		shards: make([]*lockedMap, numShards),
+	}
+	for i := range sm.shards {
+		sm.shards[i] = newLockedMap()
+	}
+	return sm
+}
+
+func (sm *MemoryLayer) get(key uint64) (*CachePL, bool) {
+	return sm.shards[key%uint64(numShards)].get(key)
+}
+
+func (sm *MemoryLayer) set(key uint64, i *CachePL) {
+	if i == nil {
+		// If item is nil make this Set a no-op.
+		return
+	}
+
+	sm.shards[key%uint64(numShards)].set(key, i)
+}
+
+func (sm *MemoryLayer) del(key uint64) {
+	sm.shards[key%uint64(numShards)].del(key)
+}
+
+func (sm *MemoryLayer) Get(key uint64) (*CachePL, bool) {
+	return sm.shards[key%uint64(numShards)].Get(key)
+}
+
+func (sm *MemoryLayer) Set(key uint64, i *CachePL) {
+	if i == nil {
+		// If item is nil make this Set a no-op.
+		return
+	}
+
+	sm.shards[key%uint64(numShards)].Set(key, i)
+}
+
+func (sm *MemoryLayer) Del(key uint64) {
+	sm.shards[key%uint64(numShards)].Del(key)
+}
+
+func (sm *MemoryLayer) UnlockKey(key uint64) {
+	sm.shards[key%uint64(numShards)].Unlock()
+}
+
+func (sm *MemoryLayer) LockKey(key uint64) {
+	sm.shards[key%uint64(numShards)].Lock()
+}
+
+func (sm *MemoryLayer) RLockKey(key uint64) {
+	sm.shards[key%uint64(numShards)].RLock()
+}
+
+func (sm *MemoryLayer) RUnlockKey(key uint64) {
+	sm.shards[key%uint64(numShards)].RUnlock()
+}
+
+func (sm *MemoryLayer) Clear() {
+	for i := 0; i < numShards; i++ {
+		sm.shards[i].Clear()
+	}
+}
+
+func (sm *MemoryLayer) deleteOldItems(ts uint64) {
+	fmt.Println("Deleting old items")
+	defer func() {
+		fmt.Println("Done deleting old items")
+	}()
+	for i := 0; i < numShards; i++ {
+		sm.shards[i].Lock()
+		defer sm.shards[i].Unlock()
+
+		for keyHash, pl := range sm.shards[i].data {
+			if pl.lastUpdate < ts-100 {
+				delete(sm.shards[i].data, keyHash)
+			}
+		}
+	}
+}
+
+type lockedMap struct {
+	sync.RWMutex
+	data map[uint64]*CachePL
+}
+
+func newLockedMap() *lockedMap {
+	return &lockedMap{
+		data: make(map[uint64]*CachePL),
+	}
+}
+
+func (m *lockedMap) get(key uint64) (*CachePL, bool) {
+	item, ok := m.data[key]
+	return item, ok
+}
+
+func (m *lockedMap) Get(key uint64) (*CachePL, bool) {
+	m.RLock()
+	defer m.RUnlock()
+	item, ok := m.data[key]
+	return item, ok
+}
+
+func (m *lockedMap) set(key uint64, i *CachePL) {
+	if i == nil {
+		// If the item is nil make this Set a no-op.
+		return
+	}
+
+	m.data[key] = i
+}
+
+func (m *lockedMap) Set(key uint64, i *CachePL) {
+	m.Lock()
+	defer m.Unlock()
+	m.set(key, i)
+}
+
+func (m *lockedMap) del(key uint64) {
+	delete(m.data, key)
+}
+
+func (m *lockedMap) Del(key uint64) {
+	m.Lock()
+	if l, ok := m.data[key]; ok && l != nil {
+		l.list = nil
+	}
+	m.Unlock()
+}
+
+func (m *lockedMap) Clear() {
+	m.Lock()
+	m.data = make(map[uint64]*CachePL)
+	m.Unlock()
+}
+
 func NewCachePL() *CachePL {
 	return &CachePL{
 		count:      0,
 		list:       nil,
 		lastUpdate: 0,
 	}
+}
+
+func checkForRollup(key []byte, l *List) {
+	deltaCount := l.mutationMap.len()
+	if deltaCount > 0 {
+		// If deltaCount is high, send it to high priority channel instead.
+		if deltaCount > 500 {
+			IncrRollup.addKeyToBatch(key, 0)
+		} else {
+			IncrRollup.addKeyToBatch(key, 1)
+		}
+	}
+}
+
+func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
+	if commitTs == 0 {
+		return
+	}
+
+	keyHash := z.MemHash([]byte(key))
+	// TODO under the same lock
+	ml.LockKey(keyHash)
+	defer ml.UnlockKey(keyHash)
+
+	val, ok := ml.get(keyHash)
+	if !ok {
+		val = NewCachePL()
+		val.lastUpdate = commitTs
+		ml.set(keyHash, val)
+		return
+	}
+
+	val.lastUpdate = commitTs
+	val.count -= 1
+
+	if val.list != nil {
+		p := new(pb.PostingList)
+		x.Check(p.Unmarshal(delta))
+		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
+		checkForRollup([]byte(key), val.list)
+	}
+	//fmt.Println("====Setting cache list", commitTs, pk, p, val.list.mutationMap)
 }
 
 // RemoveCachedKeys will delete the cached list by this txn.
@@ -377,34 +558,12 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 
 	for key, delta := range txn.cache.deltas {
 		RemoveCacheFor([]byte(key))
+
 		pk, _ := x.Parse([]byte(key))
 		if !ShouldGoInCache(pk) {
 			continue
 		}
-		globalCache.Lock()
-		val, ok := globalCache.items[key]
-		if !ok {
-			val = NewCachePL()
-			val.lastUpdate = commitTs
-			globalCache.items[key] = val
-		}
-		if commitTs != 0 {
-			// TODO Delete this if the values are too old in an async thread
-			val.lastUpdate = commitTs
-		}
-		if !ok {
-			globalCache.Unlock()
-			continue
-		}
-
-		val.count -= 1
-
-		if commitTs != 0 && val.list != nil {
-			p := new(pb.PostingList)
-			x.Check(p.Unmarshal(delta))
-			val.list.setMutationAfterCommit(txn.StartTs, commitTs, p, true)
-		}
-		globalCache.Unlock()
+		memoryLayer.updateItemInCache(key, pk, delta, txn.StartTs, commitTs)
 	}
 }
 
@@ -489,6 +648,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
+				if l.mutationMap == nil {
+					l.mutationMap = newMutableMap()
+				}
 				pl := &pb.PostingList{}
 				if err := pl.Unmarshal(val); err != nil {
 					return err
@@ -517,6 +679,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+	if l.mutationMap != nil {
+		l.mutationMap = newMutableMap()
+	}
 	return l, nil
 }
 
@@ -540,59 +705,76 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 }
 
 func ShouldGoInCache(pk x.ParsedKey) bool {
-	return (!pk.IsData() && strings.HasSuffix(pk.Attr, "dgraph.type"))
+	return !pk.IsData()
 }
 
 func PostingListCacheEnabled() bool {
 	return lCache != nil
 }
 
-func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	if PostingListCacheEnabled() {
-		l, ok := lCache.Get(key)
-		if ok && l != nil {
-			// No need to clone the immutable layer or the key since mutations will not modify it.
-			lCopy := &List{
-				minTs: l.minTs,
-				maxTs: l.maxTs,
-				key:   key,
-				plist: l.plist,
-			}
-			l.RLock()
-			lCopy.mutationMap = l.mutationMap.clone()
-			l.RUnlock()
-			return lCopy, nil
+func (ml *MemoryLayer) saveInCache(key []byte, keyHash, readTs uint64, l *List) {
+	ml.LockKey(keyHash)
+	defer ml.UnlockKey(keyHash)
+	l.RLock()
+	cacheItem, ok := ml.get(keyHash)
+	if !ok {
+		cacheItemNew := NewCachePL()
+		cacheItemNew.count = 1
+		cacheItemNew.list = copyList(l)
+		cacheItemNew.lastUpdate = l.maxTs
+		ml.set(keyHash, cacheItemNew)
+	} else {
+		// Only set l to the cache if readTs >= latestTs, which implies that l is
+		// the latest version of the PL. We also check that we're reading a version
+		// from Badger, which is higher than the write registered by the cache.
+
+		//fmt.Println("====Setting cache", readTs, pk, l.mutationMap)
+		cacheItem.Set(copyList(l), readTs)
+	}
+	l.RUnlock()
+	//allV, _ := l.AllValues(readTs)
+	//uids, _ := l.Uids(ListOptions{ReadTs: readTs})
+	//fmt.Println("====Getting from disk", readTs, pk, l.mutationMap, allV, uids)
+}
+
+func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
+	ml.LockKey(keyHash)
+
+	cacheItem, ok := ml.get(keyHash)
+	if !ok {
+		cacheItem = NewCachePL()
+		//fmt.Println("====Setting empty cache", readTs, pk)
+		ml.set(keyHash, cacheItem)
+	}
+	cacheItem.count += 1
+
+	if ok {
+		if cacheItem.list != nil && cacheItem.list.minTs <= readTs {
+			cacheItem.list.RLock()
+			lCopy := copyList(cacheItem.list)
+			cacheItem.list.RUnlock()
+			ml.UnlockKey(keyHash)
+			checkForRollup(key, lCopy)
+			//allV, _ := lCopy.AllValues(readTs)
+			//uids, _ := lCopy.Uids(ListOptions{ReadTs: readTs})
+			//fmt.Println("====Getting cache", readTs, pk, lCopy.mutationMap, allV, uids)
+			return lCopy
 		}
 	}
+	ml.UnlockKey(keyHash)
+	return nil
+}
 
-	if pstore.IsClosed() {
-		return nil, badger.ErrDBClosed
-	}
-
+func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	pk, _ := x.Parse(key)
+	var keyHash uint64
 
 	if ShouldGoInCache(pk) {
-		globalCache.Lock()
-		cacheItem, ok := globalCache.items[string(key)]
-		if !ok {
-			cacheItem = NewCachePL()
-			globalCache.items[string(key)] = cacheItem
+		keyHash = z.MemHash(key)
+		l := ml.readFromCache(key, keyHash, readTs)
+		if l != nil {
+			return l, nil
 		}
-		cacheItem.count += 1
-
-		// We use badger subscription to invalidate the cache. For every write we make the value
-		// corresponding to the key in the cache to nil. So, if we get some non-nil value from the cache
-		// then it means that no  writes have happened after the last set of this key in the cache.
-		if ok {
-			if cacheItem.list != nil && cacheItem.list.minTs <= readTs {
-				cacheItem.list.RLock()
-				lCopy := copyList(cacheItem.list)
-				cacheItem.list.RUnlock()
-				globalCache.Unlock()
-				return lCopy, nil
-			}
-		}
-		globalCache.Unlock()
 	}
 
 	txn := pstore.NewTransactionAt(readTs, false)
@@ -611,24 +793,43 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 		return l, err
 	}
 
-	// Only set l to the cache if readTs >= latestTs, which implies that l is
-	// the latest version of the PL. We also check that we're reading a version
-	// from Badger, which is higher than the write registered by the cache.
 	if ShouldGoInCache(pk) {
-		globalCache.Lock()
-		l.RLock()
-		cacheItem, ok := globalCache.items[string(key)]
-		if !ok {
-			cacheItemNew := NewCachePL()
-			cacheItemNew.count = 1
-			cacheItemNew.list = copyList(l)
-			cacheItemNew.lastUpdate = l.maxTs
-			globalCache.items[string(key)] = cacheItemNew
-		} else {
-			cacheItem.Set(copyList(l), readTs)
+		ml.saveInCache(key, keyHash, readTs, l)
+	}
+
+	return l, nil
+}
+
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	if PostingListCacheEnabled() {
+		l, ok := lCache.Get(key)
+		if ok && l != nil {
+			// No need to clone the immutable layer or the key since mutations will not modify it.
+			lCopy := &List{
+				minTs: l.minTs,
+				maxTs: l.maxTs,
+				key:   key,
+				plist: l.plist,
+			}
+			l.RLock()
+			if l.mutationMap != nil {
+				lCopy.mutationMap = newMutableMap()
+				for ts, pl := range l.mutationMap.oldList {
+					lCopy.mutationMap.oldList[ts] = proto.Clone(pl).(*pb.PostingList)
+				}
+			}
+			l.RUnlock()
+			return lCopy, nil
 		}
-		l.RUnlock()
-		globalCache.Unlock()
+	}
+
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
+
+	l, err := memoryLayer.ReadData(key, pstore, readTs)
+	if err != nil {
+		return l, err
 	}
 
 	if PostingListCacheEnabled() {
