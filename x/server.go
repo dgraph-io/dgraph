@@ -52,6 +52,7 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 
 	// if tls is enabled, make tls encryption based connections as default
 	if tlsConf != nil {
+		tlsConf.NextProtos = []string{"h2", "http/1.1"}
 		httpsRule := m.Match(cmux.Any())
 		// this is chained listener. tls listener will decrypt
 		// the message and send it in plain text to HTTP server
@@ -59,8 +60,11 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 	}
 }
 
+var H2cHandler http.Handler
+
 func startListen(l net.Listener) {
 	srv := &http.Server{
+		Handler:           H2cHandler,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      600 * time.Second,
 		IdleTimeout:       2 * time.Minute,
