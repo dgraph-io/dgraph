@@ -34,6 +34,8 @@ import (
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -316,7 +318,6 @@ func run() {
 
 	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
 	x.Check(err)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
@@ -332,6 +333,10 @@ func run() {
 	}
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/debug/z")
+
+	x.H2cHandler = h2c.NewHandler(http.DefaultServeMux, &http2.Server{})
+
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
 
 	// This must be here. It does not work if placed before Grpc init.
 	x.Check(st.node.initAndStartNode())
