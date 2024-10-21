@@ -68,14 +68,14 @@ func (l *List) DeepSize() uint64 {
 			unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
 		size += uint64(numOldBuckets * sizeOfBucket)
-		if len(l.mutationMap) > 0 || numBuckets > 1 {
+		if l.mutationMap.len() > 0 || numBuckets > 1 {
 			size += uint64(numBuckets * sizeOfBucket)
 		}
 	}
 	// adding the size of all the entries in the map.
-	for _, v := range l.mutationMap {
+	l.mutationMap.iterate(func(ts uint64, v *pb.PostingList) {
 		size += calculatePostingListSize(v)
-	}
+	}, math.MaxUint64)
 
 	return size
 }
