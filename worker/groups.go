@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -205,7 +205,7 @@ func (g *groupi) applyInitialTypes() {
 			continue
 		}
 		// It is okay to write initial types at ts=1.
-		if err := updateType(t.GetTypeName(), *t, 1); err != nil {
+		if err := updateType(t.GetTypeName(), t, 1); err != nil {
 			glog.Errorf("Error while applying initial type: %s", err)
 		}
 	}
