@@ -25,7 +25,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -170,7 +172,6 @@ func (p *Pools) Connect(addr string, tlsClientConf *tls.Config) *Pool {
 // newPool creates a new "pool" with one gRPC connection, refcount 0.
 func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 	conOpts := []grpc.DialOption{
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(x.GrpcMaxSize),
 			grpc.MaxCallSendMsgSize(x.GrpcMaxSize),

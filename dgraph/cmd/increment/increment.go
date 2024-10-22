@@ -29,7 +29,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -90,7 +91,7 @@ type Counter struct {
 }
 
 func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, error) {
-	span := trace.FromContext(ctx)
+	span := trace.SpanFromContext(ctx)
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -114,7 +115,10 @@ func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, erro
 	default:
 		x.Panic(errors.Errorf("Invalid response: %q", resp.Json))
 	}
-	span.Annotatef(nil, "Found counter: %+v", counter)
+	span.AddEvent("Found counter", trace.WithAttributes(otel.KeyValue{
+		Key:   "counter",
+		Value: otel.StringValue(fmt.Sprintf("%+v", counter)),
+	}))
 	counter.startTs = resp.GetTxn().GetStartTs()
 	counter.qLatency = time.Duration(resp.Latency.GetTotalNs()).Round(time.Millisecond)
 	return counter, nil
@@ -140,7 +144,7 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 		}
 	}()
 
-	ctx, span := trace.StartSpan(context.Background(), "Counter")
+	ctx, span := otel.Tracer("Counter").Start(context.Background(), "Counter")
 	defer span.End()
 
 	counter, err := queryCounter(ctx, txn, pred)
@@ -170,11 +174,13 @@ func process(dg *dgo.Dgraph, conf *viper.Viper) (Counter, error) {
 }
 
 func run(conf *viper.Viper) {
-	trace.ApplyConfig(trace.Config{
-		DefaultSampler:             trace.AlwaysSample(),
-		MaxAnnotationEventsPerSpan: 256,
-	})
-	x.RegisterExporters(conf, "dgraph.increment")
+	otel.SetTracerProvider(trace.NewTracerProvider(
+		trace.WithBatcher(jaeger.New(jaeger.WithCollectorEndpoint(Alpha.Conf.GetString("jaeger")))),
+		trace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("dgraph.increment"),
+		)),
+	))
 
 	startTime := time.Now()
 	defer func() { fmt.Println("Total:", time.Since(startTime).Round(time.Millisecond)) }()

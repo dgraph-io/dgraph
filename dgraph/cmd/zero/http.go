@@ -32,6 +32,9 @@ import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // intFromQueryParam checks for name as a query param, converts it to uint64 and returns it.
@@ -54,6 +57,9 @@ func intFromQueryParam(w http.ResponseWriter, r *http.Request, name string) (uin
 }
 
 func (st *state) assign(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.Tracer("zero").Start(r.Context(), "assign")
+	defer span.End()
+
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	if r.Method == "OPTIONS" {
@@ -70,7 +76,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	num := &pb.Num{Val: val}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	var ids *pb.AssignedIds
@@ -109,6 +115,9 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 // removeNode can be used to remove a node from the cluster. It takes in the RAFT id of the node
 // and the group it belongs to. It can be used to remove Dgraph alpha and Zero nodes(group=0).
 func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.Tracer("zero").Start(r.Context(), "removeNode")
+	defer span.End()
+
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -144,6 +153,9 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 // moveTablet can be used to move a tablet to a specific group. It takes in tablet and group as
 // argument.
 func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.Tracer("zero").Start(r.Context(), "moveTablet")
+	defer span.End()
+
 	x.AddCorsHeaders(w)
 	if r.Method == "OPTIONS" {
 		return
@@ -211,10 +223,13 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (st *state) getState(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.Tracer("zero").Start(r.Context(), "getState")
+	defer span.End()
+
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := st.node.WaitLinearizableRead(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -235,6 +250,9 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
+	_, span := otel.Tracer("zero").Start(ctx, "zeroHealth")
+	defer span.End()
+
 	if ctx.Err() != nil {
 		return nil, errors.Wrap(ctx.Err(), "http request context error")
 	}
@@ -254,6 +272,9 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 }
 
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
+	ctx, span := otel.Tracer("zero").Start(r.Context(), "pingResponse")
+	defer span.End()
+
 	x.AddCorsHeaders(w)
 
 	/*

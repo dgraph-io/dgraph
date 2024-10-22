@@ -38,9 +38,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/plugin/ocgrpc"
-	otrace "go.opencensus.io/trace"
-	"go.opencensus.io/zpages"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/semconv/v1.4.0"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -456,7 +460,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.StatsHandler(&otelgrpc.ServerHandler{}),
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
@@ -773,10 +777,30 @@ func run() {
 			return true, true
 		}
 	}
-	otrace.ApplyConfig(otrace.Config{
-		DefaultSampler:             otrace.ProbabilitySampler(x.WorkerConfig.Trace.GetFloat64("ratio")),
-		MaxAnnotationEventsPerSpan: 256,
-	})
+
+	// Initialize OpenTelemetry
+	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(Alpha.Conf.GetString("jaeger"))))
+	if err != nil {
+		log.Fatalf("Failed to create Jaeger exporter: %v", err)
+	}
+
+	promExporter, err := prometheus.New()
+	if err != nil {
+		log.Fatalf("Failed to create Prometheus exporter: %v", err)
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithBatcher(exporter),
+		trace.WithBatcher(promExporter),
+		trace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("dgraph.alpha"),
+		)),
+	)
+	otel.SetTracerProvider(tp)
+
+	// Register Prometheus exporter
+	http.HandleFunc("/metrics", promExporter.ServeHTTP)
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
