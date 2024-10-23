@@ -97,6 +97,7 @@ type MutableMap struct {
 	deleteMarker uint64
 	uidMap       map[uint64]int
 	uidsH        map[uint64]*pb.Posting
+	uidsHtime    uint64
 	length       int
 }
 
@@ -107,6 +108,7 @@ func newMutableMap() *MutableMap {
 		deleteMarker: math.MaxUint64,
 		length:       math.MaxInt,
 		uidsH:        make(map[uint64]*pb.Posting),
+		uidsHtime:    math.MaxUint64,
 	}
 }
 
@@ -120,6 +122,7 @@ func (mm *MutableMap) clone() *MutableMap {
 		deleteMarker: mm.deleteMarker,
 		uidsH:        mm.uidsH,
 		length:       mm.length,
+		uidsHtime:    mm.uidsHtime,
 	}
 }
 
@@ -251,7 +254,7 @@ func (mm *MutableMap) iterate(f func(ts uint64, pl *pb.PostingList), readTs uint
 
 	deleteMarker := mm.populateDeleteAll(readTs)
 	mm._iterate(func(ts uint64, pl *pb.PostingList) {
-		if ts >= deleteMarker {
+		if ts >= deleteMarker && ts <= readTs {
 			f(ts, pl)
 		}
 	})
@@ -269,6 +272,10 @@ func (mm *MutableMap) insertOldPosting(pl *pb.PostingList) {
 		// We insert old postings in reverse order. So we only need to read the first update to an UID
 		if _, ok := mm.uidsH[mpost.Uid]; !ok {
 			mm.uidsH[mpost.Uid] = mpost
+		}
+		mm.uidsHtime = x.Max(mpost.CommitTs, mm.uidsHtime)
+		if mm.length == math.MaxInt64 {
+			mm.length = 0
 		}
 		if mpost.Op == Del {
 			mm.length -= 1
@@ -325,13 +332,13 @@ func (mm *MutableMap) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 	}
 
 	getPos := func() *pb.Posting {
-		pos, ok := mm.uidsH[uid]
-		if ok {
-			return pos
-		}
 		posI, ok := mm.uidMap[uid]
 		if ok {
 			return mm.curList.Postings[posI]
+		}
+		pos, ok := mm.uidsH[uid]
+		if ok {
+			return pos
 		}
 		return nil
 	}
@@ -854,6 +861,7 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 		}
 
 		l.mutationMap.uidsH[mpost.Uid] = mpost
+		l.mutationMap.uidsHtime = x.Max(l.mutationMap.uidsHtime, commitTs)
 		if mpost.Op == Del {
 			l.mutationMap.length -= 1
 		} else {

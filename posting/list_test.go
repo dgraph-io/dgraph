@@ -522,7 +522,7 @@ func TestReadSingleValue(t *testing.T) {
 		require.NoError(t, ol.commitMutation(i, i+1))
 		kData := ol.getMutation(i + 1)
 		writer := NewTxnWriter(pstore)
-		if err := writer.SetAt(key, kData, BitDeltaPosting, i); err != nil {
+		if err := writer.SetAt(key, kData, BitDeltaPosting, i+1); err != nil {
 			require.NoError(t, err)
 		}
 		writer.Flush()
@@ -536,7 +536,7 @@ func TestReadSingleValue(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		j := uint64(2)
+		j := uint64(3)
 		if j < ol.minTs {
 			j = ol.minTs
 		}
