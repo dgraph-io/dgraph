@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"sort"
@@ -308,6 +309,13 @@ func (mm *MutableMap) insertPosting(mpost *pb.Posting) {
 	}
 
 	mm.curList.Postings = append(mm.curList.Postings, mpost)
+}
+
+func (mm *MutableMap) print() string {
+	if mm == nil {
+		return ""
+	}
+	return fmt.Sprintf("OLDLIST: %+v CURLIST: %+v DELETEBELOWTS: %d  \n", mm.oldList, mm.curList, mm.deleteMarker)
 }
 
 // Return if piterator needs to be searched or not after mutable map and the posting if found.
@@ -1865,12 +1873,12 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	var pitr pIterator
 	err = pitr.seek(l, uid-1, 0)
 	if err != nil {
-		return false, nil, errors.Wrapf(err, "cannot initialize iterator when calling List.iterate")
+		return false, nil, errors.Wrapf(err, fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
 	}
 
 	valid, err := pitr.valid()
 	if err != nil {
-		return false, nil, errors.Wrapf(err, "cannot initialize iterator when calling List.iterate")
+		return false, nil, errors.Wrapf(err, fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
 	}
 	if valid {
 		pp := pitr.posting()
