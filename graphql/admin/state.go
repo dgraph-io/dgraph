@@ -15,48 +15,25 @@ import (
 )
 
 type membershipState struct {
-	Counter    uint64         `json:"counter"`
-	Groups     []clusterGroup `json:"groups"`
-	Zeros      []member       `json:"zeros"`
-	MaxUID     uint64         `json:"maxUID"`
-	MaxNsID    uint64         `json:"maxNsID"`
-	MaxTxnTs   uint64         `json:"maxTxnTs"`
-	MaxRaftId  uint64         `json:"maxRaftId"`
-	Removed    []*pb.Member   `json:"removed"`
-	Cid        string         `json:"cid"`
-	License    *pb.License    `json:"license"`
-	Namespaces []uint64       `json:"namespaces"`
+	Counter    uint64         `json:"counter,omitempty"`
+	Groups     []clusterGroup `json:"groups,omitempty"`
+	Zeros      []*pb.Member   `json:"zeros,omitempty"`
+	MaxUID     uint64         `json:"maxUID,omitempty"`
+	MaxNsID    uint64         `json:"maxNsID,omitempty"`
+	MaxTxnTs   uint64         `json:"maxTxnTs,omitempty"`
+	MaxRaftId  uint64         `json:"maxRaftId,omitempty"`
+	Removed    []*pb.Member   `json:"removed,omitempty"`
+	Cid        string         `json:"cid,omitempty"`
+	License    *pb.License    `json:"license,omitempty"`
+	Namespaces []uint64       `json:"namespaces,omitempty"`
 }
 
 type clusterGroup struct {
-	Id         uint32   `json:"id"`
-	Members    []member `json:"members"`
-	Tablets    []tablet `json:"tablets"`
-	SnapshotTs uint64   `json:"snapshotTs"`
-	Checksum   uint64   `json:"checksum"`
-}
-
-type member struct {
-	Id              uint64 `json:"id"`
-	GroupId         uint32 `json:"groupId"`
-	Addr            string `json:"addr"`
-	Leader          bool   `json:"leader"`
-	AmDead          bool   `json:"amDead"`
-	LastUpdate      uint64 `json:"lastUpdate"`
-	ClusterInfoOnly bool   `json:"clusterInfoOnly"`
-	Learner         bool   `json:"learner"`
-	ForceGroupId    bool   `json:"forceGroupId"`
-}
-
-type tablet struct {
-	GroupId           uint32 `json:"groupId"`
-	Predicate         string `json:"predicate"`
-	Force             bool   `json:"force"`
-	OnDiskBytes       int64  `json:"onDiskBytes"`
-	Remove            bool   `json:"remove"`
-	ReadOnly          bool   `json:"readOnly"`
-	MoveTs            uint64 `json:"moveTs"`
-	UncompressedBytes int64  `json:"uncompressedBytes"`
+	Id         uint32       `json:"id,omitempty"`
+	Members    []*pb.Member `json:"members,omitempty"`
+	Tablets    []*pb.Tablet `json:"tablets,omitempty"`
+	SnapshotTs uint64       `json:"snapshotTs,omitempty"`
+	Checksum   uint64       `json:"checksum,omitempty"`
 }
 
 func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
@@ -74,7 +51,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 
 	ns, _ := x.ExtractNamespace(ctx)
 	// map to graphql response structure. Only guardian of galaxy can list the namespaces.
-	state := convertToGraphQLResp(&ms, ns == x.GalaxyNamespace)
+	state := convertToGraphQLResp(ms, ns == x.GalaxyNamespace)
 	b, err := json.Marshal(state)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -98,7 +75,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 // values and not the keys. For pb.MembershipState.Group, the keys are the group IDs
 // and pb.Group didn't contain this ID, so we are creating a custom clusterGroup type,
 // which is same as pb.Group and also contains the ID for the group.
-func convertToGraphQLResp(ms *pb.MembershipState, listNs bool) membershipState {
+func convertToGraphQLResp(ms pb.MembershipState, listNs bool) membershipState {
 	var state membershipState
 
 	// namespaces stores set of namespaces
@@ -106,31 +83,13 @@ func convertToGraphQLResp(ms *pb.MembershipState, listNs bool) membershipState {
 
 	state.Counter = ms.Counter
 	for k, v := range ms.Groups {
-		var members = make([]member, 0, len(v.Members))
-		for id, v1 := range v.Members {
-			members = append(members, member{
-				Id:              id,
-				GroupId:         v1.GroupId,
-				Addr:            v1.Addr,
-				Leader:          v1.Leader,
-				AmDead:          v1.AmDead,
-				LastUpdate:      v1.LastUpdate,
-				ClusterInfoOnly: v1.ClusterInfoOnly,
-				ForceGroupId:    v1.ForceGroupId,
-			})
+		var members = make([]*pb.Member, 0, len(v.Members))
+		for _, v1 := range v.Members {
+			members = append(members, v1)
 		}
-		var tablets = make([]tablet, 0, len(v.Tablets))
+		var tablets = make([]*pb.Tablet, 0, len(v.Tablets))
 		for name, v1 := range v.Tablets {
-			tablets = append(tablets, tablet{
-				GroupId:           v1.GroupId,
-				Predicate:         v1.Predicate,
-				Force:             v1.Force,
-				OnDiskBytes:       v1.OnDiskBytes,
-				Remove:            v1.Remove,
-				ReadOnly:          v1.ReadOnly,
-				MoveTs:            v1.MoveTs,
-				UncompressedBytes: v1.UncompressedBytes,
-			})
+			tablets = append(tablets, v1)
 			if listNs {
 				namespaces[x.ParseNamespace(name)] = struct{}{}
 			}
@@ -143,18 +102,9 @@ func convertToGraphQLResp(ms *pb.MembershipState, listNs bool) membershipState {
 			Checksum:   v.Checksum,
 		})
 	}
-	state.Zeros = make([]member, 0, len(ms.Zeros))
+	state.Zeros = make([]*pb.Member, 0, len(ms.Zeros))
 	for _, v := range ms.Zeros {
-		state.Zeros = append(state.Zeros, member{
-			Id:              v.Id,
-			GroupId:         v.GroupId,
-			Addr:            v.Addr,
-			Leader:          v.Leader,
-			AmDead:          v.AmDead,
-			LastUpdate:      v.LastUpdate,
-			ClusterInfoOnly: v.ClusterInfoOnly,
-			ForceGroupId:    v.ForceGroupId,
-		})
+		state.Zeros = append(state.Zeros, v)
 	}
 	state.MaxUID = ms.MaxUID
 	state.MaxTxnTs = ms.MaxTxnTs

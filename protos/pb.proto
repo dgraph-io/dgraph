@@ -25,8 +25,14 @@ package pb;
 
 import "github.com/dgraph-io/dgo/v240/protos/api.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
+import "google/protobuf/descriptor.proto";
+
 
 option go_package = "./pb";
+
+extend google.protobuf.FieldOptions {
+    bool dataSensitive                       = 50010;
+}
 
 message List {
   repeated fixed64 uids = 1;
@@ -122,15 +128,15 @@ message RaftContext {
 // have one RAFT node per server serving that group.
 message Member {
   fixed64 id = 1;
-  uint32 group_id = 2 ;
+  uint32 groupId = 2 ;
   string addr = 3;
   bool leader = 4;
-  bool am_dead = 5 ;
-  uint64 last_update = 6 ;
+  bool amDead = 5 ;
+  uint64 lastUpdate = 6 ;
   bool learner = 7;
 
-  bool cluster_info_only = 13;
-  bool force_group_id = 14 ;
+  bool clusterInfoOnly = 13;
+  bool forceGroupId = 14 ;
 }
 
 message Group {
@@ -294,8 +300,8 @@ message RestoreRequest {
   string backup_id = 4;
 
   // Credentials when using a minio or S3 bucket as the backup location.
-  string access_key = 5;
-  string secret_key = 6;
+  string access_key = 5 [(dataSensitive) = true];
+  string secret_key = 6 [(dataSensitive) = true];
   string session_token = 7;
   bool anonymous = 8;
 
