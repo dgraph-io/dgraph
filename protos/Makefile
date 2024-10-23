@@ -22,6 +22,8 @@ DGO_PATH    := github.com/dgraph-io/dgo/v${DGO_PB_VERSION}
 BADGER_PATH := github.com/dgraph-io/badger/v${BADGER_PB_VERSION}
 TMPDIR     := $(shell mktemp -d)
 PROTO_PATH := ${TMPDIR}/src:.
+PROTO_PATH := ${PROTO_PATH}:${TMPDIR}/src/${DGO_PATH}/protos
+PROTO_PATH := ${PROTO_PATH}:${TMPDIR}/src/${BADGER_PATH}/pb
 
 .PHONY: help
 help:
@@ -33,6 +35,7 @@ clean:
 
 .PHONY: tidy-deps
 tidy-deps:
+	@go mod tidy -v
 
 .PHONY: check
 check:
@@ -43,13 +46,16 @@ check:
 
 .PHONY: copy-protos
 copy-protos:
-	echo ${TMPDIR}
 	@mkdir -p ${TMPDIR}/src/${DGO_PATH}/protos
 	@mkdir -p ${TMPDIR}/src/${BADGER_PATH}/pb
 	@cp $(shell go list -m -f "{{.Dir}}" ${BADGER_PATH})/pb/badgerpb${BADGER_PB_VERSION}.proto \
 	 ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto \
 	 ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
+
+.PHONY: patch-pb
+patch-pb:
+	./patch_pb.sh
 
 .PHONY: regenerate
 regenerate: tidy-deps copy-protos check clean
@@ -62,5 +68,6 @@ regenerate: tidy-deps copy-protos check clean
 		--go-grpc_opt=paths=source_relative \
 		--go_opt=M{DGO_PATH}/protos/api.proto={DGO_PATH}/protos/api \
 		pb.proto
+	@$(MAKE) patch-pb  
 	@rm -rf ${TMPDIR}
 	@echo Done.

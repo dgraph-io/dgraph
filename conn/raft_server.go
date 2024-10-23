@@ -128,6 +128,7 @@ func (p *proposals) Done(key uint64, err error) {
 type RaftServer struct {
 	m    sync.RWMutex
 	node *Node
+	// embedding the pb.UnimplementedRaftServer struct to ensure forward compatibility of the server.
 	pb.UnimplementedRaftServer
 }
 

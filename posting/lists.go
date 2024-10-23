@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
-	ostats "go.opencensus.io/stats"
 )
 
 const (

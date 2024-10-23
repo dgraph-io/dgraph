@@ -10,8 +10,8 @@ require (
 	github.com/IBM/sarama v1.43.3
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.4.3
-	github.com/dgraph-io/badger/v4 v4.4.0
-	github.com/dgraph-io/dgo/v240 v240.0.1
+	github.com/dgraph-io/badger/v4 v4.4.1-0.20241128130124-d13fdcc74a8d
+	github.com/dgraph-io/dgo/v240 v240.0.2-0.20241128130808-b8caf57545c5
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
@@ -28,7 +28,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/golang/glog v1.2.3
-	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/codesearch v1.2.0
 	github.com/google/go-cmp v0.6.0
@@ -64,6 +63,7 @@ require (
 	golang.org/x/text v0.20.0
 	golang.org/x/tools v0.27.0
 	google.golang.org/grpc v1.68.0
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -119,6 +119,7 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/cpuid v1.2.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/minio/md5-simd v1.1.0 // indirect

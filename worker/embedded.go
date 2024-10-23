@@ -49,7 +49,7 @@ func applyInitialTypes(ns, ts uint64) {
 			continue
 		}
 		// It is okay to write initial types at ts=1.
-		if err := updateType(t.GetTypeName(), *t, ts); err != nil {
+		if err := updateType(t.GetTypeName(), t, ts); err != nil {
 			glog.Errorf("Error while applying initial type: %s", err)
 		}
 	}

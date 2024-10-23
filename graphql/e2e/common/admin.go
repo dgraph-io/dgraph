@@ -448,43 +448,20 @@ func adminState(t *testing.T) {
 	gqlResponse := queryParams.ExecuteAsPost(t, GraphqlAdminURL)
 	RequireNoGQLErrors(t, gqlResponse)
 
-	type Member struct {
-		Id              uint64 `json:"id"`
-		GroupId         uint32 `json:"groupId"`
-		Addr            string `json:"addr"`
-		Leader          bool   `json:"leader"`
-		AmDead          bool   `json:"amDead"`
-		LastUpdate      uint64 `json:"lastUpdate"`
-		ClusterInfoOnly bool   `json:"clusterInfoOnly"`
-		Learner         bool   `json:"learner"`
-		ForceGroupId    bool   `json:"forceGroupId"`
-	}
-
-	type Tablet struct {
-		GroupId           uint32 `json:"groupId"`
-		Predicate         string `json:"predicate"`
-		Force             bool   `json:"force"`
-		OnDiskBytes       int64  `json:"onDiskBytes"`
-		Remove            bool   `json:"remove"`
-		ReadOnly          bool   `json:"readOnly"`
-		MoveTs            uint64 `json:"moveTs"`
-		UncompressedBytes int64  `json:"uncompressedBytes"`
-	}
-
 	var result struct {
 		State struct {
 			Groups []struct {
 				Id         uint32
-				Members    []Member
-				Tablets    []Tablet
+				Members    []*pb.Member
+				Tablets    []*pb.Tablet
 				SnapshotTs uint64
 			}
-			Zeros     []Member
+			Zeros     []*pb.Member
 			MaxUID    uint64
 			MaxTxnTs  uint64
 			MaxNsID   uint64
 			MaxRaftId uint64
-			Removed   []Member
+			Removed   []*pb.Member
 			Cid       string
 			License   struct {
 				User     string
@@ -493,29 +470,6 @@ func adminState(t *testing.T) {
 				MaxNodes uint64
 			}
 		}
-	}
-
-	validateMember := func(expected *pb.Member, actual Member) {
-		require.Equal(t, expected.Id, actual.Id)
-		require.Equal(t, expected.GroupId, actual.GroupId)
-		require.Equal(t, expected.Addr, actual.Addr)
-		require.Equal(t, expected.Leader, actual.Leader)
-		require.Equal(t, expected.AmDead, actual.AmDead)
-		require.Equal(t, expected.LastUpdate, actual.LastUpdate)
-		require.Equal(t, expected.ClusterInfoOnly, actual.ClusterInfoOnly)
-		require.Equal(t, expected.ForceGroupId, actual.ForceGroupId)
-		require.Equal(t, expected.Learner, actual.Learner)
-	}
-
-	validateTablet := func(expected *pb.Tablet, actual Tablet) {
-		require.Equal(t, expected.GroupId, actual.GroupId)
-		require.Equal(t, expected.Predicate, actual.Predicate)
-		require.Equal(t, expected.Force, actual.Force)
-		require.Equal(t, expected.OnDiskBytes, actual.OnDiskBytes)
-		require.Equal(t, expected.Remove, actual.Remove)
-		require.Equal(t, expected.ReadOnly, actual.ReadOnly)
-		require.Equal(t, expected.MoveTs, actual.MoveTs)
-		require.Equal(t, expected.UncompressedBytes, actual.UncompressedBytes)
 	}
 
 	err := json.Unmarshal(gqlResponse.Data, &result)
@@ -532,6 +486,28 @@ func adminState(t *testing.T) {
 	stateRes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NoError(t, protojson.Unmarshal(stateRes, &state))
+
+	validateMember := func(expected *pb.Member, actual *pb.Member) {
+		require.Equal(t, expected.Id, actual.Id)
+		require.Equal(t, expected.GroupId, actual.GroupId)
+		require.Equal(t, expected.Addr, actual.Addr)
+		require.Equal(t, expected.Leader, actual.Leader)
+		require.Equal(t, expected.AmDead, actual.AmDead)
+		require.Equal(t, expected.LastUpdate, actual.LastUpdate)
+		require.Equal(t, expected.ClusterInfoOnly, actual.ClusterInfoOnly)
+		require.Equal(t, expected.ForceGroupId, actual.ForceGroupId)
+	}
+
+	validateTablet := func(expected *pb.Tablet, actual *pb.Tablet) {
+		require.Equal(t, expected.GroupId, actual.GroupId)
+		require.Equal(t, expected.Predicate, actual.Predicate)
+		require.Equal(t, expected.Force, actual.Force)
+		require.Equal(t, expected.OnDiskBytes, actual.OnDiskBytes)
+		require.Equal(t, expected.Remove, actual.Remove)
+		require.Equal(t, expected.ReadOnly, actual.ReadOnly)
+		require.Equal(t, expected.MoveTs, actual.MoveTs)
+		require.Equal(t, expected.UncompressedBytes, actual.UncompressedBytes)
+	}
 
 	for _, group := range result.State.Groups {
 		require.Contains(t, state.Groups, group.Id)

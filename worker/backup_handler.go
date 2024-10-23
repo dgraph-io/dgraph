@@ -234,8 +234,8 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 	creds, _ := provider.Retrieve() // Error is always nil.
 
 	req.AccessKey = creds.AccessKeyID
-	req.SecretKey = creds.SecretAccessKey
-	req.SessionToken = creds.SessionToken
+	req.SecretKey = pb.Sensitive(creds.SecretAccessKey)
+	req.SessionToken = pb.Sensitive(creds.SessionToken)
 
 	return nil
 }

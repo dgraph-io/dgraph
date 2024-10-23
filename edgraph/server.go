@@ -102,6 +102,7 @@ var (
 
 // Server implements protos.DgraphServer
 type Server struct {
+	// embedding the api.UnimplementedZeroServer struct to ensure forward compatibility of the server.
 	api.UnimplementedDgraphServer
 }
 

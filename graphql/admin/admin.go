@@ -1081,7 +1081,7 @@ func response(code, msg string) map[string]interface{} {
 type DestinationFields struct {
 	Destination  string
 	AccessKey    string
-	SecretKey    string
-	SessionToken string
+	SecretKey    pb.Sensitive
+	SessionToken pb.Sensitive
 	Anonymous    bool
 }

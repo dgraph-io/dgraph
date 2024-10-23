@@ -25,6 +25,8 @@ package pb;
 
 import "github.com/dgraph-io/dgo/v240/protos/api.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
+import "google/protobuf/descriptor.proto";
+
 
 option go_package = "./pb";
 
@@ -122,15 +124,15 @@ message RaftContext {
 // have one RAFT node per server serving that group.
 message Member {
   fixed64 id = 1;
-  uint32 group_id = 2 ;
+  uint32 groupId = 2 ;
   string addr = 3;
   bool leader = 4;
-  bool am_dead = 5 ;
-  uint64 last_update = 6 ;
+	bool amDead = 5;
+	uint64 lastUpdate = 6;
   bool learner = 7;
 
-  bool cluster_info_only = 13;
-  bool force_group_id = 14 ;
+	bool clusterInfoOnly = 13;
+	bool forceGroupId = 14;
 }
 
 message Group {
@@ -205,15 +207,14 @@ message HealthInfo {
 }
 
 message Tablet {
-  uint32 group_id = 1;
+  uint32 groupId = 1; // Served by which group.
   string predicate = 2;
   bool force = 3;  // Used while moving predicate.
   int64 on_disk_bytes = 7;
   bool remove = 8;
-  bool read_only = 9;
-  uint64 move_ts = 10 ;
-  int64 uncompressed_bytes =
-      11;  // Estimated uncompressed size of tablet in bytes
+  bool readOnly = 9; // If true, do not ask zero to serve any tablets.
+  uint64 moveTs = 10;
+  int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
 }
 
 message DirectedEdge {

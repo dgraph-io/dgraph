@@ -79,6 +79,7 @@ type Server struct {
 	blockCommitsOn *sync.Map
 
 	checkpointPerGroup map[uint32]uint64
+	// embedding the pb.UnimplementedZeroServer struct to ensure forward compatibility of the server.
 	pb.UnimplementedZeroServer
 }
 

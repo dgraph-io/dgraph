@@ -657,13 +657,7 @@ func (tl *threadLocal) toBackupKey(key []byte) ([]byte, error) {
 }
 
 func writeKVList(list *bpb.KVList, w io.Writer) error {
-	size := proto.Size(list)
-
-	// Ensure the size is non-negative and fits within uint64 bounds
-	if size < 0 {
-		return fmt.Errorf("proto.Size returned a negative value: %d", size)
-	}
-	if err := binary.Write(w, binary.LittleEndian, uint64(size)); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, uint64(proto.Size(list))); err != nil {
 		return err
 	}
 	buf, err := proto.Marshal(list)
