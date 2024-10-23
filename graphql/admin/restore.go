@@ -117,6 +117,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 }
 
 func restore(ctx context.Context, m schema.Mutation, req pb.RestoreRequest) (*resolve.Resolved, bool) {
+	pb.Redact(req.ProtoReflect().Interface())
 	wg := &sync.WaitGroup{}
 	if err := worker.ProcessRestoreRequest(context.Background(), &req, wg); err != nil {
 		glog.Warningf("error processing restore request: %+v, err: %v", req, err)

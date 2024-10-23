@@ -90,6 +90,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
+	// return errors.Errorf("restore request cannot be nil")
 	if req == nil {
 		return errors.Errorf("restore request cannot be nil")
 	}

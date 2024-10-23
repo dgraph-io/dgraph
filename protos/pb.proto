@@ -211,14 +211,14 @@ message HealthInfo {
 }
 
 message Tablet {
-  uint32 group_id = 1;
+  uint32 groupId = 1;
   string predicate = 2;
   bool force = 3;  // Used while moving predicate.
-  int64 on_disk_bytes = 7;
+  int64 OnDiskBytes = 7;
   bool remove = 8;
-  bool read_only = 9;
+  bool ReadOnly = 9;
   uint64 move_ts = 10 ;
-  int64 uncompressed_bytes =
+  int64 UncompressedBytes =
       11;  // Estimated uncompressed size of tablet in bytes
 }
 
