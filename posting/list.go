@@ -1881,12 +1881,16 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	var pitr pIterator
 	err = pitr.seek(l, uid-1, 0)
 	if err != nil {
-		return false, nil, errors.Wrapf(err, fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
+		return false, nil, errors.Wrapf(
+			err,
+			fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
 	}
 
 	valid, err := pitr.valid()
 	if err != nil {
-		return false, nil, errors.Wrapf(err, fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
+		return false, nil, errors.Wrapf(
+			err,
+			fmt.Sprintf("cannot initialize iterator when calling List.iterate %s", l.mutationMap.print()))
 	}
 	if valid {
 		pp := pitr.posting()
