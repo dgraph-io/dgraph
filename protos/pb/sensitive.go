@@ -16,11 +16,24 @@
 
 package pb
 
-// Sensitive implements the Stringer interface to redact its contents.
-// Use this type for sensitive info such as keys, passwords, or secrets
-// so it doesn't leak as output such as logs.
-type Sensitive string
+import (
+	"google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+)
 
-func (Sensitive) String() string {
-	return "****"
+// Redact replaces sensitive string fields with "****"
+func Redact(pb proto.Message) {
+	m := pb.ProtoReflect()
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		// Check for custom option indicating sensitivity
+		opts := fd.Options().(*descriptorpb.FieldOptions)
+		if proto.GetExtension(opts, E_DataSensitive).(bool) {
+			// If the field is a string type, replace the value with "****"
+			if fd.Kind() == protoreflect.StringKind {
+				m.Set(fd, protoreflect.ValueOfString("****"))
+			}
+		}
+		return true
+	})
 }

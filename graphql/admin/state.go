@@ -1,12 +1,11 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgraph/v24/edgraph"
 	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
@@ -44,9 +43,8 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	}
 
 	// unmarshal it back to MembershipState proto in order to map to graphql response
-	u := jsonpb.Unmarshaler{}
 	var ms pb.MembershipState
-	err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
+	err = protojson.Unmarshal(resp.GetJson(), &ms)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}

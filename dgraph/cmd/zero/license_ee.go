@@ -22,8 +22,8 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v24/ee/audit"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"

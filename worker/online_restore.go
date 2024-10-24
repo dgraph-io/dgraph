@@ -24,10 +24,10 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
@@ -90,6 +90,7 @@ func VerifyBackup(req *pb.RestoreRequest, creds *x.MinioCredentials, currentGrou
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest, wg *sync.WaitGroup) error {
+	// return errors.Errorf("restore request cannot be nil")
 	if req == nil {
 		return errors.Errorf("restore request cannot be nil")
 	}
