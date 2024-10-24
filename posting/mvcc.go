@@ -495,8 +495,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				}
 				pl.CommitTs = item.Version()
 				if l.mutationMap == nil {
-					l.mutationMap = newMutableMap()
+					l.mutationMap = newMutableLayer()
 					l.mutationMap.length = 0
+					l.mutationMap.deleteAllMarker = 0
 				}
 				l.mutationMap.insertOldPosting(pl)
 				return nil

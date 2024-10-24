@@ -710,7 +710,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 					}
 					pl.CommitTs = item.Version()
 					if l.mutationMap == nil {
-						l.mutationMap = newMutableMap()
+						l.mutationMap = newMutableLayer()
 					}
 					l.mutationMap.insertOldPosting(pl)
 					return nil
