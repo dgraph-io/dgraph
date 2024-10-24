@@ -143,7 +143,7 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr erro
 func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vc.delegate.startTs)
 
-	if value == nil {
+	if value == nil || len(value.Postings) == 0 {
 		return nil, ErrNoValue
 	}
 
@@ -312,8 +312,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		}
 	} else {
 		pl = &List{
-			key:   key,
-			plist: new(pb.PostingList),
+			key:         key,
+			plist:       new(pb.PostingList),
+			mutationMap: newMutableLayer(),
 		}
 	}
 
@@ -336,6 +337,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 		pl := &pb.PostingList{}
 		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+			//fmt.Println("GETTING FROM DELTAS")
 			err := pl.Unmarshal(delta)
 			lc.RUnlock()
 			return pl, err
@@ -356,6 +358,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		// If both pl and err are empty, that means that there was no data in local cache, hence we should
 		// read the data from badger.
 		if pl != nil || err != nil {
+			//fmt.Println("GETTING POSTING1", lc.startTs, pl)
 			return pl, err
 		}
 
@@ -372,6 +375,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 			return pl.Unmarshal(val)
 		})
 
+		//fmt.Println("GETTING POSTING FROM BADGER", lc.startTs, pl)
 		return pl, err
 	}
 
@@ -395,6 +399,8 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
+	//pk, _ := x.Parse([]byte(key))
+	//fmt.Println("====Getting single posting", lc.startTs, pk, pl.Postings)
 	return pl, nil
 }
 
