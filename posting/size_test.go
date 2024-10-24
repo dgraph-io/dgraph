@@ -52,7 +52,7 @@ var (
 func BenchmarkPostingList(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		list = &List{}
-		list.mutationMap = newMutableMap()
+		list.mutationMap = newMutableLayer()
 	}
 }
 
@@ -82,7 +82,7 @@ func BenchmarkFacet(b *testing.B) {
 
 func TestPostingListCalculation(t *testing.T) {
 	list = &List{}
-	list.mutationMap = newMutableMap()
+	list.mutationMap = newMutableLayer()
 	// 144 is obtained from BenchmarkPostingList
 	require.Equal(t, uint64(144), list.DeepSize())
 }
@@ -134,7 +134,7 @@ func PopulateList(l *List, t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
-		l.mutationMap.oldList[i] = pl.plist
+		l.mutationMap.commitedEntries[i] = pl.plist
 		i++
 	}
 }
@@ -147,7 +147,7 @@ func Test21MillionDataSet(t *testing.T) {
 		return
 	}
 	l := &List{}
-	l.mutationMap = newMutableMap()
+	l.mutationMap = newMutableLayer()
 	PopulateList(l, t)
 	// GC unwanted memory.
 	runtime.GC()
