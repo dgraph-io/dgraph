@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
@@ -100,21 +101,23 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 }
 
 func BenchmarkTestCache(b *testing.B) {
-	//lCache, _ = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
-	//	// Use 5% of cache memory for storing counters.
-	//	NumCounters: int64(1000 * (1 << 20) * 0.05 * 2),
-	//	MaxCost:     int64(1000 * (1 << 20) * 0.95),
-	//	BufferItems: 64,
-	//	Metrics:     true,
-	//	Cost: func(val *List) int64 {
-	//		return 0
-	//	},
-	//})
+	lCache, _ = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(1000 * (1 << 20) * 0.05 * 2),
+		MaxCost:     int64(1000 * (1 << 20) * 0.95),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val *List) int64 {
+			return 0
+		},
+	})
 
 	attr := x.GalaxyAttr("cache")
 	keys := make([][]byte, 0)
 	N := 10000
 	txn := Oracle().RegisterStartTs(1)
+
+	memoryLayer.insert = 100000000
 
 	for i := 1; i < N; i++ {
 		key := x.DataKey(attr, uint64(i))
