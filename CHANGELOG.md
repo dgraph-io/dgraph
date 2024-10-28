@@ -3,6 +3,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
+## [v24.0.4] - 2024-10-08
+[v24.0.4]: https://github.com/dgraph-io/dgraph/compare/v24.0.2...v24.0.4
+
+### Fixed
+
+- **Vector**
+
+  - fix(vector): fixed euclidean spelling and a bug in parameters (#9165)
+  - fix(vector): fix index rebuild when options change (#9149)
+
+- **Core**
+
+  - fix(core): update latest badger (#9169)
+  - fix(core): Update error msg for txn too old to give more context(#9170)
+  - fix(core): fix sampling rate of jaeger #9147 (#9147)
+  - fix(core): add the posting list risteretto cache back (#9181)
+  - fix(multi-tenancy): upsert groot for namespace after drop data (#9159)
+  - feat(core): use /v24 in the import (#9131)
+  - fix(DQL): unsupported ordering should raise an error (#9173)
+  - fix(tests): add explicit permissions for Trivy scan(#9130)
+  - feat(core): Expose APIs that can be used outside Dgraph (#9176)
+
+- **GraphQL**
+
+  - feat(graphql): adds @default directive to graphql (#8017)(#8837)
+
+- **Chore**
+  - upgrade dgo to v240.0.0 (#9154)
+  - chore(): add Dependabot version bumps (#9132)
+  - chore(deps): bump actions/labeler from 4 to 5 (#9134)
+  - chore(deps): bump golangci/golangci-lint-action from 4 to 6 (#9133)
+  - chore(deps): bump docker/login-action from 2 to 3 (#9135)
+  - chore(deps): bump actions/upload-artifact from 3 to 4 (#9136)
+  - chore(deps): bump github.com/spf13/cobra from 1.7.0 to 1.8.1 (#9139)
+  - chore(deps): bump github.com/bits-and-blooms/bitset from 1.13.0 to 1.14.2 (#9140)
+  - chore(deps): bump github.com/prometheus/client_golang from 1.20.1 to 1.20.2 (#9142)
+  - chore(deps): bump golang.org/x/mod from 0.20.0 to 0.21.0 (#9157)
+  - chore(deps): bump golang.org/x/text from 0.17.0 to 0.18.0 (#9156)
+  - chore(deps): bump github.com/dgraph-io/dgo/v240 from 240.0.0-rc1 to 240.0.0 (#9155)
+  - chore: Upgrade go.mod dependencies, fix jose v2 vulnerability, upgrade jemalloc (#9158)
+  - chore(deps): bump google.golang.org/grpc from 1.66.0 to 1.66.1 (#9163)
+  - chore(deps): bump google.golang.org/grpc from 1.65.0 to 1.66.0 (#9152)
+  - chore(deps): bump github.com/Masterminds/semver/v3 from 3.2.1 to 3.3.0 (#9151)
+  - chore(deps): bump github.com/docker/docker from 27.1.2+incompatible to 27.2.0+incompatible (#9150)
+  - chore(deps): bump the minor-and-patch group across 1 directory with 2 updates (#9174)
+  - chore(deps): bump github.com/docker/docker from 24.0.5+incompatible to 25.0.6+incompatible (#9123)
+  - chore(deps): bump the minor-and-patch group with 2 updates (#9178)
+  - chore(deps): bump google.golang.org/grpc from 1.67.0 to 1.67.1 in the minor-and-patch group (#9178)
 
 ## [v24.0.2] - 2024-08-16
 [v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.1...v24.0.2
