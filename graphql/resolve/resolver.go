@@ -326,7 +326,7 @@ func NewResolverFactory(
 	}
 }
 
-// entitiesCompletion transform the result of the `_entities` query.
+// entitiesQueryCompletion transform the result of the `_entities` query.
 // It changes the order of the result to the order of keyField in the
 // `_representations` argument.
 func entitiesQueryCompletion(ctx context.Context, resolved *Resolved) {

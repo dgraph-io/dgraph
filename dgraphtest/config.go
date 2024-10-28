@@ -156,7 +156,7 @@ func NewClusterConfig() ClusterConfig {
 //	return cc
 //}
 
-// WithNAlphas sets the number of alphas in the cluster
+// WithNumAlphas sets the number of alphas in the cluster
 func (cc ClusterConfig) WithNumAlphas(n int) ClusterConfig {
 	cc.numAlphas = n
 	return cc
@@ -174,7 +174,7 @@ func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 	return cc
 }
 
-// WithVerbsity sets the verbosity level for the logs
+// WithVerbosity sets the verbosity level for the logs
 func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
 	cc.verbosity = v
 	return cc
