@@ -555,6 +555,10 @@ func (l *List) getPosting(startTs uint64) *pb.PostingList {
 	return nil
 }
 
+func (l *List) GetPosting(startTs uint64) *pb.PostingList {
+	return l.getPosting(startTs)
+}
+
 // getMutation returns a marshaled version of posting list mutation stored internally.
 func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
@@ -817,6 +821,10 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
+func (l *List) GetLength(readTs uint64) (int, bool, *pb.Posting) {
+	return l.getPostingAndLengthNoSort(readTs, 0, 0)
+}
+
 func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
 
@@ -841,7 +849,6 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 				} else {
 					length -= 1
 				}
-
 			}
 		}
 	}

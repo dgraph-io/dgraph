@@ -236,6 +236,10 @@ type countParams struct {
 	reverse     bool
 }
 
+func shouldAddEdge(found bool, edge *pb.DirectedEdge) bool {
+	return (found && edge.Op == pb.DirectedEdge_DEL) || (!found && edge.Op != pb.DirectedEdge_DEL)
+}
+
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
@@ -245,12 +249,14 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	defer plist.Unlock()
 	if hasCountIndex {
 		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
-		if countBefore == -1 {
+		if countBefore < 0 {
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
-	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
-		return emptyCountParams, err
+	if shouldAddEdge(found, edge) {
+		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
+			return emptyCountParams, err
+		}
 	}
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, edge.Op)
@@ -534,8 +540,10 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	if err = l.addMutationInternal(ctx, txn, t); err != nil {
-		return val, found, emptyCountParams, err
+	if !(hasCountIndex && !shouldAddEdge(found, t)) {
+		if err = l.addMutationInternal(ctx, txn, t); err != nil {
+			return val, found, emptyCountParams, err
+		}
 	}
 
 	if found && doUpdateIndex {

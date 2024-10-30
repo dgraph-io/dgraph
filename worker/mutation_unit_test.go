@@ -17,15 +17,57 @@
 package worker
 
 import (
+	"context"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/v24/posting"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
 	"github.com/dgraph-io/dgraph/v24/types"
 	"github.com/dgraph-io/dgraph/v24/x"
 )
+
+func TestReverseEdge(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	// Not using posting list cache
+	posting.Init(ps, 0)
+	Init(ps)
+	err = schema.ParseBytes([]byte("revc: [uid] @reverse @count ."), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("revc")
+
+	edge := &pb.DirectedEdge{
+		ValueId: 2,
+		Attr:    attr,
+		Entity:  1,
+		Op:      pb.DirectedEdge_DEL,
+	}
+
+	x.Check(runMutation(ctx, edge, txn))
+	x.Check(runMutation(ctx, edge, txn))
+
+	pl, err := txn.Get(x.DataKey(attr, 1))
+	require.NoError(t, err)
+	pl.RLock()
+	c, _, _ := pl.GetLength(5)
+	pl.RUnlock()
+	require.Equal(t, c, 0)
+}
 
 func TestConvertEdgeType(t *testing.T) {
 	var testEdges = []struct {
