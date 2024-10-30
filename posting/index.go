@@ -253,7 +253,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
-	if shouldAddEdge(found, edge) {
+	if !(hasCountIndex && !shouldAddEdge(found, edge)) {
 		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 			return emptyCountParams, err
 		}
@@ -467,7 +467,7 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 }
 
 func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
-	if !found && op == pb.DirectedEdge_SET {
+	if !found && op != pb.DirectedEdge_DEL {
 		return countBefore + 1
 	} else if found && op == pb.DirectedEdge_DEL {
 		return countBefore - 1
