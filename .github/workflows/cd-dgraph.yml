@@ -74,6 +74,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
+          name: dgraph-build-amd
           path: |
             badger/badger-checksum-linux-amd64.sha256
             badger/badger-linux-amd64.tar.gz
@@ -156,6 +157,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
+          name: dgraph-build-arm
           path: |
             badger/badger-checksum-linux-arm64.sha256
             badger/badger-linux-arm64.tar.gz
