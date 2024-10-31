@@ -55,10 +55,12 @@ var (
 )
 
 const (
-	// Set means overwrite in mutation layer. It contributes 0 in Length.
+	// Set means set in mutation layer. It contributes 1 in Length.
 	Set uint32 = 0x01
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
+	// Ovr means overwrite in mutation layer. It contributes 0 in Length.
+	Ovr uint32 = 0x03
 
 	// BitSchemaPosting signals that the value stores a schema or type.
 	BitSchemaPosting byte = 0x01
@@ -342,7 +344,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
-	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	x.AssertTrue(mpost.Op == Set || mpost.Op == Del || mpost.Op == Ovr)
 
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
@@ -531,7 +533,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
+		pk.IsData() && mpost.Op != Del && mpost.PostingType == pb.Posting_REF
 
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
@@ -844,7 +846,7 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 					continue
 				}
 				if mpost.Uid == uid {
-					found = (mpost.Op == Set)
+					found = (mpost.Op != Del)
 				}
 				if mpost.Op == Set {
 					length += 1

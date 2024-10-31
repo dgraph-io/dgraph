@@ -236,11 +236,16 @@ type countParams struct {
 	reverse     bool
 }
 
-func updateEdge(found bool, edge *pb.DirectedEdge) bool {
+// When we want to update count edges, we should set them with OVR instead of SET as SET will mess with count
+func shouldAllCountEdge(found bool, edge *pb.DirectedEdge) bool {
 	if found {
-		edge.Op = pb.DirectedEdge_OVR
+		if edge.Op != pb.DirectedEdge_DEL {
+			edge.Op = pb.DirectedEdge_OVR
+		}
+		return true
+	} else {
+		return edge.Op != pb.DirectedEdge_DEL
 	}
-	return true
 }
 
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
@@ -256,7 +261,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
-	if !(hasCountIndex && !updateEdge(found, edge)) {
+	if !(hasCountIndex && !shouldAllCountEdge(found, edge)) {
 		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 			return emptyCountParams, err
 		}
@@ -543,7 +548,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	if !(hasCountIndex && !updateEdge(found, t)) {
+	if !(hasCountIndex && !shouldAllCountEdge(found, t)) {
 		if err = l.addMutationInternal(ctx, txn, t); err != nil {
 			return val, found, emptyCountParams, err
 		}
