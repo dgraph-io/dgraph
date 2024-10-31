@@ -166,7 +166,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		//       that we care about just data[0].
 		//       Similarly, the current assumption is that we have at most one
 		//       Vector Index, but this assumption may break later.
-		if info.op == pb.DirectedEdge_SET &&
+		if info.op != pb.DirectedEdge_DEL &&
 			len(data) > 0 && data[0].Tid == types.VFloatID &&
 			len(info.factorySpecs) > 0 {
 			// retrieve vector from inUuid save as inVec
@@ -236,8 +236,11 @@ type countParams struct {
 	reverse     bool
 }
 
-func shouldAddEdge(found bool, edge *pb.DirectedEdge) bool {
-	return (found && edge.Op == pb.DirectedEdge_DEL) || (!found && edge.Op != pb.DirectedEdge_DEL)
+func updateEdge(found bool, edge *pb.DirectedEdge) bool {
+	if found {
+		edge.Op = pb.DirectedEdge_OVR
+	}
+	return true
 }
 
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
@@ -253,7 +256,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
-	if !(hasCountIndex && !shouldAddEdge(found, edge)) {
+	if !(hasCountIndex && !updateEdge(found, edge)) {
 		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 			return emptyCountParams, err
 		}
@@ -320,7 +323,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	// entries for this key in the index are removed.
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
+		t.Op != pb.DirectedEdge_DEL && t.ValueId != 0
 	if isSingleUidUpdate {
 		dataKey := x.DataKey(t.Attr, t.Entity)
 		dataList, err := getFn(dataKey)
@@ -540,7 +543,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	if !(hasCountIndex && !shouldAddEdge(found, t)) {
+	if !(hasCountIndex && !updateEdge(found, t)) {
 		if err = l.addMutationInternal(ctx, txn, t); err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -607,7 +610,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				return err
 			}
 		}
-		if edge.Op == pb.DirectedEdge_SET {
+		if edge.Op != pb.DirectedEdge_DEL {
 			val = types.Val{
 				Tid:   types.TypeID(edge.ValueType),
 				Value: edge.Value,

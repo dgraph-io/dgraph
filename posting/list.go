@@ -305,6 +305,8 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	switch t.Op {
 	case pb.DirectedEdge_SET:
 		op = Set
+	case pb.DirectedEdge_OVR:
+		op = Set
 	case pb.DirectedEdge_DEL:
 		op = Del
 	default:
@@ -846,7 +848,7 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 				}
 				if mpost.Op == Set {
 					length += 1
-				} else {
+				} else if mpost.Op == Del {
 					length -= 1
 				}
 			}
