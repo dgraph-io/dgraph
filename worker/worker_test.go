@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -308,6 +309,46 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	require.JSONEq(t, `{
 		  "q": [
 		    { "uid": "0xc" }
+		  ]
+		}`,
+		string(resp.Json),
+	)
+}
+
+func TestCountReverseWithDeletes(t *testing.T) {
+	schemaStr := "friend: [uid] @reverse @count ."
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	testutil.DropAll(t, dg)
+
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{Schema: schemaStr}))
+
+	n := 100
+	for i := 0; i < 1000; i++ {
+		node := rand.Intn(n-1) + 2
+		if i%2 == 0 {
+			setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> <%#x> .", 1, node))
+		} else {
+			delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> <%#x> .", 1, node))
+		}
+	}
+
+	for i := 2; i <= n; i++ {
+		delClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> <%#x> .", 1, i))
+	}
+	setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> <%#x> .", 1, 2))
+
+	resp, err := runQuery(dg, "friend", []uint64{1}, nil)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		  "q": [
+		    {
+		      "friend": [
+		        { "uid": "0x2" }
+		      ]
+		    }
 		  ]
 		}`,
 		string(resp.Json),

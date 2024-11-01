@@ -68,7 +68,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 	su, ok := schema.State().Get(ctx, edge.Attr)
-	if edge.Op == pb.DirectedEdge_SET {
+	if edge.Op != pb.DirectedEdge_DEL {
 		if !ok {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}

@@ -55,10 +55,12 @@ var (
 )
 
 const (
-	// Set means overwrite in mutation layer. It contributes 0 in Length.
+	// Set means set in mutation layer. It contributes 1 in Length.
 	Set uint32 = 0x01
 	// Del means delete in mutation layer. It contributes -1 in Length.
 	Del uint32 = 0x02
+	// Ovr means overwrite in mutation layer. It contributes 0 in Length.
+	Ovr uint32 = 0x03
 
 	// BitSchemaPosting signals that the value stores a schema or type.
 	BitSchemaPosting byte = 0x01
@@ -305,6 +307,8 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	switch t.Op {
 	case pb.DirectedEdge_SET:
 		op = Set
+	case pb.DirectedEdge_OVR:
+		op = Set
 	case pb.DirectedEdge_DEL:
 		op = Del
 	default:
@@ -340,7 +344,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
 func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
-	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
+	x.AssertTrue(mpost.Op == Set || mpost.Op == Del || mpost.Op == Ovr)
 
 	// If we have a delete all, then we replace the map entry with just one.
 	if hasDeleteAll(mpost) {
@@ -529,7 +533,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
+		pk.IsData() && mpost.Op != Del && mpost.PostingType == pb.Posting_REF
 
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
@@ -553,6 +557,10 @@ func (l *List) getPosting(startTs uint64) *pb.PostingList {
 		return pl
 	}
 	return nil
+}
+
+func (l *List) GetPosting(startTs uint64) *pb.PostingList {
+	return l.getPosting(startTs)
 }
 
 // getMutation returns a marshaled version of posting list mutation stored internally.
@@ -817,6 +825,10 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
+func (l *List) GetLength(readTs uint64) (int, bool, *pb.Posting) {
+	return l.getPostingAndLengthNoSort(readTs, 0, 0)
+}
+
 func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
 
@@ -824,24 +836,29 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 	uids := dec.Seek(uid, codec.SeekStart)
 	length := codec.ExactLen(l.plist.Pack)
 	found := len(uids) > 0 && uids[0] == uid
+	found_ts := uint64(0)
 
 	for _, plist := range l.mutationMap {
 		for _, mpost := range plist.Postings {
+			ts := mpost.CommitTs
+			if mpost.StartTs == readTs {
+				ts = mpost.StartTs
+			}
 			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
 				if hasDeleteAll(mpost) {
 					found = false
 					length = 0
 					continue
 				}
-				if mpost.Uid == uid {
-					found = (mpost.Op == Set)
+				if mpost.Uid == uid && found_ts < ts {
+					found = (mpost.Op != Del)
+					found_ts = ts
 				}
 				if mpost.Op == Set {
 					length += 1
-				} else {
+				} else if mpost.Op == Del {
 					length -= 1
 				}
-
 			}
 		}
 	}
