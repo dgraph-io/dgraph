@@ -836,17 +836,23 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 	uids := dec.Seek(uid, codec.SeekStart)
 	length := codec.ExactLen(l.plist.Pack)
 	found := len(uids) > 0 && uids[0] == uid
+	found_ts := uint64(0)
 
 	for _, plist := range l.mutationMap {
 		for _, mpost := range plist.Postings {
+			ts := mpost.CommitTs
+			if mpost.StartTs == readTs {
+				ts = mpost.StartTs
+			}
 			if (mpost.CommitTs > 0 && mpost.CommitTs <= readTs) || (mpost.StartTs == readTs) {
 				if hasDeleteAll(mpost) {
 					found = false
 					length = 0
 					continue
 				}
-				if mpost.Uid == uid {
+				if mpost.Uid == uid && found_ts < ts {
 					found = (mpost.Op != Del)
+					found_ts = ts
 				}
 				if mpost.Op == Set {
 					length += 1
