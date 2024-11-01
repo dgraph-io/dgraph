@@ -233,6 +233,18 @@ type countParams struct {
 	reverse     bool
 }
 
+// When we want to update count edges, we should set them with OVR instead of SET as SET will mess with count
+func shouldAddCountEdge(found bool, edge *pb.DirectedEdge) bool {
+	if found {
+		if edge.Op != pb.DirectedEdge_DEL {
+			edge.Op = pb.DirectedEdge_OVR
+		}
+		return true
+	} else {
+		return edge.Op != pb.DirectedEdge_DEL
+	}
+}
+
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
@@ -242,12 +254,14 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	defer plist.Unlock()
 	if hasCountIndex {
 		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
-		if countBefore == -1 {
+		if countBefore < 0 {
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
-	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
-		return emptyCountParams, err
+	if !(hasCountIndex && !shouldAddCountEdge(found, edge)) {
+		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
+			return emptyCountParams, err
+		}
 	}
 	if hasCountIndex {
 		countAfter = countAfterMutation(countBefore, found, edge.Op)
@@ -311,7 +325,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	// entries for this key in the index are removed.
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
+		t.Op != pb.DirectedEdge_DEL && t.ValueId != 0
 	if isSingleUidUpdate {
 		dataKey := x.DataKey(t.Attr, t.Entity)
 		dataList, err := getFn(dataKey)
@@ -458,7 +472,7 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 }
 
 func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
-	if !found && op == pb.DirectedEdge_SET {
+	if !found && op != pb.DirectedEdge_DEL {
 		return countBefore + 1
 	} else if found && op == pb.DirectedEdge_DEL {
 		return countBefore - 1
@@ -531,8 +545,10 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		}
 	}
 
-	if err = l.addMutationInternal(ctx, txn, t); err != nil {
-		return val, found, emptyCountParams, err
+	if !(hasCountIndex && !shouldAddCountEdge(found && currPost.Op != Del, t)) {
+		if err = l.addMutationInternal(ctx, txn, t); err != nil {
+			return val, found, emptyCountParams, err
+		}
 	}
 
 	if found && doUpdateIndex {
@@ -596,7 +612,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				return err
 			}
 		}
-		if edge.Op == pb.DirectedEdge_SET {
+		if edge.Op != pb.DirectedEdge_DEL {
 			val = types.Val{
 				Tid:   types.TypeID(edge.ValueType),
 				Value: edge.Value,
@@ -895,15 +911,13 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	var txn *Txn
-
 	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
 	//TODO We need to create a single transaction irrespective of the type of the predicate
 	if pred.ValueType == pb.Posting_VFLOAT {
-		txn = NewTxn(r.startTs)
+		x.AssertTrue(false)
 	}
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -923,44 +937,25 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, errors.Wrapf(err, "error reading posting list from disk")
 		}
 
-		// We are using different transactions in each call to KeyToList function. This could
-		// be a problem for computing reverse count indexes if deltas for same key are added
-		// in different transactions. Such a case doesn't occur for now.
-		// TODO: Maybe we can always use txn initialized in rebuilder.Run().
-		streamTxn := txn
-		if streamTxn == nil {
-			streamTxn = NewTxn(r.startTs)
-		}
-		edges, err := r.fn(pk.Uid, l, streamTxn)
+		kvs, err := l.Rollup(nil, r.startTs)
 		if err != nil {
 			return nil, err
 		}
 
-		if txn != nil {
-			kvs := make([]*bpb.KV, 0, len(edges))
-			for _, edge := range edges {
-				version := atomic.AddUint64(&counter, 1)
-				key := x.DataKey(edge.Attr, edge.Entity)
-				pl, err := txn.GetFromDelta(key)
-				if err != nil {
-					return &bpb.KVList{}, nil
-				}
-				data := pl.getMutation(r.startTs)
-				kv := bpb.KV{
-					Key:      x.DataKey(edge.Attr, edge.Entity),
-					Value:    data,
-					UserMeta: []byte{BitDeltaPosting},
-					Version:  version,
-				}
-				kvs = append(kvs, &kv)
-			}
-			return &bpb.KVList{Kv: kvs}, nil
+		for _, kv := range kvs {
+			version := atomic.AddUint64(&counter, 1)
+			kv.Version = version
+		}
+
+		streamTxn := NewTxn(r.startTs)
+		_, err = r.fn(pk.Uid, l, streamTxn)
+		if err != nil {
+			return nil, err
 		}
 
 		// Convert data into deltas.
 		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		kvs := make([]*bpb.KV, 0, len(streamTxn.cache.deltas))
 		for key, data := range streamTxn.cache.deltas {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{

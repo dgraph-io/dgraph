@@ -555,6 +555,10 @@ func PostingListCacheEnabled() bool {
 	return lCache != nil
 }
 
+func GetNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	return getNew(key, pstore, readTs)
+}
+
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if PostingListCacheEnabled() {
 		l, ok := lCache.Get(key)
