@@ -549,6 +549,14 @@ func (r *remoteExportStorage) OpenFile(fileName string) (*ExportWriter, error) {
 }
 
 func (r *remoteExportStorage) FinishWriting(w *Writers) (ExportedFiles, error) {
+
+	defer func() {
+		glog.Infof("Deleting temporary export directory %s\n", r.les.destination)
+		if err := os.RemoveAll(r.les.destination); err != nil {
+			glog.Errorf("error deleting temporary export directory: %w", err)
+		}
+	}()
+
 	files, err := r.les.FinishWriting(w)
 	if err != nil {
 		return nil, err
