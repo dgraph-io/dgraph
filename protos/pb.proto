@@ -237,6 +237,7 @@ message DirectedEdge {
   enum Op {
     SET = 0;
     DEL = 1;
+    OVR = 2;
   }
   Op op = 8;
   repeated api.Facet facets = 9;

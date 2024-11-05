@@ -533,7 +533,10 @@ func lookup(db *badger.DB) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Fprintf(&buf, " Length: %d", pl.Length(math.MaxUint64, 0))
+		pl.RLock()
+		c, _, _ := pl.GetLength(math.MaxUint64)
+		pl.RUnlock()
+		fmt.Fprintf(&buf, " Length: %d", c)
 
 		splits := pl.PartSplits()
 		isMultiPart := len(splits) > 0
@@ -611,6 +614,13 @@ func printKeys(db *badger.DB) {
 		}
 
 		var sz, deltaCount int64
+		pl, err := posting.GetNew(key, db, opt.readTs)
+		if err == nil {
+			pl.RLock()
+			c, _, _ := pl.GetLength(math.MaxUint64)
+			fmt.Fprintf(&buf, " countValue: [%d]", c)
+			pl.RUnlock()
+		}
 	LOOP:
 		for ; itr.ValidForPrefix(prefix); itr.Next() {
 			item := itr.Item()
