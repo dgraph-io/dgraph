@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
+
+## [v24.0.5] - 2024-11-05
+[v24.0.5]: https://github.com/dgraph-io/dgraph/compare/v24.0.4...v24.0.5
+
+### Fixed
+
+- **Core**
+  - fix(core): fix duplicate mutation entries for count index (#9208)
+
+- **Chore**
+  - Update cd-dgraph.yml to create unique artifacts (#9194)
+
 ## [v24.0.4] - 2024-10-08
 [v24.0.4]: https://github.com/dgraph-io/dgraph/compare/v24.0.2...v24.0.4
 
