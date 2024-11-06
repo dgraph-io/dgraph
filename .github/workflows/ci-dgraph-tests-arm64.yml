@@ -15,7 +15,7 @@ on:
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-arm64-16x
+    runs-on: warp-ubuntu-latest-arm64-4x
     steps:
       - uses: actions/checkout@v4
       - name: Get Go Version
