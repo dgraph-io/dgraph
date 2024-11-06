@@ -1,29 +1,14 @@
 name: ci-golang-lint
 on:
   pull_request:
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
       - opened
       - reopened
       - synchronize
       - ready_for_review
-    paths-ignore:
-      - '.github/CODEOWNERS'
-      - '.vscode/**'
-      - 'compose/**'
-      - 'contrib/systemd/**'
-      - 'licenses/**'
-      - 'paper/**'
-      - 'present/**'
-      - 'RFC/**'
-      - 'static/**'
-      - 'wiki/**'
-      - '**/**.dockerignore'
-      - '**/**.gitignore'
-      - '**/**.md'
-      - '**/**.png'
-      - '**/**.jpg'
-      - '**/**.gif'
-      - '**/**.ini'
     branches:
       - main
       - 'release/**'
@@ -50,5 +35,4 @@ jobs:
           version: latest
           only-new-issues: true
           args: --timeout=10m
-          skip-pkg-cache: true
-          skip-build-cache: true
+          skip-cache: true

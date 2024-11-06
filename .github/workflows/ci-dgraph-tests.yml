@@ -1,32 +1,17 @@
 name: ci-dgraph-tests
 on:
   pull_request:
-    paths-ignore:
-    - '.github/CODEOWNERS'
-    - '.vscode/**'
-    - 'compose/**'
-    - 'contrib/systemd/**'
-    - 'licenses/**'
-    - 'paper/**'
-    - 'present/**'
-    - 'RFC/**'
-    - 'static/**'
-    - 'wiki/**'
-    - '**/**.dockerignore'
-    - '**/**.gitignore'
-    - '**/**.md'
-    - '**/**.png'
-    - '**/**.jpg'
-    - '**/**.gif'
-    - '**/**.ini'
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
-    - opened
-    - reopened
-    - synchronize
-    - ready_for_review
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     branches:
-    - main
-    - 'release/**'
+      - main
+      - 'release/**'
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false

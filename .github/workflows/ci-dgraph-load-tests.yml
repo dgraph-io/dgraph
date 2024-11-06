@@ -1,29 +1,14 @@
 name: ci-dgraph-load-tests
 on:
   pull_request:
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
       - opened
       - reopened
       - synchronize
       - ready_for_review
-    paths-ignore:
-      - '.github/CODEOWNERS'
-      - '.vscode/**'
-      - 'compose/**'
-      - 'contrib/systemd/**'
-      - 'licenses/**'
-      - 'paper/**'
-      - 'present/**'
-      - 'RFC/**'
-      - 'static/**'
-      - 'wiki/**'
-      - '**/**.dockerignore'
-      - '**/**.gitignore'
-      - '**/**.md'
-      - '**/**.png'
-      - '**/**.jpg'
-      - '**/**.gif'
-      - '**/**.ini'
     branches:
       - main
       - 'release/**'

@@ -1,6 +1,9 @@
 name: ci-dgraph-upgrade-tests
 on:
   pull_request:
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
       - opened
       - reopened

@@ -1,6 +1,9 @@
 name: ci-dgraph-integration2-tests
 on:
   pull_request:
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
       - opened
       - reopened

@@ -1,24 +1,9 @@
 name: ci-dgraph-ldbc-tests
 on:
   pull_request:
-    paths-ignore:
-      - '.github/CODEOWNERS'
-      - '.vscode/**'
-      - 'compose/**'
-      - 'contrib/systemd/**'
-      - 'licenses/**'
-      - 'paper/**'
-      - 'present/**'
-      - 'RFC/**'
-      - 'static/**'
-      - 'wiki/**'
-      - '**/**.dockerignore'
-      - '**/**.gitignore'
-      - '**/**.md'
-      - '**/**.png'
-      - '**/**.jpg'
-      - '**/**.gif'
-      - '**/**.ini'
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
     types:
       - opened
       - reopened
