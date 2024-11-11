@@ -6,7 +6,7 @@ package x
 import (
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 func MonitorDiskMetrics(_ string, _ string, lc *z.Closer) {

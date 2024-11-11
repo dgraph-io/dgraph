@@ -23,7 +23,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 var (
