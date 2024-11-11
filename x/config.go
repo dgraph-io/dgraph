@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // Options stores the options for this package.

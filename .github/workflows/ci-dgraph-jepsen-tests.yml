@@ -16,11 +16,6 @@ jobs:
           repository: dgraph-io/jepsen
           path: jepsen
           ref: master
-      - name: Get go version
-        run: |
-          #!/bin/bash
-          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
-          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set jepsen root
         run: |
           #!/bin/bash
@@ -30,7 +25,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GOVERSION }}
+          go-version-file: go.mod
       - name: Make dgraph linux build
         run: make install
       - name: Start jepsen cluster
@@ -49,5 +44,3 @@ jobs:
           #!/bin/bash
           cd contrib/jepsen
           ./jepsen --jepsen-root ${{ env.JEPSEN_ROOT }} --down-only
-
-          

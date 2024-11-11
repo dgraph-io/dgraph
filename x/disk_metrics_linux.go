@@ -14,7 +14,7 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {

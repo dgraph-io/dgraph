@@ -54,7 +54,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/types"
 	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/dgraph/v24/xidmap"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 type options struct {

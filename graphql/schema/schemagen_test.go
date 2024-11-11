@@ -30,7 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 type Tests map[string][]TestCase
