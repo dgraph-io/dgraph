@@ -62,7 +62,7 @@ import (
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // Error constants representing different types of errors.

@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/ee/audit"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // proposeTrialLicense proposes an enterprise license valid for 30 days.

@@ -25,7 +25,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/v24/dgraph/cmd"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 func main() {

@@ -1,6 +1,8 @@
 module github.com/dgraph-io/dgraph/v24
 
-go 1.22.6
+go 1.22.0
+
+toolchain go1.23.2
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
@@ -11,12 +13,12 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/bits-and-blooms/bitset v1.14.3
 	github.com/blevesearch/bleve/v2 v2.4.2
-	github.com/dgraph-io/badger/v4 v4.3.1
-	github.com/dgraph-io/dgo/v240 v240.0.0
+	github.com/dgraph-io/badger/v4 v4.4.0
+	github.com/dgraph-io/dgo/v240 v240.0.1
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
-	github.com/dgraph-io/ristretto v1.0.0
+	github.com/dgraph-io/ristretto/v2 v2.0.0
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20230630160417-2bfb7969fb3c
@@ -117,7 +119,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.10 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect

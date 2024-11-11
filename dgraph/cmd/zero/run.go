@@ -45,7 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/raftwal"
 	"github.com/dgraph-io/dgraph/v24/worker"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 type options struct {

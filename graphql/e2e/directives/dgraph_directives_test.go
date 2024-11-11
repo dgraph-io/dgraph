@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
