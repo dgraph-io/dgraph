@@ -84,7 +84,7 @@ func (sh *StatsHolder) InsertRecord(pred string, key []byte, count uint64) {
 	val.InsertRecord(key, count)
 }
 
-func (sh *StatsHolder) ProcessPredicate(pred string, key []byte) uint64 {
+func (sh *StatsHolder) ProcessEqPredicate(pred string, key []byte) uint64 {
 	sh.RLock()
 	val, ok := sh.predStats[pred]
 	sh.RUnlock()

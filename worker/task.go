@@ -1812,10 +1812,16 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 		return true
 	}
 
+	if uint64(len(uidlist)) < Config.TypeFilterUidLimit && checkUidEmpty(uidlist) {
+		fc.tokens = fc.tokens[:0]
+		fc.n = len(uidlist)
+		return
+	}
+
 	estimatedCount := uint64(0)
 	gotEstimate := false
 	for _, eqToken := range fc.tokens {
-		count := posting.GlobalStatsHolder.ProcessPredicate(pred, []byte(eqToken))
+		count := posting.GlobalStatsHolder.ProcessEqPredicate(pred, []byte(eqToken))
 		if count != math.MaxUint64 {
 			estimatedCount += count
 			gotEstimate = true
@@ -1828,12 +1834,14 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 		gotEstimate = false
 	}
 
+	// TODO make a different config
 	if gotEstimate && uint64(len(uidlist)) < estimatedCount/Config.TypeFilterUidLimit && checkUidEmpty(uidlist) {
 		fc.tokens = fc.tokens[:0]
 		fc.n = len(uidlist)
-	} else {
-		fc.n = len(fc.tokens)
+		return
 	}
+
+	fc.n = len(fc.tokens)
 }
 
 func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
