@@ -168,8 +168,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		//       Similarly, the current assumption is that we have at most one
 		//       Vector Index, but this assumption may break later.
 		if info.op != pb.DirectedEdge_DEL &&
-			len(data) > 0 && data[0].Tid == types.VFloatID &&
-			len(info.factorySpecs) > 0 {
+			len(data) > 0 && len(info.factorySpecs) > 0 {
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
@@ -1387,6 +1386,62 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
+
+		processAddIndexMutation := func(edge *pb.DirectedEdge, val types.Val) ([]*pb.DirectedEdge, error) {
+			for {
+				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
+					tokenizers:   tokenizers,
+					factorySpecs: factorySpecs,
+					edge:         edge,
+					val:          val,
+					op:           pb.DirectedEdge_SET,
+				})
+				switch err {
+				case ErrRetry:
+					time.Sleep(10 * time.Millisecond)
+				default:
+					return newEdges, err
+				}
+			}
+		}
+
+		if runForVectors {
+			val, err := pl.Value(txn.StartTs)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			if val.Tid != types.VFloatID {
+				sv, err := types.Convert(val, types.VFloatID)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+				b := types.ValueForType(types.BinaryID)
+				if err = types.Marshal(sv, &b); err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+				edge.Value = b.Value.([]byte)
+				edge.ValueType = types.VFloatID.Enum()
+
+				inKey := x.DataKey(edge.Attr, uid)
+				p, err := txn.Get(inKey)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+
+				if err := p.addMutation(ctx, txn, &edge); err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+
+				_, err = processAddIndexMutation(&edge, val)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+
+				return edges, nil
+			}
+		}
+
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			// Add index entries based on p.
 			val := types.Val{
@@ -1395,31 +1450,22 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			}
 			edge.Lang = string(p.LangTag)
 
-			for {
-				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
-					tokenizers:   tokenizers,
-					factorySpecs: factorySpecs,
-					edge:         &edge,
-					val:          val,
-					op:           pb.DirectedEdge_SET,
-				})
-				switch err {
-				case ErrRetry:
-					time.Sleep(10 * time.Millisecond)
-				default:
-					if !runForVectors {
-						edges = append(edges, newEdges...)
-					}
-					return err
-				}
+			newEdges, err := processAddIndexMutation(&edge, val)
+			if err != nil {
+				return err
 			}
+			if !runForVectors {
+				edges = append(edges, newEdges...)
+			}
+			return nil
 		})
 		if err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
-		return edges, err
+		return edges, nil
 	}
-	if len(factorySpecs) != 0 {
+
+	if runForVectors {
 		return builder.RunWithoutTemp(ctx)
 	}
 	return builder.Run(ctx)

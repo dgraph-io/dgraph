@@ -54,7 +54,7 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 500
-	pred := "project_discription_v"
+	pred := "project_description_v"
 	allVectors := make([][][]float32, 0, 5)
 	allRdfs := make([]string, 0, 5)
 	for i := 1; i <= 5; i++ {
@@ -78,7 +78,7 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
 		require.NoError(t, dgraphapi.WaitForRestore(c))
 		query := `{
-			vector(func: has(project_discription_v)) {
+			vector(func: has(project_description_v)) {
 				   count(uid)
 				}
 		}`
@@ -131,7 +131,7 @@ func TestVectorBackupRestore(t *testing.T) {
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 1000
-	pred := "project_discription_v"
+	pred := "project_description_v"
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
@@ -171,7 +171,7 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	require.NoError(t, gc.SetupSchema(testSchema))
 	// add data to the vector predicate
 	numVectors := 3
-	pred := "project_discription_v"
+	pred := "project_description_v"
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 1, pred)
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
@@ -216,7 +216,7 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	require.NoError(t, dgraphapi.WaitForRestore(c))
 
 	query := ` {
-		vectors(func: has(project_discription_v)) {
+		vectors(func: has(project_description_v)) {
 			   count(uid)
 			 }
 		}`
@@ -258,7 +258,7 @@ func TestVectorBackupRestoreReIndexing(t *testing.T) {
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 1000
-	pred := "project_discription_v"
+	pred := "project_description_v"
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
