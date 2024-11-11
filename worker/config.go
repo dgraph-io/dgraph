@@ -78,7 +78,7 @@ type Options struct {
 	// vs searched via type index. If the number of elements are too low, then querying the
 	// index might be slower. This would allow people to set their limit according to
 	// their use case.
-	TypeFilterUidLimit int64
+	TypeFilterUidLimit uint64
 }
 
 // Config holds an instance of the server options..

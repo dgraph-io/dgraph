@@ -249,6 +249,42 @@ func runQuery(dg *dgo.Dgraph, attr string, uids []uint64, srcFunc []string) (*ap
 	return resp, err
 }
 
+func BenchmarkEqFilter(b *testing.B) {
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		panic(err)
+	}
+	err = dg.Alter(context.Background(), &api.Operation{DropAll: true})
+	if err != nil {
+		panic(err)
+	}
+
+	n := 10000
+	for i := 0; i < n; i++ {
+		rdf := fmt.Sprintf("<%#x> <dgraph.type> \"abc\" .", i+1)
+		mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
+		err := testutil.RetryMutation(dg, mu)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		query := `
+		{
+			q(func: uid(1, 2)) @filter(type(abc)) {
+				uid
+			}
+		}
+		`
+		_, err := testutil.RetryQuery(dg, query)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
 // Index-related test. Similar to TestProcessTaskIndex but we call MergeLists only
 // at the end. In other words, everything is happening only in mutation layers,
 // and not committed to BadgerDB until near the end.
