@@ -77,8 +77,8 @@ type Person struct {
 type Product struct {
 	Uid           string `json:"uid,omitempty"`
 	Name          string `json:"name"`
-	Discription   string `json:"discription"`
-	Discription_v string `json:"discription_v"`
+	Description   string `json:"description"`
+	Description_v string `json:"description_v"`
 }
 
 func Parse(b []byte, op int) ([]*api.NQuad, error) {
@@ -1406,7 +1406,7 @@ func TestNquadsJsonEmptyStringVectorPred(t *testing.T) {
 	p := Product{
 		Uid:           "1",
 		Name:          "",
-		Discription_v: "",
+		Description_v: "",
 	}
 
 	b, err := json.Marshal([]Product{p})
@@ -1420,16 +1420,16 @@ func TestNquadsJsonEmptyStringVectorPred(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(fastNQ))
 
-	// predicate Name should be empty and edge for Discription_v should not be there
+	// predicate Name should be empty and edge for Description_v should not be there
 	// we do not create edge for "" in float32vector.
 	exp := &Experiment{
 		t:   t,
 		nqs: nq,
 		schema: `name: string @index(exact) .
-		discription_v: float32vector .`,
+		description_v: float32vector .`,
 		query: `{product(func: uid(1)) {
 			name
-			discription_v
+			description_v
 		}}`,
 		expected: `{"product":[{
 			"name":""}]}`,
@@ -1443,7 +1443,7 @@ func TestNquadsJsonEmptyStringVectorPred(t *testing.T) {
 func TestNquadsJsonEmptySquareBracketVectorPred(t *testing.T) {
 	p := Product{
 		Name:          "ipad",
-		Discription_v: "[]",
+		Description_v: "[]",
 	}
 
 	b, err := json.Marshal(p)
@@ -1457,16 +1457,16 @@ func TestNquadsJsonEmptySquareBracketVectorPred(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(fastNQ))
 
-	// predicate Name should have value "ipad" and edge for Discription_v should not be there
+	// predicate Name should have value "ipad" and edge for Description_v should not be there
 	// we do not create edge for [] in float32vector.
 	exp := &Experiment{
 		t:   t,
 		nqs: nq,
 		schema: `name: string @index(exact) .
-		discription_v: float32vector .`,
+		description_v: float32vector .`,
 		query: `{product(func: eq(name, "ipad")) {
 			name
-			discription_v
+			description_v
 		}}`,
 		expected: `{"product":[{
 			"name":"ipad"}]}`,
@@ -1480,7 +1480,7 @@ func TestNquadsJsonEmptySquareBracketVectorPred(t *testing.T) {
 func TestNquadsJsonValidVector(t *testing.T) {
 	p := Product{
 		Name:          "ipad",
-		Discription_v: "[1.1, 2.2, 3.3]",
+		Description_v: "[1.1, 2.2, 3.3]",
 	}
 
 	b, err := json.Marshal(p)
@@ -1498,14 +1498,14 @@ func TestNquadsJsonValidVector(t *testing.T) {
 		t:   t,
 		nqs: nq,
 		schema: `name: string @index(exact) .
-		discription_v: float32vector .`,
+		description_v: float32vector .`,
 		query: `{product(func: eq(name, "ipad")) {
 			name
-			discription_v
+			description_v
 		}}`,
 		expected: `{"product":[{
 			"name":"ipad",
-			"discription_v":[1.1, 2.2, 3.3]}]}`,
+			"description_v":[1.1, 2.2, 3.3]}]}`,
 	}
 	exp.verify()
 

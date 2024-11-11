@@ -90,7 +90,7 @@ func UnmarshalVectorResp(resp *api.Response) ([][]float32, error) {
 	type Data struct {
 		Vector []struct {
 			UID                 string    `json:"uid"`
-			ProjectDescriptionV []float32 `json:"project_discription_v"`
+			ProjectDescriptionV []float32 `json:"project_description_v"`
 		} `json:"vector"`
 	}
 	var data Data
