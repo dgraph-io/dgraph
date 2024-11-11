@@ -45,6 +45,7 @@ var (
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB, cacheSize int64) {
+	GlobalStatsHolder = NewStatsHolder()
 	pstore = ps
 	closer = z.NewCloser(1)
 	go x.MonitorMemoryMetrics(closer)
