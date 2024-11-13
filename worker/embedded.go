@@ -7,6 +7,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/conn"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/schema"
+	"github.com/golang/glog"
 )
 
 func InitForLite(ps *badger.DB) {
@@ -30,18 +31,37 @@ func ApplyCommited(ctx context.Context, delta *pb.OracleDelta) error {
 	return groups().Node.commitOrAbort(1, delta)
 }
 
-func ApplyInitialSchema() error {
-	for _, su := range schema.InitialSchema(0) {
-		if err := updateSchema(su, 1); err != nil {
+func ApplyInitialSchema(ns, ts uint64) error {
+	for _, su := range schema.InitialSchema(ns) {
+		if err := updateSchema(su, ts); err != nil {
 			return err
 		}
 	}
-	gr.applyInitialTypes()
+	applyInitialTypes(ns, ts)
 	return nil
+}
+
+func applyInitialTypes(ns, ts uint64) {
+	initialTypes := schema.InitialTypes(ns)
+	for _, t := range initialTypes {
+		if _, ok := schema.State().GetType(t.TypeName); ok {
+			continue
+		}
+		// It is okay to write initial types at ts=1.
+		if err := updateType(t.GetTypeName(), *t, ts); err != nil {
+			glog.Errorf("Error while applying initial type: %s", err)
+		}
+	}
 }
 
 func SetMaxUID(uid uint64) {
 	groups().Lock()
 	defer groups().Unlock()
 	groups().state.MaxUID = uid
+}
+
+func SetMaxNsID(nsId uint64) {
+	groups().Lock()
+	defer groups().Unlock()
+	groups().state.MaxNsID = nsId
 }

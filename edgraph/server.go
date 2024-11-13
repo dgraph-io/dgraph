@@ -358,7 +358,7 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 // then restoring from the incremental backup of such a DB would restore even the dropped
 // data back. This is also used to capture the delete namespace operation during backup.
 func InsertDropRecord(ctx context.Context, dropOp string) error {
-	_, err := (&Server{}).doQuery(context.WithValue(ctx, IsGraphql, true), &Request{
+	_, err := (&Server{}).DoQuery(context.WithValue(ctx, IsGraphql, true), &Request{
 		req: &api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
@@ -1209,7 +1209,7 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 		}
 	}
 	// no need to attach namespace here, it is already done by GraphQL layer
-	return s.doQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+	return s.DoQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
@@ -1247,7 +1247,7 @@ func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Respon
 			defer cancel()
 		}
 	}
-	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
+	return s.DoQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
 var pendingQueries int64
@@ -1258,7 +1258,7 @@ func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
 }
 
-func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
+func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

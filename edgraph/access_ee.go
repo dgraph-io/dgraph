@@ -314,7 +314,7 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		},
 		doAuth: NoAuthorize,
 	}
-	queryResp, err := (&Server{}).doQuery(ctx, req)
+	queryResp, err := (&Server{}).DoQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -337,7 +337,7 @@ func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
 	}
 
 	ctx = x.AttachNamespace(ctx, ns)
-	queryResp, err := (&Server{}).doQuery(ctx, req)
+	queryResp, err := (&Server{}).DoQuery(ctx, req)
 	if err != nil {
 		return errors.Errorf("unable to retrieve acls: %v", err)
 	}
@@ -495,7 +495,7 @@ func upsertGuardian(ctx context.Context) error {
 		doAuth: NoAuthorize,
 	}
 
-	resp, err := (&Server{}).doQuery(ctx, req)
+	resp, err := (&Server{}).DoQuery(ctx, req)
 
 	// Structs to parse guardians group uid from query response
 	type groupNode struct {
@@ -572,7 +572,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 		doAuth: NoAuthorize,
 	}
 
-	resp, err := (&Server{}).doQuery(ctx, req)
+	resp, err := (&Server{}).DoQuery(ctx, req)
 	if err != nil {
 		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 	}
