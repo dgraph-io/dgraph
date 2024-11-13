@@ -308,11 +308,11 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		"$password": password,
 	}
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			Query: queryUser,
 			Vars:  queryVars,
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 	queryResp, err := (&Server{}).DoQuery(ctx, req)
 	if err != nil {
@@ -328,12 +328,12 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 
 func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
 			StartTs:  refreshTs,
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 
 	ctx = x.AttachNamespace(ctx, ns)
@@ -482,7 +482,7 @@ func upsertGuardian(ctx context.Context) error {
 		`, x.GuardiansId)
 	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			CommitNow: true,
 			Query:     query,
 			Mutations: []*api.Mutation{
@@ -492,7 +492,7 @@ func upsertGuardian(ctx context.Context) error {
 				},
 			},
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 
 	resp, err := (&Server{}).DoQuery(ctx, req)
@@ -558,7 +558,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 		ObjectId:  "uid(guid)",
 	})
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			CommitNow: true,
 			Query:     query,
 			Mutations: []*api.Mutation{
@@ -569,7 +569,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 				},
 			},
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 
 	resp, err := (&Server{}).DoQuery(ctx, req)

@@ -359,7 +359,7 @@ func parseSchemaFromAlterOperation(ctx context.Context, op *api.Operation) (
 // data back. This is also used to capture the delete namespace operation during backup.
 func InsertDropRecord(ctx context.Context, dropOp string) error {
 	_, err := (&Server{}).DoQuery(context.WithValue(ctx, IsGraphql, true), &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			Mutations: []*api.Mutation{{
 				Set: []*api.NQuad{{
 					Subject:     "_:r",
@@ -368,7 +368,7 @@ func InsertDropRecord(ctx context.Context, dropOp string) error {
 				}},
 			}},
 			CommitNow: true,
-		}, doAuth: NoAuthorize})
+		}, DoAuth: NoAuthorize})
 	return err
 }
 
@@ -1083,12 +1083,12 @@ type queryContext struct {
 // Request represents a query request sent to the doQuery() method on the Server.
 // It contains all the metadata required to execute a query.
 type Request struct {
-	// req is the incoming gRPC request
-	req *api.Request
-	// gqlField is the GraphQL field for which the request is being sent
-	gqlField gqlSchema.Field
-	// doAuth tells whether this request needs ACL authorization or not
-	doAuth AuthMode
+	// Req is the incoming gRPC request
+	Req *api.Request
+	// GqlField is the GraphQL field for which the request is being sent
+	GqlField gqlSchema.Field
+	// DoAuth tells whether this request needs ACL authorization or not
+	DoAuth AuthMode
 }
 
 // Health handles /health and /health?all requests.
@@ -1209,7 +1209,7 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 		}
 	}
 	// no need to attach namespace here, it is already done by GraphQL layer
-	return s.DoQuery(ctx, &Request{req: req, gqlField: field, doAuth: getAuthMode(ctx)})
+	return s.DoQuery(ctx, &Request{Req: req, GqlField: field, DoAuth: getAuthMode(ctx)})
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
@@ -1247,7 +1247,7 @@ func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Respon
 			defer cancel()
 		}
 	}
-	return s.DoQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
+	return s.DoQuery(ctx, &Request{Req: req, DoAuth: getAuthMode(ctx)})
 }
 
 var pendingQueries int64
@@ -1282,7 +1282,7 @@ func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response,
 	// 	glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
 	// }
 
-	isMutation := len(req.req.Mutations) > 0
+	isMutation := len(req.Req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
 		methodRequest = methodMutate
@@ -1311,15 +1311,15 @@ func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response,
 		return
 	}
 
-	req.req.Query = strings.TrimSpace(req.req.Query)
-	isQuery := len(req.req.Query) != 0
+	req.Req.Query = strings.TrimSpace(req.Req.Query)
+	isQuery := len(req.Req.Query) != 0
 	if !isQuery && !isMutation {
 		span.Annotate(nil, "empty request")
 		return nil, errors.Errorf("empty request")
 	}
 
-	span.AddAttributes(otrace.StringAttribute("Query", req.req.Query))
-	span.Annotatef(nil, "Request received: %v", req.req)
+	span.AddAttributes(otrace.StringAttribute("Query", req.Req.Query))
+	span.Annotatef(nil, "Request received: %v", req.Req)
 	if isQuery {
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
@@ -1330,7 +1330,7 @@ func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response,
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
+	if req.DoAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
 		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
@@ -1341,17 +1341,17 @@ func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response,
 	}
 
 	qc := &queryContext{
-		req:      req.req,
+		req:      req.Req,
 		latency:  l,
 		span:     span,
 		graphql:  isGraphQL,
-		gqlField: req.gqlField,
+		gqlField: req.GqlField,
 	}
 	if rerr = parseRequest(ctx, qc); rerr != nil {
 		return
 	}
 
-	if req.doAuth == NeedAuthorize {
+	if req.DoAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
 		}
@@ -1361,9 +1361,9 @@ func (s *Server) DoQuery(ctx context.Context, req *Request) (resp *api.Response,
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.req.StartTs == 0 {
+	if isMutation && req.Req.StartTs == 0 {
 		start := time.Now()
-		req.req.StartTs = worker.State.GetTimestamp(false)
+		req.Req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 	if x.WorkerConfig.AclEnabled {

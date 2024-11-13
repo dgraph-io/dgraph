@@ -51,7 +51,7 @@ func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) err
 		},
 	}
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			CommitNow: true,
 			Query:     query,
 			Mutations: []*api.Mutation{
@@ -61,7 +61,7 @@ func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) err
 				},
 			},
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 	ctx = x.AttachNamespace(ctx, inp.Namespace)
 	resp, err := (&Server{}).DoQuery(ctx, req)

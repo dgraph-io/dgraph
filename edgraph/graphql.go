@@ -71,12 +71,12 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		"$join": join,
 	}
 	req := &Request{
-		req: &api.Request{
+		Req: &api.Request{
 			Query:    queryForSHA,
 			Vars:     variables,
 			ReadOnly: true,
 		},
-		doAuth: NoAuthorize,
+		DoAuth: NoAuthorize,
 	}
 	storedQuery, err := (&Server{}).DoQuery(ctx, req)
 
@@ -109,7 +109,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		}
 
 		req = &Request{
-			req: &api.Request{
+			Req: &api.Request{
 				Mutations: []*api.Mutation{
 					{
 						Set: []*api.NQuad{
@@ -129,7 +129,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 				},
 				CommitNow: true,
 			},
-			doAuth: NoAuthorize,
+			DoAuth: NoAuthorize,
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
