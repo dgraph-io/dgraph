@@ -1,7 +1,8 @@
 module github.com/dgraph-io/dgraph/v24
 
-go 1.22.6
-toolchain go1.22.9
+go 1.22.7
+
+toolchain go1.23.2
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
