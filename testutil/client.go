@@ -208,7 +208,7 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 	} else {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	conn, err := grpc.Dial(serviceAddr, dialOpts...)
+	conn, err := grpc.NewClient(serviceAddr, dialOpts...)
 	if err != nil {
 		return nil, err
 	}
