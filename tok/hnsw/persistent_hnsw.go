@@ -45,7 +45,7 @@ type persistentHNSW[T c.Float] struct {
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for uuid 65443. The result will be a neighboring uuid.
 	nodeAllEdges map[uint64][][]uint64
-	visitedUids  bitset.BitSet
+	visitedUids  *bitset.BitSet
 	deadNodes    map[uint64]struct{}
 }
 
@@ -366,7 +366,7 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	start := time.Now().UnixMilli()
 	r = index.NewSearchPathResult()
 
-	ph.visitedUids.ClearAll()
+	ph.visitedUids = bitset.New(10)
 
 	// 0-profile_vector_entry
 	var startVec []T
@@ -451,7 +451,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	inLevel := getInsertLayer(ph.maxLevels) // calculate layer to insert node at (randomized every time)
 	var layerErr error
 
-	ph.visitedUids.ClearAll()
+	ph.visitedUids = bitset.New(10)
 
 	for level := 0; level < inLevel; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
