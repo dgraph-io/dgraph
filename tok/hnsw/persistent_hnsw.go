@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bits-and-blooms/bitset"
 	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 	"github.com/dgraph-io/dgraph/v24/tok/index"
 	opt "github.com/dgraph-io/dgraph/v24/tok/options"
@@ -45,7 +44,6 @@ type persistentHNSW[T c.Float] struct {
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for uuid 65443. The result will be a neighboring uuid.
 	nodeAllEdges map[uint64][][]uint64
-	visitedUids  *bitset.BitSet
 	deadNodes    map[uint64]struct{}
 }
 
@@ -215,9 +213,6 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		var eVec []T
 		improved := false
 		for _, currUid := range allLayerEdges[level] {
-			if ph.visitedUids.Test(uint(currUid)) {
-				continue
-			}
 			if r.indexVisited(currUid) {
 				continue
 			}
@@ -238,7 +233,6 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 				currDist, currUid, filteredOut)
 			r.addToVisited(*currElement)
 			r.incrementDistanceComputations()
-			ph.visitedUids.Set(uint(currUid))
 
 			// If we have not yet found k candidates, we can consider
 			// any candidate. Otherwise, only consider those that
@@ -366,8 +360,6 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	start := time.Now().UnixMilli()
 	r = index.NewSearchPathResult()
 
-	ph.visitedUids = bitset.New(10)
-
 	// 0-profile_vector_entry
 	var startVec []T
 	entry, err := ph.PickStartNode(ctx, c, &startVec)
@@ -450,8 +442,6 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	visited := []minPersistentHeapElement[T]{}
 	inLevel := getInsertLayer(ph.maxLevels) // calculate layer to insert node at (randomized every time)
 	var layerErr error
-
-	ph.visitedUids = bitset.New(10)
 
 	for level := 0; level < inLevel; level++ {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
