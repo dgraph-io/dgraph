@@ -326,5 +326,12 @@ jobs:
                  docker manifest push dgraph/dgraph:latest
               fi
             fi
+      # Cleanup artifacts
+      - name: Cleanup Docker Artifacts 
+        run: |
+             rm -f dgraph-docker-amd64.tar
+             rm -f dgraph-docker-arm64.tar
+             rm -rf dgraph-standalone-amd64.tar
+             rm -rf dgraph-standalone-arm64.tar
 
 
