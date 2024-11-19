@@ -116,7 +116,7 @@ jobs:
         if: inputs.custom-build == false
         uses: actions/upload-artifact@v4
         with:
-          name: dgraph-docker-standalone-amd64
+          name: dgraph-standalone-amd64
           path: dgraph-standalone-amd64.tar
 
   dgraph-build-arm64:
@@ -219,7 +219,7 @@ jobs:
         if: inputs.custom-build == false
         uses: actions/upload-artifact@v4
         with:
-          name: dgraph-docker-standalone-arm64
+          name: dgraph-standalone-arm64
           path: dgraph-standalone-arm64.tar
   dgraph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
@@ -265,10 +265,38 @@ jobs:
         run: |
           docker load -i dgraph-docker-amd64.tar
 
-      # Load ARM64 Image
+      # Load Dgraph ARM64 Image
       - name: Load ARM64 Docker Image
         run: |
           docker load -i dgraph-docker-arm64.tar
+      
+      # Download Standalone AMD64 Tar File
+      - name: Download Standalone AMD64 Tar
+        if: inputs.custom-build == false
+        uses: actions/download-artifact@v4
+        with:
+          name: dgraph-standalone-amd64
+
+      # Load Standalone AMD64 Image
+      - name: Load Standalone AMD64 Docker Image
+        if: inputs.custom-build == false
+        run: |
+          docker load -i dgraph-standalone-amd64.tar
+      
+      # Download Standalone ARM64 Tar File
+      - name: Download Standalone ARM64 Tar
+        if: inputs.custom-build == false
+        uses: actions/download-artifact@v4
+        with:
+          name: dgraph-standalone-arm64
+
+      # Load Standalone ARM64 Image
+      - name: Load Standalone ARM64 Docker Image
+        if: inputs.custom-build == false
+        run: |
+          docker load -i dgraph-standalone-arm64.tar
+      
+      
       - name: Docker Manifest
         run: |
             if [ "${{ github.event.inputs.custom-build }}" == "true" ]; then
