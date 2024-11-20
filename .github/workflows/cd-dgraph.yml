@@ -97,11 +97,13 @@ jobs:
                 dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 \
                 $( [[ "${{ inputs.latest }}" = true ]] && echo "dgraph/dgraph:latest-amd64" ) \
                $( [[ "${{ inputs.custom-build }}" = true ]] && echo "dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64" )
-      - name: Upload AMD64 Docker Image
-        uses: actions/upload-artifact@v4
+      - #Cacheing Intermediate docker images instead of uploading
+        name: Cache AMD64 Docker Image
+        uses: actions/cache@v3
         with:
-          name: dgraph-docker-amd64
-          path: dgraph-docker-amd64.tar
+          path: |
+            dgraph-docker-amd64.tar
+          key: dgraph-${{ env.DGRAPH_RELEASE_VERSION }}-amd64
       - name: Make Dgraph Standalone Docker Image with Version
         #No need to build and push Standalone Image when its a custom build
         if: inputs.custom-build == false
@@ -112,12 +114,14 @@ jobs:
           docker save -o dgraph-standalone-amd64.tar \
                 dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 \
                 $( [[ "${{ inputs.latest }}" = true ]] && echo "dgraph/standalone:latest-amd64" )
-      - name: Upload AMD64 Standalone Image
+      - name: Cache AMD64 Standalone Image
         if: inputs.custom-build == false
-        uses: actions/upload-artifact@v4
+        uses: actions/cache@v3
         with:
-          name: dgraph-standalone-amd64
-          path: dgraph-standalone-amd64.tar
+          path: |
+            dgraph-standalone-amd64.tar
+          key: dgraph-standalone-${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+        
 
   dgraph-build-arm64:
     runs-on: warp-ubuntu-latest-arm64-16x
@@ -200,11 +204,12 @@ jobs:
                 dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 \
                 $( [[ "${{ inputs.latest }}" = true ]] && echo "dgraph/dgraph:latest-arm64" ) \
                $( [[ "${{ inputs.custom-build }}" = true ]] && echo "dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64" )
-      - name: Upload ARM64 Docker Image
-        uses: actions/upload-artifact@v4
+      - name: Cache ARM64 Docker Image
+        uses: actions/cache@v3
         with:
-          name: dgraph-docker-arm64
-          path: dgraph-docker-arm64.tar
+          path: |
+            dgraph-docker-arm64.tar
+          key: dgraph-${{ env.DGRAPH_RELEASE_VERSION }}-arm64
       - name: Make Dgraph Standalone Docker Image with Version
          #No need to build and push Standalone Image when its a custom build
         if: inputs.custom-build == false
@@ -215,12 +220,13 @@ jobs:
           docker save -o dgraph-standalone-arm64.tar \
                 dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64 \
                 $( [[ "${{ inputs.latest }}" = true ]] && echo "dgraph/standalone:latest-arm64" )
-      - name: Upload ARM64 Standalone Image
+      - name: Cache ARM64 Standalone Image
         if: inputs.custom-build == false
-        uses: actions/upload-artifact@v4
+        uses: actions/cache@v3
         with:
-          name: dgraph-standalone-arm64
-          path: dgraph-standalone-arm64.tar
+          path: |
+            dgraph-standalone-arm64.tar
+          key: dgraph-standalone-${{ env.DGRAPH_RELEASE_VERSION }}-arm64
   dgraph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
     runs-on: warp-ubuntu-latest-x64-16x
@@ -248,54 +254,38 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
         
-          # Download AMD64 Tar File
-      - name: Download Dgraph AMD64 Tar
-        uses: actions/download-artifact@v4
+        # Restore Dgraph AMD64 Tar File
+      - name: Download AMD64 Tar
+        uses: actions/cache@v3
         with:
-          name: dgraph-docker-amd64
+          path: dgraph-docker-amd64.tar
+          key: dgraph-${{ github.event.inputs.releasetag }}-amd64
 
-      # Download Dgraph ARM64 Tar File
+      # Restore Dgraph ARM64 Tar File
       - name: Download ARM64 Tar
-        uses: actions/download-artifact@v4
+        uses: actions/cache@v3
         with:
-          name: dgraph-docker-arm64
+          path: dgraph-docker-arm64.tar
+          key: dgraph-${{ github.event.inputs.releasetag }}-arm64
 
-      # Load Dgraph AMD64 Image
-      - name: Load AMD64 Docker Image
-        run: |
-          docker load -i dgraph-docker-amd64.tar
-
-      # Load Dgraph ARM64 Image
-      - name: Load ARM64 Docker Image
-        run: |
-          docker load -i dgraph-docker-arm64.tar
+    
       
-      # Download Standalone AMD64 Tar File
-      - name: Download Standalone AMD64 Tar
+      # Restore Standalone AMD64 Tar File
+      - name: Restore Standalone AMD64 Tar
         if: inputs.custom-build == false
-        uses: actions/download-artifact@v4
+        uses: actions/cache@v3
         with:
-          name: dgraph-standalone-amd64
-
-      # Load Standalone AMD64 Image
-      - name: Load Standalone AMD64 Docker Image
-        if: inputs.custom-build == false
-        run: |
-          docker load -i dgraph-standalone-amd64.tar
+          path: dgraph-standalone-amd64.tar
+          key: dgraph-standalone-${{ github.event.inputs.releasetag }}-amd64
       
-      # Download Standalone ARM64 Tar File
-      - name: Download Standalone ARM64 Tar
+      # Restore Standalone ARM64 Tar File
+      - name: Restore Standalone ARM64 Tar
         if: inputs.custom-build == false
-        uses: actions/download-artifact@v4
+        uses: actions/cache@v3
         with:
-          name: dgraph-standalone-arm64
-
-      # Load Standalone ARM64 Image
-      - name: Load Standalone ARM64 Docker Image
-        if: inputs.custom-build == false
-        run: |
-          docker load -i dgraph-standalone-arm64.tar
-      
+          path: dgraph-standalone-arm64.tar
+          key: dgraph-standalone-${{ github.event.inputs.releasetag }}-arm64
+  
       
       - name: Docker Manifest
         run: |
@@ -333,5 +323,3 @@ jobs:
              rm -f dgraph-docker-arm64.tar
              rm -rf dgraph-standalone-amd64.tar
              rm -rf dgraph-standalone-arm64.tar
-
-
