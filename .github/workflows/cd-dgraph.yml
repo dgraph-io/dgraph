@@ -103,7 +103,7 @@ jobs:
         with:
           path: |
             dgraph-docker-amd64.tar
-          key: dgraph-${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+          key: ${{ env.DGRAPH_RELEASE_VERSION }}-amd64
       - name: Make Dgraph Standalone Docker Image with Version
         #No need to build and push Standalone Image when its a custom build
         if: inputs.custom-build == false
@@ -209,7 +209,7 @@ jobs:
         with:
           path: |
             dgraph-docker-arm64.tar
-          key: dgraph-${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+          key: ${{ env.DGRAPH_RELEASE_VERSION }}-arm64
       - name: Make Dgraph Standalone Docker Image with Version
          #No need to build and push Standalone Image when its a custom build
         if: inputs.custom-build == false
@@ -259,14 +259,14 @@ jobs:
         uses: actions/cache@v3
         with:
           path: dgraph-docker-amd64.tar
-          key: dgraph-${{ github.event.inputs.releasetag }}-amd64
+          key: ${{ github.event.inputs.releasetag }}-amd64
 
       # Restore Dgraph ARM64 Tar File
       - name: Download ARM64 Tar
         uses: actions/cache@v3
         with:
           path: dgraph-docker-arm64.tar
-          key: dgraph-${{ github.event.inputs.releasetag }}-arm64
+          key: ${{ github.event.inputs.releasetag }}-arm64
 
     
       
