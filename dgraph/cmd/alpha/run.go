@@ -460,6 +460,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
+		tlsCfg.NextProtos = []string{"h2"}
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
