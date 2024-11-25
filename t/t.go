@@ -265,8 +265,49 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 	}()
 }
 
-func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v", "-tags=integration"}
+func mergeXMLFiles(outputFile string, files []string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("no files to merge")
+	}
+
+	finalFile, err := os.Create(outputFile)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %v", err)
+	}
+	defer finalFile.Close()
+
+	finalFile.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+	finalFile.WriteString(`<testsuites>`)
+
+	for _, file := range files {
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			log.Printf("Skipping missing file: %s\n", file)
+			continue
+		}
+
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %v", file, err)
+		}
+
+		// Extract the <testsuite> element from the file and append it
+		parts := strings.SplitN(string(content), "<testsuite", 2)
+		if len(parts) > 1 {
+			finalFile.WriteString("<testsuite" + parts[1])
+		}
+	}
+
+	finalFile.WriteString(`</testsuites>`)
+	return nil
+}
+
+func sanitizeFilename(pkg string) string {
+	return strings.ReplaceAll(pkg, "/", "_")
+}
+
+func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
+	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
+		"-v", "-failfast", "-tags=integration"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
@@ -394,6 +435,27 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	ctx := closer.Ctx()
 	ctx = context.WithValue(ctx, _threadIdKey{}, threadId)
 
+	tmpDir, err := os.MkdirTemp("", "dgraph-test-xml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			log.Printf("Failed to remove temporary directory %s: %v", tmpDir, err)
+		}
+	}()
+
+	var xmlFiles []string
+
+	defer func() {
+		finalXMLFile := filepath.Join("./", "test-results.xml")
+		if err := mergeXMLFiles(finalXMLFile, xmlFiles); err != nil {
+			log.Printf("Error merging XML files: %v\n", err)
+		} else {
+			fmt.Printf("Merged test results into %s\n", finalXMLFile)
+		}
+	}()
+
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -403,20 +465,22 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			continue
 		}
 
+		xmlFile := filepath.Join(tmpDir, sanitizeFilename(task.pkg.ID))
+		xmlFiles = append(xmlFiles, xmlFile) // Add XML file path regardless of success or failure
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
 			start()
-			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
 			}
 		} else {
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
-			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg); cerr != nil {
+			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
 				return cerr
 			}
 		}
@@ -441,7 +505,7 @@ func getClusterPrefix() string {
 }
 
 // for tests that require custom docker-compose file (located in test directory)
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, xmlFile string) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
 	compose := composeFileFor(pkg)
@@ -455,7 +519,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 		defer stopCluster(compose, prefix, wg, err)
 	}
 
-	err = runTestsFor(ctx, pkg, prefix)
+	err = runTestsFor(ctx, pkg, prefix, xmlFile)
 	return err
 }
 
