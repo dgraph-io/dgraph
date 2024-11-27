@@ -18,15 +18,10 @@ jobs:
     runs-on: warp-ubuntu-latest-arm64-4x
     steps:
       - uses: actions/checkout@v4
-      - name: Get Go Version
-        run: |
-          #!/bin/bash
-          GOVERSION=$({ [ -f .go-version ] && cat .go-version; })
-          echo "GOVERSION=$GOVERSION" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GOVERSION }}
+          go-version-file: go.mod
       - name: Install protobuf-compiler
         run: sudo apt update && sudo apt install -y protobuf-compiler
       - name: Check protobuf

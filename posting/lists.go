@@ -28,8 +28,8 @@ import (
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/tok/index"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2"
+	"github.com/dgraph-io/ristretto/v2/z"
 	ostats "go.opencensus.io/stats"
 )
 

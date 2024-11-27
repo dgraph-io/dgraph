@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // dummy function as enterprise features are not available in oss binary.

@@ -18,7 +18,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v24/testutil"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // Opens a badger db and runs a a test on it.

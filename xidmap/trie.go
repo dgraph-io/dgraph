@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 // Trie is an implementation of Ternary Search Tries to store XID to UID map. It uses Arena to

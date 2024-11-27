@@ -61,7 +61,7 @@ import (
 	"github.com/dgraph-io/dgraph/v24/worker"
 	"github.com/dgraph-io/dgraph/v24/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 var (
@@ -460,6 +460,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
+		tlsCfg.NextProtos = []string{"h2"}
 		opt = append(opt, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
