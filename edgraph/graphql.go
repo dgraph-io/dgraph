@@ -71,14 +71,14 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		"$join": join,
 	}
 	req := &Request{
-		Req: &api.Request{
+		req: &api.Request{
 			Query:    queryForSHA,
 			Vars:     variables,
 			ReadOnly: true,
 		},
-		DoAuth: NoAuthorize,
+		doAuth: NoAuthorize,
 	}
-	storedQuery, err := (&Server{}).DoQuery(ctx, req)
+	storedQuery, err := (&Server{}).doQuery(ctx, req)
 
 	if err != nil {
 		glog.Errorf("Error while querying sha %s", sha256Hash)
@@ -109,7 +109,7 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 		}
 
 		req = &Request{
-			Req: &api.Request{
+			req: &api.Request{
 				Mutations: []*api.Mutation{
 					{
 						Set: []*api.NQuad{
@@ -129,11 +129,11 @@ func ProcessPersistedQuery(ctx context.Context, gqlReq *schema.Request) error {
 				},
 				CommitNow: true,
 			},
-			DoAuth: NoAuthorize,
+			doAuth: NoAuthorize,
 		}
 
 		ctx := context.WithValue(ctx, IsGraphql, true)
-		_, err := (&Server{}).DoQuery(ctx, req)
+		_, err := (&Server{}).doQuery(ctx, req)
 		return err
 
 	}

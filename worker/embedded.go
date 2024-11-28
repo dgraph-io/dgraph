@@ -3,11 +3,12 @@ package worker
 import (
 	"context"
 
+	"github.com/golang/glog"
+
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v24/conn"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/schema"
-	"github.com/golang/glog"
 )
 
 func InitForLite(ps *badger.DB) {

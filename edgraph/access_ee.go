@@ -308,13 +308,13 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 		"$password": password,
 	}
 	req := &Request{
-		Req: &api.Request{
+		req: &api.Request{
 			Query: queryUser,
 			Vars:  queryVars,
 		},
-		DoAuth: NoAuthorize,
+		doAuth: NoAuthorize,
 	}
-	queryResp, err := (&Server{}).DoQuery(ctx, req)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		glog.Errorf("Error while query user with id %s: %v", userid, err)
 		return nil, err
@@ -328,16 +328,16 @@ func authorizeUser(ctx context.Context, userid string, password string) (
 
 func refreshAclCache(ctx context.Context, ns, refreshTs uint64) error {
 	req := &Request{
-		Req: &api.Request{
+		req: &api.Request{
 			Query:    queryAcls,
 			ReadOnly: true,
 			StartTs:  refreshTs,
 		},
-		DoAuth: NoAuthorize,
+		doAuth: NoAuthorize,
 	}
 
 	ctx = x.AttachNamespace(ctx, ns)
-	queryResp, err := (&Server{}).DoQuery(ctx, req)
+	queryResp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return errors.Errorf("unable to retrieve acls: %v", err)
 	}
@@ -482,7 +482,7 @@ func upsertGuardian(ctx context.Context) error {
 		`, x.GuardiansId)
 	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
 	req := &Request{
-		Req: &api.Request{
+		req: &api.Request{
 			CommitNow: true,
 			Query:     query,
 			Mutations: []*api.Mutation{
@@ -492,10 +492,10 @@ func upsertGuardian(ctx context.Context) error {
 				},
 			},
 		},
-		DoAuth: NoAuthorize,
+		doAuth: NoAuthorize,
 	}
 
-	resp, err := (&Server{}).DoQuery(ctx, req)
+	resp, err := (&Server{}).doQuery(ctx, req)
 
 	// Structs to parse guardians group uid from query response
 	type groupNode struct {
@@ -558,7 +558,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 		ObjectId:  "uid(guid)",
 	})
 	req := &Request{
-		Req: &api.Request{
+		req: &api.Request{
 			CommitNow: true,
 			Query:     query,
 			Mutations: []*api.Mutation{
@@ -569,10 +569,10 @@ func upsertGroot(ctx context.Context, passwd string) error {
 				},
 			},
 		},
-		DoAuth: NoAuthorize,
+		doAuth: NoAuthorize,
 	}
 
-	resp, err := (&Server{}).DoQuery(ctx, req)
+	resp, err := (&Server{}).doQuery(ctx, req)
 	if err != nil {
 		return errors.Wrapf(err, "while upserting user with id %s", x.GrootId)
 	}
