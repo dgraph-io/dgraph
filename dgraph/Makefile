@@ -36,11 +36,11 @@ endif
 GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
-dgraphVersion   = github.com/dgraph-io/dgraph/x.dgraphVersion
-dgraphCodename  = github.com/dgraph-io/dgraph/x.dgraphCodename
-gitBranch       = github.com/dgraph-io/dgraph/x.gitBranch
-lastCommitSHA   = github.com/dgraph-io/dgraph/x.lastCommitSHA
-lastCommitTime  = github.com/dgraph-io/dgraph/x.lastCommitTime
+dgraphVersion   = github.com/dgraph-io/dgraph/v24/x.dgraphVersion
+dgraphCodename  = github.com/dgraph-io/dgraph/v24/x.dgraphCodename
+gitBranch       = github.com/dgraph-io/dgraph/v24/x.gitBranch
+lastCommitSHA   = github.com/dgraph-io/dgraph/v24/x.lastCommitSHA
+lastCommitTime  = github.com/dgraph-io/dgraph/v24/x.lastCommitTime
 
 BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
 
