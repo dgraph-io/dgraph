@@ -9,7 +9,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.43.3
 	github.com/Masterminds/semver/v3 v3.3.1
-	github.com/bits-and-blooms/bitset v1.15.0
+	github.com/bits-and-blooms/bitset v1.17.0
 	github.com/blevesearch/bleve/v2 v2.4.3
 	github.com/dgraph-io/badger/v4 v4.4.0
 	github.com/dgraph-io/dgo/v240 v240.0.1
@@ -49,7 +49,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/twpayne/go-geom v1.5.7
 	github.com/viterin/vek v0.4.2
 	github.com/xdg/scram v1.0.5
