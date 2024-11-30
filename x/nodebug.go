@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/golang/glog"
 )
 
 // PrintRollup prints information about any rollup that happen
@@ -35,6 +36,9 @@ func PrintMutationEdge(plist *pb.DirectedEdge, key ParsedKey, startTs uint64) {
 
 // PrintOracleDelta prints all delta proposals that are commited
 func PrintOracleDelta(delta *pb.OracleDelta) {
+	for _, status := range delta.Txns {
+		glog.Infof("[TXNLOG] COMMITING: startTs: %v, commitTs: %v", status.StartTs, status.CommitTs)
+	}
 }
 
 // VerifyPack works in debug mode. Check out the comment in debug_on.go

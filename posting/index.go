@@ -457,6 +457,9 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 		Attr:    params.attr,
 		Op:      pb.DirectedEdge_DEL,
 	}
+
+	glog.Infof("[UPDATING COUNT] UID: %+v, Predicate: %s, CountBefore: %d, CountAfter: %d, TS: %d",
+		params.entity, params.attr, params.countBefore, params.countAfter, txn.StartTs)
 	if params.countBefore > 0 {
 		if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
 			params.reverse); err != nil {
