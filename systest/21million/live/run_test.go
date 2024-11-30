@@ -21,6 +21,7 @@ package bulk
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,7 +55,9 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
 	if exitCode != 0 {
-		uploadPDirToS3()
+		now := time.Now().Unix()
+		uploadLogsToS3(now)
+		uploadPDirToS3(now)
 	}
 
 	cleanupAndExit(exitCode)
@@ -65,20 +68,36 @@ func cleanupAndExit(exitCode int) {
 	os.Exit(exitCode)
 }
 
-func uploadPDirToS3() {
-	destFile := fmt.Sprintf("p-%v.tar.gz", time.Now().Unix())
+func uploadLogsToS3(now int64) {
+	log.Printf("getting alpha logs from docker")
+	alphaLogs, err := testutil.GetContainerLogs("alpha1")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile("alpha1-%v.log", alphaLogs, 0644); err != nil {
+		panic(err)
+	}
 
-	glog.Infof("Copying data from alpha1:/data/alpha1/p to %v", destFile)
+	log.Printf("uploading alpha1-%v.log to s3", now)
+	if err := uploadDataToS3(fmt.Sprintf("alpha1-%v.log", now)); err != nil {
+		panic(err)
+	}
+	log.Printf("uploading alpha1-%v.log to s3 completed", now)
+}
+
+func uploadPDirToS3(now int64) {
+	destFile := fmt.Sprintf("p-%v.tar.gz", now)
+
+	log.Printf("copying data from alpha1:/data/alpha1/p to %v", destFile)
 	if err := testutil.CopyPDir("alpha1", "/data/alpha1/p", destFile); err != nil {
 		panic(err)
 	}
 
-	glog.Infof("Uploading %v to S3", destFile)
+	log.Printf("uploading %v to S3", destFile)
 	if err := uploadDataToS3(destFile); err != nil {
 		panic(err)
 	}
-
-	glog.Infof("Uploading %v to S3 completed", destFile)
+	log.Printf("uploading %v to S3 completed", destFile)
 }
 
 func uploadDataToS3(srcFile string) error {

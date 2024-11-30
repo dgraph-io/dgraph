@@ -340,16 +340,48 @@ func CopyPDir(name, srcPath, destPathWithFileName string) error {
 	c := getContainer(name)
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	x.Check(err)
+	if err != nil {
+		return fmt.Errorf("error creating docker client: %v", err)
+	}
 
 	tarStream, _, err := cli.CopyFromContainer(context.Background(), c.ID, srcPath)
 	if err != nil {
-		fmt.Println(err)
-		return nil
+		return fmt.Errorf("error copying from container %s: %v", name, err)
 	}
 
 	data, err := io.ReadAll(tarStream)
-	x.Check(err)
+	if err != nil {
+		return fmt.Errorf("error reading tar stream from container %s: %v", name, err)
+	}
 
 	return os.WriteFile(destPathWithFileName, data, 0644)
+}
+
+func GetContainerLogs(name string) ([]byte, error) {
+	c := getContainer(name)
+	if c.ID == "" {
+		return nil, fmt.Errorf("Unable to find container: %s\n", name)
+	}
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("error creating docker client: %v", err)
+	}
+
+	rc, err := cli.ContainerLogs(context.Background(), c.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
+	if err != nil {
+		return nil, fmt.Errorf("error getting logs for container %s: %v", name, err)
+	}
+	defer func() {
+		if err := rc.Close(); err != nil {
+			glog.Errorf("error closing logs for container %s: %v", name, err)
+		}
+	}()
+
+	contLogs, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("error reading logs for container %s: %v", name, err)
+	}
+
+	return contLogs, nil
 }
