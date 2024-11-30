@@ -19,9 +19,17 @@
 package bulk
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/v24/systest/21million/common"
 	"github.com/dgraph-io/dgraph/v24/testutil"
@@ -44,10 +52,102 @@ func TestMain(m *testing.M) {
 	}
 
 	exitCode := m.Run()
+
+	if exitCode != 0 {
+		uploadPDirToS3()
+	}
+
 	cleanupAndExit(exitCode)
 }
 
 func cleanupAndExit(exitCode int) {
 	_ = os.RemoveAll("./t")
 	os.Exit(exitCode)
+}
+
+func uploadPDirToS3() {
+	destFile := fmt.Sprintf("p-%v.tar.gz", time.Now().Unix())
+
+	glog.Infof("Copying data from alpha1:/data/alpha1/p to %v", destFile)
+	if err := testutil.CopyPDir("alpha1", "/data/alpha1/p", destFile); err != nil {
+		panic(err)
+	}
+
+	glog.Infof("Uploading %v to S3", destFile)
+	if err := uploadDataToS3(destFile); err != nil {
+		panic(err)
+	}
+
+	glog.Infof("Uploading %v to S3 completed", destFile)
+}
+
+func uploadDataToS3(srcFile string) error {
+	file, err := os.Open(srcFile)
+	if err != nil {
+		return fmt.Errorf("error opening file %v: %v", srcFile, err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			glog.Errorf("error closing file %v: %v", srcFile, err)
+		}
+	}()
+
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String("us-west-2"),
+	})
+	if err != nil {
+		return fmt.Errorf("error creating AWS session: %v", err)
+	}
+	s3Client := s3.New(sess)
+
+	createResp, err := s3Client.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
+		Bucket: aws.String("dgraph-load-test-failures-debugging-p-dir"),
+		Key:    aws.String(srcFile),
+	})
+	if err != nil {
+		return fmt.Errorf("error creating multipart upload: %v", err)
+	}
+
+	const partSize = 5 * 1024 * 1024 // 5MB
+	buffer := make([]byte, partSize)
+	var completedParts []*s3.CompletedPart
+	partNumber := int64(1)
+	for {
+		n, err := file.Read(buffer)
+		if err != nil && err.Error() != "EOF" {
+			return fmt.Errorf("error reading file %v: %v", srcFile, err)
+		}
+		if n == 0 {
+			break
+		}
+
+		uploadResp, err := s3Client.UploadPart(&s3.UploadPartInput{
+			Bucket:     aws.String("dgraph-load-test-failures-debugging-p-dir"),
+			Key:        aws.String(srcFile),
+			PartNumber: aws.Int64(partNumber),
+			UploadId:   createResp.UploadId,
+			Body:       bytes.NewReader(buffer[:n]),
+		})
+		if err != nil {
+			return fmt.Errorf("error uploading part %v: %v", partNumber, err)
+		}
+
+		completedParts = append(completedParts, &s3.CompletedPart{
+			ETag:       uploadResp.ETag,
+			PartNumber: aws.Int64(partNumber),
+		})
+		partNumber++
+	}
+
+	_, err = s3Client.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
+		Bucket:          aws.String("dgraph-load-test-failures-debugging-p-dir"),
+		Key:             aws.String(srcFile),
+		UploadId:        createResp.UploadId,
+		MultipartUpload: &s3.CompletedMultipartUpload{Parts: completedParts},
+	})
+	if err != nil {
+		return fmt.Errorf("error completing multipart upload: %v", err)
+	}
+
+	return nil
 }

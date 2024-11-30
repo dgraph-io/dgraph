@@ -12,6 +12,15 @@ on:
     branches:
       - main
       - 'release/**'
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ROLE: '${{ vars.AWS_ROLE }}'
+# Permission can be added at job level or workflow level
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
 jobs:
   dgraph-load-tests:
     if: github.event.pull_request.draft == false
@@ -36,6 +45,13 @@ jobs:
           go clean -testcache
           # clean up docker containers before test execution
           cd t; ./t -r
+      # this is required to upload p dir in case the workflow fails
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: '${{ env.AWS_ROLE }}'
+          role-session-name: dgraph-load-test
+          aws-region: '${{ env.AWS_REGION }}'
       - name: Run Load Tests
         run: |
           #!/bin/bash

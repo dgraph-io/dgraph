@@ -335,3 +335,21 @@ func CheckHealthContainer(socketAddrHttp string) error {
 	}
 	return err
 }
+
+func CopyPDir(name, srcPath, destPathWithFileName string) error {
+	c := getContainer(name)
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	x.Check(err)
+
+	tarStream, _, err := cli.CopyFromContainer(context.Background(), c.ID, srcPath)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	data, err := io.ReadAll(tarStream)
+	x.Check(err)
+
+	return os.WriteFile(destPathWithFileName, data, 0644)
+}
