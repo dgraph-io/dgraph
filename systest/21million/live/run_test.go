@@ -74,15 +74,16 @@ func uploadLogsToS3(now int64) {
 	if err != nil {
 		panic(err)
 	}
-	if err := os.WriteFile("alpha1-%v.log", alphaLogs, 0644); err != nil {
+	fileName := fmt.Sprintf("alpha1-%v.log", now)
+	if err := os.WriteFile(fileName, alphaLogs, 0644); err != nil {
 		panic(err)
 	}
 
-	log.Printf("uploading alpha1-%v.log to s3", now)
-	if err := uploadDataToS3(fmt.Sprintf("alpha1-%v.log", now)); err != nil {
+	log.Printf("uploading %s to s3", fileName)
+	if err := uploadDataToS3(fileName); err != nil {
 		panic(err)
 	}
-	log.Printf("uploading alpha1-%v.log to s3 completed", now)
+	log.Printf("uploading %s to s3 completed", fileName)
 }
 
 func uploadPDirToS3(now int64) {
