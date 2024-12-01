@@ -494,8 +494,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
-	// TODO: Do this in a way, where we don't break multiple updates for the same Edge across
-	// different goroutines.
 	sort.SliceStable(m.Edges, func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
@@ -538,22 +536,43 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if numGo == 1 {
 		return process(m.Edges)
 	}
+
+	// We need to create batches such that no two batches contains the same entry (<Entity> + <Predicate>)
+	// combination. We have already sorted the edges, all we need to do is increase the batch size until we reach
+	// the next different entry. New number of chans would ne less than NumGo. So we can create the chan with
+	// numGo.
+	sameAttrAndUid := func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return false
+		}
+		return ei.GetEntity() == ej.GetEntity()
+	}
+	numChanCreated := 0
+
 	errCh := make(chan error, numGo)
-	for i := range numGo {
-		start := i * width
-		end := start + width
+	for i := 0; i < len(m.Edges); {
+		end := i + width
 		if end > len(m.Edges) {
 			end = len(m.Edges)
 		}
+
+		for end < len(m.Edges) && sameAttrAndUid(end, end-1) {
+			end++
+		}
+
+		numChanCreated += 1
 		go func(start, end int) {
 			errCh <- process(m.Edges[start:end])
-		}(start, end)
+		}(i, end)
+		i = end
 	}
 	// Earlier we were returning after even if one thread had an error. We should wait for
 	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
 	// a deadlock with runMutation.
 	var errs error
-	for range numGo {
+	for range numChanCreated {
 		if err := <-errCh; err != nil {
 			if errs == nil {
 				errs = errors.New("Got error while running mutation")
