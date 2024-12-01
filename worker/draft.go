@@ -573,7 +573,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Earlier we were returning after even if one thread had an error. We should wait for
 	// all the transactions to finish. We call txn.Update() when this function exists. This could cause
 	// a deadlock with runMutation.
-	fmt.Println("HERE", numChanCreated)
 	var errs error
 	for range numChanCreated {
 		if err := <-errCh; err != nil {
