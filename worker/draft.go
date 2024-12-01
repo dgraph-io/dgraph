@@ -558,10 +558,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			end = len(m.Edges)
 		}
 
-		if end < len(m.Edges) {
-			for end < len(m.Edges) && checkSame(end, end-1) {
-				end++
-			}
+		for end < len(m.Edges) && checkSame(end, end-1) {
+			end++
 		}
 
 		numChanCreated += 1
