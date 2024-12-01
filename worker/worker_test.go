@@ -315,6 +315,48 @@ func TestProcessTaskIndexMLayer(t *testing.T) {
 	)
 }
 
+func TestCountReverseIndex(t *testing.T) {
+	schemaStr := "friend: [uid] @count ."
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	testutil.DropAll(t, dg)
+
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{Schema: schemaStr}))
+
+	n := 1000
+	rdf := ""
+	for i := 2; i < n; i++ {
+		rdf = rdf + fmt.Sprintf("<%#x> <friend> <%#x> . \n", 1, i)
+	}
+	setClusterEdge(t, dg, rdf)
+
+	resp, err := runQuery(dg, "friend", []uint64{1}, nil)
+	require.NoError(t, err)
+	count := strings.Count(string(resp.Json), "uid")
+
+	resp, err = runQuery(
+		dg,
+		"count(friend)",
+		nil,
+		[]string{"eq", "", fmt.Sprintf("%d", count)})
+	require.Equal(t, string(resp.Json), `{"q":[{"uid":"0x1"}]}`)
+
+	for i := 1; i < n; i++ {
+		if i == count {
+			continue
+		}
+		resp, err = runQuery(
+			dg,
+			"count(friend)",
+			nil,
+			[]string{"eq", "", fmt.Sprintf("%d", i)})
+		require.NotEqual(
+			t, string(resp.Json), `{"q":[{"uid":"0x1"}]}`, fmt.Sprintf("Failed for iteration %d", i))
+	}
+}
+
 func TestCountReverseWithDeletes(t *testing.T) {
 	schemaStr := "friend: [uid] @reverse @count ."
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
