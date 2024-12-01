@@ -541,7 +541,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// combination. We have already sorted the edges, all we need to do is increase the batch size until we reach
 	// the next different entry. New number of chans would ne less than NumGo. So we can create the chan with
 	// numGo.
-	checkSame := func(i, j int) bool {
+	sameAttrAndUid := func(i, j int) bool {
 		ei := m.Edges[i]
 		ej := m.Edges[j]
 		if ei.GetAttr() != ej.GetAttr() {
@@ -558,13 +558,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			end = len(m.Edges)
 		}
 
-		for end < len(m.Edges) && checkSame(end, end-1) {
+		for end < len(m.Edges) && sameAttrAndUid(end, end-1) {
 			end++
 		}
 
 		numChanCreated += 1
-		go func(i, end int) {
-			errCh <- process(m.Edges[i:end])
+		go func(start, end int) {
+			errCh <- process(m.Edges[start:end])
 		}(i, end)
 		i = end
 	}
