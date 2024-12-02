@@ -1250,6 +1250,10 @@ func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Respon
 	return s.doQuery(ctx, &Request{req: req, doAuth: getAuthMode(ctx)})
 }
 
+func (s *Server) QueryNoAuth(ctx context.Context, req *api.Request) (*api.Response, error) {
+	return s.doQuery(ctx, &Request{req: req, doAuth: NoAuthorize})
+}
+
 var pendingQueries int64
 var maxPendingQueries int64
 var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your requests")
