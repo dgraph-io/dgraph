@@ -291,27 +291,35 @@ func (mm *MutableLayer) iterate(f func(ts uint64, pl *pb.PostingList), readTs ui
 // cached. This includes deleteAllMarker, length and committedUids map. this should be called while
 // building the list only.
 func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
+	if mm.committedUidsTime == math.MaxUint64 {
+		mm.committedUidsTime = 0
+	}
+	if mm.length == math.MaxInt64 {
+		mm.length = 0
+	}
+
+	mm.committedUidsTime = x.Max(pl.CommitTs, mm.committedUidsTime)
+	mm.committedEntries[pl.CommitTs] = pl
+
 	for _, mpost := range pl.Postings {
 		mpost.CommitTs = pl.CommitTs
 		if hasDeleteAll(mpost) {
 			if mpost.CommitTs > mm.deleteAllMarker {
 				mm.deleteAllMarker = mpost.CommitTs
 			}
+			// No need to set the length here as we are reading the list in reverse.
+			continue
 		}
-		// We insert old postings in reverse order. So we only need to read the first update to an UID
+		// If this posting is less than deleteAllMarker, we don't need to add it to the mutable map results.
+		if mpost.CommitTs < mm.deleteAllMarker {
+			continue
+		}
+		mm.length += getLengthDelta(mpost.Op)
+		// We insert old postings in reverse order. So we only need to read the first update to an UID.
 		if _, ok := mm.committedUids[mpost.Uid]; !ok {
 			mm.committedUids[mpost.Uid] = mpost
 		}
-		if mm.committedUidsTime == math.MaxUint64 {
-			mm.committedUidsTime = 0
-		}
-		mm.committedUidsTime = x.Max(mpost.CommitTs, mm.committedUidsTime)
-		if mm.length == math.MaxInt64 {
-			mm.length = 0
-		}
-		mm.length += getLengthDelta(mpost.Op)
 	}
-	mm.committedEntries[pl.CommitTs] = pl
 }
 
 func (mm *MutableLayer) populateUidMap(pl *pb.PostingList) {
@@ -369,13 +377,23 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 		return true, nil
 	}
 
+	deleteAllMarker := mm.populateDeleteAll(readTs)
+
 	getPosting := func() *pb.Posting {
 		// If the timestamp that we are reading for is ahead of the cache map, we can check the map and return.
 		// Otherwise we need to iterate (slow) the entire map, and keep the latest entry per the commitTs.
 		if readTs >= mm.committedUidsTime {
-			posI, ok := mm.currentUids[uid]
-			if ok {
-				return mm.currentEntries.Postings[posI]
+			if mm.currentEntries != nil && readTs == mm.readTs {
+				posI, ok := mm.currentUids[uid]
+				if ok {
+					return mm.currentEntries.Postings[posI]
+				}
+				// We only need to check deleteAllMarker if it's same as readTs as it would been
+				// inserted in the current entires. If it's < readTs, then we have already
+				// accounted for it in committedUids.
+				if deleteAllMarker == readTs {
+					return &pb.Posting{Op: Del}
+				}
 			}
 			return mm.committedUids[uid]
 		} else {
@@ -411,7 +429,7 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 	}
 
 	// If delete all is set, immutable layer can't be read. Hence setting searchFurther as false.
-	if mm.populateDeleteAll(readTs) > 0 {
+	if deleteAllMarker > 0 {
 		return false, nil
 	}
 
@@ -934,17 +952,20 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 
 	}
 
+	if l.mutationMap.committedUidsTime == math.MaxUint64 {
+		l.mutationMap.committedUidsTime = 0
+	}
+	l.mutationMap.committedUidsTime = x.Max(l.mutationMap.committedUidsTime, commitTs)
+
 	for _, mpost := range pl.Postings {
 		if hasDeleteAll(mpost) {
 			l.mutationMap.deleteAllMarker = commitTs
 			l.mutationMap.length = 0
+			clear(l.mutationMap.committedUids)
+			continue
 		}
 
 		l.mutationMap.committedUids[mpost.Uid] = mpost
-		if l.mutationMap.committedUidsTime == math.MaxUint64 {
-			l.mutationMap.committedUidsTime = 0
-		}
-		l.mutationMap.committedUidsTime = x.Max(l.mutationMap.committedUidsTime, commitTs)
 		l.mutationMap.length += getLengthDelta(mpost.Op)
 	}
 
@@ -1182,6 +1203,12 @@ func (l *List) GetLength(readTs uint64) int {
 // This function gets the posting and length without iterating over it
 func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
 	l.AssertRLock()
+
+	// We can't call GetLength() while indexing is going on.
+	// TODO check if indexing is in progress only for the predicate of this list.
+	if schema.State().IndexingInProgress() {
+		return l.getPostingAndLength(readTs, afterUid, uid)
+	}
 
 	length := l.GetLength(readTs)
 
