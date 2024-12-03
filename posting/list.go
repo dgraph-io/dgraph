@@ -216,6 +216,7 @@ func (mm *MutableLayer) listLen(readTs uint64) int {
 
 	if mm.currentEntries != nil && (readTs == mm.readTs) {
 		if mm.populateDeleteAll(readTs) == mm.readTs {
+			// If deleteAll is present, we don't need the count from mm.length.
 			count = 0
 		}
 		checkPostingForCount(mm.currentEntries)
