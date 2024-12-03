@@ -419,7 +419,7 @@ func (p ParsedKey) ToBackupKey() *pb.BackupKey {
 	key.Attr = attr
 	key.Uid = p.Uid
 	key.StartUid = p.StartUid
-	key.Term = p.Term
+	key.Term = []byte(p.Term)
 	key.Count = p.Count
 
 	switch {
@@ -455,7 +455,7 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 	case pb.BackupKey_DATA:
 		key = DataKey(attr, backupKey.Uid)
 	case pb.BackupKey_INDEX:
-		key = IndexKey(attr, backupKey.Term)
+		key = IndexKey(attr, string(backupKey.Term))
 	case pb.BackupKey_REVERSE:
 		key = ReverseKey(attr, backupKey.Uid)
 	case pb.BackupKey_COUNT:

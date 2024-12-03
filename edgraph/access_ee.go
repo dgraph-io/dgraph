@@ -27,6 +27,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -105,7 +106,7 @@ func (s *Server) Login(ctx context.Context,
 		RefreshJwt: refreshJwt,
 	}
 
-	jwtBytes, err := loginJwt.Marshal()
+	jwtBytes, err := proto.Marshal(&loginJwt)
 	if err != nil {
 		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)

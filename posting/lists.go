@@ -23,6 +23,9 @@ import (
 	"sync"
 	"time"
 
+	ostats "go.opencensus.io/stats"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
@@ -30,7 +33,6 @@ import (
 	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
-	ostats "go.opencensus.io/stats"
 )
 
 const (
@@ -336,7 +338,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 		pl := &pb.PostingList{}
 		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-			err := pl.Unmarshal(delta)
+			err := proto.Unmarshal(delta, pl)
 			lc.RUnlock()
 			return pl, err
 		}
@@ -369,7 +371,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 
 		err = item.Value(func(val []byte) error {
-			return pl.Unmarshal(val)
+			return proto.Unmarshal(val, pl)
 		})
 
 		return pl, err

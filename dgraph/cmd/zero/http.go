@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
@@ -99,9 +99,15 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{EmitDefaults: true}
-	if err := m.Marshal(w, ids); err != nil {
+	m := protojson.MarshalOptions{EmitUnpopulated: true}
+	buf, err := m.Marshal(ids)
+	if err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
+		return
+	}
+
+	if _, err := w.Write(buf); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 }
@@ -227,9 +233,14 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{EmitDefaults: true}
-	if err := m.Marshal(w, mstate); err != nil {
+	m := protojson.MarshalOptions{EmitUnpopulated: true}
+	buf, err := m.Marshal(mstate)
+	if err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
+		return
+	}
+	if _, err := w.Write(buf); err != nil {
+		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 }

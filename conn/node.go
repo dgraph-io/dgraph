@@ -33,6 +33,7 @@ import (
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	otrace "go.opencensus.io/trace"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -598,7 +599,7 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
 	pid := rc.Id
 	rc.SnapshotTs = 0
-	rcBytes, err := rc.Marshal()
+	rcBytes, err := proto.Marshal(rc)
 	x.Check(err)
 
 	cc := raftpb.ConfChange{

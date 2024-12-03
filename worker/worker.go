@@ -78,6 +78,7 @@ func Init(ps *badger.DB) {
 // grpcWorker struct implements the gRPC server interface.
 type grpcWorker struct {
 	sync.Mutex
+	pb.WorkerServer
 }
 
 // grpcWorker implements pb.WorkerServer.
