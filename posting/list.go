@@ -1223,10 +1223,6 @@ func (l *List) getPostingAndLengthNoSort(readTs, afterUid, uid uint64) (int, boo
 	}
 
 	length := l.GetLength(readTs)
-	l1, _, _ := l.getPostingAndLength(readTs, afterUid, uid)
-	if length != l1 {
-		panic(errors.Errorf("I panic"))
-	}
 
 	found, pos, err := l.findPosting(readTs, uid)
 	if err != nil {

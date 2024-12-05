@@ -1708,21 +1708,21 @@ func TestSplitLength(t *testing.T) {
 	maxListSize = mb / 2
 
 	// Create a list that should be split recursively.
-	size := int(1e5)
+	size := uint64(1e5)
 	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1333)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
-	for i := 1; i <= size; i++ {
+	for i := uint64(1); i <= size; i++ {
 		commits++
 		edge := &pb.DirectedEdge{
-			ValueId: uint64(i),
+			ValueId: i,
 		}
-		edge.Facets = []*api.Facet{{Key: strconv.Itoa(i)}}
+		edge.Facets = []*api.Facet{{Key: fmt.Sprintf("%d", i)}}
 
 		txn := Txn{StartTs: uint64(i)}
 		addMutationHelper(t, ol, edge, Set, &txn)
-		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+		require.NoError(t, ol.commitMutation(i, i+1))
 
 		// Do not roll-up the list here to ensure the final list should
 		// be split more than once.
@@ -1737,7 +1737,7 @@ func TestSplitLength(t *testing.T) {
 	require.True(t, len(ol.plist.Splits) > 2)
 
 	ol.RLock()
-	require.Equal(t, size, ol.GetLength(uint64(size+10)))
+	require.Equal(t, int(size), ol.GetLength(size+10))
 	ol.RUnlock()
 
 }
