@@ -154,6 +154,7 @@ func (mm *MutableLayer) setCurrentEntries(ts uint64, pl *pb.PostingList) {
 	mm.currentEntries = pl
 	clear(mm.currentUids)
 	mm.deleteAllMarker = math.MaxUint64
+	mm.populateUidMap(pl)
 }
 
 // get() returns the posting stored in the mutable layer at any given timestamp. If the ts is the same as readTs,
@@ -298,6 +299,9 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 	if mm.length == math.MaxInt64 {
 		mm.length = 0
 	}
+	if mm.deleteAllMarker == math.MaxUint64 {
+		mm.deleteAllMarker = 0
+	}
 
 	mm.committedUidsTime = x.Max(pl.CommitTs, mm.committedUidsTime)
 	mm.committedEntries[pl.CommitTs] = pl
@@ -312,10 +316,9 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 			continue
 		}
 		// If this posting is less than deleteAllMarker, we don't need to add it to the mutable map results.
-		if mpost.CommitTs < mm.deleteAllMarker {
-			continue
+		if mpost.CommitTs >= mm.deleteAllMarker {
+			mm.length += getLengthDelta(mpost.Op)
 		}
-		mm.length += getLengthDelta(mpost.Op)
 		// We insert old postings in reverse order. So we only need to read the first update to an UID.
 		if _, ok := mm.committedUids[mpost.Uid]; !ok {
 			mm.committedUids[mpost.Uid] = mpost
@@ -380,23 +383,32 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 
 	deleteAllMarker := mm.populateDeleteAll(readTs)
 
+	// To get the posting from cached values, we need to make sure that it is >= deleteAllMarker
+	// If we get it using mm.iterate (in getPosting), we know that we only see postings >= deleteAllMarker
+	getPostingFromCachedValues := func() (*pb.Posting, uint64) {
+		if readTs == mm.readTs {
+			posI, ok := mm.currentUids[uid]
+			if ok {
+				return mm.currentEntries.Postings[posI], mm.readTs
+			}
+		}
+		posting, ok := mm.committedUids[uid]
+		if ok {
+			return posting, posting.CommitTs
+		}
+		return nil, 0
+	}
+
+	// Check if readTs >= committedUidTime. It lets us figure out if we can use the cached values or not.
 	getPosting := func() *pb.Posting {
 		// If the timestamp that we are reading for is ahead of the cache map, we can check the map and return.
 		// Otherwise we need to iterate (slow) the entire map, and keep the latest entry per the commitTs.
 		if readTs >= mm.committedUidsTime {
-			if mm.currentEntries != nil && readTs == mm.readTs {
-				posI, ok := mm.currentUids[uid]
-				if ok {
-					return mm.currentEntries.Postings[posI]
-				}
-				// We only need to check deleteAllMarker if it's same as readTs as it would been
-				// inserted in the current entires. If it's < readTs, then we have already
-				// accounted for it in committedUids.
-				if deleteAllMarker == readTs {
-					return &pb.Posting{Op: Del}
-				}
+			posting, ts := getPostingFromCachedValues()
+			if posting == nil || ts < deleteAllMarker {
+				return nil
 			}
-			return mm.committedUids[uid]
+			return posting
 		} else {
 			var posting *pb.Posting
 			var tsFound uint64
@@ -962,7 +974,6 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 		if hasDeleteAll(mpost) {
 			l.mutationMap.deleteAllMarker = commitTs
 			l.mutationMap.length = 0
-			clear(l.mutationMap.committedUids)
 			continue
 		}
 

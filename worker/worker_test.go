@@ -357,6 +357,28 @@ func TestCountReverseIndex(t *testing.T) {
 	}
 }
 
+func TestCountIndexOverwrite(t *testing.T) {
+	schemaStr := "friend: [uid] @reverse @count ."
+	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	if err != nil {
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+	testutil.DropAll(t, dg)
+
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{Schema: schemaStr}))
+
+	for i := 0; i < 1000; i++ {
+		setClusterEdge(t, dg, fmt.Sprintf("<%#x> <friend> <%#x> .", 1, 2))
+	}
+	resp, err := runQuery(
+		dg,
+		"count(friend)",
+		nil,
+		[]string{"eq", "", "1"})
+	require.Equal(
+		t, string(resp.Json), `{"q":[{"uid":"0x1"}]}`)
+}
+
 func TestCountReverseWithDeletes(t *testing.T) {
 	schemaStr := "friend: [uid] @reverse @count ."
 	dg, err := testutil.DgraphClient(testutil.SockAddr)

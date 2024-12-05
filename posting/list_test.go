@@ -1542,6 +1542,141 @@ func TestSingleListRollup(t *testing.T) {
 	// TODO: Need more testing here.
 }
 
+func TestMutableMap(t *testing.T) {
+	create_pl := func(startTs, commitTs, uid uint64, op uint32) *pb.PostingList {
+		return &pb.PostingList{
+			Postings: []*pb.Posting{
+				{
+					Uid:      uid,
+					Op:       op,
+					StartTs:  startTs,
+					CommitTs: commitTs,
+				},
+			},
+			CommitTs: commitTs,
+		}
+	}
+
+	create_deleteAll_pl := func(startTs, commitTs uint64) *pb.PostingList {
+		return &pb.PostingList{
+			Postings: []*pb.Posting{
+				{
+					Value:    []byte(x.Star),
+					Op:       Del,
+					StartTs:  startTs,
+					CommitTs: commitTs,
+				},
+			},
+			CommitTs: commitTs,
+		}
+	}
+
+	t.Run("Populate delete all tests", func(t *testing.T) {
+		ml := newMutableLayer()
+		ml.insertCommittedPostings(create_pl(10, 11, 1, Set))
+		ml.insertCommittedPostings(create_deleteAll_pl(8, 9))
+		ml.insertCommittedPostings(create_pl(6, 7, 1, Set))
+		ml.insertCommittedPostings(create_deleteAll_pl(4, 5))
+		ml.insertCommittedPostings(create_pl(2, 3, 1, Set))
+		ml.insertCommittedPostings(create_deleteAll_pl(1, 2))
+
+		require.Equal(t, uint64(9), ml.deleteAllMarker)
+		require.Equal(t, 1, ml.length)
+
+		ml.setCurrentEntries(11, create_deleteAll_pl(11, 0))
+		require.Equal(t, true, math.MaxUint64 == ml.deleteAllMarker)
+		require.Equal(t, 1, ml.length)
+
+		require.Equal(t, uint64(11), ml.populateDeleteAll(11))
+		require.Equal(t, uint64(9), ml.populateDeleteAll(10))
+		require.Equal(t, uint64(5), ml.populateDeleteAll(5))
+		require.Equal(t, uint64(2), ml.populateDeleteAll(4))
+
+	})
+
+	// Need to insert postings in reverse order
+	t.Run("Current Entries has deleteAll", func(t *testing.T) {
+		ml := newMutableLayer()
+		ml.insertCommittedPostings(create_pl(1, 2, 1, Set))
+		ml.setCurrentEntries(3, create_deleteAll_pl(3, 0))
+
+		require.Equal(t, uint64(3), ml.populateDeleteAll(3))
+		require.Equal(t, uint64(2), ml.committedUidsTime)
+		require.Equal(t, 1, ml.length)
+
+		searchFurther, pos := ml.findPosting(3, 1)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, true, pos == nil)
+
+		searchFurther, pos = ml.findPosting(2, 1)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, uint64(2), pos.CommitTs)
+
+		require.Equal(t, 0, ml.listLen(1))
+		require.Equal(t, 1, ml.listLen(2))
+		require.Equal(t, 0, ml.listLen(3))
+	})
+
+	t.Run("Data in committedUids but found posting", func(t *testing.T) {
+		ml := newMutableLayer()
+		ml.insertCommittedPostings(create_deleteAll_pl(4, 5))
+		ml.insertCommittedPostings(create_pl(2, 3, 1, Ovr))
+		ml.insertCommittedPostings(create_pl(1, 2, 1, Set))
+
+		ml.setCurrentEntries(7, create_pl(7, 0, 2, Set))
+
+		require.Equal(t, uint64(5), ml.committedUidsTime)
+		require.Equal(t, 0, ml.length)
+
+		searchFurther, pos := ml.findPosting(2, 1)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, uint64(1), pos.StartTs)
+
+		searchFurther, pos = ml.findPosting(3, 1)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, uint64(2), pos.StartTs)
+
+		searchFurther, pos = ml.findPosting(8, 1)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, true, pos == nil)
+
+		searchFurther, pos = ml.findPosting(7, 2)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, uint64(7), pos.StartTs)
+
+		// If we are reading at a time which is != current readTs, it should not be visible
+		searchFurther, pos = ml.findPosting(8, 2)
+		require.Equal(t, false, searchFurther)
+		require.Equal(t, true, pos == nil)
+
+		require.Equal(t, 0, ml.listLen(1))
+		require.Equal(t, 1, ml.listLen(2))
+		require.Equal(t, 1, ml.listLen(3))
+		require.Equal(t, 0, ml.listLen(5))
+		require.Equal(t, 1, ml.listLen(7))
+		require.Equal(t, 0, ml.listLen(8))
+	})
+
+	t.Run("No current entries set", func(t *testing.T) {
+		ml := newMutableLayer()
+		ml.insertCommittedPostings(create_pl(16, 17, 1, Del))
+		ml.insertCommittedPostings(create_pl(13, 14, 1, Ovr))
+		ml.insertCommittedPostings(create_pl(10, 11, 1, Set))
+		ml.insertCommittedPostings(create_deleteAll_pl(8, 9))
+		ml.insertCommittedPostings(create_pl(5, 6, 1, Del))
+		ml.insertCommittedPostings(create_pl(1, 2, 1, Set))
+
+		require.Equal(t, 0, ml.listLen(1))
+		require.Equal(t, 1, ml.listLen(2))
+		require.Equal(t, 0, ml.listLen(6))
+		require.Equal(t, 0, ml.listLen(9))
+		require.Equal(t, 1, ml.listLen(11))
+		require.Equal(t, 1, ml.listLen(14))
+		require.Equal(t, 0, ml.listLen(17))
+		require.Equal(t, 0, ml.listLen(20))
+	})
+}
+
 func TestListDeleteMarker(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = mb / 2
@@ -1566,6 +1701,45 @@ func TestListDeleteMarker(t *testing.T) {
 	addMutationHelper(t, ol, edge, Del, &txn)
 
 	require.Equal(t, ol.mutationMap.populateDeleteAll(3), uint64(3))
+}
+
+func TestSplitLength(t *testing.T) {
+	defer setMaxListSize(maxListSize)
+	maxListSize = mb / 2
+
+	// Create a list that should be split recursively.
+	size := int(1e5)
+	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1333)
+	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	commits := 0
+	for i := 1; i <= size; i++ {
+		commits++
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		edge.Facets = []*api.Facet{{Key: strconv.Itoa(i)}}
+
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+
+		// Do not roll-up the list here to ensure the final list should
+		// be split more than once.
+	}
+
+	// Rollup the list. The final output should have more than two parts.
+	kvs, err := ol.Rollup(nil, math.MaxUint64)
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = readPostingListFromDisk(key, ps, math.MaxUint64)
+	require.NoError(t, err)
+	require.True(t, len(ol.plist.Splits) > 2)
+
+	ol.RLock()
+	require.Equal(t, size, ol.GetLength(uint64(size+10)))
+	ol.RUnlock()
+
 }
 
 func TestRecursiveSplits(t *testing.T) {

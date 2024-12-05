@@ -270,6 +270,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func TestCountReverseIndexWithData(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
 	indexNameCountVal := "testcount: [uid] @count @reverse ."
 
 	attr := x.GalaxyAttr("testcount")
@@ -303,7 +304,7 @@ func TestCountReverseIndexWithData(t *testing.T) {
 }
 
 func TestCountReverseIndexEmptyPosting(t *testing.T) {
-	pstore.DropAll()
+	require.NoError(t, pstore.DropAll())
 	indexNameCountVal := "testcount: [uid] @count @reverse ."
 
 	attr := x.GalaxyAttr("testcount")
