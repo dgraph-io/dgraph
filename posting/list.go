@@ -664,7 +664,7 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	case pb.DirectedEdge_SET:
 		op = Set
 	case pb.DirectedEdge_OVR:
-		op = Set
+		op = Ovr
 	case pb.DirectedEdge_DEL:
 		op = Del
 	default:
