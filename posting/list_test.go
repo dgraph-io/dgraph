@@ -1720,7 +1720,7 @@ func TestSplitLength(t *testing.T) {
 		}
 		edge.Facets = []*api.Facet{{Key: fmt.Sprintf("%d", i)}}
 
-		txn := Txn{StartTs: uint64(i)}
+		txn := Txn{StartTs: i}
 		addMutationHelper(t, ol, edge, Set, &txn)
 		require.NoError(t, ol.commitMutation(i, i+1))
 
