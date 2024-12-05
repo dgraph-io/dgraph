@@ -1,14 +1,14 @@
 ARG DGRAPH_VERSION=latest
 FROM dgraph/dgraph:${DGRAPH_VERSION}
-LABEL MAINTAINER="Dgraph Labs <contact@dgraph.io>"
+LABEL MAINTAINER="Hypermode <hello@hypermode.com>"
 
-# Ratel port
-# EXPOSE 8000 ## Ratel is not supported in the standalone image
+# Zero port
+EXPOSE 5080
 # REST API port
 EXPOSE 8080
 # gRPC API port
 EXPOSE 9080
 
-ADD run.sh /run.sh
-RUN chmod +x /run.sh
-CMD ["/run.sh"]
+ADD load_and_run.sh /load_and_run.sh
+RUN chmod +x /load_and_run.sh
+CMD ["/load_and_run.sh"]
