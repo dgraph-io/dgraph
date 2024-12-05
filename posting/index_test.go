@@ -303,6 +303,7 @@ func TestCountReverseIndexWithData(t *testing.T) {
 }
 
 func TestCountReverseIndexEmptyPosting(t *testing.T) {
+	pstore.DropAll()
 	indexNameCountVal := "testcount: [uid] @count @reverse ."
 
 	attr := x.GalaxyAttr("testcount")
