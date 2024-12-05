@@ -10,8 +10,8 @@ require (
 	github.com/IBM/sarama v1.43.3
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.4.3
-	github.com/dgraph-io/badger/v4 v4.4.1-0.20241128130124-d13fdcc74a8d
-	github.com/dgraph-io/dgo/v240 v240.0.2-0.20241128130808-b8caf57545c5
+	github.com/dgraph-io/badger/v4 v4.5.0
+	github.com/dgraph-io/dgo/v240 v240.1.0
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
@@ -22,7 +22,7 @@ require (
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/getsentry/sentry-go v0.29.1
+	github.com/getsentry/sentry-go v0.30.0
 	github.com/go-jose/go-jose/v4 v4.0.4
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -57,13 +57,13 @@ require (
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/mod v0.22.0
 	golang.org/x/net v0.31.0
-	golang.org/x/sync v0.9.0
-	golang.org/x/sys v0.27.0
-	golang.org/x/term v0.26.0
-	golang.org/x/text v0.20.0
+	golang.org/x/sync v0.10.0
+	golang.org/x/sys v0.28.0
+	golang.org/x/term v0.27.0
+	golang.org/x/text v0.21.0
 	golang.org/x/tools v0.27.0
 	google.golang.org/grpc v1.68.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.35.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
