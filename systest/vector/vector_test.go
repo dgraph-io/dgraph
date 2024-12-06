@@ -33,10 +33,9 @@ import (
 )
 
 const (
-	testSchema = `
-	project_discription_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
-
-	testSchemaWithoutIndex = `project_discription_v: float32vector .`
+	testSchema             = `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
+	testSchemaWithoutIndex = `project_description_v: float32vector .`
+	pred                   = "project_description_v"
 )
 
 func testVectorQuery(t *testing.T, gc *dgraphapi.GrpcClient, vectors [][]float32, rdfs, pred string, topk int) {
@@ -74,9 +73,8 @@ func TestVectorDropAll(t *testing.T) {
 		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	numVectors := 100
-	pred := "project_discription_v"
 
-	testVectorSimilarTo := func(vectors [][]float32, dropAll bool) {
+	testVectorSimilarTo := func(vectors [][]float32) {
 		for _, vector := range vectors {
 			_, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 100)
 			require.ErrorContains(t, err, "is not indexed")
@@ -92,7 +90,7 @@ func TestVectorDropAll(t *testing.T) {
 		require.NoError(t, err)
 
 		query := `{
-			vector(func: has(project_discription_v)) {
+			vector(func: has(project_description_v)) {
 				   count(uid)
 				}
 		}`
@@ -108,7 +106,7 @@ func TestVectorDropAll(t *testing.T) {
 		result, err = gc.Query(query)
 		require.NoError(t, err)
 		require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, 0), string(result.GetJson()))
-		testVectorSimilarTo(vectors, true)
+		testVectorSimilarTo(vectors)
 	}
 }
 
@@ -149,14 +147,13 @@ func TestVectorSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	numVectors := 500
-	pred := "project_discription_v"
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 
 	query := `{
-		vector(func: has(project_discription_v)) {
+		vector(func: has(project_description_v)) {
 			   count(uid)
 			}
 	}`
@@ -205,7 +202,6 @@ func TestVectorDropNamespace(t *testing.T) {
 		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	numVectors := 500
-	pred := "project_discription_v"
 	for i := 0; i < 6; i++ {
 		ns, err := hc.AddNamespace()
 		require.NoError(t, err)
@@ -216,7 +212,7 @@ func TestVectorDropNamespace(t *testing.T) {
 		require.NoError(t, err)
 
 		query := `{
-			vector(func: has(project_discription_v)) {
+			vector(func: has(project_description_v)) {
 				   count(uid)
 				}
 		}`
@@ -257,14 +253,13 @@ func TestVectorIndexRebuilding(t *testing.T) {
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
-	pred := "project_discription_v"
 	numVectors := 1000
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 	query := `{
-		vector(func: has(project_discription_v)) {
+		vector(func: has(project_description_v)) {
 			   count(uid)
 			}
 	}`
@@ -309,9 +304,170 @@ func TestVectorIndexOnVectorPredWithoutData(t *testing.T) {
 		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
-	pred := "project_discription_v"
 
 	vector := []float32{1.0, 2.0, 3.0}
 	_, err = gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 10)
 	require.NoError(t, err)
+}
+
+func TestVectorIndexDropPredicate(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	defer cleanup()
+	require.NoError(t, err)
+
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+	numVectors := 1000
+
+	// add vectors
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	for _, vect := range vectors {
+		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 2)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(similarVects))
+	}
+
+	query := `{
+		vector(func: has(project_description_v)) {
+			   count(uid)
+			}
+	}`
+
+	result, err := gc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+
+	// remove index from vector predicate
+	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
+
+	// drop predicate
+	op := &api.Operation{
+		DropAttr: pred,
+	}
+	require.NoError(t, gc.Alter(context.Background(), op))
+
+	// generate random vectors
+	rdfs, vectors = dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
+	mu = &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	// add index back
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	result, err = gc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+
+	for _, vect := range vectors {
+		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
+		require.NoError(t, err)
+		require.Equal(t, 100, len(similarVects))
+	}
+}
+
+func TestVectorIndexWithoutSchema(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	defer cleanup()
+	require.NoError(t, err)
+
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	numVectors := 1000
+
+	// add vectors
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	require.NoError(t, gc.SetupSchema(testSchema))
+
+	for _, vect := range vectors {
+		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
+		require.NoError(t, err)
+		require.Equal(t, 100, len(similarVects))
+	}
+
+	query := `{
+		vector(func: has(project_description_v)) {
+			   count(uid)
+			}
+	}`
+
+	result, err := gc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+}
+
+func TestVectorIndexWithoutSchemaWithoutIndex(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	defer cleanup()
+	require.NoError(t, err)
+
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	numVectors := 1000
+
+	// add vectors
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
+
+	for i, vect := range vectors {
+		triple := strings.Split(rdfs, "\n")[i]
+		uid := strings.Split(triple, " ")[0]
+		queriedVector, err := gc.QuerySingleVectorsUsingUid(uid, pred)
+		require.NoError(t, err)
+		require.Equal(t, vect, queriedVector[0])
+	}
+
+	query := `{
+		vector(func: has(project_description_v)) {
+			   count(uid)
+			}
+	}`
+
+	result, err := gc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
 }

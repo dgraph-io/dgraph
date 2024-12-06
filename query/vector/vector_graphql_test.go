@@ -19,12 +19,15 @@
 package query
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -249,6 +252,59 @@ func testVectorGraphQlMutationAndQuery(t *testing.T, hc *dgraphapi.HTTPClient) {
 	}
 
 	// query similar project by embedding
+	for _, project := range projects {
+		similarProjects := queryProjectsSimilarByEmbedding(t, hc, project.TitleV, numProjects)
+		for _, similarVec := range similarProjects {
+			require.Contains(t, vectors, similarVec.TitleV)
+		}
+	}
+}
+
+func TestVectorIndexDropPredicate(t *testing.T) {
+	gc, cleanup, err := dc.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	hc, err := dc.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+
+	require.NoError(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
+
+	var vectors [][]float32
+	numProjects := 100
+	projects := generateProjects(numProjects)
+	for _, project := range projects {
+		vectors = append(vectors, project.TitleV)
+		addProject(t, hc, project)
+	}
+
+	schemaWithoutIndex := `type Project  {
+		id: ID!
+		title: String!  @search(by: [exact])
+		title_v: [Float!] @embedding
+	} `
+
+	require.NoError(t, hc.UpdateGQLSchema(schemaWithoutIndex))
+
+	op := &api.Operation{
+		DropAttr: "title_v",
+	}
+	require.NoError(t, gc.Alter(context.Background(), op))
+
+	numProjects = 100
+	projects = generateProjects(numProjects)
+	for _, project := range projects {
+		vectors = append(vectors, project.TitleV)
+		addProject(t, hc, project)
+	}
+
+	require.NoError(t, hc.UpdateGQLSchema(fmt.Sprintf(graphQLVectorSchema, "euclidean")))
+
+	// similar to query
 	for _, project := range projects {
 		similarProjects := queryProjectsSimilarByEmbedding(t, hc, project.TitleV, numProjects)
 		for _, similarVec := range similarProjects {
