@@ -373,7 +373,7 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		if strings.Contains(err.Error(), plError) {
 			// no vector. Return empty array of floats
 			index.BytesAsFloatArray([]byte{}, vec, ph.floatBits)
-			return errors.New(fmt.Sprintf("Nil vector returned %s", err.Error()))
+			return errors.New(fmt.Sprintf("error while getting vector from UID [%v] %s", uid, err.Error()))
 		}
 		return err
 	}
