@@ -535,7 +535,7 @@ func lookup(db *badger.DB) {
 			log.Fatal(err)
 		}
 		pl.RLock()
-		c, _, _ := pl.GetLength(math.MaxUint64)
+		c := pl.GetLength(math.MaxUint64)
 		pl.RUnlock()
 		fmt.Fprintf(&buf, " Length: %d", c)
 
@@ -618,7 +618,7 @@ func printKeys(db *badger.DB) {
 		pl, err := posting.GetNew(key, db, opt.readTs)
 		if err == nil {
 			pl.RLock()
-			c, _, _ := pl.GetLength(math.MaxUint64)
+			c := pl.GetLength(math.MaxUint64)
 			fmt.Fprintf(&buf, " countValue: [%d]", c)
 			pl.RUnlock()
 		}

@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/golang/glog"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -77,7 +78,7 @@ func VerifySnapshot(pstore *badger.DB, readTs uint64) {
 
 			err := item.Value(func(v []byte) error {
 				plist := &pb.PostingList{}
-				Check(plist.Unmarshal(v))
+				Check(proto.Unmarshal(v, plist))
 				VerifyPack(plist)
 				if len(plist.Splits) == 0 {
 					return nil

@@ -2287,6 +2287,14 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 	gcli, cleanup, err = doGrpcLogin(ssuite)
 	defer cleanup()
 	require.NoError(t, err)
+
+	op.Schema = `name: string @index(exact) .`
+	require.NoError(t, gcli.Alter(ctx, op))
+
+	// We need to rebuild count index after the mutable map changes
+	op.Schema = `name: string @index(exact) @count .`
+	require.NoError(t, gcli.Alter(ctx, op))
+
 	_, err = gcli.NewTxn().Mutate(context.Background(), mu)
 	require.NoError(t, err, "mutation to delete name should have been succeeded")
 
