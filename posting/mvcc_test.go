@@ -90,12 +90,12 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 	// Read key at timestamp 10. Make sure cache is not updated by this, as there is a later read.
 	l, err := GetNoStore(key, 10)
 	require.NoError(t, err)
-	require.Equal(t, len(l.mutationMap), 0)
+	require.Equal(t, l.mutationMap.len(), 0)
 
 	// Read at 20 should show the value
 	l1, err := GetNoStore(key, 20)
 	require.NoError(t, err)
-	require.Equal(t, len(l1.mutationMap), 1)
+	require.Equal(t, l1.mutationMap.len(), 1)
 }
 
 func TestRollupTimestamp(t *testing.T) {

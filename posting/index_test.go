@@ -240,6 +240,20 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
 }
 
+func addDelEdgeToUID(t *testing.T, attr string, src uint64,
+	dst uint64, startTs, commitTs uint64) {
+	edge := &pb.DirectedEdge{
+		ValueId: dst,
+		Attr:    attr,
+		Entity:  src,
+		Op:      pb.DirectedEdge_DEL,
+	}
+	l, err := GetNoStore(x.DataKey(attr, src), startTs)
+	require.NoError(t, err)
+	// No index entries added here as we do not call AddMutationWithIndex.
+	addMutation(t, l, edge, Del, startTs, commitTs, false)
+}
+
 // addEdgeToUID adds uid edge with reverse edge
 func addEdgeToUID(t *testing.T, attr string, src uint64,
 	dst uint64, startTs, commitTs uint64) {
@@ -253,6 +267,73 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
+}
+
+func TestCountReverseIndexWithData(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	indexNameCountVal := "testcount: [uid] @count @reverse ."
+
+	attr := x.GalaxyAttr("testcount")
+	addEdgeToUID(t, attr, 1, 23, uint64(8), uint64(9))
+	addEdgeToUID(t, attr, 1, 23, uint64(10), uint64(11))
+	l, err := GetNoStore(x.DataKey(attr, 1), 12)
+	require.NoError(t, err)
+	l.RLock()
+	require.Equal(t, l.GetLength(12), 2)
+	l.RUnlock()
+
+	require.NoError(t, schema.ParseBytes([]byte(indexNameCountVal), 1))
+	currentSchema, _ := schema.State().Get(context.Background(), attr)
+	rb := IndexRebuild{
+		Attr:          attr,
+		StartTs:       12,
+		OldSchema:     nil,
+		CurrentSchema: &currentSchema,
+	}
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
+	require.NoError(t, err)
+	require.NoError(t, pstore.DropPrefix(prefixes...))
+	require.NoError(t, rebuildCountIndex(context.Background(), &rb))
+
+	l, err = GetNoStore(x.DataKey(attr, 1), 14)
+	require.NoError(t, err)
+	l.RLock()
+	require.Equal(t, l.GetLength(14), 1)
+	l.RUnlock()
+}
+
+func TestCountReverseIndexEmptyPosting(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	indexNameCountVal := "testcount: [uid] @count @reverse ."
+
+	attr := x.GalaxyAttr("testcount")
+	addDelEdgeToUID(t, attr, 1, 23, uint64(10), uint64(11))
+	l, err := GetNoStore(x.DataKey(attr, 1), 12)
+	require.NoError(t, err)
+	l.RLock()
+	require.Equal(t, l.GetLength(12), -1)
+	l.RUnlock()
+
+	require.NoError(t, schema.ParseBytes([]byte(indexNameCountVal), 1))
+	currentSchema, _ := schema.State().Get(context.Background(), attr)
+	rb := IndexRebuild{
+		Attr:          attr,
+		StartTs:       12,
+		OldSchema:     nil,
+		CurrentSchema: &currentSchema,
+	}
+	rebuildInfo := rb.needsTokIndexRebuild()
+	prefixes, err := rebuildInfo.prefixesForTokIndexes()
+	require.NoError(t, err)
+	require.NoError(t, pstore.DropPrefix(prefixes...))
+	require.NoError(t, rebuildCountIndex(context.Background(), &rb))
+
+	l, err = GetNoStore(x.DataKey(attr, 1), 14)
+	require.NoError(t, err)
+	l.RLock()
+	require.Equal(t, l.GetLength(14), 0)
+	l.RUnlock()
 }
 
 func TestRebuildTokIndex(t *testing.T) {
