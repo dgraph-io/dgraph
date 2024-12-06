@@ -36,7 +36,6 @@ import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
@@ -388,7 +387,6 @@ type setItems struct {
 type MemoryLayer struct {
 	shards []*lockedMap
 	setBuf chan *setItems
-	skull  *ristretto.Skull[uint64, struct{}]
 
 	insert            int
 	numCacheRead      int
@@ -401,7 +399,6 @@ func initMemoryLayer() *MemoryLayer {
 	sm := &MemoryLayer{
 		shards: make([]*lockedMap, numShards),
 		setBuf: make(chan *setItems, 32*1024),
-		skull:  ristretto.GetSkull[uint64, struct{}](),
 	}
 	for i := range sm.shards {
 		sm.shards[i] = newLockedMap()
@@ -441,7 +438,6 @@ func (sm *MemoryLayer) Set(key uint64, i *CachePL) {
 
 func (sm *MemoryLayer) Del(key uint64) {
 	sm.shards[key%uint64(numShards)].Del(key)
-	sm.skull.Del(key)
 }
 
 func (sm *MemoryLayer) UnlockKey(key uint64) {
@@ -743,8 +739,7 @@ func (ml *MemoryLayer) Process(i *setItems) {
 		return
 	}
 	ml.insert -= 1
-	victims, add := ml.skull.Set(i.keyHash, int64(i.list.ApproxLen()/100))
-	//fmt.Println(add, i.list.ApproxLen())
+	add := true
 
 	if add {
 		ml.LockKey(i.keyHash)
@@ -780,12 +775,6 @@ func (ml *MemoryLayer) Process(i *setItems) {
 		//}
 		ml.UnlockKey(i.keyHash)
 	}
-
-	for _, vic := range victims {
-		ml.LockKey(vic.Key)
-		delete(ml.shards[vic.Key%uint64(numShards)].data, vic.Key)
-		ml.UnlockKey(vic.Key)
-	}
 }
 
 func (ml *MemoryLayer) deleteOldItems(ts uint64) {
@@ -809,7 +798,6 @@ func (ml *MemoryLayer) deleteOldItems(ts uint64) {
 		for keyHash, pl := range ml.shards[i].data {
 			if time.Since(pl.lastRead) > 5*time.Second {
 				delete(ml.shards[i].data, keyHash)
-				ml.skull.Del(keyHash)
 			}
 			if len(ml.shards[i].data) < 500 { // Keeps like 200k entries after this
 				break
@@ -831,7 +819,6 @@ func (ml *MemoryLayer) saveInCache(keyHash, readTs uint64, l *List) {
 func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
 	ml.RLockKey(keyHash)
 
-	ml.skull.Get(keyHash)
 	cacheItem, ok := ml.get(keyHash)
 
 	if ok {
