@@ -66,6 +66,9 @@ func Init(ps *badger.DB, cacheSize int64) {
 		Cost: func(val *List) int64 {
 			return 0
 		},
+		ShouldUpdate: func(cur, prev *List) bool {
+			return !(cur != nil && prev != nil && prev.maxTs > cur.maxTs)
+		},
 	})
 	x.Check(err)
 	go func() {
