@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -36,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
@@ -135,7 +138,7 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	RemoveCacheFor(key)
 	//pk, _ := x.Parse(key)
 	//fmt.Println("====Setting cache delete rollup", ts, pk)
-	memoryLayer.Del(z.MemHash(key))
+	memoryLayer.del(key)
 	// TODO Update cache with rolled up results
 	// If we do a rollup, we typically won't need to update the key in cache.
 	// The only caveat is that the key written by rollup would be written at +1
@@ -179,7 +182,7 @@ func (ir *incrRollupi) mem(getNewTs func(bool) uint64) {
 	for {
 		select {
 		case <-deleteCacheTick.C:
-			memoryLayer.deleteOldItems(ir.getNewTs(false))
+			//memoryLayer.deleteOldItems(ir.getNewTs(false))
 		case <-forceRollupTick.C:
 			t := 10000
 			memoryLayer.insert += t
@@ -367,7 +370,7 @@ func ResetCache() {
 	if lCache != nil {
 		lCache.Clear()
 	}
-	memoryLayer.Clear()
+	memoryLayer.clear()
 }
 
 // RemoveCacheFor will delete the list corresponding to the given key.
@@ -385,8 +388,7 @@ type setItems struct {
 }
 
 type MemoryLayer struct {
-	shards []*lockedMap
-	setBuf chan *setItems
+	cache *ristretto.Cache[[]byte, *CachePL]
 
 	insert            int
 	numCacheRead      int
@@ -396,126 +398,56 @@ type MemoryLayer struct {
 }
 
 func initMemoryLayer() *MemoryLayer {
-	sm := &MemoryLayer{
-		shards: make([]*lockedMap, numShards),
-		setBuf: make(chan *setItems, 32*1024),
-	}
-	for i := range sm.shards {
-		sm.shards[i] = newLockedMap()
-	}
+	sm := &MemoryLayer{}
+	cacheSize := 100000000
+	cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
+		// Use 5% of cache memory for storing counters.
+		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
+		MaxCost:     int64(float64(cacheSize) * 0.95),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val *CachePL) int64 {
+			return 0
+		},
+		ShouldUpdate: func(cur, prev *CachePL) bool {
+			return !(cur.list != nil && prev.list != nil && prev.list.maxTs > cur.list.maxTs)
+		},
+	})
+	x.Check(err)
+	go func() {
+		m := cache.Metrics
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			// Record the posting list cache hit ratio
+			fmt.Println("CACHE HIT RATIOS", m.Ratio())
+			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+		}
+	}()
 	return sm
 }
 
-func (sm *MemoryLayer) get(key uint64) (*CachePL, bool) {
-	return sm.shards[key%uint64(numShards)].get(key)
-}
-
-func (sm *MemoryLayer) set(key uint64, i *CachePL) {
-	if i == nil {
-		// If item is nil make this Set a no-op.
-		return
+func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
+	val, ok := sm.cache.Get(key)
+	if !ok {
+		return val, ok
 	}
-
-	sm.shards[key%uint64(numShards)].set(key, i)
-}
-
-func (sm *MemoryLayer) del(key uint64) {
-	sm.shards[key%uint64(numShards)].del(key)
-}
-
-func (sm *MemoryLayer) Get(key uint64) (*CachePL, bool) {
-	return sm.shards[key%uint64(numShards)].Get(key)
-}
-
-func (sm *MemoryLayer) Set(key uint64, i *CachePL) {
-	if i == nil {
-		// If item is nil make this Set a no-op.
-		return
+	if val.list == nil {
+		return nil, false
 	}
-
-	sm.shards[key%uint64(numShards)].Set(key, i)
+	return val, val.list.isDeleted()
 }
 
-func (sm *MemoryLayer) Del(key uint64) {
-	sm.shards[key%uint64(numShards)].Del(key)
+func (sm *MemoryLayer) set(key []byte, i *CachePL) {
+	sm.cache.Set(key, i, 0)
 }
 
-func (sm *MemoryLayer) UnlockKey(key uint64) {
-	sm.shards[key%uint64(numShards)].Unlock()
+func (sm *MemoryLayer) del(key []byte) {
+	sm.cache.Del(key)
 }
 
-func (sm *MemoryLayer) LockKey(key uint64) {
-	sm.shards[key%uint64(numShards)].Lock()
-}
-
-func (sm *MemoryLayer) RLockKey(key uint64) {
-	sm.shards[key%uint64(numShards)].RLock()
-}
-
-func (sm *MemoryLayer) RUnlockKey(key uint64) {
-	sm.shards[key%uint64(numShards)].RUnlock()
-}
-
-func (sm *MemoryLayer) Clear() {
-	for i := 0; i < numShards; i++ {
-		sm.shards[i].Clear()
-	}
-}
-
-type lockedMap struct {
-	sync.RWMutex
-	data map[uint64]*CachePL
-}
-
-func newLockedMap() *lockedMap {
-	return &lockedMap{
-		data: make(map[uint64]*CachePL),
-	}
-}
-
-func (m *lockedMap) get(key uint64) (*CachePL, bool) {
-	item, ok := m.data[key]
-	return item, ok
-}
-
-func (m *lockedMap) Get(key uint64) (*CachePL, bool) {
-	m.RLock()
-	defer m.RUnlock()
-	item, ok := m.data[key]
-	return item, ok
-}
-
-func (m *lockedMap) set(key uint64, i *CachePL) {
-	if i == nil {
-		// If the item is nil make this Set a no-op.
-		return
-	}
-
-	m.data[key] = i
-}
-
-func (m *lockedMap) Set(key uint64, i *CachePL) {
-	m.Lock()
-	defer m.Unlock()
-	m.set(key, i)
-}
-
-func (m *lockedMap) del(key uint64) {
-	delete(m.data, key)
-}
-
-func (m *lockedMap) Del(key uint64) {
-	m.Lock()
-	if l, ok := m.data[key]; ok && l != nil {
-		l.list = nil
-	}
-	m.Unlock()
-}
-
-func (m *lockedMap) Clear() {
-	m.Lock()
-	m.data = make(map[uint64]*CachePL)
-	m.Unlock()
+func (sm *MemoryLayer) clear() {
+	sm.cache.Clear()
 }
 
 func NewCachePL() *CachePL {
@@ -539,36 +471,31 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 		return
 	}
 
+	updateItemAfterCommit := true
+
 	p := new(pb.PostingList)
 	x.Check(proto.Unmarshal(delta, p))
 	//fmt.Println("======COMMITTING", startTs, commitTs, pk, p)
 
-	keyHash := z.MemHash([]byte(key))
-	// TODO under the same lock
-	ml.LockKey(keyHash)
-	defer ml.UnlockKey(keyHash)
-
-	a := 1
-	if a == 1 {
-		delete(ml.shards[keyHash%uint64(numShards)].data, keyHash)
-		return
-	}
-
-	val, ok := ml.get(keyHash)
+	val, ok := ml.get([]byte(key))
 	if !ok {
-		val = NewCachePL()
-		val.lastUpdate = commitTs
-		ml.set(keyHash, val)
 		return
 	}
 
 	val.lastUpdate = commitTs
 	val.count -= 1
 
-	if val.list != nil {
+	if val.list != nil && updateItemAfterCommit {
 		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
 		checkForRollup([]byte(key), val.list)
 		//fmt.Println("====Setting cache list", commitTs, pk, p, val.list.mutationMap, val.list.key)
+	}
+
+	if !updateItemAfterCommit {
+		if val.list != nil {
+			val.list.markDeleted()
+		}
+		ml.del([]byte(key))
 	}
 }
 
@@ -734,92 +661,8 @@ func PostingListCacheEnabled() bool {
 	//return lCache != nil
 }
 
-func (ml *MemoryLayer) Process(i *setItems) {
-	if ml.insert < 0 {
-		return
-	}
-	ml.insert -= 1
-	add := true
-
-	if add {
-		ml.LockKey(i.keyHash)
-		i.list.RLock()
-		cacheItem, ok := ml.get(i.keyHash)
-		if !ok {
-			cacheItemNew := NewCachePL()
-			cacheItemNew.count = 1
-			cacheItemNew.list = copyList(i.list)
-			cacheItemNew.lastUpdate = i.list.maxTs
-			ml.set(i.keyHash, cacheItemNew)
-		} else {
-			// Only set l to the cache if readTs >= latestTs, which implies that l is
-			// the latest version of the PL. We also check that we're reading a version
-			// from Badger, which is higher than the write registered by the cache.
-
-			//fmt.Println("====Setting cache", readTs, pk, l.mutationMap)
-			cacheItem.Set(copyList(i.list), i.readTs)
-		}
-		ml.numCacheSave += 1
-		//allV, _ := i.list.AllValues(i.readTs)
-		//uids, _ := i.list.Uids(ListOptions{ReadTs: i.readTs})
-		//fmt.Println("====Setting into cache", i.readTs, i.list.key, i.list.mutationMap, allV, uids)
-		i.list.RUnlock()
-
-		//idx := int(i.keyHash % uint64(numShards))
-		//if len(ml.shards[idx].data) > 500 {
-		//	for keyHash, pl := range ml.shards[idx].data {
-		//		if pl.lastRead < i.readTs-100 {
-		//			delete(ml.shards[idx].data, keyHash)
-		//		}
-		//	}
-		//}
-		ml.UnlockKey(i.keyHash)
-	}
-}
-
-func (ml *MemoryLayer) deleteOldItems(ts uint64) {
-	fmt.Println("Deleting old items", ml.numCacheRead, ml.numDisksRead, ml.numCacheSave, ml.numCacheReadFails, float64(ml.numCacheRead)/float64(ml.numDisksRead), ml.insert)
-	lb := 0
-	la := 0
-	t1 := time.Now()
-	defer func() {
-		fmt.Println("Done deleting old items", lb, la, time.Since(t1))
-	}()
-
-	//ml.skull.ExpiryMap.SkullCleanup(func(keyHash uint64) {
-	//	ml.LockKey(keyHash)
-	//	delete(ml.shards[keyHash%uint64(numShards)].data, keyHash)
-	//	ml.UnlockKey(keyHash)
-	//}, ml.skull.CachePolicy)
-
-	for i := 0; i < numShards; i++ {
-		ml.shards[i].Lock()
-		lb += len(ml.shards[i].data)
-		for keyHash, pl := range ml.shards[i].data {
-			if time.Since(pl.lastRead) > 5*time.Second {
-				delete(ml.shards[i].data, keyHash)
-			}
-			if len(ml.shards[i].data) < 500 { // Keeps like 200k entries after this
-				break
-			}
-		}
-		la += len(ml.shards[i].data)
-		ml.shards[i].Unlock()
-	}
-}
-
-func (ml *MemoryLayer) saveInCache(keyHash, readTs uint64, l *List) {
-	ml.Process(&setItems{
-		keyHash: keyHash,
-		readTs:  readTs,
-		list:    l,
-	})
-}
-
 func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
-	ml.RLockKey(keyHash)
-
-	cacheItem, ok := ml.get(keyHash)
+	cacheItem, ok := ml.get(key)
 
 	if ok {
 		cacheItem.count += 1
@@ -828,7 +671,6 @@ func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
 			cacheItem.list.RLock()
 			lCopy := copyList(cacheItem.list)
 			cacheItem.list.RUnlock()
-			ml.RUnlockKey(keyHash)
 			checkForRollup(key, lCopy)
 			//allV, _ := lCopy.AllValues(readTs)
 			//uids, _ := lCopy.Uids(ListOptions{ReadTs: readTs})
@@ -836,7 +678,6 @@ func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
 			return lCopy
 		}
 	}
-	ml.RUnlockKey(keyHash)
 	return nil
 }
 
@@ -861,6 +702,14 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	return l, nil
 }
 
+func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
+	cacheItem := NewCachePL()
+	cacheItem.count = 1
+	cacheItem.list = copyList(l)
+	cacheItem.lastUpdate = l.maxTs
+	ml.set(key, cacheItem)
+}
+
 func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	pk, _ := x.Parse(key)
 	var keyHash uint64
@@ -881,7 +730,7 @@ func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*
 		if err != nil {
 			return nil, err
 		}
-		ml.saveInCache(keyHash, readTs, l)
+		ml.saveInCache(key, l)
 		if l.minTs == 0 || readTs >= l.minTs {
 			return l, nil
 		}
