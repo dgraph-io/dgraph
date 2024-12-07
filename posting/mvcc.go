@@ -703,6 +703,8 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 }
 
 func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
+	l.RLock()
+	defer l.RUnlock()
 	cacheItem := NewCachePL()
 	cacheItem.count = 1
 	cacheItem.list = copyList(l)
