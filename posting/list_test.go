@@ -536,7 +536,7 @@ func TestReadSingleValue(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
 			// Delete item from global cache before reading, as we are not updating the cache in the test
-			memoryLayer.Del(z.MemHash(key))
+			memoryLayer.del(key)
 			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
