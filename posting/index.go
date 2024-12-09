@@ -1432,14 +1432,13 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 				if err := p.addMutation(ctx, txn, &edge); err != nil {
 					return []*pb.DirectedEdge{}, err
 				}
-
-				_, err = processAddIndexMutation(&edge, val)
-				if err != nil {
-					return []*pb.DirectedEdge{}, err
-				}
-
-				return edges, nil
 			}
+			_, err = processAddIndexMutation(&edge, val)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			return edges, nil
 		}
 
 		err := pl.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
@@ -1454,15 +1453,13 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			if err != nil {
 				return err
 			}
-			if !runForVectors {
-				edges = append(edges, newEdges...)
-			}
+			edges = append(edges, newEdges...)
 			return nil
 		})
 		if err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
-		return edges, nil
+		return edges, err
 	}
 
 	if runForVectors {
