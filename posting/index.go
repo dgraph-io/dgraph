@@ -168,7 +168,8 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		//       Similarly, the current assumption is that we have at most one
 		//       Vector Index, but this assumption may break later.
 		if info.op != pb.DirectedEdge_DEL &&
-			len(data) > 0 && len(info.factorySpecs) > 0 {
+			len(data) > 0 && data[0].Tid == types.VFloatID &&
+			len(info.factorySpecs) > 0 {
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
@@ -1405,13 +1406,20 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 			}
 		}
 
+		// There are two cases to consider here:
+		// 1. This can be a schema mutation where the user adds a index on existing vectors.
+		// 2. This can be a vector mutation where the user adds vectors to the DB on a
+		// predicate that is already indexed.
 		if runForVectors {
 			val, err := pl.Value(txn.StartTs)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
 
+			// In the first case, val.Tid is default, so we need to convert the
+			// vector into the vfloat type and re-add it to the DB.
 			if val.Tid != types.VFloatID {
+				// Here, we convert the defaultID type vector into vfloat.
 				sv, err := types.Convert(val, types.VFloatID)
 				if err != nil {
 					return []*pb.DirectedEdge{}, err
@@ -1433,6 +1441,8 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 					return []*pb.DirectedEdge{}, err
 				}
 			}
+			// In the second case, we don't need to convert the vector as it is already
+			// in the vfloat type. We just need to process it further.
 			_, err = processAddIndexMutation(&edge, val)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
