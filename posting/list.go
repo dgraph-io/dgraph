@@ -471,6 +471,18 @@ func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
 	}
 }
 
+func (l *List) markDeleted() {
+	l.Lock()
+	defer l.Unlock()
+	l.key = nil
+}
+
+func (l *List) isDeleted() bool {
+	l.RLock()
+	defer l.RUnlock()
+	return l.key == nil
+}
+
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -812,6 +824,17 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
+func indexConflicKey(key []byte, t *pb.DirectedEdge) uint64 {
+	getKey := func(key []byte, uid uint64) uint64 {
+		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
+		// here to save memory allocations.
+		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
+		return farm.Fingerprint64(key) ^ uid
+	}
+
+	return getKey(key, t.ValueId)
+}
+
 func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	getKey := func(key []byte, uid uint64) uint64 {
 		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
@@ -999,7 +1022,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = newMutableLayer()
 	}
 	l.mutationMap.setCurrentEntries(startTs, pl)
-
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -1030,6 +1052,7 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 // If greater than zero, this timestamp must thus be greater than l.minTs.
 func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
+	// either way, effective ts is returning ts.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
 			// Has been committed and below the readTs.
@@ -1069,6 +1092,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 	// mposts is the list of mutable postings
 	deleteBelowTs, mposts := l.pickPostings(readTs)
+	//fmt.Println(mposts, deleteBelowTs, l.plist)
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
@@ -1258,6 +1282,7 @@ func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb
 	var count int
 	var found bool
 	var post *pb.Posting
+
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			post = p
@@ -1401,6 +1426,7 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
+	//fmt.Println("ROLLING UP", l.key, out.plist, kv.Version)
 	x.PrintRollup(out.plist, out.parts, l.key, kv.Version)
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
@@ -1818,8 +1844,10 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	if l.mutationMap == nil {
 		// If mutation map is empty, check if there is some data, and return it.
 		if l.plist != nil && len(l.plist.Postings) > 0 {
+			//fmt.Println("nil map plist")
 			return l.plist
 		}
+		//fmt.Println("nil map nil")
 		return nil
 	}
 
@@ -1831,6 +1859,7 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	// If maxTs < readTs then we need to read maxTs
 	if l.maxTs <= readTs {
 		if mutation := l.mutationMap.get(l.maxTs); mutation != nil {
+			//fmt.Println("mutation", mutation)
 			return mutation
 		}
 	}
@@ -1846,11 +1875,13 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 		}
 	}, readTs)
 	if mutation != nil {
+		//fmt.Println("iterate", mutation)
 		return mutation
 	}
 
 	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
 	// means we need to return l.plist
+	//fmt.Println("got nothing", l.plist, l.plist != nil)
 	return l.plist
 }
 
@@ -2012,6 +2043,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	// Iterate starts iterating after the given argument, so we pass UID - 1
 	// TODO Find what happens when uid = math.MaxUint64
 	searchFurther, pos := l.mutationMap.findPosting(readTs, uid)
+	//fmt.Println("FIND POSTING", readTs, "key", l.key, "mutationMap:", l.mutationMap, "plist:", l.plist, uid, searchFurther, pos)
 	if pos != nil {
 		return true, pos, nil
 	}
