@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"runtime"
 	"strconv"
@@ -399,7 +398,7 @@ type MemoryLayer struct {
 
 func initMemoryLayer() *MemoryLayer {
 	sm := &MemoryLayer{}
-	cacheSize := 100000000
+	cacheSize := 1000000
 	cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 		// Use 5% of cache memory for storing counters.
 		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
@@ -407,7 +406,7 @@ func initMemoryLayer() *MemoryLayer {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val *CachePL) int64 {
-			return 0
+			return 1
 		},
 		ShouldUpdate: func(cur, prev *CachePL) bool {
 			return !(cur.list != nil && prev.list != nil && prev.list.maxTs > cur.list.maxTs)
@@ -420,7 +419,6 @@ func initMemoryLayer() *MemoryLayer {
 		defer ticker.Stop()
 		for range ticker.C {
 			// Record the posting list cache hit ratio
-			fmt.Println("CACHE HIT ", m.Ratio(), sm.numCacheRead, sm.numDisksRead, sm.numCacheReadFails)
 			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
 	}()
@@ -440,7 +438,7 @@ func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
 }
 
 func (sm *MemoryLayer) set(key []byte, i *CachePL) {
-	sm.cache.Set(key, i, 0)
+	sm.cache.Set(key, i, 1)
 }
 
 func (sm *MemoryLayer) del(key []byte) {
@@ -472,7 +470,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 		return
 	}
 
-	updateItemAfterCommit := true
+	updateItemAfterCommit := false
 
 	p := new(pb.PostingList)
 	x.Check(proto.Unmarshal(delta, p))
