@@ -420,10 +420,11 @@ func initMemoryLayer() *MemoryLayer {
 		defer ticker.Stop()
 		for range ticker.C {
 			// Record the posting list cache hit ratio
-			fmt.Println("CACHE HIT RATIOS", m.Ratio())
+			fmt.Println("CACHE HIT ", m.Ratio(), sm.numCacheRead, sm.numDisksRead, sm.numCacheReadFails)
 			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 		}
 	}()
+	sm.cache = cache
 	return sm
 }
 
@@ -435,7 +436,7 @@ func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
 	if val.list == nil {
 		return nil, false
 	}
-	return val, val.list.isDeleted()
+	return val, !val.list.isDeleted()
 }
 
 func (sm *MemoryLayer) set(key []byte, i *CachePL) {
