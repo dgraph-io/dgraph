@@ -398,7 +398,7 @@ type MemoryLayer struct {
 
 func initMemoryLayer() *MemoryLayer {
 	sm := &MemoryLayer{}
-	cacheSize := 1000000
+	cacheSize := 100000
 	cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 		// Use 5% of cache memory for storing counters.
 		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
