@@ -62,7 +62,7 @@ func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportForma
 	require.NoError(t, gc.SetupSchema(testSchema))
 
 	numVectors := 100
-	pred := "project_discription_v"
+	pred := "project_description_v"
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
@@ -76,7 +76,7 @@ func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportForma
 	require.NoError(t, gc.DropAll())
 
 	query := `{
-		vector(func: has(project_discription_v)) {
+		vector(func: has(project_description_v)) {
 			   count(uid)
 			}
 	}`
