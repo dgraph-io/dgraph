@@ -1723,8 +1723,8 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	isGalaxyQuery := x.IsGalaxyOperation(ctx)
 
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
-	var buildQuery strings.Builder
 	for gmuIndex, gmu := range qc.gmuList {
+		var buildQuery strings.Builder
 		for rdfIndex, pred := range gmu.Set {
 			if isGalaxyQuery {
 				// The caller should make sure that the directed edges contain the namespace we want
