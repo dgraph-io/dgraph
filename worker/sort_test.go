@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -52,6 +53,7 @@ func rollup(t *testing.T, key []byte, pstore *badger.DB, readTs uint64) {
 	kvs, err := ol.Rollup(nil, readTs+1)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
+	posting.ResetCache()
 }
 
 func writePostingListToDisk(kvs []*bpb.KV) error {
@@ -214,6 +216,16 @@ func TestLangExact(t *testing.T) {
 	require.Equal(t, val.Value, []byte("hindi"))
 }
 
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
 func BenchmarkAddMutationWithIndex(b *testing.B) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
@@ -235,15 +247,25 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	txn := posting.Oracle().RegisterStartTs(5)
 	attr := x.GalaxyAttr("benchmarkadd")
 
+	n := 1000
+	values := make([]string, 0)
+	for i := 0; i < n; i++ {
+		values = append(values, RandStringBytes(5))
+	}
+
 	for i := 0; i < b.N; i++ {
+		//b.RunParallel(func(pbi *testing.PB) {
+		//	for pbi.Next() {
 		edge := &pb.DirectedEdge{
-			Value:  []byte("david"),
+			Value:  []byte(values[rand.Intn(n)]),
 			Attr:   attr,
-			Entity: 1,
+			Entity: uint64(rand.Intn(n)) + 1,
 			Op:     pb.DirectedEdge_SET,
 		}
 
 		x.Check(runMutation(ctx, edge, txn))
+		//		}
+		//	})
 	}
 }
 
