@@ -267,14 +267,14 @@ func (ph *persistentHNSW[T]) Search(ctx context.Context, c index.CacheType, quer
 	return r.Neighbors, err
 }
 
-// Search searches the hnsw graph for the nearest neighbors of the query uid
+// SearchWithUid searches the hnsw graph for the nearest neighbors of the query uid
 // and returns the traversal path and the nearest neighbors
-func (ph *persistentHNSW[T]) SearchWithUid(ctx context.Context, c index.CacheType, queryUid uint64,
+func (ph *persistentHNSW[T]) SearchWithUid(_ context.Context, c index.CacheType, queryUid uint64,
 	maxResults int, filter index.SearchFilter[T]) (nnUids []uint64, err error) {
 	var queryVec []T
 	err = ph.getVecFromUid(queryUid, c, &queryVec)
 	if err != nil {
-		if strings.Contains(err.Error(), plError) {
+		if errors.Is(err, errFetchingPostingList) {
 			// No vector. return empty result
 			return []uint64{}, nil
 		}
@@ -304,7 +304,7 @@ func (ph *persistentHNSW[T]) SearchWithUid(ctx context.Context, c index.CacheTyp
 // There will be times when the entry node has been deleted. In that case, we want to make a new node
 // the first vector.
 func (ph *persistentHNSW[T]) calculateNewEntryVec(
-	ctx context.Context,
+	_ context.Context,
 	c index.CacheType,
 	startVec *[]T) (uint64, error) {
 
@@ -330,7 +330,7 @@ func (ph *persistentHNSW[T]) PickStartNode(
 
 	data, err := getDataFromKeyWithCacheType(ph.vecEntryKey, 1, c)
 	if err != nil {
-		if strings.Contains(err.Error(), plError) {
+		if errors.Is(err, errFetchingPostingList) {
 			// The index might be empty
 			return ph.calculateNewEntryVec(ctx, c, startVec)
 		}
@@ -338,8 +338,7 @@ func (ph *persistentHNSW[T]) PickStartNode(
 	}
 
 	entry := BytesToUint64(data.([]byte))
-	err = ph.getVecFromUid(entry, c, startVec)
-	if err != nil && !strings.Contains(err.Error(), "Nil vector returned") {
+	if err = ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
 		return 0, err
 	}
 
