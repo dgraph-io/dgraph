@@ -138,7 +138,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	val, err := proto.Marshal(&pb.SchemaUpdate{ValueType: pb.Posting_UID})
 	require.NoError(t, err)
 
-	txn := pstore.NewTransactionAt(math.MaxUint64, true)
+	txn := Pstore.NewTransactionAt(math.MaxUint64, true)
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
@@ -147,7 +147,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	val, err = proto.Marshal(&pb.SchemaUpdate{ValueType: pb.Posting_UID})
 	require.NoError(t, err)
 
-	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	txn = Pstore.NewTransactionAt(math.MaxUint64, true)
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val))
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("friend_not_served"), val))
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("age"), val))
@@ -156,7 +156,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	val, err = proto.Marshal(personType)
 	require.NoError(t, err)
 
-	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	txn = Pstore.NewTransactionAt(math.MaxUint64, true)
 	require.NoError(t, txn.Set(testutil.GalaxyTypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
@@ -164,7 +164,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 
 	// Drop age predicate after populating DB.
 	// age should not exist in the exported schema.
-	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	txn = Pstore.NewTransactionAt(math.MaxUint64, true)
 	require.NoError(t, txn.Delete(testutil.GalaxySchemaKey("age")))
 	require.NoError(t, txn.CommitAt(1, nil))
 }

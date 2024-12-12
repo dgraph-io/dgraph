@@ -612,6 +612,16 @@ service Worker {
       returns (UpdateGraphQLSchemaResponse) {}
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
+  rpc PDirStat(PDirReadyStatus) returns (PDirReadyStatus) {}
+}
+
+service ImportP {
+  rpc StreamSnapshot(stream Snapshot) returns (stream KVS) {}
+}
+
+message PDirReadyStatus {
+  bool isReady = 1;
+  bool ack = 2;
 }
 
 message TabletResponse {

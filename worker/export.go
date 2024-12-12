@@ -610,7 +610,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
-	return exportInternal(ctx, in, pstore, false)
+	return exportInternal(ctx, in, Pstore, false)
 }
 
 func ToExportKvList(pk x.ParsedKey, pl *posting.List, in *pb.ExportRequest) (*bpb.KVList, error) {

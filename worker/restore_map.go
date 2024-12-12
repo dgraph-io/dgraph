@@ -887,7 +887,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				dropAttr[op.DropValue] = struct{}{}
 			case pb.DropOperation_NS:
 				// pstore will be nil for export_backup tool. In that case we don't need to ban ns.
-				if pstore == nil {
+				if Pstore == nil {
 					continue
 				}
 				// If there is a drop namespace, we just ban the namespace in the pstore.
@@ -895,7 +895,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 				if err != nil {
 					return nil, errors.Wrapf(err, "Map phase failed to parse namespace")
 				}
-				if err := pstore.BanNamespace(ns); err != nil {
+				if err := Pstore.BanNamespace(ns); err != nil {
 					return nil, errors.Wrapf(err, "Map phase failed to ban namespace: %d", ns)
 				}
 				maxBannedNs = x.Max(maxBannedNs, ns)

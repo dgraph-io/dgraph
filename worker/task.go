@@ -2405,7 +2405,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	x.AssertTrue(countl >= 1)
 	countKey = x.CountKey(cp.attr, uint32(countl), cp.reverse)
 
-	txn := pstore.NewTransactionAt(cp.readTs, false)
+	txn := Pstore.NewTransactionAt(cp.readTs, false)
 	defer txn.Discard()
 
 	pk := x.ParsedKey{Attr: cp.attr}
@@ -2451,7 +2451,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		glog.Infof("handleHasFunction query: %+v\n", q)
 	}
 
-	txn := pstore.NewTransactionAt(q.ReadTs, false)
+	txn := Pstore.NewTransactionAt(q.ReadTs, false)
 	defer txn.Discard()
 
 	initKey := x.ParsedKey{

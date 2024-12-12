@@ -18,6 +18,8 @@ package worker
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -25,6 +27,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/v3"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v24/conn"
@@ -45,6 +49,7 @@ type badgerWriter interface {
 	Flush() error
 }
 
+// client code to recive snapshot
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateSnapshot(snap *pb.Snapshot, pl *conn.Pool) error {
 	c := pb.NewWorkerClient(pl.Get())
@@ -67,7 +72,7 @@ func (n *node) populateSnapshot(snap *pb.Snapshot, pl *conn.Pool) error {
 
 	var writer badgerWriter
 	if snap.SinceTs == 0 {
-		sw := pstore.NewStreamWriter()
+		sw := Pstore.NewStreamWriter()
 		defer sw.Cancel()
 
 		if err := sw.Prepare(); err != nil {
@@ -76,7 +81,7 @@ func (n *node) populateSnapshot(snap *pb.Snapshot, pl *conn.Pool) error {
 
 		writer = sw
 	} else {
-		writer = pstore.NewManagedWriteBatch()
+		writer = Pstore.NewManagedWriteBatch()
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
@@ -123,7 +128,7 @@ func (n *node) populateSnapshot(snap *pb.Snapshot, pl *conn.Pool) error {
 		return err
 	}
 
-	x.VerifySnapshot(pstore, snap.ReadTs)
+	x.VerifySnapshot(Pstore, snap.ReadTs)
 	glog.Infof("Populated snapshot with data size: %s\n", humanize.IBytes(uint64(size)))
 	return nil
 }
@@ -185,7 +190,7 @@ func deleteStalePreds(ctx context.Context, kvs *pb.KVS, ts uint64) error {
 	return nil
 }
 
-func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) error {
+func DoStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) error {
 	// We choose not to try and match the requested snapshot from the latest snapshot at the leader.
 	// This is the job of the Raft library. At the leader end, we service whatever is asked of us.
 	// If this snapshot is old, Raft should cause the follower to request another one, to overwrite
@@ -203,11 +208,11 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	// request. Any other node in the group should have the same data as the leader, once it is past
 	// the read timestamp.
 	glog.Infof("Waiting to reach timestamp: %d", snap.ReadTs)
-	if err := posting.Oracle().WaitForTs(out.Context(), snap.ReadTs); err != nil {
-		return err
-	}
+	// if err := posting.Oracle().WaitForTs(out.Context(), snap.ReadTs); err != nil {
+	// 	return err
+	// }
 
-	stream := pstore.NewStreamAt(snap.ReadTs)
+	stream := Pstore.NewStreamAt(snap.ReadTs)
 	stream.LogPrefix = "Sending Snapshot"
 	// Use the default implementation. We no longer try to generate a rolled up posting list here.
 	// Instead, we just stream out all the versions as they are.
@@ -294,11 +299,91 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 		return err
 	}
 	glog.Infof("Got StreamSnapshot request: %+v\n", snap)
-	if err := doStreamSnapshot(snap, stream); err != nil {
+	if err := DoStreamSnapshot(snap, stream); err != nil {
 		glog.Errorf("While streaming snapshot: %v. Reporting failure.", err)
 		n.Raft().ReportSnapshot(snap.Context.GetId(), raft.SnapshotFailure)
 		return err
 	}
 	glog.Infof("Stream snapshot: OK")
+	return nil
+}
+
+func (w *grpcWorker) PDirStat(context.Context, *pb.PDirReadyStatus) (*pb.PDirReadyStatus, error) {
+	// p dir is ready we can get it from import server
+	fmt.Println("i am here in PDIRST")
+
+	err := getPDirfromImport(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func getPDirfromImport(ctx context.Context) error {
+	serverAddress := "localhost:50051"
+	// Dial the gRPC server
+	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to gRPC server: %v", err)
+	}
+
+	defer conn.Close()
+	c := pb.NewImportPClient(conn)
+	stream, err := c.StreamSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+
+	var writer badgerWriter
+	sw := Pstore.NewStreamWriter()
+	defer sw.Cancel()
+
+	if err := sw.Prepare(); err != nil {
+		return err
+	}
+
+	writer = sw
+
+	size := 0
+	var done *pb.KVS
+	for {
+		kvs, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+		if kvs.Done {
+			done = kvs
+			glog.V(1).Infoln("All key-values have been received.")
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		size += len(kvs.Data)
+		glog.V(1).Infof("Received batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
+
+		buf := z.NewBufferSlice(kvs.Data)
+		if err := writer.Write(buf); err != nil {
+			return err
+		}
+	}
+	fmt.Println("dne", done)
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	// Reset the cache after having received a snapshot.
+	posting.ResetCache()
+
+	glog.Infof("Snapshot writes DONE. Sending ACK")
+	// Send an acknowledgement back to the leader.
+	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -53,7 +53,7 @@ func populateKeyValues(ctx context.Context, kvs []*bpb.KV) error {
 	if len(kvs) == 0 {
 		return nil
 	}
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	if err := writer.Write(&bpb.KVList{Kv: kvs}); err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		return errors.Wrapf(err, "while calling ReceivePredicate")
 	}
 
-	txn := pstore.NewTransactionAt(in.TxnTs, false)
+	txn := Pstore.NewTransactionAt(in.TxnTs, false)
 	defer txn.Discard()
 
 	// Send schema first.
@@ -327,7 +327,7 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 
 	// sends all data except schema, schema key has different prefix
 	// Read the predicate keys and stream to keysCh.
-	stream := pstore.NewStreamAt(in.TxnTs)
+	stream := Pstore.NewStreamAt(in.TxnTs)
 	stream.LogPrefix = fmt.Sprintf("Sending predicate: [%s]", in.Predicate)
 	stream.Prefix = x.PredicatePrefix(in.Predicate)
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {

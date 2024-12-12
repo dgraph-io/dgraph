@@ -340,7 +340,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 	glog.Infof("Backup map phase is complete. Map result is: %+v\n", mapRes)
 
-	sw := pstore.NewStreamWriter()
+	sw := Pstore.NewStreamWriter()
 	defer sw.Cancel()
 
 	prepareForReduce := func() error {
@@ -350,7 +350,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		// If there is a drop all in between the last restored backup and the incremental backups
 		// then drop everything before restoring incremental backups.
 		if mapRes.shouldDropAll {
-			if err := pstore.DropAll(); err != nil {
+			if err := Pstore.DropAll(); err != nil {
 				return errors.Wrap(err, "failed to reduce incremental restore map")
 			}
 		}
@@ -377,7 +377,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 				dropAttrs = append(dropAttrs, x.PredicatePrefix(pred))
 			}
 		}
-		if err := pstore.DropPrefix(dropAttrs...); err != nil {
+		if err := Pstore.DropPrefix(dropAttrs...); err != nil {
 			return errors.Wrap(err, "failed to reduce incremental restore map")
 		}
 		// If there are any writes done after last incremental restore on badger DB,

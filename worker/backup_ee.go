@@ -71,7 +71,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.BackupR
 	}
 	defer closer.Done()
 
-	bp := NewBackupProcessor(pstore, req)
+	bp := NewBackupProcessor(Pstore, req)
 	defer bp.Close()
 
 	return bp.WriteBackup(closer.Ctx())

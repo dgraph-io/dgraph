@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	pstore       *badger.DB
+	Pstore       *badger.DB
 	workerServer *grpc.Server
 	raftServer   conn.RaftServer
 
@@ -57,7 +57,7 @@ func workerPort() int {
 
 // Init initializes this package.
 func Init(ps *badger.DB) {
-	pstore = ps
+	Pstore = ps
 	// needs to be initialized after group config
 	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
 	go limiter.bleed()
@@ -96,7 +96,7 @@ func (w *grpcWorker) Subscribe(
 	for _, m := range req.GetMatches() {
 		matches = append(matches, *m)
 	}
-	return pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
+	return Pstore.Subscribe(stream.Context(), func(kvs *badgerpb.KVList) error {
 		return stream.Send(kvs)
 	}, matches)
 }
@@ -162,10 +162,10 @@ func UpdateCacheMb(memoryMB int64) error {
 	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
 
 	posting.UpdateMaxCost(plCacheSize)
-	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
+	if _, err := Pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update block cache size")
 	}
-	if _, err := pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
+	if _, err := Pstore.CacheMaxCost(badger.IndexCache, indexCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update index cache size")
 	}
 

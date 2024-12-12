@@ -61,7 +61,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	commit := commitTs(startTs)
 
 	txn.Update()
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commit))
 	require.NoError(t, writer.Flush())
 }
@@ -498,7 +498,7 @@ func TestMain(m *testing.M) {
 	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
-	pstore = ps
+	Pstore = ps
 	// Not using posting list cache
 	posting.Init(ps, 0)
 	Init(ps)

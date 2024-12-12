@@ -55,7 +55,7 @@ func rollup(t *testing.T, key []byte, pstore *badger.DB, readTs uint64) {
 }
 
 func writePostingListToDisk(kvs []*bpb.KV) error {
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	for _, kv := range kvs {
 		if err := writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version); err != nil {
 			return err
@@ -72,7 +72,7 @@ func TestSingleUid(t *testing.T) {
 	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
-	pstore = ps
+	Pstore = ps
 	posting.Init(ps, 0)
 	Init(ps)
 	err = schema.ParseBytes([]byte("singleUidTest: string @index(exact) @unique ."), 1)
@@ -98,7 +98,7 @@ func TestSingleUid(t *testing.T) {
 	}, txn))
 
 	txn.Update()
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	require.NoError(t, txn.CommitToDisk(writer, 7))
 	require.NoError(t, writer.Flush())
 	txn.UpdateCachedKeys(7)
@@ -121,7 +121,7 @@ func TestSingleUid(t *testing.T) {
 	}, txn))
 
 	txn.Update()
-	writer = posting.NewTxnWriter(pstore)
+	writer = posting.NewTxnWriter(Pstore)
 	require.NoError(t, txn.CommitToDisk(writer, 11))
 	require.NoError(t, writer.Flush())
 	txn.UpdateCachedKeys(11)
@@ -142,7 +142,7 @@ func TestSingleUid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, found, false)
 
-	rollup(t, key, pstore, 16)
+	rollup(t, key, Pstore, 16)
 
 	txn = posting.Oracle().RegisterStartTs(18)
 	l, err = txn.Get(key)
@@ -166,7 +166,7 @@ func TestLangExact(t *testing.T) {
 	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
-	pstore = ps
+	Pstore = ps
 	// Not using posting list cache
 	posting.Init(ps, 0)
 	Init(ps)
@@ -198,15 +198,15 @@ func TestLangExact(t *testing.T) {
 	x.Check(runMutation(ctx, edge, txn))
 
 	txn.Update()
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	require.NoError(t, txn.CommitToDisk(writer, 2))
 	require.NoError(t, writer.Flush())
 	txn.UpdateCachedKeys(2)
 
 	key := x.DataKey(attr, 1)
-	rollup(t, key, pstore, 4)
+	rollup(t, key, Pstore, 4)
 
-	pl, err := readPostingListFromDisk(key, pstore, 6)
+	pl, err := readPostingListFromDisk(key, Pstore, 6)
 	require.NoError(t, err)
 
 	val, err := pl.ValueForTag(6, "hi")
@@ -222,7 +222,7 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
-	pstore = ps
+	Pstore = ps
 	// Not using posting list cache
 	posting.Init(ps, 0)
 	Init(ps)

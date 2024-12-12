@@ -680,7 +680,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
 		// We can now discard all invalid versions of keys below this ts.
-		pstore.SetDiscardTs(snap.ReadTs)
+		Pstore.SetDiscardTs(snap.ReadTs)
 		return nil
 	case proposal.Restore != nil:
 		// Enable draining mode for the duration of the restore processing.
@@ -860,7 +860,7 @@ func (n *node) processApplyCh() {
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	x.PrintOracleDelta(delta)
 	// First let's commit all mutations to disk.
-	writer := posting.NewTxnWriter(pstore)
+	writer := posting.NewTxnWriter(Pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil || commit == 0 {
@@ -897,7 +897,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	}
 
 	if x.WorkerConfig.HardSync {
-		if err := pstore.Sync(); err != nil {
+		if err := Pstore.Sync(); err != nil {
 			glog.Errorf("Error while calling Sync while commitOrAbort: %v", err)
 		}
 	}
@@ -1222,7 +1222,7 @@ func (n *node) Run() {
 		closer := z.NewCloser(2)
 		defer closer.SignalAndWait()
 		go x.StoreSync(n.Store, closer)
-		go x.StoreSync(pstore, closer)
+		go x.StoreSync(Pstore, closer)
 	}
 
 	applied, err := n.Store.Checkpoint()
@@ -1524,7 +1524,7 @@ func (n *node) calculateTabletSizes() {
 		total += int64(tinfo.OnDiskSize)
 	}
 
-	tableInfos := pstore.Tables()
+	tableInfos := Pstore.Tables()
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)

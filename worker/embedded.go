@@ -12,7 +12,7 @@ import (
 )
 
 func InitForLite(ps *badger.DB) {
-	pstore = ps
+	Pstore = ps
 	groups().state = &pb.MembershipState{}
 	groups().Node = &node{Node: &conn.Node{Id: 1}}
 	groups().gid = 1

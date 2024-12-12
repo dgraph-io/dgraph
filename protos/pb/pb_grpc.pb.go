@@ -946,6 +946,7 @@ const (
 	Worker_UpdateGraphQLSchema_FullMethodName = "/pb.Worker/UpdateGraphQLSchema"
 	Worker_DeleteNamespace_FullMethodName     = "/pb.Worker/DeleteNamespace"
 	Worker_TaskStatus_FullMethodName          = "/pb.Worker/TaskStatus"
+	Worker_PDirStat_FullMethodName            = "/pb.Worker/PDirStat"
 )
 
 // WorkerClient is the client API for Worker service.
@@ -967,6 +968,7 @@ type WorkerClient interface {
 	UpdateGraphQLSchema(ctx context.Context, in *UpdateGraphQLSchemaRequest, opts ...grpc.CallOption) (*UpdateGraphQLSchemaResponse, error)
 	DeleteNamespace(ctx context.Context, in *DeleteNsRequest, opts ...grpc.CallOption) (*Status, error)
 	TaskStatus(ctx context.Context, in *TaskStatusRequest, opts ...grpc.CallOption) (*TaskStatusResponse, error)
+	PDirStat(ctx context.Context, in *PDirReadyStatus, opts ...grpc.CallOption) (*PDirReadyStatus, error)
 }
 
 type workerClient struct {
@@ -1173,6 +1175,15 @@ func (c *workerClient) TaskStatus(ctx context.Context, in *TaskStatusRequest, op
 	return out, nil
 }
 
+func (c *workerClient) PDirStat(ctx context.Context, in *PDirReadyStatus, opts ...grpc.CallOption) (*PDirReadyStatus, error) {
+	out := new(PDirReadyStatus)
+	err := c.cc.Invoke(ctx, Worker_PDirStat_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerServer is the server API for Worker service.
 // All implementations must embed UnimplementedWorkerServer
 // for forward compatibility
@@ -1192,6 +1203,7 @@ type WorkerServer interface {
 	UpdateGraphQLSchema(context.Context, *UpdateGraphQLSchemaRequest) (*UpdateGraphQLSchemaResponse, error)
 	DeleteNamespace(context.Context, *DeleteNsRequest) (*Status, error)
 	TaskStatus(context.Context, *TaskStatusRequest) (*TaskStatusResponse, error)
+	PDirStat(context.Context, *PDirReadyStatus) (*PDirReadyStatus, error)
 	mustEmbedUnimplementedWorkerServer()
 }
 
@@ -1240,6 +1252,9 @@ func (UnimplementedWorkerServer) DeleteNamespace(context.Context, *DeleteNsReque
 }
 func (UnimplementedWorkerServer) TaskStatus(context.Context, *TaskStatusRequest) (*TaskStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TaskStatus not implemented")
+}
+func (UnimplementedWorkerServer) PDirStat(context.Context, *PDirReadyStatus) (*PDirReadyStatus, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PDirStat not implemented")
 }
 func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
 
@@ -1525,6 +1540,24 @@ func _Worker_TaskStatus_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_PDirStat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PDirReadyStatus)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).PDirStat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_PDirStat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).PDirStat(ctx, req.(*PDirReadyStatus))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Worker_ServiceDesc is the grpc.ServiceDesc for Worker service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1576,6 +1609,10 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "TaskStatus",
 			Handler:    _Worker_TaskStatus_Handler,
 		},
+		{
+			MethodName: "PDirStat",
+			Handler:    _Worker_PDirStat_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1593,6 +1630,128 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Subscribe",
 			Handler:       _Worker_Subscribe_Handler,
 			ServerStreams: true,
+		},
+	},
+	Metadata: "pb.proto",
+}
+
+const (
+	ImportP_StreamSnapshot_FullMethodName = "/pb.ImportP/StreamSnapshot"
+)
+
+// ImportPClient is the client API for ImportP service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ImportPClient interface {
+	StreamSnapshot(ctx context.Context, opts ...grpc.CallOption) (ImportP_StreamSnapshotClient, error)
+}
+
+type importPClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewImportPClient(cc grpc.ClientConnInterface) ImportPClient {
+	return &importPClient{cc}
+}
+
+func (c *importPClient) StreamSnapshot(ctx context.Context, opts ...grpc.CallOption) (ImportP_StreamSnapshotClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ImportP_ServiceDesc.Streams[0], ImportP_StreamSnapshot_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &importPStreamSnapshotClient{stream}
+	return x, nil
+}
+
+type ImportP_StreamSnapshotClient interface {
+	Send(*Snapshot) error
+	Recv() (*KVS, error)
+	grpc.ClientStream
+}
+
+type importPStreamSnapshotClient struct {
+	grpc.ClientStream
+}
+
+func (x *importPStreamSnapshotClient) Send(m *Snapshot) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *importPStreamSnapshotClient) Recv() (*KVS, error) {
+	m := new(KVS)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ImportPServer is the server API for ImportP service.
+// All implementations must embed UnimplementedImportPServer
+// for forward compatibility
+type ImportPServer interface {
+	StreamSnapshot(ImportP_StreamSnapshotServer) error
+	mustEmbedUnimplementedImportPServer()
+}
+
+// UnimplementedImportPServer must be embedded to have forward compatible implementations.
+type UnimplementedImportPServer struct {
+}
+
+func (UnimplementedImportPServer) StreamSnapshot(ImportP_StreamSnapshotServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamSnapshot not implemented")
+}
+func (UnimplementedImportPServer) mustEmbedUnimplementedImportPServer() {}
+
+// UnsafeImportPServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ImportPServer will
+// result in compilation errors.
+type UnsafeImportPServer interface {
+	mustEmbedUnimplementedImportPServer()
+}
+
+func RegisterImportPServer(s grpc.ServiceRegistrar, srv ImportPServer) {
+	s.RegisterService(&ImportP_ServiceDesc, srv)
+}
+
+func _ImportP_StreamSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ImportPServer).StreamSnapshot(&importPStreamSnapshotServer{stream})
+}
+
+type ImportP_StreamSnapshotServer interface {
+	Send(*KVS) error
+	Recv() (*Snapshot, error)
+	grpc.ServerStream
+}
+
+type importPStreamSnapshotServer struct {
+	grpc.ServerStream
+}
+
+func (x *importPStreamSnapshotServer) Send(m *KVS) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *importPStreamSnapshotServer) Recv() (*Snapshot, error) {
+	m := new(Snapshot)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ImportP_ServiceDesc is the grpc.ServiceDesc for ImportP service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ImportP_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.ImportP",
+	HandlerType: (*ImportPServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamSnapshot",
+			Handler:       _ImportP_StreamSnapshot_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "pb.proto",

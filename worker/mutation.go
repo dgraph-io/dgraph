@@ -292,7 +292,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 func updateSchema(s *pb.SchemaUpdate, ts uint64) error {
 	schema.State().Set(s.Predicate, s)
 	schema.State().DeleteMutSchema(s.Predicate)
-	txn := pstore.NewTransactionAt(ts, true)
+	txn := Pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := proto.Marshal(s)
 	x.Check(err)
@@ -347,7 +347,7 @@ func runTypeMutation(ctx context.Context, update *pb.TypeUpdate, ts uint64) erro
 // only during schema mutations or we see a new predicate.
 func updateType(typeName string, t *pb.TypeUpdate, ts uint64) error {
 	schema.State().SetType(typeName, t)
-	txn := pstore.NewTransactionAt(ts, true)
+	txn := Pstore.NewTransactionAt(ts, true)
 	defer txn.Discard()
 	data, err := proto.Marshal(t)
 	x.Check(err)
@@ -368,7 +368,7 @@ func hasEdges(attr string, startTs uint64) bool {
 	iterOpt.PrefetchValues = false
 	iterOpt.Prefix = pk.DataPrefix()
 
-	txn := pstore.NewTransactionAt(startTs, false)
+	txn := Pstore.NewTransactionAt(startTs, false)
 	defer txn.Discard()
 
 	it := txn.NewIterator(iterOpt)

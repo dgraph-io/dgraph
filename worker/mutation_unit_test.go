@@ -40,7 +40,7 @@ func TestReverseEdge(t *testing.T) {
 	opt := badger.DefaultOptions(dir)
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
-	pstore = ps
+	Pstore = ps
 	// Not using posting list cache
 	posting.Init(ps, 0)
 	Init(ps)
