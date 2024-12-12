@@ -85,7 +85,6 @@ var (
 	}
 
 	memoryLayer = initMemoryLayer()
-	numShards   = 256
 )
 
 func init() {
@@ -380,12 +379,6 @@ func RemoveCacheFor(key []byte) {
 	}
 }
 
-type setItems struct {
-	keyHash uint64
-	list    *List
-	readTs  uint64
-}
-
 type MemoryLayer struct {
 	cache *ristretto.Cache[[]byte, *CachePL]
 
@@ -465,6 +458,10 @@ func checkForRollup(key []byte, l *List) {
 	}
 }
 
+func (ml *MemoryLayer) wait() {
+	ml.cache.Wait()
+}
+
 func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
 	if commitTs == 0 {
 		return
@@ -487,7 +484,6 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 	if val.list != nil && updateItemAfterCommit {
 		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
 		checkForRollup([]byte(key), val.list)
-		//fmt.Println("====Setting cache list", commitTs, pk, p, val.list.mutationMap, val.list.key)
 	}
 
 	if !updateItemAfterCommit {
@@ -503,6 +499,8 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {
 		return
 	}
+
+	memoryLayer.wait()
 
 	for key, delta := range txn.cache.deltas {
 		RemoveCacheFor([]byte(key))

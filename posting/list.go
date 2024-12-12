@@ -824,17 +824,6 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
-func indexConflicKey(key []byte, t *pb.DirectedEdge) uint64 {
-	getKey := func(key []byte, uid uint64) uint64 {
-		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
-		// here to save memory allocations.
-		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
-		return farm.Fingerprint64(key) ^ uid
-	}
-
-	return getKey(key, t.ValueId)
-}
-
 func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	getKey := func(key []byte, uid uint64) uint64 {
 		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
