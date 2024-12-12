@@ -247,9 +247,9 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	txn := posting.Oracle().RegisterStartTs(5)
 	attr := x.GalaxyAttr("benchmarkadd")
 
-	n := 1000
+	n := uint64(1000)
 	values := make([]string, 0)
-	for i := 0; i < n; i++ {
+	for range n {
 		values = append(values, RandStringBytes(5))
 	}
 
@@ -257,9 +257,9 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 		//b.RunParallel(func(pbi *testing.PB) {
 		//	for pbi.Next() {
 		edge := &pb.DirectedEdge{
-			Value:  []byte(values[rand.Intn(n)]),
+			Value:  []byte(values[rand.Intn(int(n))]),
 			Attr:   attr,
-			Entity: uint64(rand.Intn(n)) + 1,
+			Entity: rand.Uint64()%n + 1,
 			Op:     pb.DirectedEdge_SET,
 		}
 

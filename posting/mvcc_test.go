@@ -114,13 +114,13 @@ func BenchmarkTestCache(b *testing.B) {
 
 	attr := x.GalaxyAttr("cache")
 	keys := make([][]byte, 0)
-	N := 10000
+	N := uint64(10000)
 	txn := Oracle().RegisterStartTs(1)
 
 	memoryLayer.insert = 100000000
 
-	for i := 1; i < N; i++ {
-		key := x.DataKey(attr, uint64(i))
+	for i := uint64(1); i < N; i++ {
+		key := x.DataKey(attr, i)
 		keys = append(keys, key)
 		edge := &pb.DirectedEdge{
 			ValueId: 2,
@@ -146,7 +146,7 @@ func BenchmarkTestCache(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			key := keys[rand.Intn(N-1)]
+			key := keys[rand.Intn(int(N-1))]
 			_, err = getNew(key, pstore, math.MaxUint64)
 			if err != nil {
 				panic(err)
