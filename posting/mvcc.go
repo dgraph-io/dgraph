@@ -391,7 +391,7 @@ type MemoryLayer struct {
 
 func initMemoryLayer() *MemoryLayer {
 	sm := &MemoryLayer{}
-	cacheSize := 100000
+	cacheSize := 1000 * (1 << 20)
 	cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 		// Use 5% of cache memory for storing counters.
 		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
@@ -467,7 +467,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 		return
 	}
 
-	updateItemAfterCommit := false
+	updateItemAfterCommit := true
 
 	p := new(pb.PostingList)
 	x.Check(proto.Unmarshal(delta, p))
@@ -658,7 +658,7 @@ func PostingListCacheEnabled() bool {
 	//return lCache != nil
 }
 
-func (ml *MemoryLayer) readFromCache(key []byte, keyHash, readTs uint64) *List {
+func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	cacheItem, ok := ml.get(key)
 
 	if ok {
@@ -710,32 +710,25 @@ func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
 }
 
 func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	pk, _ := x.Parse(key)
-	var keyHash uint64
 
-	gic := ShouldGoInCache(pk)
-	if gic {
-		keyHash = z.MemHash(key)
-		l := ml.readFromCache(key, keyHash, readTs)
-		if l != nil {
-			//fmt.Println(pk, pk.IsData())
-			ml.numCacheRead += 1
-			return l, nil
-		} else {
-			ml.numCacheReadFails += 1
-		}
-		l, err := ml.readFromDisk(key, pstore, math.MaxUint64)
-		//fmt.Println("READING FROM DISK", l.minTs, readTs)
-		if err != nil {
-			return nil, err
-		}
-		ml.saveInCache(key, l)
-		if l.minTs == 0 || readTs >= l.minTs {
-			return l, nil
-		}
+	l := ml.readFromCache(key, readTs)
+	if l != nil {
+		ml.numCacheRead += 1
+		return l, nil
+	} else {
+		ml.numCacheReadFails += 1
+	}
+	l, err := ml.readFromDisk(key, pstore, math.MaxUint64)
+	//fmt.Println("READING FROM DISK", l.minTs, readTs)
+	if err != nil {
+		return nil, err
+	}
+	ml.saveInCache(key, l)
+	if l.minTs == 0 || readTs >= l.minTs {
+		return l, nil
 	}
 
-	l, err := ml.readFromDisk(key, pstore, readTs)
+	l, err = ml.readFromDisk(key, pstore, readTs)
 	if err != nil {
 		return nil, err
 	}
