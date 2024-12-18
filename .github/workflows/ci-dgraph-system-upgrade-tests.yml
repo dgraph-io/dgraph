@@ -1,0 +1,51 @@
+name: ci-dgraph-system-upgrade-tests
+on:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    branches:
+      - main
+      - 'release/**'
+jobs:
+  dgraph-upgrade-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+      - name: Run System Upgrade Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          export DGRAPH_UPGRADE_MAIN_ONLY=true
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the sytem upgrade tests
+          go test -tags=upgrade  github.com/dgraph-io/dgraph/v24/systest/mutations-and-queries \
+          github.com/dgraph-io/dgraph/v24/systest/plugin \
+          github.com/dgraph-io/dgraph/v24/systest/license \
+          github.com/dgraph-io/dgraph/v24/systest/multi-tenancy \
+          -v -timeout=120m -failfast
+          # clean up docker containers after test execution
+          go clean -testcache
+          # sleep
+          sleep 5

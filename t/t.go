@@ -720,7 +720,7 @@ func testSuiteContains(suite string) bool {
 func isValidPackageForSuite(pkg string) bool {
 	valid := false
 	if testSuiteContains("all") {
-		valid = true
+		return true
 	}
 	if testSuiteContains("ldbc") {
 		valid = valid || isLDBCPackage(pkg)
@@ -730,6 +730,15 @@ func isValidPackageForSuite(pkg string) bool {
 	}
 	if testSuiteContains("unit") {
 		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
+	}
+	if testSuiteContains("vector") {
+		valid = valid || isVectorPackage(pkg)
+	}
+	if testSuiteContains("systest") {
+		valid = valid || isSystestPackage(pkg)
+	}
+	if testSuiteContains("core") {
+		valid = valid || isCorePackage(pkg)
 	}
 	if valid {
 		return valid
@@ -748,6 +757,28 @@ func isLoadPackage(pkg string) bool {
 
 func isLDBCPackage(pkg string) bool {
 	return strings.HasSuffix(pkg, "/systest/ldbc")
+}
+
+func isSystestPackage(pkg string) bool {
+	if !strings.Contains(pkg, "/systest") {
+		return false
+	}
+	return !isExcludedFromSystest(pkg)
+}
+
+func isExcludedFromSystest(pkg string) bool {
+	return isLDBCPackage(pkg) || isLoadPackage(pkg) || isVectorPackage(pkg)
+}
+
+func isCorePackage(pkg string) bool {
+	if isSystestPackage(pkg) || isLDBCPackage(pkg) || isVectorPackage(pkg) || isLoadPackage(pkg) {
+		return false
+	}
+	return true
+}
+
+func isVectorPackage(pkg string) bool {
+	return strings.HasSuffix(pkg, "/vector")
 }
 
 var datafiles = map[string]string{
@@ -1041,7 +1072,7 @@ func run() error {
 
 func validateAllowed(testSuite []string) {
 
-	allowed := []string{"all", "ldbc", "load", "unit"}
+	allowed := []string{"all", "ldbc", "load", "unit", "systest", "vector", "core"}
 	for _, str := range testSuite {
 		onlyAllowed := false
 		for _, allowedStr := range allowed {
