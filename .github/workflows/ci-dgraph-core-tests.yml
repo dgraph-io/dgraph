@@ -24,6 +24,8 @@ jobs:
           go-version-file: go.mod
       - name: Install protobuf-compiler
         run: sudo apt update && sudo apt install -y protobuf-compiler
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
       - name: Check protobuf
         run: |
           cd ./protos

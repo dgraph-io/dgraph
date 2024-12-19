@@ -276,8 +276,16 @@ func mergeXMLFiles(outputFile string, files []string) error {
 	}
 	defer finalFile.Close()
 
-	finalFile.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
-	finalFile.WriteString(`<testsuites>`)
+	testSuiteStr := `<testsuites>`
+	fileWriteErrorMsg := "failed to write string to the file: %v"
+
+	if _, err := finalFile.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`); err != nil {
+		return fmt.Errorf(fileWriteErrorMsg, err)
+	}
+
+	if _, err := finalFile.WriteString(testSuiteStr); err != nil {
+		return fmt.Errorf(fileWriteErrorMsg, err)
+	}
 
 	for _, file := range files {
 		if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -291,13 +299,15 @@ func mergeXMLFiles(outputFile string, files []string) error {
 		}
 
 		// Extract the <testsuite> element from the file and append it
-		parts := strings.SplitN(string(content), "<testsuite", 2)
+		parts := strings.SplitN(string(content), testSuiteStr, 2)
 		if len(parts) > 1 {
-			finalFile.WriteString("<testsuite" + parts[1])
+			finalFile.WriteString(testSuiteStr + parts[1])
 		}
 	}
 
-	finalFile.WriteString(`</testsuites>`)
+	if _, err := finalFile.WriteString(testSuiteStr); err != nil {
+		return fmt.Errorf(fileWriteErrorMsg, err)
+	}
 	return nil
 }
 

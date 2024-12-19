@@ -25,6 +25,8 @@ jobs:
           go-version-file: go.mod
       - name: Make Linux Build and Docker Image
         run: make docker-image
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
       - name: Build Test Binary
         run : |
           #!/bin/bash
