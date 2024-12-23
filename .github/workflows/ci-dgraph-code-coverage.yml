@@ -23,6 +23,8 @@ jobs:
           #!/bin/bash
           # build the test binary
           cd t; go build .
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
       - name: Clean Up Environment
         run: |
           #!/bin/bash

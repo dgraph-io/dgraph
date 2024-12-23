@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/xml"
 	"fmt"
 	"log"
 	"math/rand"
@@ -101,6 +102,39 @@ var (
 			"Package Check uses string.Contains(). Please check the flag carefully")
 	runCoverage = pflag.Bool("coverage", false, "Set true to calculate test coverage")
 )
+
+type TestSuites struct {
+	XMLName    xml.Name    `xml:"testsuites"`
+	Tests      int         `xml:"tests,attr"`
+	Failures   int         `xml:"failures,attr"`
+	Errors     int         `xml:"errors,attr"`
+	Time       float64     `xml:"time,attr"`
+	TestSuites []TestSuite `xml:"testsuite"`
+}
+
+type TestSuite struct {
+	XMLName    xml.Name   `xml:"testsuite"`
+	Name       string     `xml:"name,attr"`
+	Tests      int        `xml:"tests,attr"`
+	Failures   int        `xml:"failures,attr"`
+	Time       float64    `xml:"time,attr"`
+	Timestamp  string     `xml:"timestamp,attr,omitempty"`
+	TestCases  []TestCase `xml:"testcase"`
+	Properties []Property `xml:"properties>property,omitempty"`
+}
+
+type TestCase struct {
+	XMLName   xml.Name `xml:"testcase"`
+	ClassName string   `xml:"classname,attr"`
+	Name      string   `xml:"name,attr"`
+	Time      float64  `xml:"time,attr"`
+}
+
+type Property struct {
+	XMLName xml.Name `xml:"property"`
+	Name    string   `xml:"name,attr"`
+	Value   string   `xml:"value,attr"`
+}
 
 func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
@@ -265,8 +299,53 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 	}()
 }
 
-func runTestsFor(ctx context.Context, pkg, prefix string) error {
-	var args = []string{"go", "test", "-failfast", "-v", "-tags=integration"}
+func combineJUnitXML(outputFile string, files []string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("no files to merge")
+	}
+
+	combined := &TestSuites{}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", file, err)
+		}
+
+		var suites TestSuites
+		if err := xml.Unmarshal(data, &suites); err != nil {
+			return fmt.Errorf("failed to parse XML from %s: %w", file, err)
+		}
+
+		// Aggregate data into the combined structure
+		combined.Tests += suites.Tests
+		combined.Failures += suites.Failures
+		combined.Errors += suites.Errors
+		combined.Time += suites.Time
+		combined.TestSuites = append(combined.TestSuites, suites.TestSuites...)
+	}
+
+	output, err := xml.MarshalIndent(combined, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal combined XML: %w", err)
+	}
+
+	output = append([]byte(xml.Header), output...)
+
+	if err := os.WriteFile(outputFile, output, 0644); err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	fmt.Printf("Combined XML written to %s\n", outputFile)
+	return nil
+}
+
+func sanitizeFilename(pkg string) string {
+	return strings.ReplaceAll(pkg, "/", "_")
+}
+
+func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
+	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
+		"-v", "-failfast", "-tags=integration"}
 	if *race {
 		args = append(args, "-timeout", "180m")
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
@@ -394,6 +473,27 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	ctx := closer.Ctx()
 	ctx = context.WithValue(ctx, _threadIdKey{}, threadId)
 
+	tmpDir, err := os.MkdirTemp("", "dgraph-test-xml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			log.Printf("Failed to remove temporary directory %s: %v", tmpDir, err)
+		}
+	}()
+
+	var xmlFiles []string
+
+	defer func() {
+		finalXMLFile := filepath.Join(*baseDir, "test-results.xml")
+		if err := combineJUnitXML(finalXMLFile, xmlFiles); err != nil {
+			log.Printf("Error merging XML files: %v\n", err)
+		} else {
+			fmt.Printf("Merged test results into %s\n", finalXMLFile)
+		}
+	}()
+
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -403,20 +503,22 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			continue
 		}
 
+		xmlFile := filepath.Join(tmpDir, sanitizeFilename(task.pkg.ID))
+		xmlFiles = append(xmlFiles, xmlFile) // Add XML file path regardless of success or failure
 		if task.isCommon {
 			if *runCustom {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
 			start()
-			if err = runTestsFor(ctx, task.pkg.ID, prefix); err != nil {
+			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
 			}
 		} else {
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
-			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg); cerr != nil {
+			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
 				return cerr
 			}
 		}
@@ -441,7 +543,7 @@ func getClusterPrefix() string {
 }
 
 // for tests that require custom docker-compose file (located in test directory)
-func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) error {
+func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, xmlFile string) error {
 	fmt.Printf("Bringing up cluster for package: %s\n", pkg)
 	var err error
 	compose := composeFileFor(pkg)
@@ -455,7 +557,7 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup) e
 		defer stopCluster(compose, prefix, wg, err)
 	}
 
-	err = runTestsFor(ctx, pkg, prefix)
+	err = runTestsFor(ctx, pkg, prefix, xmlFile)
 	return err
 }
 
