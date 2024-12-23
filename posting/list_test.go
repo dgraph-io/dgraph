@@ -135,6 +135,7 @@ func TestGetSinglePosting(t *testing.T) {
 
 	res, err := l.StaticValue(1)
 	require.NoError(t, err)
+	//fmt.Println(res, res == nil)
 	require.Equal(t, res == nil, true)
 
 	l.plist = create_pl(1, 1)
@@ -226,6 +227,7 @@ func TestAddMutation(t *testing.T) {
 
 func getFirst(t *testing.T, l *List, readTs uint64) (res pb.Posting) {
 	require.NoError(t, l.Iterate(readTs, 0, func(p *pb.Posting) error {
+		//fmt.Println("INSIDE ITERATE", p)
 		res = *p
 		return ErrStopIteration
 	}))
@@ -234,6 +236,7 @@ func getFirst(t *testing.T, l *List, readTs uint64) (res pb.Posting) {
 
 func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 	p := getFirst(t, ol, readTs)
+	//fmt.Println("HERE", val, string(p.Value), p, ol, p.Uid)
 	require.Equal(t, uint64(math.MaxUint64), p.Uid) // Cast to prevent overflow.
 	require.EqualValues(t, val, p.Value)
 }
@@ -532,6 +535,8 @@ func TestReadSingleValue(t *testing.T) {
 			kvs, err := ol.Rollup(nil, txn.StartTs-3)
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
+			// Delete item from global cache before reading, as we are not updating the cache in the test
+			memoryLayer.Del(z.MemHash(key))
 			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
@@ -541,6 +546,7 @@ func TestReadSingleValue(t *testing.T) {
 			j = ol.minTs
 		}
 		for ; j < i+6; j++ {
+			ResetCache()
 			tx := NewTxn(j)
 			k, err := tx.cache.GetSinglePosting(key)
 			require.NoError(t, err)
