@@ -507,7 +507,7 @@ func TestAddMutation_mrjn1(t *testing.T) {
 func TestReadSingleValue(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
-	pstore.DropAll()
+	require.Equal(t, nil, pstore.DropAll())
 
 	// We call pl.Iterate and then stop iterating in the first loop when we are reading
 	// single values. This test confirms that the two functions, getFirst from this file

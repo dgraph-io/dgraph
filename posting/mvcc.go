@@ -427,7 +427,7 @@ func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
 	if val.list == nil {
 		return nil, false
 	}
-	return val, !val.list.isDeleted()
+	return val, true
 }
 
 func (sm *MemoryLayer) set(key []byte, i *CachePL) {

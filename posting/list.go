@@ -471,18 +471,6 @@ func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
 	}
 }
 
-func (l *List) markDeleted() {
-	l.Lock()
-	defer l.Unlock()
-	l.key = nil
-}
-
-func (l *List) isDeleted() bool {
-	l.RLock()
-	defer l.RUnlock()
-	return l.key == nil
-}
-
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
