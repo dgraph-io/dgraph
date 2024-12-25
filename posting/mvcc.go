@@ -431,7 +431,7 @@ func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
 }
 
 func (sm *MemoryLayer) set(key []byte, i *CachePL) {
-	sm.cache.Set(key, i, 1)
+	sm.cache.AsyncSet(key, i, 1)
 }
 
 func (sm *MemoryLayer) del(key []byte) {
@@ -459,7 +459,6 @@ func checkForRollup(key []byte, l *List) {
 }
 
 func (ml *MemoryLayer) wait() {
-	ml.cache.Wait()
 }
 
 func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
@@ -469,9 +468,10 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 
 	updateItemAfterCommit := true
 
-	p := new(pb.PostingList)
-	x.Check(proto.Unmarshal(delta, p))
-	//fmt.Println("======COMMITTING", startTs, commitTs, pk, p)
+	if !updateItemAfterCommit {
+		ml.del([]byte(key))
+		return
+	}
 
 	val, ok := ml.get([]byte(key))
 	if !ok {
@@ -482,15 +482,12 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 	val.count -= 1
 
 	if val.list != nil && updateItemAfterCommit {
+		p := new(pb.PostingList)
+		x.Check(proto.Unmarshal(delta, p))
+		//fmt.Println("======COMMITTING", startTs, commitTs, pk, p)
+
 		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
 		checkForRollup([]byte(key), val.list)
-	}
-
-	if !updateItemAfterCommit {
-		if val.list != nil {
-			val.list.markDeleted()
-		}
-		ml.del([]byte(key))
 	}
 }
 

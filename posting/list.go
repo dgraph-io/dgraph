@@ -990,6 +990,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 		}
 
 		l.mutationMap.committedUids[mpost.Uid] = mpost
+		if l.mutationMap.length == math.MaxInt64 {
+			l.mutationMap.length = 0
+		}
 		l.mutationMap.length += getLengthDelta(mpost.Op)
 	}
 
