@@ -396,7 +396,7 @@ func initMemoryLayer() *MemoryLayer {
 		// Use 5% of cache memory for storing counters.
 		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
 		MaxCost:     int64(float64(cacheSize) * 0.95),
-		BufferItems: 64,
+		BufferItems: 16,
 		Metrics:     true,
 		Cost: func(val *CachePL) int64 {
 			return 1
@@ -466,7 +466,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 		return
 	}
 
-	updateItemAfterCommit := true
+	updateItemAfterCommit := false
 
 	if !updateItemAfterCommit {
 		ml.del([]byte(key))
