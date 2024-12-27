@@ -380,7 +380,6 @@ func RemoveCacheFor(key []byte) {
 type MemoryLayer struct {
 	cache *ristretto.Cache[[]byte, *CachePL]
 
-	insert            int
 	numCacheRead      int
 	numCacheReadFails int
 	numDisksRead      int

@@ -39,7 +39,6 @@ func TestQueries(t *testing.T) {
 }
 
 func BenchmarkQueries(b *testing.B) {
-
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
@@ -54,8 +53,6 @@ func BenchmarkQueries(b *testing.B) {
 		panic(fmt.Sprintf("Error reading directory: %s", err.Error()))
 	}
 
-	//savepath := ""
-	//diffs := 0
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
@@ -83,6 +80,24 @@ func BenchmarkQueries(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
+	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
+	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
+		os.Exit(1)
+	}
+
+	if err := testutil.BulkLoad(testutil.BulkOpts{
+		Zero:       testutil.SockAddrZero,
+		Shards:     1,
+		RdfFile:    rdfFile,
+		SchemaFile: schemaFile,
+	}); err != nil {
+		cleanupAndExit(1)
+	}
+
+	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
+		cleanupAndExit(1)
+	}
 	exitCode := m.Run()
 	cleanupAndExit(exitCode)
 }
