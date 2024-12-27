@@ -105,7 +105,7 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
 func (vt *viTxn) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vt.delegate.StartTs)
 
-	if value == nil {
+	if value == nil || len(value.Postings) == 0 {
 		//fmt.Println("DIFF", val, err, nil, badger.ErrKeyNotFound)
 		return nil, ErrNoValue
 	}
