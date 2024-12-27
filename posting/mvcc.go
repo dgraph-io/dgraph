@@ -171,25 +171,25 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 	}
 }
 
-func (ir *incrRollupi) mem(getNewTs func(bool) uint64) {
-	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-	defer forceRollupTick.Stop()
-	deleteCacheTick := time.NewTicker(1 * time.Second)
-	defer deleteCacheTick.Stop()
-
-	for {
-		select {
-		case <-deleteCacheTick.C:
-			//memoryLayer.deleteOldItems(ir.getNewTs(false))
-		case <-forceRollupTick.C:
-			t := 10000
-			memoryLayer.insert += t
-			if memoryLayer.insert > 5*t {
-				memoryLayer.insert = 5 * t
-			}
-		}
-	}
-}
+// func (ir *incrRollupi) mem(getNewTs func(bool) uint64) {
+// 	forceRollupTick := time.NewTicker(500 * time.Millisecond)
+// 	defer forceRollupTick.Stop()
+// 	deleteCacheTick := time.NewTicker(1 * time.Second)
+// 	defer deleteCacheTick.Stop()
+//
+// 	for {
+// 		select {
+// 		case <-deleteCacheTick.C:
+// 			//memoryLayer.deleteOldItems(ir.getNewTs(false))
+// 		case <-forceRollupTick.C:
+// 			t := 10000
+// 			memoryLayer.insert += t
+// 			if memoryLayer.insert > 5*t {
+// 				memoryLayer.insert = 5 * t
+// 			}
+// 		}
+// 	}
+// }
 
 // Process will rollup batches of 64 keys in a go routine.
 func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
@@ -208,8 +208,6 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 	defer cleanupTick.Stop()
 	forceRollupTick := time.NewTicker(500 * time.Millisecond)
 	defer forceRollupTick.Stop()
-
-	ir.mem(getNewTs)
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
