@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -149,6 +150,16 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		glog.Infof("Authenticated user %s through refresh token", userId)
 		return user, nil
 	}
+
+	log.Printf("%+v", request)
+	if request.NamespaceName != "" {
+		ns, err := getNamespaceID(ctx, request.NamespaceName)
+		if err != nil {
+			return nil, err
+		}
+		request.Namespace = ns
+	}
+	log.Printf("%+v", request)
 
 	// In case of login, we can't extract namespace from JWT because we have not yet given JWT
 	// to the user, so the login request should contain the namespace, which is then set to ctx.

@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"sort"
@@ -1893,6 +1894,92 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	v = new(api.Version)
 	v.Tag = x.Version()
 	return v, nil
+}
+
+func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceRequest) (
+	*api.CreateNamespaceResponse, error) {
+
+	log.Println("CAME HERE")
+
+	// TODO: check auth
+
+	// TODO: ensure that this namespace doesn't already exist
+
+	ctx0 := x.AttachNamespace(ctx, 0)
+	resp, err := (&Server{}).QueryNoGrpc(ctx0, &api.Request{
+		Mutations: []*api.Mutation{{
+			Set: []*api.NQuad{{
+				Subject:     "_:ns",
+				Predicate:   "dgraph.namespace.name",
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: in.Name}},
+			}},
+		}},
+		CommitNow: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	uid := resp.Uids["ns"]
+
+	ns, err := (&Server{}).CreateNamespaceInternal(ctx, "password")
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: what if we crash here
+
+	_, err = (&Server{}).QueryNoGrpc(ctx0, &api.Request{
+		Mutations: []*api.Mutation{{
+			Set: []*api.NQuad{{
+				Subject:     uid,
+				Predicate:   "dgraph.namespace.id",
+				ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(ns)}},
+			}},
+		}},
+		CommitNow: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.CreateNamespaceResponse{Namespace: ns}, nil
+}
+
+func (s *Server) DropNamespace(ctx context.Context, in *api.DropNamespaceRequest) (
+	*api.DropNamespaceResponse, error) {
+
+	ns, err := getNamespaceID(ctx, in.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.DropNamespaceResponse{}, (&Server{}).DeleteNamespace(ctx, ns)
+}
+
+func getNamespaceID(ctx context.Context, namespaceName string) (uint64, error) {
+	ctx = x.AttachNamespace(ctx, 0)
+
+	q := `{q(func: eq(dgraph.namespace.name, "` + namespaceName + `")) { dgraph.namespace.id }}`
+	resp, err := (&Server{}).doQuery(ctx, &Request{req: &api.Request{Query: q}, doAuth: NoAuthorize})
+	if err != nil {
+		return 0, err
+	}
+
+	log.Println("resp: ", string(resp.Json))
+	var data struct {
+		Data []struct {
+			ID int64 `json:"dgraph.namespace.id"`
+		} `json:"q"`
+	}
+	if err := json.Unmarshal(resp.GetJson(), &data); err != nil {
+		return 0, err
+	}
+
+	if len(data.Data) == 0 {
+		return 0, errors.Errorf("namespace %q not found", namespaceName)
+	}
+
+	return uint64(data.Data[0].ID), nil
 }
 
 // -------------------------------------------------------------------------------------------------
