@@ -428,7 +428,7 @@ func (sm *MemoryLayer) get(key []byte) (*CachePL, bool) {
 }
 
 func (sm *MemoryLayer) set(key []byte, i *CachePL) {
-	sm.cache.AsyncSet(key, i, 1)
+	sm.cache.Set(key, i, 1)
 }
 
 func (sm *MemoryLayer) del(key []byte) {
@@ -456,6 +456,7 @@ func checkForRollup(key []byte, l *List) {
 }
 
 func (ml *MemoryLayer) wait() {
+	sm.cache.Wait()
 }
 
 func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
