@@ -20,13 +20,16 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/dgraph-io/dgraph/v24/schema"
 	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
@@ -100,20 +103,19 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 }
 
 func BenchmarkTestCache(b *testing.B) {
-	//lCache, _ = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
-	//	// Use 5% of cache memory for storing counters.
-	//	NumCounters: int64(1000 * (1 << 20) * 0.05 * 2),
-	//	MaxCost:     int64(1000 * (1 << 20) * 0.95),
-	//	BufferItems: 64,
-	//	Metrics:     true,
-	//	Cost: func(val *List) int64 {
-	//		return 0
-	//	},
-	//})
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Panic(err)
+	defer os.RemoveAll(dir)
+
+	ps, err = badger.OpenManaged(badger.DefaultOptions(dir))
+	x.Panic(err)
+	Init(ps, 10000000)
+	schema.Init(ps)
 
 	attr := x.GalaxyAttr("cache")
 	keys := make([][]byte, 0)
 	N := uint64(10000)
+	NInt = 10000
 	txn := Oracle().RegisterStartTs(1)
 
 	for i := uint64(1); i < N; i++ {
@@ -135,7 +137,7 @@ func BenchmarkTestCache(b *testing.B) {
 	}
 	txn.Update()
 	writer := NewTxnWriter(pstore)
-	err := txn.CommitToDisk(writer, 2)
+	err = txn.CommitToDisk(writer, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -143,14 +145,13 @@ func BenchmarkTestCache(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			key := keys[rand.Intn(int(N)-1)]
+			key := keys[rand.Intn(NInt-1)]
 			_, err = getNew(key, pstore, math.MaxUint64)
 			if err != nil {
 				panic(err)
 			}
 		}
 	})
-
 }
 
 func TestRollupTimestamp(t *testing.T) {

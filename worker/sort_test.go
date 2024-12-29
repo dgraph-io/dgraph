@@ -254,18 +254,18 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		//b.RunParallel(func(pbi *testing.PB) {
-		//	for pbi.Next() {
-		edge := &pb.DirectedEdge{
-			Value:  []byte(values[rand.Intn(int(n))]),
-			Attr:   attr,
-			Entity: rand.Uint64()%n + 1,
-			Op:     pb.DirectedEdge_SET,
-		}
+		b.RunParallel(func(pbi *testing.PB) {
+			for pbi.Next() {
+				edge := &pb.DirectedEdge{
+					Value:  []byte(values[rand.Intn(int(n))]),
+					Attr:   attr,
+					Entity: rand.Uint64()%n + 1,
+					Op:     pb.DirectedEdge_SET,
+				}
 
-		x.Check(runMutation(ctx, edge, txn))
-		//		}
-		//	})
+				x.Check(runMutation(ctx, edge, txn))
+			}
+		})
 	}
 }
 

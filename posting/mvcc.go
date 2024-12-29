@@ -83,9 +83,9 @@ var (
 	IncrRollup = &incrRollupi{
 		priorityKeys: make([]*pooledKeys, 2),
 	}
-
-	memoryLayer = initMemoryLayer()
 )
+
+var memoryLayer *MemoryLayer
 
 func init() {
 	runtime.SetCPUProfileRate(200)
@@ -134,8 +134,6 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	}
 
 	RemoveCacheFor(key)
-	//pk, _ := x.Parse(key)
-	//fmt.Println("====Setting cache delete rollup", ts, pk)
 	memoryLayer.del(key)
 	// TODO Update cache with rolled up results
 	// If we do a rollup, we typically won't need to update the key in cache.
@@ -170,26 +168,6 @@ func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
 		rki.keysPool.Put(batch)
 	}
 }
-
-// func (ir *incrRollupi) mem(getNewTs func(bool) uint64) {
-// 	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-// 	defer forceRollupTick.Stop()
-// 	deleteCacheTick := time.NewTicker(1 * time.Second)
-// 	defer deleteCacheTick.Stop()
-//
-// 	for {
-// 		select {
-// 		case <-deleteCacheTick.C:
-// 			//memoryLayer.deleteOldItems(ir.getNewTs(false))
-// 		case <-forceRollupTick.C:
-// 			t := 10000
-// 			memoryLayer.insert += t
-// 			if memoryLayer.insert > 5*t {
-// 				memoryLayer.insert = 5 * t
-// 			}
-// 		}
-// 	}
-// }
 
 // Process will rollup batches of 64 keys in a go routine.
 func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
@@ -334,7 +312,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
 				data := cache.deltas[key]
-				//fmt.Println("--------------------------------------------------------HUI")
 				if len(data) == 0 {
 					continue
 				}
@@ -363,18 +340,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func ResetCache() {
-	if lCache != nil {
-		lCache.Clear()
-	}
 	memoryLayer.clear()
 }
 
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
-	// TODO: investigate if this can be done by calling Set with a nil value.
-	if lCache != nil {
-		lCache.Del(key)
-	}
+	memoryLayer.del(key)
 }
 
 type MemoryLayer struct {
@@ -386,9 +357,8 @@ type MemoryLayer struct {
 	numCacheSave      int
 }
 
-func initMemoryLayer() *MemoryLayer {
+func initMemoryLayer(cacheSize int64) *MemoryLayer {
 	sm := &MemoryLayer{}
-	cacheSize := 1000 * (1 << 20)
 	cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 		// Use 5% of cache memory for storing counters.
 		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
@@ -459,7 +429,7 @@ func (ml *MemoryLayer) wait() {
 	ml.cache.Wait()
 }
 
-func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
+func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, commitTs uint64) {
 	if commitTs == 0 {
 		return
 	}
@@ -482,7 +452,6 @@ func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byt
 	if val.list != nil && updateItemAfterCommit {
 		p := new(pb.PostingList)
 		x.Check(proto.Unmarshal(delta, p))
-		//fmt.Println("======COMMITTING", startTs, commitTs, pk, p)
 
 		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
 		checkForRollup([]byte(key), val.list)
@@ -496,15 +465,8 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	memoryLayer.wait()
-
 	for key, delta := range txn.cache.deltas {
-		RemoveCacheFor([]byte(key))
-
-		pk, _ := x.Parse([]byte(key))
-		if !ShouldGoInCache(pk) {
-			continue
-		}
-		memoryLayer.updateItemInCache(key, pk, delta, txn.StartTs, commitTs)
+		memoryLayer.updateItemInCache(key, delta, txn.StartTs, commitTs)
 	}
 }
 
@@ -532,7 +494,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// lists ended up being rolled-up multiple times. This issue was caught by the
 	// uid-set Jepsen test.
 	pk, err := x.Parse(key)
-	//fmt.Println("READING KEY", key, pk)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
 	}
@@ -642,17 +603,6 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 	}
 }
 
-func ShouldGoInCache(pk x.ParsedKey) bool {
-	//return !pk.IsData()
-	return true
-	//return false
-}
-
-func PostingListCacheEnabled() bool {
-	return false
-	//return lCache != nil
-}
-
 func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	cacheItem, ok := ml.get(key)
 
@@ -664,9 +614,6 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 			lCopy := copyList(cacheItem.list)
 			cacheItem.list.RUnlock()
 			checkForRollup(key, lCopy)
-			//allV, _ := lCopy.AllValues(readTs)
-			//uids, _ := lCopy.Uids(ListOptions{ReadTs: readTs})
-			//fmt.Println("====Getting cache", readTs, lCopy.key, lCopy.mutationMap, allV, uids)
 			return lCopy
 		}
 	}
@@ -687,7 +634,6 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	defer itr.Close()
 	itr.Seek(key)
 	l, err := ReadPostingList(key, itr)
-	//fmt.Println("=============GETTING DISK", key, l.mutationMap, l.plist)
 	if err != nil {
 		return l, err
 	}
@@ -705,7 +651,9 @@ func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
 }
 
 func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-
+	// We first try to read the data from cache, if it is present. If it's not present, then we would read the
+	// latest data from the disk. This would get stored in the cache. If this read has a minTs > readTs then
+	// we would have to read the correct timestamp from the disk.
 	l := ml.readFromCache(key, readTs)
 	if l != nil {
 		ml.numCacheRead += 1
@@ -714,7 +662,6 @@ func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64) (*
 		ml.numCacheReadFails += 1
 	}
 	l, err := ml.readFromDisk(key, pstore, math.MaxUint64)
-	//fmt.Println("READING FROM DISK", l.minTs, readTs)
 	if err != nil {
 		return nil, err
 	}
@@ -736,29 +683,6 @@ func GetNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	//fmt.Println("Get new", key)
-	if PostingListCacheEnabled() {
-		l, ok := lCache.Get(key)
-		if ok && l != nil {
-			// No need to clone the immutable layer or the key since mutations will not modify it.
-			memoryLayer.numCacheRead += 1
-			lCopy := &List{
-				minTs: l.minTs,
-				maxTs: l.maxTs,
-				key:   key,
-				plist: l.plist,
-			}
-			l.RLock()
-			if l.mutationMap != nil {
-				lCopy.mutationMap = l.mutationMap.clone()
-			}
-			l.RUnlock()
-			return lCopy, nil
-		} else {
-			memoryLayer.numCacheReadFails += 1
-		}
-	}
-
 	if pstore.IsClosed() {
 		return nil, badger.ErrDBClosed
 	}
@@ -767,11 +691,5 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-
-	if PostingListCacheEnabled() {
-		memoryLayer.numCacheSave += 1
-		lCache.Set(key, l, 0)
-	}
-
 	return l, nil
 }

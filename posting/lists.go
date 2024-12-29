@@ -18,12 +18,9 @@ package posting
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	ostats "go.opencensus.io/stats"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -31,7 +28,6 @@ import (
 	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/dgraph/v24/tok/index"
 	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
@@ -42,7 +38,6 @@ const (
 var (
 	pstore *badger.DB
 	closer *z.Closer
-	lCache *ristretto.Cache[[]byte, *List]
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -53,33 +48,11 @@ func Init(ps *badger.DB, cacheSize int64) {
 
 	// Initialize cache.
 	if cacheSize == 0 {
+		memoryLayer = &MemoryLayer{}
 		return
 	}
 
-	var err error
-	lCache, err = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
-		// Use 5% of cache memory for storing counters.
-		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
-		MaxCost:     int64(float64(cacheSize) * 0.95),
-		BufferItems: 64,
-		Metrics:     true,
-		Cost: func(val *List) int64 {
-			return 0
-		},
-		ShouldUpdate: func(cur, prev *List) bool {
-			return !(cur != nil && prev != nil && prev.maxTs > cur.maxTs)
-		},
-	})
-	x.Check(err)
-	go func() {
-		m := lCache.Metrics
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			// Record the posting list cache hit ratio
-			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-		}
-	}()
+	memoryLayer = initMemoryLayer(cacheSize)
 }
 
 func UpdateMaxCost(maxCost int64) {
@@ -342,7 +315,6 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 		pl := &pb.PostingList{}
 		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-			//fmt.Println("GETTING FROM DELTAS")
 			err := proto.Unmarshal(delta, pl)
 			lc.RUnlock()
 			return pl, err
@@ -363,7 +335,6 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		// If both pl and err are empty, that means that there was no data in local cache, hence we should
 		// read the data from badger.
 		if pl != nil || err != nil {
-			//fmt.Println("GETTING POSTING1", lc.startTs, pl)
 			return pl, err
 		}
 
@@ -380,7 +351,6 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 			return proto.Unmarshal(val, pl)
 		})
 
-		//fmt.Println("GETTING POSTING FROM BADGER", lc.startTs, pl)
 		return pl, err
 	}
 
@@ -404,8 +374,6 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
-	//pk, _ := x.Parse([]byte(key))
-	//fmt.Println("====Getting single posting", lc.startTs, pk, pl.Postings)
 	return pl, nil
 }
 
@@ -430,8 +398,6 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
-		//pk, _ := x.Parse([]byte(key))
-		//fmt.Printf("{TXN} Closing %v\n", pk)
 		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
 			lc.deltas[key] = data
