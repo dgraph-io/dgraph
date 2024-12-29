@@ -115,7 +115,7 @@ func BenchmarkTestCache(b *testing.B) {
 	attr := x.GalaxyAttr("cache")
 	keys := make([][]byte, 0)
 	N := uint64(10000)
-	NInt = 10000
+	NInt := 10000
 	txn := Oracle().RegisterStartTs(1)
 
 	for i := uint64(1); i < N; i++ {
