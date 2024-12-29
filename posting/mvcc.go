@@ -456,7 +456,7 @@ func checkForRollup(key []byte, l *List) {
 }
 
 func (ml *MemoryLayer) wait() {
-	sm.cache.Wait()
+	ml.cache.Wait()
 }
 
 func (ml *MemoryLayer) updateItemInCache(key string, pk x.ParsedKey, delta []byte, startTs, commitTs uint64) {
