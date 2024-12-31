@@ -157,6 +157,7 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	}
 
 	txn.Update()
+	txn.UpdateCachedKeys(commitTs)
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commitTs))
 	require.NoError(t, writer.Flush())
@@ -271,6 +272,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 
 func TestCountReverseIndexWithData(t *testing.T) {
 	require.NoError(t, pstore.DropAll())
+	memoryLayer.clear()
 	indexNameCountVal := "testcount: [uid] @count @reverse ."
 
 	attr := x.GalaxyAttr("testcount")
@@ -305,6 +307,7 @@ func TestCountReverseIndexWithData(t *testing.T) {
 
 func TestCountReverseIndexEmptyPosting(t *testing.T) {
 	require.NoError(t, pstore.DropAll())
+	memoryLayer.clear()
 	indexNameCountVal := "testcount: [uid] @count @reverse ."
 
 	attr := x.GalaxyAttr("testcount")

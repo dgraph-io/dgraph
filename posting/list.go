@@ -978,6 +978,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 		}
 
 		l.mutationMap.committedUids[mpost.Uid] = mpost
+		if l.mutationMap.length == math.MaxInt64 {
+			l.mutationMap.length = 0
+		}
 		l.mutationMap.length += getLengthDelta(mpost.Op)
 	}
 
@@ -999,7 +1002,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = newMutableLayer()
 	}
 	l.mutationMap.setCurrentEntries(startTs, pl)
-
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -1258,6 +1260,7 @@ func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb
 	var count int
 	var found bool
 	var post *pb.Posting
+
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			post = p
