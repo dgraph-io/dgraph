@@ -7,7 +7,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20220622145613-731d59e8b567
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
-	github.com/IBM/sarama v1.43.3
+	github.com/IBM/sarama v1.44.0
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.4.4
 	github.com/dgraph-io/badger/v4 v4.5.0
@@ -134,7 +134,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/pelletier/go-toml v1.2.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
-	github.com/pierrec/lz4/v4 v4.1.21 // indirect
+	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
