@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"testing"
 	"time"
 
@@ -21,9 +22,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v24/testutil"
 	"github.com/hypermodeinc/dgraph/v24/tok"
 	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/x"
+)
+
+var (
+	dg *dgraphapi.GrpcClient
 )
 
 func makeNquad(sub, pred string, val *api.Value) *api.NQuad {
@@ -85,17 +93,12 @@ func FastParse(b []byte, op int) ([]*api.NQuad, error) {
 
 func (exp *Experiment) verify() {
 	// insert the data into dgraph
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		exp.t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-
 	ctx := context.Background()
+	require.NoError(exp.t, dg.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
-
-	_, err = dg.NewTxn().Mutate(ctx,
+	_, err := dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
 	require.NoError(exp.t, err, "mutation failed")
 
@@ -1500,4 +1503,23 @@ func TestNquadsJsonValidVector(t *testing.T) {
 
 	exp.nqs = fastNQ
 	exp.verify()
+}
+
+func TestMain(m *testing.M) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+
+	x.Panic(err)
+	x.Panic(c.Start())
+	var cleanup func()
+	dg, cleanup, err = c.Client()
+	x.Panic(err)
+	defer cleanup()
+	code := m.Run()
+	if code != 0 {
+		c.Cleanup(true)
+	} else {
+		c.Cleanup(false)
+	}
+	os.Exit(code)
 }
