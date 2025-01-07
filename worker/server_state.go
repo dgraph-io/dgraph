@@ -25,10 +25,10 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/raftwal"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/raftwal"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 const (

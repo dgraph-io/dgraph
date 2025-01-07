@@ -39,13 +39,13 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/ee/enc"
-	"github.com/dgraph-io/dgraph/v24/posting"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/types/facets"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/posting"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/types/facets"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // DefaultExportFormat stores the name of the default format for exports.

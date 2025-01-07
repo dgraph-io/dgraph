@@ -1,5 +1,5 @@
 # **Don't delete** Comments at top of schemas should work
-# See: https://github.com/dgraph-io/dgraph/issues/4227
+# See: https://github.com/hypermodeinc/dgraph/issues/4227
 
 type Hotel {
     id: ID!

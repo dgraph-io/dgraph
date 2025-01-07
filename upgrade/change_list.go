@@ -37,7 +37,7 @@ func init() {
 						" types User, Group and Rule. They are now dgraph.type.User, " +
 						"dgraph.type.Group, and dgraph.type.Rule. This change was introduced in " +
 						"v20.07.0, and is applied while upgrading from v20.03.0+ to v20.07.0+. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
+						"For more info, see: https://github.com/hypermodeinc/dgraph/pull/5185",
 					minFromVersion: &version{major: 20, minor: 3, patch: 0},
 					applyFunc:      upgradeAclTypeNames,
 				},
@@ -60,7 +60,7 @@ func init() {
 					description: "This updates the persisted query from old format to new format." +
 						"Persistent query had 2 predicates which have been merged into a single " +
 						"predicate dgraph.graphql.p_query. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/7451",
+						"For more info, see: https://github.com/hypermodeinc/dgraph/pull/7451",
 					minFromVersion: &version{major: 20, minor: 11, patch: 0},
 					applyFunc:      upgradePersitentQuery,
 				},
@@ -69,7 +69,7 @@ func init() {
 					description: "This updates GraphQL schema to contain the CORS information. " +
 						"Some of the dgraph internal predicates are removed in v21.03.0. " +
 						"dgraph.cors that used to store CORS information is one of them. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/7431",
+						"For more info, see: https://github.com/hypermodeinc/dgraph/pull/7431",
 					minFromVersion: &version{major: 20, minor: 11, patch: 0},
 					applyFunc:      upgradeCORS,
 				},

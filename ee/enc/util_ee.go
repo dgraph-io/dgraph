@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
+ *     https://github.com/hypermodeinc/dgraph/blob/main/licenses/DCL.txt
  */
 
 package enc
@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // EeBuild indicates if this is a Enterprise build.

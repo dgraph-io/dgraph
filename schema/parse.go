@@ -24,11 +24,11 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/v24/lex"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/tok"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/tok"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // ParseBytes parses the byte array which holds the schema. We will reset

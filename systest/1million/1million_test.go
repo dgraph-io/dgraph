@@ -29,8 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/systest/1million/common"
-	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/systest/1million/common"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
 func Test1Million(t *testing.T) {

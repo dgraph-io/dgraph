@@ -19,9 +19,9 @@ package schema
 import (
 	"fmt"
 
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // AsGQLErrors formats an error as a list of GraphQL errors.

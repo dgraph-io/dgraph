@@ -23,10 +23,10 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/worker"
+	"github.com/hypermodeinc/dgraph/v24/graphql/resolve"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/worker"
 )
 
 type backupInput struct {

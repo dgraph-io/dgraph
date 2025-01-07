@@ -26,11 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	dschema "github.com/dgraph-io/dgraph/v24/schema"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules"
 	"github.com/dgraph-io/ristretto/v2/z"
+	dschema "github.com/hypermodeinc/dgraph/v24/schema"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type Tests map[string][]TestCase

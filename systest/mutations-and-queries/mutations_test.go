@@ -36,9 +36,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/dgraphapi"
-	"github.com/dgraph-io/dgraph/v24/dgraphtest"
-	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
 // TestSystem uses the externally run Dgraph cluster for testing. Most other
@@ -2414,7 +2414,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	require.NoError(t, err)
 	ctx := context.Background()
 	// This test checks that we consider reverse count index keys while doing conflict detection
-	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
+	// for transactions. See https://github.com/hypermodeinc/dgraph/issues/3893 for more details.
 	op := &api.Operation{}
 	op.Schema = `friend: [uid] @count @reverse .`
 	require.NoError(t, gcli.Alter(ctx, op))

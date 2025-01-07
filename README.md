@@ -13,13 +13,13 @@
 **The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
-[![ci-dgraph-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
-[![ci-dgraph-load-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
-[![ci-golang-lint](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
-[![ci-aqua-security-trivy-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml/badge.svg)](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
-[![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=main)](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
-[![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/dgraph-io/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/dgraph-io/dgraph&branch=main)
+[![ci-dgraph-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-tests.yml)
+[![ci-dgraph-load-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+[![ci-golang-lint](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-golang-lint.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-golang-lint.yml)
+[![ci-aqua-security-trivy-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
+[![Coverage Status](https://coveralls.io/repos/github/hypermodeinc/dgraph/badge.svg?branch=main)](https://coveralls.io/github/hypermodeinc/dgraph?branch=main)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hypermodeinc/dgraph)](https://goreportcard.com/report/github.com/hypermodeinc/dgraph)
+[![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/hypermodeinc/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/hypermodeinc/dgraph&branch=main)
 
 Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to perform 
 a rich set of queries. Being a native GraphQL database, it tightly controls how the
@@ -37,7 +37,7 @@ Dgraph is at [version v24.0.5][rel] and is production-ready. Apart from the vast
 production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser). A hosted version of Dgraph is available at [https://cloud.dgraph.io](https://cloud.dgraph.io).
 
-[rel]: https://github.com/dgraph-io/dgraph/releases/tag/v24.0.5
+[rel]: https://github.com/hypermodeinc/dgraph/releases/tag/v24.0.5
 
 ## Supported Platforms
 
@@ -77,7 +77,7 @@ sudo apt-get install build-essential
 Then clone the Dgraph repository and use `make install` to install the Dgraph binary in the directory named by the GOBIN environment variable, which defaults to $GOPATH/bin or $HOME/go/bin if the GOPATH environment variable is not set. 
 
 ```bash
-git clone https://github.com/dgraph-io/dgraph.git
+git clone https://github.com/hypermodeinc/dgraph.git
 cd dgraph
 make install
 ```
@@ -125,7 +125,7 @@ makes it easy to build applications with it.
   [https://discuss.dgraph.io](https://discuss.dgraph.io).
 - Check out [the demo at dgraph.io](http://dgraph.io) and [the visualization at
   play.dgraph.io](http://play.dgraph.io/).
-- Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to
+- Please see [releases tab](https://github.com/hypermodeinc/dgraph/releases) to
   find the latest release and corresponding release notes.
 - [See the Roadmap](https://discuss.dgraph.io/t/product-roadmap-2020/8479) for a list of
   working and planned features.
@@ -135,8 +135,8 @@ makes it easy to build applications with it.
   channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
 
 ## Developers
-- See a list of issues [that we need help with](https://github.com/dgraph-io/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-- Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/main/CONTRIBUTING.md) for guidelines on contributions.
+- See a list of issues [that we need help with](https://github.com/hypermodeinc/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
+- Please see [Contributing to Dgraph](https://github.com/hypermodeinc/dgraph/blob/main/CONTRIBUTING.md) for guidelines on contributions.
 
 ## Client Libraries
 The Dgraph team maintains several [officially supported client libraries](https://dgraph.io/docs/clients/). There are also libraries contributed by the community [unofficial client libraries](https://dgraph.io/docs/clients#unofficial-dgraph-clients).

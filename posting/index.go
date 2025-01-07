@@ -39,13 +39,13 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/schema"
-	"github.com/dgraph-io/dgraph/v24/tok"
-	"github.com/dgraph-io/dgraph/v24/tok/hnsw"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/schema"
+	"github.com/hypermodeinc/dgraph/v24/tok"
+	"github.com/hypermodeinc/dgraph/v24/tok/hnsw"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 var emptyCountParams countParams

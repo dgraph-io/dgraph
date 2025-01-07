@@ -20,8 +20,8 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/dgraph-io/dgraph/v24/codec"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/codec"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 )
 
 const jump = 32          // Jump size in InsersectWithJump.

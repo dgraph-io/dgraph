@@ -15,7 +15,7 @@
 #
 
 
-DGRAPH_PATH = $(GOPATH)/src/github.com/dgraph-io/dgraph/dgraph
+DGRAPH_PATH = $(GOPATH)/src/github.com/hypermodeinc/dgraph/dgraph
 DGRAPH_BIN  = $(DGRAPH_PATH)/dgraph
 
 TARGETS     = test1 test2 test3 test4 test5 test6

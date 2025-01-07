@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/dgraph-io/dgraph/v24/testutil"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // Opens a badger db and runs a a test on it.
