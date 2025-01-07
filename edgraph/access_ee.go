@@ -2,7 +2,7 @@
 // +build !oss
 
 /*
- * Copyright 2023 Dgraph Labs, Inc. All rights reserved.
+ * Copyright 2025 Hypermode Inc. All rights reserved.
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You

@@ -2,7 +2,7 @@ Dgraph Community License Agreement
 
   Please read this Dgraph Community License Agreement (the "Agreement")
   carefully before using Dgraph (as defined below), which is offered by
-  Dgraph Labs, Inc. or its affiliated Legal Entities ("Dgraph Labs").
+  Hypermode Inc. or its affiliated Legal Entities ("Dgraph Labs").
 
   By downloading Dgraph or using it in any manner, You agree that You have
   read and agree to be bound by the terms of this Agreement.  If You are
