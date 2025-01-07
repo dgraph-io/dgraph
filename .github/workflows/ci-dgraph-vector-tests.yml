@@ -12,6 +12,8 @@ on:
     branches:
       - main
       - 'release/**'
+  schedule:
+      - cron: "0 0 * * *" # 1 run per day
 jobs:
   dgraph-vector-tests:
     if: github.event.pull_request.draft == false
