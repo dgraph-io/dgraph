@@ -18,7 +18,7 @@ package dql
 
 import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v24/lex"
 )
 
 // ParseMutation parses a block into a mutation. Returns an object with a mutation or

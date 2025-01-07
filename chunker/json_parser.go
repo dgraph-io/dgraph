@@ -31,11 +31,11 @@ import (
 	"github.com/twpayne/go-geom/encoding/geojson"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/types/facets"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/simdjson-go"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/types/facets"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func stripSpaces(str string) string {

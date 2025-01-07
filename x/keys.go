@@ -26,7 +26,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 )
 
 const (

@@ -8,7 +8,7 @@
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
+ *     https://github.com/hypermodeinc/dgraph/blob/main/licenses/DCL.txt
  */
 package audit
 
@@ -26,10 +26,10 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/x"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"

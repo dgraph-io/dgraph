@@ -37,8 +37,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/testutil"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // TestAddMutation tests that add mutations work as expected.  There's a few angles
@@ -355,7 +355,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 			},
 		},
 		// Country: anotherCountry,
-		// FIXME: Won't work till https://github.com/dgraph-io/dgraph/pull/4411 is merged
+		// FIXME: Won't work till https://github.com/hypermodeinc/dgraph/pull/4411 is merged
 	}
 
 	patchRemove := &author{

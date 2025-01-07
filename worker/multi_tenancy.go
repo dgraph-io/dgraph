@@ -22,8 +22,8 @@ package worker
 import (
 	"context"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func (w *grpcWorker) DeleteNamespace(ctx context.Context,

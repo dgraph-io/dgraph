@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	dgraphRepoUrl = "https://github.com/dgraph-io/dgraph.git"
+	dgraphRepoUrl = "https://github.com/hypermodeinc/dgraph.git"
 	cloneTimeout  = 10 * time.Minute
 )
 

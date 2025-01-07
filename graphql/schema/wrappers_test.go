@@ -28,8 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {

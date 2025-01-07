@@ -22,7 +22,7 @@ Dgraph Community License Agreement
     (b) "Dgraph Core" shall mean the open source version of
         Dgraph, available free of charge at
 
-            https://github.com/dgraph-io/dgraph
+            https://github.com/hypermodeinc/dgraph
 
     (c) "Dgraph Enterprise Edition" shall mean the additional features made
         available by Dgraph Labs, the use of which is subject to additional
@@ -252,7 +252,7 @@ Dgraph Community License Agreement
      Contribution intentionally submitted for inclusion in Dgraph by You to
      Dgraph Labs shall be under the terms and conditions of
 
-         https://cla-assistant.io/dgraph-io/dgraph
+         https://cla-assistant.io/hypermodeinc/dgraph
 
      (which is based off of the Apache License), without any additional terms or
      conditions, payments of royalties or otherwise to Your benefit.

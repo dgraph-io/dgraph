@@ -22,12 +22,12 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgraph/v24/edgraph"
-	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/query"
-	"github.com/dgraph-io/dgraph/v24/worker"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/edgraph"
+	"github.com/hypermodeinc/dgraph/v24/graphql/resolve"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/query"
+	"github.com/hypermodeinc/dgraph/v24/worker"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type getSchemaResolver struct {

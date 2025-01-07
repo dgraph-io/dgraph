@@ -46,7 +46,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
-	"github.com/dgraph-io/dgraph/v24/contrib/jepsen/browser"
+	"github.com/hypermodeinc/dgraph/v24/contrib/jepsen/browser"
 )
 
 type jepsenTest struct {

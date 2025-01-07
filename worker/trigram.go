@@ -22,11 +22,11 @@ import (
 	cindex "github.com/google/codesearch/index"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dgraph-io/dgraph/v24/algo"
-	"github.com/dgraph-io/dgraph/v24/posting"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/tok"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/algo"
+	"github.com/hypermodeinc/dgraph/v24/posting"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/tok"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 var errRegexTooWide = errors.New(

@@ -24,10 +24,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/v24/graphql/admin"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/worker"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/graphql/admin"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/worker"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type allowedMethods map[string]bool

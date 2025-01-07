@@ -46,15 +46,15 @@ import (
 	bopt "github.com/dgraph-io/badger/v4/options"
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/chunker"
-	"github.com/dgraph-io/dgraph/v24/ee"
-	"github.com/dgraph-io/dgraph/v24/ee/enc"
-	"github.com/dgraph-io/dgraph/v24/filestore"
-	schemapkg "github.com/dgraph-io/dgraph/v24/schema"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/dgraph/v24/xidmap"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/chunker"
+	"github.com/hypermodeinc/dgraph/v24/ee"
+	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/filestore"
+	schemapkg "github.com/hypermodeinc/dgraph/v24/schema"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/xidmap"
 )
 
 type options struct {

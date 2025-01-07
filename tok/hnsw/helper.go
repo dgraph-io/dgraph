@@ -31,9 +31,9 @@ import (
 	"strings"
 	"unsafe"
 
-	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
-	"github.com/dgraph-io/dgraph/v24/tok/index"
 	"github.com/getsentry/sentry-go"
+	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	"github.com/hypermodeinc/dgraph/v24/tok/index"
 	"github.com/pkg/errors"
 	"github.com/viterin/vek"
 	"github.com/viterin/vek/vek32"

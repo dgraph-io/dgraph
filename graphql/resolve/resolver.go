@@ -30,11 +30,11 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/edgraph"
-	"github.com/dgraph-io/dgraph/v24/graphql/api"
-	"github.com/dgraph-io/dgraph/v24/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/edgraph"
+	"github.com/hypermodeinc/dgraph/v24/graphql/api"
+	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type resolveCtxKey string

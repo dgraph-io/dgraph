@@ -24,9 +24,9 @@ import (
 	"sync"
 	"testing"
 
-	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
-	"github.com/dgraph-io/dgraph/v24/tok/index"
-	opt "github.com/dgraph-io/dgraph/v24/tok/options"
+	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	"github.com/hypermodeinc/dgraph/v24/tok/index"
+	opt "github.com/hypermodeinc/dgraph/v24/tok/options"
 	"golang.org/x/exp/slices"
 )
 

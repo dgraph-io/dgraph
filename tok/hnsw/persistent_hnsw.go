@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
-	"github.com/dgraph-io/dgraph/v24/tok/index"
-	opt "github.com/dgraph-io/dgraph/v24/tok/options"
 	"github.com/golang/glog"
+	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	"github.com/hypermodeinc/dgraph/v24/tok/index"
+	opt "github.com/hypermodeinc/dgraph/v24/tok/options"
 	"github.com/pkg/errors"
 )
 

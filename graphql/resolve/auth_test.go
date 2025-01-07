@@ -31,14 +31,14 @@ import (
 	"gopkg.in/yaml.v2"
 
 	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/dql"
-	"github.com/dgraph-io/dgraph/v24/graphql/authorization"
-	"github.com/dgraph-io/dgraph/v24/graphql/dgraph"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/graphql/test"
-	"github.com/dgraph-io/dgraph/v24/testutil"
-	"github.com/dgraph-io/dgraph/v24/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	"github.com/hypermodeinc/dgraph/v24/dql"
+	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"
+	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/graphql/test"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type AuthQueryRewritingCase struct {

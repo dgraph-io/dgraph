@@ -36,12 +36,12 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/dql"
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/tok"
-	"github.com/dgraph-io/dgraph/v24/types"
-	"github.com/dgraph-io/dgraph/v24/x"
-	"github.com/dgraph-io/dgraph/v24/xidmap"
+	"github.com/hypermodeinc/dgraph/v24/dql"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/tok"
+	"github.com/hypermodeinc/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/xidmap"
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.

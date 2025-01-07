@@ -20,7 +20,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/types"
 )
 
 type mathTree struct {
