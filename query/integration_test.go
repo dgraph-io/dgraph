@@ -22,9 +22,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/v24/dgraphapi"
-	"github.com/dgraph-io/dgraph/v24/dgraphtest"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func TestMain(m *testing.M) {

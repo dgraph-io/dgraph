@@ -29,7 +29,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
 // Tests in this file require a cluster running with the --limit "mutations=<mode>;" flag.

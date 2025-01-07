@@ -1,4 +1,4 @@
-module github.com/dgraph-io/dgraph/v24
+module github.com/hypermodeinc/dgraph/v24
 
 go 1.22.7
 

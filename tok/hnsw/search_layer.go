@@ -19,8 +19,8 @@
 package hnsw
 
 import (
-	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
-	"github.com/dgraph-io/dgraph/v24/tok/index"
+	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	"github.com/hypermodeinc/dgraph/v24/tok/index"
 
 	"fmt"
 )

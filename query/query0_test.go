@@ -27,9 +27,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/dgraphapi"
-	"github.com/dgraph-io/dgraph/v24/dgraphtest"
-	"github.com/dgraph-io/dgraph/v24/dql"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v24/dql"
 )
 
 func TestGetUID(t *testing.T) {

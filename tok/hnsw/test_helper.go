@@ -25,7 +25,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dgraph-io/dgraph/v24/tok/index"
+	"github.com/hypermodeinc/dgraph/v24/tok/index"
 	"github.com/pkg/errors"
 )
 

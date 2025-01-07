@@ -31,14 +31,14 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgraph/v24/edgraph"
-	"github.com/dgraph-io/dgraph/v24/ee/audit"
-	"github.com/dgraph-io/dgraph/v24/graphql/api"
-	"github.com/dgraph-io/dgraph/v24/graphql/resolve"
-	"github.com/dgraph-io/dgraph/v24/graphql/schema"
-	"github.com/dgraph-io/dgraph/v24/graphql/subscription"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
+	"github.com/hypermodeinc/dgraph/v24/edgraph"
+	"github.com/hypermodeinc/dgraph/v24/ee/audit"
+	"github.com/hypermodeinc/dgraph/v24/graphql/api"
+	"github.com/hypermodeinc/dgraph/v24/graphql/resolve"
+	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v24/graphql/subscription"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type Headerkey string

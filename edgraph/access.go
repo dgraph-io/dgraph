@@ -25,10 +25,10 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/dql"
-	"github.com/dgraph-io/dgraph/v24/query"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/dql"
+	"github.com/hypermodeinc/dgraph/v24/query"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // Login handles login requests from clients. This version rejects all requests

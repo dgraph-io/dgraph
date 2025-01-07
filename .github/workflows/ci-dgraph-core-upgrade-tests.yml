@@ -41,9 +41,9 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the core upgrade tests
           go test -tags=upgrade \
-          github.com/dgraph-io/dgraph/v24/ee/acl \
-          github.com/dgraph-io/dgraph/v24/worker \
-          github.com/dgraph-io/dgraph/v24/query \
+          github.com/hypermodeinc/dgraph/v24/ee/acl \
+          github.com/hypermodeinc/dgraph/v24/worker \
+          github.com/hypermodeinc/dgraph/v24/query \
           -v -timeout=120m -failfast
           # clean up docker containers after test execution
           go clean -testcache

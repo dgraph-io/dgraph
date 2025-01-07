@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func TestDataAndErrors(t *testing.T) {

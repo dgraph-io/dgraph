@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v24/lex"
 )
 
 func TestQueryLexing(t *testing.T) {

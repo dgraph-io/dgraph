@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 )
 
 func TestCompareSchemaUpdates(t *testing.T) {

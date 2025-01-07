@@ -24,7 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/types"
+	"github.com/hypermodeinc/dgraph/v24/types"
 )
 
 func TestVector(t *testing.T) {

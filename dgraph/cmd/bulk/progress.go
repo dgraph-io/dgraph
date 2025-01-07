@@ -23,8 +23,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 type phase int32

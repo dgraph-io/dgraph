@@ -21,7 +21,7 @@ package live
 import (
 	"testing"
 
-	"github.com/dgraph-io/dgraph/v24/systest/bulk_live/common"
+	"github.com/hypermodeinc/dgraph/v24/systest/bulk_live/common"
 )
 
 func TestLiveCases(t *testing.T) {

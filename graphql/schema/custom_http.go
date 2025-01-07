@@ -25,9 +25,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgraph-io/dgraph/v24/graphql/authorization"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/golang/glog"
+	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 var (

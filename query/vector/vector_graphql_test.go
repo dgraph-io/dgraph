@@ -24,7 +24,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
 	"github.com/stretchr/testify/require"
 )
 

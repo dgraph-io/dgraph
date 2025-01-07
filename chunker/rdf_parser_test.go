@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/dgraph/v24/lex"
-	"github.com/dgraph-io/dgraph/v24/types/facets"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v24/types/facets"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 var testNQuads = []struct {

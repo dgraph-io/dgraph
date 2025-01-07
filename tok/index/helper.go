@@ -24,8 +24,8 @@ import (
 	"reflect"
 	"unsafe"
 
-	c "github.com/dgraph-io/dgraph/v24/tok/constraints"
 	"github.com/golang/glog"
+	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
 )
 
 // BytesAsFloatArray[T c.Float](encoded) converts encoded into a []T,

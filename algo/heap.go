@@ -17,7 +17,7 @@
 package algo
 
 import (
-	"github.com/dgraph-io/dgraph/v24/codec"
+	"github.com/hypermodeinc/dgraph/v24/codec"
 )
 
 type elem struct {

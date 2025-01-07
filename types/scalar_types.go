@@ -23,7 +23,7 @@ import (
 
 	"github.com/twpayne/go-geom"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 )
 
 const (

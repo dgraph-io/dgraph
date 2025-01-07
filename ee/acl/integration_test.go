@@ -17,8 +17,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dgraph-io/dgraph/v24/dgraphapi"
-	"github.com/dgraph-io/dgraph/v24/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
 )
 
 type AclTestSuite struct {

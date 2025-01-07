@@ -21,7 +21,7 @@ done
 
 tmp=${tmp:-tmp}
 
-go install -race github.com/dgraph-io/dgraph/cmd/dgraph-bulk-loader
+go install -race github.com/hypermodeinc/dgraph/cmd/dgraph-bulk-loader
 
 function run_test {
 	[[ $# == 2 ]] || { echo "bad args"; exit 1; }

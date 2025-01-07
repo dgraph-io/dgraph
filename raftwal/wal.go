@@ -26,8 +26,8 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 var errNotFound = errors.New("Unable to find raft entry")

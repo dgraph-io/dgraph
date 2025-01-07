@@ -22,8 +22,8 @@ package zero
 import (
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 )
 
 // dummy function as enterprise features are not available in oss binary.

@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgraph/v24/dgraphtest"
-	"github.com/dgraph-io/dgraph/v24/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v24/graphql/e2e/common"
+	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
 // disableDraining disables draining mode before each test for increased reliability.

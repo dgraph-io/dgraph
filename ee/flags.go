@@ -24,8 +24,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/pflag"
 
-	"github.com/dgraph-io/dgraph/v24/x"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 // Keys holds the configuration for ACL and encryption.

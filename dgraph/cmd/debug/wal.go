@@ -28,9 +28,9 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/dgraph-io/dgraph/v24/protos/pb"
-	"github.com/dgraph-io/dgraph/v24/raftwal"
-	"github.com/dgraph-io/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/raftwal"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
