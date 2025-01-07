@@ -2,7 +2,7 @@ Dgraph Community License Agreement
 
   Please read this Dgraph Community License Agreement (the "Agreement")
   carefully before using Dgraph (as defined below), which is offered by
-  Dgraph Labs, Inc. or its affiliated Legal Entities ("Dgraph Labs").
+  Hypermode Inc. or its affiliated Legal Entities ("Dgraph Labs").
 
   By downloading Dgraph or using it in any manner, You agree that You have
   read and agree to be bound by the terms of this Agreement.  If You are
@@ -22,7 +22,7 @@ Dgraph Community License Agreement
     (b) "Dgraph Core" shall mean the open source version of
         Dgraph, available free of charge at
 
-            https://github.com/dgraph-io/dgraph
+            https://github.com/hypermodeinc/dgraph
 
     (c) "Dgraph Enterprise Edition" shall mean the additional features made
         available by Dgraph Labs, the use of which is subject to additional

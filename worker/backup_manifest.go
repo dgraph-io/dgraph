@@ -2,13 +2,13 @@
 // +build !oss
 
 /*
- * Copyright 2021 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 Hypermode Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
+ *     https://github.com/hypermodeinc/dgraph/blob/main/licenses/DCL.txt
  */
 
 package worker
@@ -165,7 +165,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 // the drop data/attr operation.
 // If the manifest version is 2103, convert the format of predicate from <ns bytes>|<attr> to
 // <ns string>-<attr>. This is because of a bug for namespace greater than 127.
-// See https://github.com/dgraph-io/dgraph/pull/7810
+// See https://github.com/hypermodeinc/dgraph/pull/7810
 // NOTE: Do not use the upgraded manifest to overwrite the non-upgraded manifest.
 func upgradeManifest(m *Manifest) error {
 	switch m.Version {

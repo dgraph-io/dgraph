@@ -2,7 +2,7 @@
 // +build debug
 
 /*
- * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

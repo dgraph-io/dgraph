@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-Copyright 2015-2023 Dgraph Labs, Inc.
+Copyright 2015-2025 Hypermode Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,

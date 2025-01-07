@@ -36,7 +36,7 @@ It's best to put the Dgraph repo somewhere in `$GOPATH`.
 
     $ mkdir -p "$(go env GOPATH)/src/github.com/dgraph-io"
     $ cd "$(go env GOPATH)/src/github.com/dgraph-io"
-    $ git clone https://github.com/dgraph-io/dgraph.git
+    $ git clone https://github.com/hypermodeinc/dgraph.git
     $ cd ./dgraph
     $ make install
 
@@ -95,7 +95,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2023 Dgraph Labs, Inc.
+Copyright 2015-2025 Hypermode Inc.
 ```
 
 ### Build Docker Image
@@ -129,7 +129,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-Copyright 2015-2023 Dgraph Labs, Inc.
+Copyright 2015-2025 Hypermode Inc.
 ```
 
 For release images, follow [Doing a release](#doing-a-release). It creates
@@ -202,7 +202,7 @@ Every new source file must begin with a license header.
 Most of Dgraph, Badger, and the Dgraph clients (dgo, dgraph-js, pydgraph and dgraph4j) are licensed under the Apache 2.0 license:
 
     /*
-     * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
+     * Copyright 2016-2025 Hypermode Inc. and Contributors
      *
      * Licensed under the Apache License, Version 2.0 (the "License");
      * you may not use this file except in compliance with the License.

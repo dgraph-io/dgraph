@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -355,7 +355,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 			},
 		},
 		// Country: anotherCountry,
-		// FIXME: Won't work till https://github.com/dgraph-io/dgraph/pull/4411 is merged
+		// FIXME: Won't work till https://github.com/hypermodeinc/dgraph/pull/4411 is merged
 	}
 
 	patchRemove := &author{

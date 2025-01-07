@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -269,7 +269,7 @@ they form a Raft group and provide synchronous replication.
 		Head("Feature flags to enable various experimental features").
 		Flag("normalize-compatibility-mode", "configure @normalize response formatting."+
 			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
-			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
+			" For more details, see https://github.com/hypermodeinc/dgraph/pull/7639").
 		String())
 }
 

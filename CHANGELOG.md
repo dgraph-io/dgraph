@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project will adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
 ## [v24.0.5] - 2024-11-05
-[v24.0.5]: https://github.com/dgraph-io/dgraph/compare/v24.0.4...v24.0.5
+[v24.0.5]: https://github.com/hypermodeinc/dgraph/compare/v24.0.4...v24.0.5
 
 ### Fixed
 
@@ -16,7 +16,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Update cd-dgraph.yml to create unique artifacts (#9194)
 
 ## [v24.0.4] - 2024-10-08
-[v24.0.4]: https://github.com/dgraph-io/dgraph/compare/v24.0.2...v24.0.4
+[v24.0.4]: https://github.com/hypermodeinc/dgraph/compare/v24.0.2...v24.0.4
 
 ### Fixed
 
@@ -65,28 +65,28 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - chore(deps): bump google.golang.org/grpc from 1.67.0 to 1.67.1 in the minor-and-patch group (#9178)
 
 ## [v24.0.2] - 2024-08-16
-[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.1...v24.0.2
+[v24.0.1]: https://github.com/hypermodeinc/dgraph/compare/v24.0.1...v24.0.2
 
 
 
 - **Fixed**
   
-	- fix(core): Fix namespace used by unique query https://github.com/dgraph-io/dgraph/pull/9119 
-	- fix(core): Fix regression in computing cond variables  https://github.com/dgraph-io/dgraph/pull/9126
-  	- fix(live): Fix derigster while retrying  https://github.com/dgraph-io/dgraph/pull/9121
+	- fix(core): Fix namespace used by unique query https://github.com/hypermodeinc/dgraph/pull/9119 
+	- fix(core): Fix regression in computing cond variables  https://github.com/hypermodeinc/dgraph/pull/9126
+  	- fix(live): Fix derigster while retrying  https://github.com/hypermodeinc/dgraph/pull/9121
    
 
 - **Chore**
-	- chore(deps): bump certifi from 2023.7.22 to 2024.7.4 in /contrib/config/marketplace/aws/tests https://github.com/dgraph-io/dgraph/pull/9110
-	- chore(deps): bump idna from 2.9 to 3.7 in /contrib/config/marketplace/aws/tests  https://github.com/dgraph-io/dgraph/pull/9072
+	- chore(deps): bump certifi from 2023.7.22 to 2024.7.4 in /contrib/config/marketplace/aws/tests https://github.com/hypermodeinc/dgraph/pull/9110
+	- chore(deps): bump idna from 2.9 to 3.7 in /contrib/config/marketplace/aws/tests  https://github.com/hypermodeinc/dgraph/pull/9072
 
 
 - **Perf**
-	- perf(query): Read just the latest value for scalar types https://github.com/dgraph-io/dgraph/pull/8966
-  - perf(vector): Add heap to neighbour edges https://github.com/dgraph-io/dgraph/pull/9122
+	- perf(query): Read just the latest value for scalar types https://github.com/hypermodeinc/dgraph/pull/8966
+  - perf(vector): Add heap to neighbour edges https://github.com/hypermodeinc/dgraph/pull/9122
 
 ## [v24.0.1] - 2024-07-30
-[v24.0.1]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v24.0.1
+[v24.0.1]: https://github.com/hypermodeinc/dgraph/compare/v24.0.0...v24.0.1
 
 > **Warning**
 > After upgrading to v24.0.1, vector index needs to be rebuilt as underlying data has changed.
@@ -108,7 +108,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 
 ## [v24.0.0] - 2024-06-06
-[v24.0.0]: https://github.com/dgraph-io/dgraph/compare/v24.0.0...v23.1.0
+[v24.0.0]: https://github.com/hypermodeinc/dgraph/compare/v24.0.0...v23.1.0
 
 > **Warning**
 > This will be a breaking change for anyone moving from to `v.24.0.0`.
@@ -178,7 +178,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 	- chore(deps): bump google.golang.org/protobuf from 1.31.0 to 1.33.0in #9051[
 
 ## [23.1.1] - 2024-04-26
-[v23.1.1]: https://github.com/dgraph-io/dgraph/compare/v23.1.0...v23.1.1
+[v23.1.1]: https://github.com/hypermodeinc/dgraph/compare/v23.1.0...v23.1.1
 
 ### Fixed
 
@@ -190,7 +190,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - ci/cd optimizations (#9069)
 
 ## [v23.1.0] - 2023-08-17
-[v23.1.0]: https://github.com/dgraph-io/dgraph/compare/v23.0.1...v23.1.0
+[v23.1.0]: https://github.com/hypermodeinc/dgraph/compare/v23.0.1...v23.1.0
 
 ### Added
 
@@ -245,7 +245,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
     - chore: update pull request template (#8899)
 
 ## [v23.0.1] - 2023-07-09
-[v23.0.1]: https://github.com/dgraph-io/dgraph/compare/v23.0.0...v23.0.1
+[v23.0.1]: https://github.com/hypermodeinc/dgraph/compare/v23.0.0...v23.0.1
 
 ### Fixed
 
@@ -269,91 +269,91 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - chore(deps): bump github.com/cloudflare/circl from 1.1.0 to 1.3.3 (#8822)
 
 ## [v23.0.0] - 2023-05-08
-[v23.0.0]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0
+[v23.0.0]: https://github.com/hypermodeinc/dgraph/compare/v22.0.2...v23.0.0
 
 ### Added
 
 - **GraphQL**
-    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/hypermodeinc/dgraph/pull/8574)
 
 - **Core Dgraph**
-    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
-    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
-    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
-    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
-    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
-    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
-    - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+    - feat(metrics): add badger metrics (#8034) (https://github.com/hypermodeinc/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/hypermodeinc/dgraph/pull/8624)
+    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/hypermodeinc/dgraph/pull/8516)
+    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/hypermodeinc/dgraph/pull/8625)
+    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/hypermodeinc/dgraph/pull/8655)
+    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/hypermodeinc/dgraph/pull/8564)
+    - feat(multitenancy): namespace aware drop data (https://github.com/hypermodeinc/dgraph/pull/8511)
 
 ### Fixed
 
 - **GraphQL**
-    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/hypermodeinc/dgraph/pull/8571)
 
 - **Core Dgraph**
-    - Fix wal replay issue during rollup (https://github.com/dgraph-io/dgraph/pull/8774)
-    - security(logging): fix aes implementation in audit logging (https://github.com/dgraph-io/dgraph/pull/8323)
-    - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
-    - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
-    - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
-    - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
-    - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
-    - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
-    - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
-    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
-    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
-    - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
-    - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
-    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
-    - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
-    - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
-    - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
-    - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
-    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
-    - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
-    - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
-    - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+    - Fix wal replay issue during rollup (https://github.com/hypermodeinc/dgraph/pull/8774)
+    - security(logging): fix aes implementation in audit logging (https://github.com/hypermodeinc/dgraph/pull/8323)
+    - chore(worker): unify mapper receiver names (https://github.com/hypermodeinc/dgraph/pull/8740)
+    - fix(dql): fix panic in parsing of regexp (https://github.com/hypermodeinc/dgraph/pull/8739)
+    - fix(Query): Do an error check before bubbling up nil error (https://github.com/hypermodeinc/dgraph/pull/8769)
+    - chore: replace global index with local one & fix typos (https://github.com/hypermodeinc/dgraph/pull/8719)
+    - chore(logs): add logs to track dropped proposals (https://github.com/hypermodeinc/dgraph/pull/8568)
+    - fix(debug): check length of wal entry before parsing (https://github.com/hypermodeinc/dgraph/pull/8560)
+    - opt(schema): optimize populateSchema() (https://github.com/hypermodeinc/dgraph/pull/8565)
+    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/hypermodeinc/dgraph/pull/8573)
+    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/hypermodeinc/dgraph/pull/8561)
+    - fix(restore): set kv version to restoreTs for all keys (https://github.com/hypermodeinc/dgraph/pull/8563)
+    - fix(probe): do not contend for lock in lazy load (https://github.com/hypermodeinc/dgraph/pull/8566)
+    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/hypermodeinc/dgraph/pull/8614)
+    - fix(proposals): incremental proposal key for zero proposals (https://github.com/hypermodeinc/dgraph/pull/8567)
+    - fix(zero): fix waiting for random time while rate limiting (https://github.com/hypermodeinc/dgraph/pull/8656)
+    - chore(deps): upgrade badger (https://github.com/hypermodeinc/dgraph/pull/8654, https://github.com/hypermodeinc/dgraph/pull/8658)
+    - opt(schema): load schema and types using Stream framework  (https://github.com/hypermodeinc/dgraph/pull/8562)
+    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/hypermodeinc/dgraph/pull/8510)
+    - fix(audit): fixing audit logs for websocket connections (https://github.com/hypermodeinc/dgraph/pull/8627)
+    - fix(restore): consider the banned namespaces while bumping (https://github.com/hypermodeinc/dgraph/pull/8559)
+    - fix(backup): create directory before writing backup (https://github.com/hypermodeinc/dgraph/pull/8638)
 
 - **Test**
-    - chore(tests): add upgrade tests in query package (https://github.com/dgraph-io/dgraph/pull/8750)
-    - simplify test setup in query package (https://github.com/dgraph-io/dgraph/pull/8782)
-    - add a test for incremental restore (https://github.com/dgraph-io/dgraph/pull/8754)
-    - chore(tests): run tests in query package against dgraph cloud (https://github.com/dgraph-io/dgraph/pull/8726)
-    - fix the backup test cluster compose file (https://github.com/dgraph-io/dgraph/pull/8775)
-    - cleanup tests to reduce the scope of err var (https://github.com/dgraph-io/dgraph/pull/8771)
-    - use t.TempDir() for using a temp dir in tests (https://github.com/dgraph-io/dgraph/pull/8772)
-    - fix(test): clan cruft from test run (https://github.com/dgraph-io/dgraph/pull/8348)
-    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/dgraph-io/dgraph/pull/8765)
-    - chore: fix linter issue on main (https://github.com/dgraph-io/dgraph/pull/8749)
-    - recreate the context variable for parallel test (https://github.com/dgraph-io/dgraph/pull/8748)
-    - fix(tests): wait for license to be applied before trying to login (https://github.com/dgraph-io/dgraph/pull/8744)
-    - fix(tests): sleep longer so that ACLs are updated (https://github.com/dgraph-io/dgraph/pull/8745)
-    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/dgraph-io/dgraph/pull/8734)
-    - chore(linter): fix unconvert linter issues on linux (https://github.com/dgraph-io/dgraph/pull/8718)
-    - chore(linter): add unconvert linter and address related issues (https://github.com/dgraph-io/dgraph/pull/8685)
-    - chore(ci): resolve community PR goveralls failure (https://github.com/dgraph-io/dgraph/pull/8716)
-    - chore(test): increased iterations of the health check (https://github.com/dgraph-io/dgraph/pull/8711)
-    - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
-    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
-    - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
-    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
-    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
-    - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
-    - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
-    - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+    - chore(tests): add upgrade tests in query package (https://github.com/hypermodeinc/dgraph/pull/8750)
+    - simplify test setup in query package (https://github.com/hypermodeinc/dgraph/pull/8782)
+    - add a test for incremental restore (https://github.com/hypermodeinc/dgraph/pull/8754)
+    - chore(tests): run tests in query package against dgraph cloud (https://github.com/hypermodeinc/dgraph/pull/8726)
+    - fix the backup test cluster compose file (https://github.com/hypermodeinc/dgraph/pull/8775)
+    - cleanup tests to reduce the scope of err var (https://github.com/hypermodeinc/dgraph/pull/8771)
+    - use t.TempDir() for using a temp dir in tests (https://github.com/hypermodeinc/dgraph/pull/8772)
+    - fix(test): clan cruft from test run (https://github.com/hypermodeinc/dgraph/pull/8348)
+    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/hypermodeinc/dgraph/pull/8765)
+    - chore: fix linter issue on main (https://github.com/hypermodeinc/dgraph/pull/8749)
+    - recreate the context variable for parallel test (https://github.com/hypermodeinc/dgraph/pull/8748)
+    - fix(tests): wait for license to be applied before trying to login (https://github.com/hypermodeinc/dgraph/pull/8744)
+    - fix(tests): sleep longer so that ACLs are updated (https://github.com/hypermodeinc/dgraph/pull/8745)
+    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/hypermodeinc/dgraph/pull/8734)
+    - chore(linter): fix unconvert linter issues on linux (https://github.com/hypermodeinc/dgraph/pull/8718)
+    - chore(linter): add unconvert linter and address related issues (https://github.com/hypermodeinc/dgraph/pull/8685)
+    - chore(ci): resolve community PR goveralls failure (https://github.com/hypermodeinc/dgraph/pull/8716)
+    - chore(test): increased iterations of the health check (https://github.com/hypermodeinc/dgraph/pull/8711)
+    - fix(test): avoid host volume mount in minio container (https://github.com/hypermodeinc/dgraph/pull/8569)
+    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/hypermodeinc/dgraph/pull/8515)
+    - chore(test): add Backup/Restore test for NFS (https://github.com/hypermodeinc/dgraph/pull/8551)
+    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/hypermodeinc/dgraph/pull/8619)
+    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/hypermodeinc/dgraph/pull/8662)
+    - chore(test): add automated test to test multitenant --limit flag (https://github.com/hypermodeinc/dgraph/pull/8646)
+    - chore(test): add restore test for more than 127 namespaces (https://github.com/hypermodeinc/dgraph/pull/8643)
+    - fix(test): fix the corner case for raft entries test (https://github.com/hypermodeinc/dgraph/pull/8617)
 
 - **CD**
-    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
-    - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
-    - chore(cd): add badger binary to dgraph docker image (https://github.com/dgraph-io/dgraph/pull/8790)
+    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/hypermodeinc/dgraph/pull/8652)
+    - chore(deps): update min go build version (https://github.com/hypermodeinc/dgraph/pull/8423)
+    - chore(cd): add badger binary to dgraph docker image (https://github.com/hypermodeinc/dgraph/pull/8790)
 
 - **Security**
-    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
-    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
-    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
-    - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
-    - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
-    - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/hypermodeinc/dgraph/pull/8496)
+    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/hypermodeinc/dgraph/pull/8575)
+    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/hypermodeinc/dgraph/pull/8676)
+    - fix(sec): upgrade networkx to  (https://github.com/hypermodeinc/dgraph/pull/8613)
+    - fix(sec): CVE-2022-41721 (https://github.com/hypermodeinc/dgraph/pull/8633)
+    - fix(sec): CVE & OS Patching (https://github.com/hypermodeinc/dgraph/pull/8634)
 
    - <details>
       <summary>CVE Fixes (31 total)</summary>
@@ -394,236 +394,236 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - **Core Dgraph**
-    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
-    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
-    - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
-    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
-    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
-    - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+    - upgrade badger to v4.1.0 (https://github.com/hypermodeinc/dgraph/pull/8783) (https://github.com/hypermodeinc/dgraph/pull/8709)
+    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/hypermodeinc/dgraph/pull/8601)
+    - fix(query): handle bad timezone correctly (https://github.com/hypermodeinc/dgraph/pull/8657)
+    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/hypermodeinc/dgraph/pull/8612)
+    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/hypermodeinc/dgraph/pull/8554)
+    - fix(mutation): validate mutation before applying it (https://github.com/hypermodeinc/dgraph/pull/8623)
 
 - **CI Enhancements**
-    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
-    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
-    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
-    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
-    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
-    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
-    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
-    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+    - fix(ci): unpin curl (https://github.com/hypermodeinc/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/hypermodeinc/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/hypermodeinc/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/hypermodeinc/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/hypermodeinc/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/hypermodeinc/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/hypermodeinc/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/hypermodeinc/dgraph/pull/8628)
 
 ## [v23.0.0-rc1] - 2023-04-11
-[v23.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-rc1
+[v23.0.0-rc1]: https://github.com/hypermodeinc/dgraph/compare/v22.0.2...v23.0.0-rc1
 
 ### Added
 
 - **GraphQL**
-    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+    - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/hypermodeinc/dgraph/pull/8574)
 
 - **Core Dgraph**
-    - feat(metrics): add badger metrics (#8034) (https://github.com/dgraph-io/dgraph/pull/8737)
-    - feat(restore): introduce incremental restore (#7942) (https://github.com/dgraph-io/dgraph/pull/8624)
-    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
-    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
-    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
-    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
-    - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+    - feat(metrics): add badger metrics (#8034) (https://github.com/hypermodeinc/dgraph/pull/8737)
+    - feat(restore): introduce incremental restore (#7942) (https://github.com/hypermodeinc/dgraph/pull/8624)
+    - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/hypermodeinc/dgraph/pull/8516)
+    - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/hypermodeinc/dgraph/pull/8625)
+    - chore(deps): update prometheus dependency, adds new metrics (https://github.com/hypermodeinc/dgraph/pull/8655)
+    - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/hypermodeinc/dgraph/pull/8564)
+    - feat(multitenancy): namespace aware drop data (https://github.com/hypermodeinc/dgraph/pull/8511)
 
 ### Fixed
 
 - **GragphQL**
-    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+    - fix(GraphQL): nested Auth Rules not working properly (https://github.com/hypermodeinc/dgraph/pull/8571)
 
 - **Core Dgraph**
-    - Fix wal replay issue during rollup (https://github.com/dgraph-io/dgraph/pull/8774)
-    - security(logging): fix aes implementation in audit logging (https://github.com/dgraph-io/dgraph/pull/8323)
-    - chore(worker): unify mapper receiver names (https://github.com/dgraph-io/dgraph/pull/8740)
-    - fix(dql): fix panic in parsing of regexp (https://github.com/dgraph-io/dgraph/pull/8739)
-    - fix(Query): Do an error check before bubbling up nil error (https://github.com/dgraph-io/dgraph/pull/8769)
-    - chore: replace global index with local one & fix typos (https://github.com/dgraph-io/dgraph/pull/8719)
-    - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
-    - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
-    - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
-    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
-    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
-    - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
-    - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
-    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
-    - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
-    - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
-    - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
-    - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
-    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
-    - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
-    - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
-    - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+    - Fix wal replay issue during rollup (https://github.com/hypermodeinc/dgraph/pull/8774)
+    - security(logging): fix aes implementation in audit logging (https://github.com/hypermodeinc/dgraph/pull/8323)
+    - chore(worker): unify mapper receiver names (https://github.com/hypermodeinc/dgraph/pull/8740)
+    - fix(dql): fix panic in parsing of regexp (https://github.com/hypermodeinc/dgraph/pull/8739)
+    - fix(Query): Do an error check before bubbling up nil error (https://github.com/hypermodeinc/dgraph/pull/8769)
+    - chore: replace global index with local one & fix typos (https://github.com/hypermodeinc/dgraph/pull/8719)
+    - chore(logs): add logs to track dropped proposals (https://github.com/hypermodeinc/dgraph/pull/8568)
+    - fix(debug): check length of wal entry before parsing (https://github.com/hypermodeinc/dgraph/pull/8560)
+    - opt(schema): optimize populateSchema() (https://github.com/hypermodeinc/dgraph/pull/8565)
+    - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/hypermodeinc/dgraph/pull/8573)
+    - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/hypermodeinc/dgraph/pull/8561)
+    - fix(restore): set kv version to restoreTs for all keys (https://github.com/hypermodeinc/dgraph/pull/8563)
+    - fix(probe): do not contend for lock in lazy load (https://github.com/hypermodeinc/dgraph/pull/8566)
+    - fix(core): fixed infinite loop in CommitToDisk (https://github.com/hypermodeinc/dgraph/pull/8614)
+    - fix(proposals): incremental proposal key for zero proposals (https://github.com/hypermodeinc/dgraph/pull/8567)
+    - fix(zero): fix waiting for random time while rate limiting (https://github.com/hypermodeinc/dgraph/pull/8656)
+    - chore(deps): upgrade badger (https://github.com/hypermodeinc/dgraph/pull/8654, https://github.com/hypermodeinc/dgraph/pull/8658)
+    - opt(schema): load schema and types using Stream framework  (https://github.com/hypermodeinc/dgraph/pull/8562)
+    - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/hypermodeinc/dgraph/pull/8510)
+    - fix(audit): fixing audit logs for websocket connections (https://github.com/hypermodeinc/dgraph/pull/8627)
+    - fix(restore): consider the banned namespaces while bumping (https://github.com/hypermodeinc/dgraph/pull/8559)
+    - fix(backup): create directory before writing backup (https://github.com/hypermodeinc/dgraph/pull/8638)
 
 - **Test**
-    - chore(tests): add upgrade tests in query package (https://github.com/dgraph-io/dgraph/pull/8750)
-    - simplify test setup in query package (https://github.com/dgraph-io/dgraph/pull/8782)
-    - add a test for incremental restore (https://github.com/dgraph-io/dgraph/pull/8754)
-    - chore(tests): run tests in query package against dgraph cloud (https://github.com/dgraph-io/dgraph/pull/8726)
-    - fix the backup test cluster compose file (https://github.com/dgraph-io/dgraph/pull/8775)
-    - cleanup tests to reduce the scope of err var (https://github.com/dgraph-io/dgraph/pull/8771)
-    - use t.TempDir() for using a temp dir in tests (https://github.com/dgraph-io/dgraph/pull/8772)
-    - fix(test): clan cruft from test run (https://github.com/dgraph-io/dgraph/pull/8348)
-    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/dgraph-io/dgraph/pull/8765)
-    - chore: fix linter issue on main (https://github.com/dgraph-io/dgraph/pull/8749)
-    - recreate the context variable for parallel test (https://github.com/dgraph-io/dgraph/pull/8748)
-    - fix(tests): wait for license to be applied before trying to login (https://github.com/dgraph-io/dgraph/pull/8744)
-    - fix(tests): sleep longer so that ACLs are updated (https://github.com/dgraph-io/dgraph/pull/8745)
-    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/dgraph-io/dgraph/pull/8734)
-    - chore(linter): fix unconvert linter issues on linux (https://github.com/dgraph-io/dgraph/pull/8718)
-    - chore(linter): add unconvert linter and address related issues (https://github.com/dgraph-io/dgraph/pull/8685)
-    - chore(ci): resolve community PR goveralls failure (https://github.com/dgraph-io/dgraph/pull/8716)
-    - chore(test): increased iterations of the health check (https://github.com/dgraph-io/dgraph/pull/8711)
-    - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
-    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
-    - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
-    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
-    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
-    - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
-    - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
-    - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+    - chore(tests): add upgrade tests in query package (https://github.com/hypermodeinc/dgraph/pull/8750)
+    - simplify test setup in query package (https://github.com/hypermodeinc/dgraph/pull/8782)
+    - add a test for incremental restore (https://github.com/hypermodeinc/dgraph/pull/8754)
+    - chore(tests): run tests in query package against dgraph cloud (https://github.com/hypermodeinc/dgraph/pull/8726)
+    - fix the backup test cluster compose file (https://github.com/hypermodeinc/dgraph/pull/8775)
+    - cleanup tests to reduce the scope of err var (https://github.com/hypermodeinc/dgraph/pull/8771)
+    - use t.TempDir() for using a temp dir in tests (https://github.com/hypermodeinc/dgraph/pull/8772)
+    - fix(test): clan cruft from test run (https://github.com/hypermodeinc/dgraph/pull/8348)
+    - chore(tests): avoid calling os.Exit in TestMain (https://github.com/hypermodeinc/dgraph/pull/8765)
+    - chore: fix linter issue on main (https://github.com/hypermodeinc/dgraph/pull/8749)
+    - recreate the context variable for parallel test (https://github.com/hypermodeinc/dgraph/pull/8748)
+    - fix(tests): wait for license to be applied before trying to login (https://github.com/hypermodeinc/dgraph/pull/8744)
+    - fix(tests): sleep longer so that ACLs are updated (https://github.com/hypermodeinc/dgraph/pull/8745)
+    - chore(test): use pointer receiver for LocalCluster methods (https://github.com/hypermodeinc/dgraph/pull/8734)
+    - chore(linter): fix unconvert linter issues on linux (https://github.com/hypermodeinc/dgraph/pull/8718)
+    - chore(linter): add unconvert linter and address related issues (https://github.com/hypermodeinc/dgraph/pull/8685)
+    - chore(ci): resolve community PR goveralls failure (https://github.com/hypermodeinc/dgraph/pull/8716)
+    - chore(test): increased iterations of the health check (https://github.com/hypermodeinc/dgraph/pull/8711)
+    - fix(test): avoid host volume mount in minio container (https://github.com/hypermodeinc/dgraph/pull/8569)
+    - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/hypermodeinc/dgraph/pull/8515)
+    - chore(test): add Backup/Restore test for NFS (https://github.com/hypermodeinc/dgraph/pull/8551)
+    - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/hypermodeinc/dgraph/pull/8619)
+    - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/hypermodeinc/dgraph/pull/8662)
+    - chore(test): add automated test to test multitenant --limit flag (https://github.com/hypermodeinc/dgraph/pull/8646)
+    - chore(test): add restore test for more than 127 namespaces (https://github.com/hypermodeinc/dgraph/pull/8643)
+    - fix(test): fix the corner case for raft entries test (https://github.com/hypermodeinc/dgraph/pull/8617)
 
 - **CD**
-    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
-    - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
-    - chore(cd): add badger binary to dgraph docker image (https://github.com/dgraph-io/dgraph/pull/8790)
+    - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/hypermodeinc/dgraph/pull/8652)
+    - chore(deps): update min go build version (https://github.com/hypermodeinc/dgraph/pull/8423)
+    - chore(cd): add badger binary to dgraph docker image (https://github.com/hypermodeinc/dgraph/pull/8790)
 
 - **Security**
-    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
-    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
-    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
-    - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
-    - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
-    - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+    - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/hypermodeinc/dgraph/pull/8496)
+    - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/hypermodeinc/dgraph/pull/8575)
+    - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/hypermodeinc/dgraph/pull/8676)
+    - fix(sec): upgrade networkx to  (https://github.com/hypermodeinc/dgraph/pull/8613)
+    - fix(sec): CVE-2022-41721 (https://github.com/hypermodeinc/dgraph/pull/8633)
+    - fix(sec): CVE & OS Patching (https://github.com/hypermodeinc/dgraph/pull/8634)
 
 ### Changed
 
 - **Core Dgraph**
-    - upgrade badger to v4.1.0 (https://github.com/dgraph-io/dgraph/pull/8783) (https://github.com/dgraph-io/dgraph/pull/8709)
-    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
-    - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
-    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
-    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
-    - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+    - upgrade badger to v4.1.0 (https://github.com/hypermodeinc/dgraph/pull/8783) (https://github.com/hypermodeinc/dgraph/pull/8709)
+    - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/hypermodeinc/dgraph/pull/8601)
+    - fix(query): handle bad timezone correctly (https://github.com/hypermodeinc/dgraph/pull/8657)
+    - chore(ludicroud): remove ludicrous mode from the code (https://github.com/hypermodeinc/dgraph/pull/8612)
+    - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/hypermodeinc/dgraph/pull/8554)
+    - fix(mutation): validate mutation before applying it (https://github.com/hypermodeinc/dgraph/pull/8623)
 
 - **CI Enhancements**
-    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
-    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
-    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
-    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
-    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
-    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
-    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
-    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+    - fix(ci): unpin curl (https://github.com/hypermodeinc/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/hypermodeinc/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/hypermodeinc/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/hypermodeinc/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/hypermodeinc/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/hypermodeinc/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/hypermodeinc/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/hypermodeinc/dgraph/pull/8628)
 
 
 ## [v23.0.0-beta1] - 2023-03-01
-[v23.0.0-beta1]: https://github.com/dgraph-io/dgraph/compare/v22.0.2...v23.0.0-beta1
+[v23.0.0-beta1]: https://github.com/hypermodeinc/dgraph/compare/v22.0.2...v23.0.0-beta1
 
 ### Added
 
 - **GraphQL**
-  - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/dgraph-io/dgraph/pull/8574)
+  - fix(GraphQL): pass on HTTP request headers for subscriptions (https://github.com/hypermodeinc/dgraph/pull/8574)
 
 - **Core Dgraph**
-  - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/dgraph-io/dgraph/pull/8516)
-  - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/dgraph-io/dgraph/pull/8625)
-  - chore(deps): update prometheus dependency, adds new metrics (https://github.com/dgraph-io/dgraph/pull/8655)
-  - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/dgraph-io/dgraph/pull/8564)
-  - chore(deps): bump badger up to v4 (https://github.com/dgraph-io/dgraph/pull/8709)
-  - feat(multitenancy): namespace aware drop data (https://github.com/dgraph-io/dgraph/pull/8511)
+  - chore(debug): add `only-summary` flag in `dgraph debug` to show LSM tree and namespace size (https://github.com/hypermodeinc/dgraph/pull/8516)
+  - feat(cloud): add `shared-instance` flag in limit superflag in alpha (https://github.com/hypermodeinc/dgraph/pull/8625)
+  - chore(deps): update prometheus dependency, adds new metrics (https://github.com/hypermodeinc/dgraph/pull/8655)
+  - feat(cdc): add superflag `tls` to enable TLS without CA or certs (https://github.com/hypermodeinc/dgraph/pull/8564)
+  - chore(deps): bump badger up to v4 (https://github.com/hypermodeinc/dgraph/pull/8709)
+  - feat(multitenancy): namespace aware drop data (https://github.com/hypermodeinc/dgraph/pull/8511)
 
 ### Fixed
 
 - **GragphQL**
-  - fix(GraphQL): nested Auth Rules not working properly (https://github.com/dgraph-io/dgraph/pull/8571)
+  - fix(GraphQL): nested Auth Rules not working properly (https://github.com/hypermodeinc/dgraph/pull/8571)
 
 - **Core Dgraph**
-  - chore(logs): add logs to track dropped proposals (https://github.com/dgraph-io/dgraph/pull/8568)
-  - fix(debug): check length of wal entry before parsing (https://github.com/dgraph-io/dgraph/pull/8560)
-  - opt(schema): optimize populateSchema() (https://github.com/dgraph-io/dgraph/pull/8565)
-  - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/dgraph-io/dgraph/pull/8573)
-  - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/dgraph-io/dgraph/pull/8561)
-  - fix(restore): set kv version to restoreTs for all keys (https://github.com/dgraph-io/dgraph/pull/8563)
-  - fix(probe): do not contend for lock in lazy load (https://github.com/dgraph-io/dgraph/pull/8566)
-  - fix(core): fixed infinite loop in CommitToDisk (https://github.com/dgraph-io/dgraph/pull/8614)
-  - fix(proposals): incremental proposal key for zero proposals (https://github.com/dgraph-io/dgraph/pull/8567)
-  - fix(zero): fix waiting for random time while rate limiting (https://github.com/dgraph-io/dgraph/pull/8656)
-  - chore(deps): upgrade badger (https://github.com/dgraph-io/dgraph/pull/8654, https://github.com/dgraph-io/dgraph/pull/8658)
-  - opt(schema): load schema and types using Stream framework  (https://github.com/dgraph-io/dgraph/pull/8562)
-  - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/dgraph-io/dgraph/pull/8510)
-  - fix(audit): fixing audit logs for websocket connections (https://github.com/dgraph-io/dgraph/pull/8627)
-  - fix(restore): consider the banned namespaces while bumping (https://github.com/dgraph-io/dgraph/pull/8559)
-  - fix(backup): create directory before writing backup (https://github.com/dgraph-io/dgraph/pull/8638)
+  - chore(logs): add logs to track dropped proposals (https://github.com/hypermodeinc/dgraph/pull/8568)
+  - fix(debug): check length of wal entry before parsing (https://github.com/hypermodeinc/dgraph/pull/8560)
+  - opt(schema): optimize populateSchema() (https://github.com/hypermodeinc/dgraph/pull/8565)
+  - fix(zero): fix update membership to make bulk tablet proposal instead of multiple small (https://github.com/hypermodeinc/dgraph/pull/8573)
+  - fix(groot): do not upsert groot for all namespaces on restart (https://github.com/hypermodeinc/dgraph/pull/8561)
+  - fix(restore): set kv version to restoreTs for all keys (https://github.com/hypermodeinc/dgraph/pull/8563)
+  - fix(probe): do not contend for lock in lazy load (https://github.com/hypermodeinc/dgraph/pull/8566)
+  - fix(core): fixed infinite loop in CommitToDisk (https://github.com/hypermodeinc/dgraph/pull/8614)
+  - fix(proposals): incremental proposal key for zero proposals (https://github.com/hypermodeinc/dgraph/pull/8567)
+  - fix(zero): fix waiting for random time while rate limiting (https://github.com/hypermodeinc/dgraph/pull/8656)
+  - chore(deps): upgrade badger (https://github.com/hypermodeinc/dgraph/pull/8654, https://github.com/hypermodeinc/dgraph/pull/8658)
+  - opt(schema): load schema and types using Stream framework  (https://github.com/hypermodeinc/dgraph/pull/8562)
+  - fix(backup): use StreamWriter instead of KVLoader during backup restore (https://github.com/hypermodeinc/dgraph/pull/8510)
+  - fix(audit): fixing audit logs for websocket connections (https://github.com/hypermodeinc/dgraph/pull/8627)
+  - fix(restore): consider the banned namespaces while bumping (https://github.com/hypermodeinc/dgraph/pull/8559)
+  - fix(backup): create directory before writing backup (https://github.com/hypermodeinc/dgraph/pull/8638)
 
 - **Test**
-  - fix(test): avoid host volume mount in minio container (https://github.com/dgraph-io/dgraph/pull/8569)
-  - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/dgraph-io/dgraph/pull/8515)
-  - chore(test): add Backup/Restore test for NFS (https://github.com/dgraph-io/dgraph/pull/8551)
-  - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/dgraph-io/dgraph/pull/8619)
-  - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/dgraph-io/dgraph/pull/8662)
-  - chore(test): add automated test to test multitenant --limit flag (https://github.com/dgraph-io/dgraph/pull/8646)
-  - chore(test): add restore test for more than 127 namespaces (https://github.com/dgraph-io/dgraph/pull/8643)
-  - fix(test): fix the corner case for raft entries test (https://github.com/dgraph-io/dgraph/pull/8617)
+  - fix(test): avoid host volume mount in minio container (https://github.com/hypermodeinc/dgraph/pull/8569)
+  - chore(test): add tests for lex/iri.go,chunker/chunk.go (https://github.com/hypermodeinc/dgraph/pull/8515)
+  - chore(test): add Backup/Restore test for NFS (https://github.com/hypermodeinc/dgraph/pull/8551)
+  - chore(test): add test that after snapshot is applied, GraphQL schema is refreshed (https://github.com/hypermodeinc/dgraph/pull/8619)
+  - chore(test): upgrade graphql tests to use go 1.19 (https://github.com/hypermodeinc/dgraph/pull/8662)
+  - chore(test): add automated test to test multitenant --limit flag (https://github.com/hypermodeinc/dgraph/pull/8646)
+  - chore(test): add restore test for more than 127 namespaces (https://github.com/hypermodeinc/dgraph/pull/8643)
+  - fix(test): fix the corner case for raft entries test (https://github.com/hypermodeinc/dgraph/pull/8617)
 
 - **CD**
-  - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/dgraph-io/dgraph/pull/8652)
-  - chore(deps): update min go build version (https://github.com/dgraph-io/dgraph/pull/8423)
+  - fix(build): update dockerfile to use cache busting and reduce image size (https://github.com/hypermodeinc/dgraph/pull/8652)
+  - chore(deps): update min go build version (https://github.com/hypermodeinc/dgraph/pull/8423)
 
 - **Security**
-  - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/dgraph-io/dgraph/pull/8496)
-  - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/dgraph-io/dgraph/pull/8575)
-  - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/dgraph-io/dgraph/pull/8676)
-  - fix(sec): upgrade networkx to  (https://github.com/dgraph-io/dgraph/pull/8613)
-  - fix(sec): CVE-2022-41721 (https://github.com/dgraph-io/dgraph/pull/8633)
-  - fix(sec): CVE & OS Patching (https://github.com/dgraph-io/dgraph/pull/8634)
+  - chore(deps): bump certifi from 2020.4.5.1 to 2022.12.7 in /contrib/config/marketplace/aws/tests (https://github.com/hypermodeinc/dgraph/pull/8496)
+  - chore(deps): bump github.com/docker/distribution from 2.7.1+incompatible to 2.8.0+incompatible (https://github.com/hypermodeinc/dgraph/pull/8575)
+  - chore(deps): bump werkzeug from 0.16.1 to 2.2.3 in /contrib/embargo (https://github.com/hypermodeinc/dgraph/pull/8676)
+  - fix(sec): upgrade networkx to  (https://github.com/hypermodeinc/dgraph/pull/8613)
+  - fix(sec): CVE-2022-41721 (https://github.com/hypermodeinc/dgraph/pull/8633)
+  - fix(sec): CVE & OS Patching (https://github.com/hypermodeinc/dgraph/pull/8634)
 
 ### Changed
 
 - **Core Dgraph**
-  - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/dgraph-io/dgraph/pull/8601)
-  - fix(query): handle bad timezone correctly (https://github.com/dgraph-io/dgraph/pull/8657)
-  - chore(ludicroud): remove ludicrous mode from the code (https://github.com/dgraph-io/dgraph/pull/8612)
-  - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/dgraph-io/dgraph/pull/8554)
-  - fix(mutation): validate mutation before applying it (https://github.com/dgraph-io/dgraph/pull/8623)
+  - fix(multitenancy) store namespace in predicate as a hex separated by a hyphen to prevent json marshal issues (https://github.com/hypermodeinc/dgraph/pull/8601)
+  - fix(query): handle bad timezone correctly (https://github.com/hypermodeinc/dgraph/pull/8657)
+  - chore(ludicroud): remove ludicrous mode from the code (https://github.com/hypermodeinc/dgraph/pull/8612)
+  - fix(backup): make the /admin/backup and /admin/export API asynchronous (https://github.com/hypermodeinc/dgraph/pull/8554)
+  - fix(mutation): validate mutation before applying it (https://github.com/hypermodeinc/dgraph/pull/8623)
 
 - **CI Enhancements**
-    - fix(ci): unpin curl (https://github.com/dgraph-io/dgraph/pull/8577)
-    - fix(ci): adjust cron schedules (https://github.com/dgraph-io/dgraph/pull/8592)
-    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/dgraph-io/dgraph/pull/8478)
-    - chore(linter): enable gosec linter (https://github.com/dgraph-io/dgraph/pull/8678)
-    - chore: apply go vet improvements (https://github.com/dgraph-io/dgraph/pull/8620)
-    - chore(linter): fix some of the warnings from gas linter (https://github.com/dgraph-io/dgraph/pull/8664)
-    - chore(linter): fix golangci config and some issues in tests (https://github.com/dgraph-io/dgraph/pull/8669)
-    - fix(linter): address gosimple linter reports & errors (https://github.com/dgraph-io/dgraph/pull/8628)
+    - fix(ci): unpin curl (https://github.com/hypermodeinc/dgraph/pull/8577)
+    - fix(ci): adjust cron schedules (https://github.com/hypermodeinc/dgraph/pull/8592)
+    - chore(ci): Capture coverage from bulk load and LDBC tests (https://github.com/hypermodeinc/dgraph/pull/8478)
+    - chore(linter): enable gosec linter (https://github.com/hypermodeinc/dgraph/pull/8678)
+    - chore: apply go vet improvements (https://github.com/hypermodeinc/dgraph/pull/8620)
+    - chore(linter): fix some of the warnings from gas linter (https://github.com/hypermodeinc/dgraph/pull/8664)
+    - chore(linter): fix golangci config and some issues in tests (https://github.com/hypermodeinc/dgraph/pull/8669)
+    - fix(linter): address gosimple linter reports & errors (https://github.com/hypermodeinc/dgraph/pull/8628)
 
 ## [v22.0.2] - 2022-12-16
-[v22.0.2]: https://github.com/dgraph-io/dgraph/compare/v22.0.1...v22.0.2
+[v22.0.2]: https://github.com/hypermodeinc/dgraph/compare/v22.0.1...v22.0.2
 
 ### Added
 
-- **ARM Support** -  Dgraph now supports ARM64 Architecture for development (https://github.com/dgraph-io/dgraph/pull/8543 https://github.com/dgraph-io/dgraph/pull/8520 https://github.com/dgraph-io/dgraph/pull/8503 https://github.com/dgraph-io/dgraph/pull/8436 https://github.com/dgraph-io/dgraph/pull/8405 https://github.com/dgraph-io/dgraph/pull/8395)
-- Additional logging and trace tags for debugging (https://github.com/dgraph-io/dgraph/pull/8490)
+- **ARM Support** -  Dgraph now supports ARM64 Architecture for development (https://github.com/hypermodeinc/dgraph/pull/8543 https://github.com/hypermodeinc/dgraph/pull/8520 https://github.com/hypermodeinc/dgraph/pull/8503 https://github.com/hypermodeinc/dgraph/pull/8436 https://github.com/hypermodeinc/dgraph/pull/8405 https://github.com/hypermodeinc/dgraph/pull/8395)
+- Additional logging and trace tags for debugging (https://github.com/hypermodeinc/dgraph/pull/8490)
 
 ### Fixed
 
 - **EDgraph**
-  - fix(ACL): Prevents permissions overrride and merges acl cache to persist permissions across different namespaces (https://github.com/dgraph-io/dgraph/pull/8506)
+  - fix(ACL): Prevents permissions overrride and merges acl cache to persist permissions across different namespaces (https://github.com/hypermodeinc/dgraph/pull/8506)
 
 - **Core Dgraph**
-  - Fix(badger): Upgrade badger version to fix  manifest corruption (https://github.com/dgraph-io/dgraph/pull/8365)
-  - fix(pagination): Fix after for regexp, match functions (https://github.com/dgraph-io/dgraph/pull/8471)
-  - fix(query): Do not execute filters if there are no source uids(https://github.com/dgraph-io/dgraph/pull/8452)
-  - fix(admin): make config changes to pass through gog middlewares (https://github.com/dgraph-io/dgraph/pull/8442)
-  - fix(sort): Only filter out nodes with positive offsets (https://github.com/dgraph-io/dgraph/pull/8441)
-  - fix(fragment): merge the nested fragments fields (https://github.com/dgraph-io/dgraph/pull/8435)
-  - Fix(lsbackup): Fix profiler in lsBackup (https://github.com/dgraph-io/dgraph/pull/8432)
-  - fix(DQL): optimize query for has function with offset (https://github.com/dgraph-io/dgraph/pull/8431)
+  - Fix(badger): Upgrade badger version to fix  manifest corruption (https://github.com/hypermodeinc/dgraph/pull/8365)
+  - fix(pagination): Fix after for regexp, match functions (https://github.com/hypermodeinc/dgraph/pull/8471)
+  - fix(query): Do not execute filters if there are no source uids(https://github.com/hypermodeinc/dgraph/pull/8452)
+  - fix(admin): make config changes to pass through gog middlewares (https://github.com/hypermodeinc/dgraph/pull/8442)
+  - fix(sort): Only filter out nodes with positive offsets (https://github.com/hypermodeinc/dgraph/pull/8441)
+  - fix(fragment): merge the nested fragments fields (https://github.com/hypermodeinc/dgraph/pull/8435)
+  - Fix(lsbackup): Fix profiler in lsBackup (https://github.com/hypermodeinc/dgraph/pull/8432)
+  - fix(DQL): optimize query for has function with offset (https://github.com/hypermodeinc/dgraph/pull/8431)
 
 - **GraphQL**
-  - Fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/dgraph-io/dgraph/pull/8449)
+  - Fix(GraphQL): Make mutation rewriting tests more robust (https://github.com/hypermodeinc/dgraph/pull/8449)
 
 - **Security**
    - <details>
@@ -675,26 +675,26 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 ### Changed
 
 - **CI Enhancements**
-    - Added more unit tests (https://github.com/dgraph-io/dgraph/pull/8470 https://github.com/dgraph-io/dgraph/pull/8489 https://github.com/dgraph-io/dgraph/pull/8479 https://github.com/dgraph-io/dgraph/pull/8488 https://github.com/dgraph-io/dgraph/pull/8433)
-    - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/dgraph-io/dgraph/pull/8494)
-    - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
+    - Added more unit tests (https://github.com/hypermodeinc/dgraph/pull/8470 https://github.com/hypermodeinc/dgraph/pull/8489 https://github.com/hypermodeinc/dgraph/pull/8479 https://github.com/hypermodeinc/dgraph/pull/8488 https://github.com/hypermodeinc/dgraph/pull/8433)
+    - [Coveralls](https://coveralls.io/github/dgraph-io/dgraph?branch=main) on CI is enhanced to measure code coverage for integration tests (https://github.com/hypermodeinc/dgraph/pull/8494)
+    - [**LDBC Benchmarking**](https://ldbcouncil.org) in enabled on [CI](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-ldbc-tests.yml)
 
 - **CD Enhancements**
-    - Enhanced our [CD Pipeline](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/dgraph-io/dgraph/pull/8520)
-    - Enhanced [dgraph-lambda](https://github.com/dgraph-io/dgraph-lambda) to support arm64 (https://github.com/dgraph-io/dgraph-lambda/pull/39 https://github.com/dgraph-io/dgraph-lambda/pull/38 https://github.com/dgraph-io/dgraph-lambda/pull/37)
+    - Enhanced our [CD Pipeline](https://github.com/hypermodeinc/dgraph/actions/workflows/cd-dgraph.yml) to support ARM64 binaries and docker-images (https://github.com/hypermodeinc/dgraph/pull/8520)
+    - Enhanced [dgraph-lambda](https://github.com/hypermodeinc/dgraph-lambda) to support arm64 (https://github.com/hypermodeinc/dgraph-lambda/pull/39 https://github.com/hypermodeinc/dgraph-lambda/pull/38 https://github.com/hypermodeinc/dgraph-lambda/pull/37)
     - Enhanced [badger](https://github.com/dgraph-io/badger) to support arm64 (https://github.com/dgraph-io/badger/pull/1838)
 
 
 ## [v22.0.1] - 2022-11-10
-[v22.0.1]: https://github.com/dgraph-io/dgraph/compare/v22.0.0...v22.0.1
+[v22.0.1]: https://github.com/hypermodeinc/dgraph/compare/v22.0.0...v22.0.1
 
 ### Fixed
 - **CD Release Pipeline**
-  - Badger Binary fetch steps added to the release CD pipeline (https://github.com/dgraph-io/dgraph/pull/8425)
+  - Badger Binary fetch steps added to the release CD pipeline (https://github.com/hypermodeinc/dgraph/pull/8425)
   - Corresponding Badger artifacts will be fetched & uploaded from v22.0.1 onwards
 
 ## [v22.0.0] - 2022-10-21
-[v22.0.0]: https://github.com/dgraph-io/dgraph/compare/v21.03.2...v22.0.0
+[v22.0.0]: https://github.com/hypermodeinc/dgraph/compare/v21.03.2...v22.0.0
 
 > **Note**
 > `v22.0.0` release is based of `v21.03.2` release.
@@ -706,13 +706,13 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 ### Fixed
 - **GraphQL**
-  - fix(GraphQL): optimize eq filter queries (https://github.com/dgraph-io/dgraph/pull/7895)
-  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/dgraph-io/dgraph/pull/8333)
-  - fix(GraphQL) fix auth query rewriting with ID filter (https://github.com/dgraph-io/dgraph/pull/8157)
+  - fix(GraphQL): optimize eq filter queries (https://github.com/hypermodeinc/dgraph/pull/7895)
+  - fix(GraphQL): add validation of null values with correct order of graphql rule validation (https://github.com/hypermodeinc/dgraph/pull/8333)
+  - fix(GraphQL) fix auth query rewriting with ID filter (https://github.com/hypermodeinc/dgraph/pull/8157)
 - **EDgraph**
-  - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/dgraph-io/dgraph/pull/8332)
+  - fix(query): Prevent multiple entries for same predicate in mutations (https://github.com/hypermodeinc/dgraph/pull/8332)
 - **Posting**
-  - fix(rollups): Fix splits in roll-up (https://github.com/dgraph-io/dgraph/pull/8297)
+  - fix(rollups): Fix splits in roll-up (https://github.com/hypermodeinc/dgraph/pull/8297)
 - **Security**
     - <details>
       <summary>CVE Fixes (417 total)</summary>
@@ -1146,31 +1146,31 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
       - GHSA-cg3q-j54f-5p7p
       - GHSA-wxc4-f4m6-wwqv
       </details>
-    - fix(sec): fixing HIGH CVEs (https://github.com/dgraph-io/dgraph/pull/8289)
-    - fix(sec): CVE High Vulnerability (https://github.com/dgraph-io/dgraph/pull/8277)
-    - fix(sec): Fixing CVE-2021-31525 (https://github.com/dgraph-io/dgraph/pull/8274)
-    - fix(sec): CVE-2019-11254 (https://github.com/dgraph-io/dgraph/pull/8270)
+    - fix(sec): fixing HIGH CVEs (https://github.com/hypermodeinc/dgraph/pull/8289)
+    - fix(sec): CVE High Vulnerability (https://github.com/hypermodeinc/dgraph/pull/8277)
+    - fix(sec): Fixing CVE-2021-31525 (https://github.com/hypermodeinc/dgraph/pull/8274)
+    - fix(sec): CVE-2019-11254 (https://github.com/hypermodeinc/dgraph/pull/8270)
 
 ### Changed
 - **CI Test Infrastructure**
-  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/tree/main/.github/workflows)
+  - Configured to run with [Github Actions](https://github.com/hypermodeinc/dgraph/tree/main/.github/workflows)
   - Stability Improvements to test harness
-  - Enabled [Unit/Integration Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-tests.yml)
-  - Enabled [Load Tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
-  - Enabled [Linters](https://github.com/dgraph-io/dgraph/actions/workflows/ci-golang-lint.yml)
+  - Enabled [Unit/Integration Tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-tests.yml)
+  - Enabled [Load Tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+  - Enabled [Linters](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-golang-lint.yml)
   - Enabled [Code Coverage](https://coveralls.io/github/dgraph-io/dgraph?branch=main)
 - **CI Security**
-  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
-  - Enabled [Trivy Scans](https://github.com/dgraph-io/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
+  - Configured to run with [Github Actions](https://github.com/hypermodeinc/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
+  - Enabled [Trivy Scans](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
   - Enabled dependabot scans
-  - Configured to run with [Github Actions](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
+  - Configured to run with [Github Actions](https://github.com/hypermodeinc/dgraph/blob/main/.github/workflows/ci-aqua-security-trivy-tests.yml)
 - **CD Release Pipeline**
-  - Automated [Release Pipeline](https://github.com/dgraph-io/dgraph/blob/main/.github/workflows/cd-dgraph.yml) to facilitate building of dgraph-binary & corresponding docker-images. The built artifacts are published to repositories through the same pipeline.
-- [**Github Issues Enabled**](https://github.com/dgraph-io/dgraph/issues/new/choose)
+  - Automated [Release Pipeline](https://github.com/hypermodeinc/dgraph/blob/main/.github/workflows/cd-dgraph.yml) to facilitate building of dgraph-binary & corresponding docker-images. The built artifacts are published to repositories through the same pipeline.
+- [**Github Issues Enabled**](https://github.com/hypermodeinc/dgraph/issues/new/choose)
 
 
 ## [21.03.2] - 2021-08-26
-[21.03.2]: https://github.com/dgraph-io/dgraph/compare/v21.03.1...v21.03.2
+[21.03.2]: https://github.com/hypermodeinc/dgraph/compare/v21.03.1...v21.03.2
 
 ### Fixed
 
@@ -1198,23 +1198,23 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - feat(acl): allow access to all the predicates using wildcard. ([#7993][])
 - feat(Multi-tenancy): Add namespaces field to state. ([#7936][])
 
-[#7923]: https://github.com/dgraph-io/dgraph/issues/7923
-[#7908]: https://github.com/dgraph-io/dgraph/issues/7908
-[#7921]: https://github.com/dgraph-io/dgraph/issues/7921
-[#7952]: https://github.com/dgraph-io/dgraph/issues/7952
-[#7967]: https://github.com/dgraph-io/dgraph/issues/7967
-[#7964]: https://github.com/dgraph-io/dgraph/issues/7964
-[#7981]: https://github.com/dgraph-io/dgraph/issues/7981
-[#7934]: https://github.com/dgraph-io/dgraph/issues/7934
-[#7999]: https://github.com/dgraph-io/dgraph/issues/7999
-[#7998]: https://github.com/dgraph-io/dgraph/issues/7998
-[#7949]: https://github.com/dgraph-io/dgraph/issues/7949
-[#7913]: https://github.com/dgraph-io/dgraph/issues/7913
-[#7993]: https://github.com/dgraph-io/dgraph/issues/7993
-[#7936]: https://github.com/dgraph-io/dgraph/issues/7936
+[#7923]: https://github.com/hypermodeinc/dgraph/issues/7923
+[#7908]: https://github.com/hypermodeinc/dgraph/issues/7908
+[#7921]: https://github.com/hypermodeinc/dgraph/issues/7921
+[#7952]: https://github.com/hypermodeinc/dgraph/issues/7952
+[#7967]: https://github.com/hypermodeinc/dgraph/issues/7967
+[#7964]: https://github.com/hypermodeinc/dgraph/issues/7964
+[#7981]: https://github.com/hypermodeinc/dgraph/issues/7981
+[#7934]: https://github.com/hypermodeinc/dgraph/issues/7934
+[#7999]: https://github.com/hypermodeinc/dgraph/issues/7999
+[#7998]: https://github.com/hypermodeinc/dgraph/issues/7998
+[#7949]: https://github.com/hypermodeinc/dgraph/issues/7949
+[#7913]: https://github.com/hypermodeinc/dgraph/issues/7913
+[#7993]: https://github.com/hypermodeinc/dgraph/issues/7993
+[#7936]: https://github.com/hypermodeinc/dgraph/issues/7936
 
 ## [21.03.1] - 2021-06-16
-[21.03.1]: https://github.com/dgraph-io/dgraph/compare/v21.03.0...v21.03.1
+[21.03.1]: https://github.com/hypermodeinc/dgraph/compare/v21.03.0...v21.03.1
 
 ### Fixed
 - GraphQL
@@ -1253,59 +1253,59 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - make exports synchronous again ([#7877][])
   - feat(schema): do schema versioning and make backup non-blocking for i… ([#7856][]) ([#7873][])
 
-[#7701]: https://github.com/dgraph-io/dgraph/issues/7701
-[#7737]: https://github.com/dgraph-io/dgraph/issues/7737
-[#7745]: https://github.com/dgraph-io/dgraph/issues/7745
-[#7722]: https://github.com/dgraph-io/dgraph/issues/7722
-[#7749]: https://github.com/dgraph-io/dgraph/issues/7749
-[#7719]: https://github.com/dgraph-io/dgraph/issues/7719
-[#7750]: https://github.com/dgraph-io/dgraph/issues/7750
-[#7765]: https://github.com/dgraph-io/dgraph/issues/7765
-[#7767]: https://github.com/dgraph-io/dgraph/issues/7767
-[#7759]: https://github.com/dgraph-io/dgraph/issues/7759
-[#7769]: https://github.com/dgraph-io/dgraph/issues/7769
-[#7782]: https://github.com/dgraph-io/dgraph/issues/7782
-[#7784]: https://github.com/dgraph-io/dgraph/issues/7784
-[#7803]: https://github.com/dgraph-io/dgraph/issues/7803
-[#7804]: https://github.com/dgraph-io/dgraph/issues/7804
-[#7827]: https://github.com/dgraph-io/dgraph/issues/7827
-[#7741]: https://github.com/dgraph-io/dgraph/issues/7741
-[#7811]: https://github.com/dgraph-io/dgraph/issues/7811
-[#7845]: https://github.com/dgraph-io/dgraph/issues/7845
-[#7847]: https://github.com/dgraph-io/dgraph/issues/7847
-[#7744]: https://github.com/dgraph-io/dgraph/issues/7744
-[#7756]: https://github.com/dgraph-io/dgraph/issues/7756
-[#7787]: https://github.com/dgraph-io/dgraph/issues/7787
-[#7802]: https://github.com/dgraph-io/dgraph/issues/7802
-[#7832]: https://github.com/dgraph-io/dgraph/issues/7832
-[#7834]: https://github.com/dgraph-io/dgraph/issues/7834
-[#7796]: https://github.com/dgraph-io/dgraph/issues/7796
-[#7781]: https://github.com/dgraph-io/dgraph/issues/7781
-[#7713]: https://github.com/dgraph-io/dgraph/issues/7713
-[#7797]: https://github.com/dgraph-io/dgraph/issues/7797
-[#7835]: https://github.com/dgraph-io/dgraph/issues/7835
-[#7836]: https://github.com/dgraph-io/dgraph/issues/7836
-[#7856]: https://github.com/dgraph-io/dgraph/issues/7856
-[#7873]: https://github.com/dgraph-io/dgraph/issues/7873
-[#7881]: https://github.com/dgraph-io/dgraph/issues/7881
-[#7885]: https://github.com/dgraph-io/dgraph/issues/7885
-[#7888]: https://github.com/dgraph-io/dgraph/issues/7888
-[#7877]: https://github.com/dgraph-io/dgraph/issues/7877
-[#7695]: https://github.com/dgraph-io/dgraph/issues/7695
-[#7726]: https://github.com/dgraph-io/dgraph/issues/7726
-[#7730]: https://github.com/dgraph-io/dgraph/issues/7730
-[#7728]: https://github.com/dgraph-io/dgraph/issues/7728
-[#7733]: https://github.com/dgraph-io/dgraph/issues/7733
-[#7751]: https://github.com/dgraph-io/dgraph/issues/7751
-[#7754]: https://github.com/dgraph-io/dgraph/issues/7754
-[#7757]: https://github.com/dgraph-io/dgraph/issues/7757
-[#7760]: https://github.com/dgraph-io/dgraph/issues/7760
-[#7900]: https://github.com/dgraph-io/dgraph/issues/7900
-[#7904]: https://github.com/dgraph-io/dgraph/issues/7904
+[#7701]: https://github.com/hypermodeinc/dgraph/issues/7701
+[#7737]: https://github.com/hypermodeinc/dgraph/issues/7737
+[#7745]: https://github.com/hypermodeinc/dgraph/issues/7745
+[#7722]: https://github.com/hypermodeinc/dgraph/issues/7722
+[#7749]: https://github.com/hypermodeinc/dgraph/issues/7749
+[#7719]: https://github.com/hypermodeinc/dgraph/issues/7719
+[#7750]: https://github.com/hypermodeinc/dgraph/issues/7750
+[#7765]: https://github.com/hypermodeinc/dgraph/issues/7765
+[#7767]: https://github.com/hypermodeinc/dgraph/issues/7767
+[#7759]: https://github.com/hypermodeinc/dgraph/issues/7759
+[#7769]: https://github.com/hypermodeinc/dgraph/issues/7769
+[#7782]: https://github.com/hypermodeinc/dgraph/issues/7782
+[#7784]: https://github.com/hypermodeinc/dgraph/issues/7784
+[#7803]: https://github.com/hypermodeinc/dgraph/issues/7803
+[#7804]: https://github.com/hypermodeinc/dgraph/issues/7804
+[#7827]: https://github.com/hypermodeinc/dgraph/issues/7827
+[#7741]: https://github.com/hypermodeinc/dgraph/issues/7741
+[#7811]: https://github.com/hypermodeinc/dgraph/issues/7811
+[#7845]: https://github.com/hypermodeinc/dgraph/issues/7845
+[#7847]: https://github.com/hypermodeinc/dgraph/issues/7847
+[#7744]: https://github.com/hypermodeinc/dgraph/issues/7744
+[#7756]: https://github.com/hypermodeinc/dgraph/issues/7756
+[#7787]: https://github.com/hypermodeinc/dgraph/issues/7787
+[#7802]: https://github.com/hypermodeinc/dgraph/issues/7802
+[#7832]: https://github.com/hypermodeinc/dgraph/issues/7832
+[#7834]: https://github.com/hypermodeinc/dgraph/issues/7834
+[#7796]: https://github.com/hypermodeinc/dgraph/issues/7796
+[#7781]: https://github.com/hypermodeinc/dgraph/issues/7781
+[#7713]: https://github.com/hypermodeinc/dgraph/issues/7713
+[#7797]: https://github.com/hypermodeinc/dgraph/issues/7797
+[#7835]: https://github.com/hypermodeinc/dgraph/issues/7835
+[#7836]: https://github.com/hypermodeinc/dgraph/issues/7836
+[#7856]: https://github.com/hypermodeinc/dgraph/issues/7856
+[#7873]: https://github.com/hypermodeinc/dgraph/issues/7873
+[#7881]: https://github.com/hypermodeinc/dgraph/issues/7881
+[#7885]: https://github.com/hypermodeinc/dgraph/issues/7885
+[#7888]: https://github.com/hypermodeinc/dgraph/issues/7888
+[#7877]: https://github.com/hypermodeinc/dgraph/issues/7877
+[#7695]: https://github.com/hypermodeinc/dgraph/issues/7695
+[#7726]: https://github.com/hypermodeinc/dgraph/issues/7726
+[#7730]: https://github.com/hypermodeinc/dgraph/issues/7730
+[#7728]: https://github.com/hypermodeinc/dgraph/issues/7728
+[#7733]: https://github.com/hypermodeinc/dgraph/issues/7733
+[#7751]: https://github.com/hypermodeinc/dgraph/issues/7751
+[#7754]: https://github.com/hypermodeinc/dgraph/issues/7754
+[#7757]: https://github.com/hypermodeinc/dgraph/issues/7757
+[#7760]: https://github.com/hypermodeinc/dgraph/issues/7760
+[#7900]: https://github.com/hypermodeinc/dgraph/issues/7900
+[#7904]: https://github.com/hypermodeinc/dgraph/issues/7904
 
 
 ## [21.03.0] - 2021-04-07
-[21.03.0]: https://github.com/dgraph-io/dgraph/compare/v20.11.0...v21.03.0
+[21.03.0]: https://github.com/hypermodeinc/dgraph/compare/v20.11.0...v21.03.0
 
 ### Changed
 
@@ -1461,158 +1461,158 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Fix(restore): reset acl accounts once restore is done if necessary ([#7202][])
   - Fix(restore): multiple restore requests should be rejected and proposals should not be submitted ([#7118][])
 
-[#7677]: https://github.com/dgraph-io/dgraph/issues/7677
-[#7272]: https://github.com/dgraph-io/dgraph/issues/7272
-[#7436]: https://github.com/dgraph-io/dgraph/issues/7436
-[#7337]: https://github.com/dgraph-io/dgraph/issues/7337
-[#7560]: https://github.com/dgraph-io/dgraph/issues/7560
-[#7652]: https://github.com/dgraph-io/dgraph/issues/7652
-[#7675]: https://github.com/dgraph-io/dgraph/issues/7675
-[#7341]: https://github.com/dgraph-io/dgraph/issues/7341
-[#7659]: https://github.com/dgraph-io/dgraph/issues/7659
-[#7631]: https://github.com/dgraph-io/dgraph/issues/7631
-[#7507]: https://github.com/dgraph-io/dgraph/issues/7507
-[#7387]: https://github.com/dgraph-io/dgraph/issues/7387
-[#7148]: https://github.com/dgraph-io/dgraph/issues/7148
-[#7143]: https://github.com/dgraph-io/dgraph/issues/7143
-[#7451]: https://github.com/dgraph-io/dgraph/issues/7451
-[#6649]: https://github.com/dgraph-io/dgraph/issues/6649
-[#7670]: https://github.com/dgraph-io/dgraph/issues/7670
-[#7494]: https://github.com/dgraph-io/dgraph/issues/7494
-[#7616]: https://github.com/dgraph-io/dgraph/issues/7616
-[#7528]: https://github.com/dgraph-io/dgraph/issues/7528
-[#7581]: https://github.com/dgraph-io/dgraph/issues/7581
-[#7584]: https://github.com/dgraph-io/dgraph/issues/7584
-[#7503]: https://github.com/dgraph-io/dgraph/issues/7503
-[#7472]: https://github.com/dgraph-io/dgraph/issues/7472
-[#7469]: https://github.com/dgraph-io/dgraph/issues/7469
-[#7441]: https://github.com/dgraph-io/dgraph/issues/7441
-[#7235]: https://github.com/dgraph-io/dgraph/issues/7235
-[#7433]: https://github.com/dgraph-io/dgraph/issues/7433
-[#7385]: https://github.com/dgraph-io/dgraph/issues/7385
-[#7448]: https://github.com/dgraph-io/dgraph/issues/7448
-[#7410]: https://github.com/dgraph-io/dgraph/issues/7410
-[#7039]: https://github.com/dgraph-io/dgraph/issues/7039
-[#7340]: https://github.com/dgraph-io/dgraph/issues/7340
-[#7314]: https://github.com/dgraph-io/dgraph/issues/7314
-[#7406]: https://github.com/dgraph-io/dgraph/issues/7406
-[#7363]: https://github.com/dgraph-io/dgraph/issues/7363
-[#7381]: https://github.com/dgraph-io/dgraph/issues/7381
-[#7371]: https://github.com/dgraph-io/dgraph/issues/7371
-[#7275]: https://github.com/dgraph-io/dgraph/issues/7275
-[#7476]: https://github.com/dgraph-io/dgraph/issues/7476
-[#7490]: https://github.com/dgraph-io/dgraph/issues/7490
-[#7603]: https://github.com/dgraph-io/dgraph/issues/7603
-[#7360]: https://github.com/dgraph-io/dgraph/issues/7360
-[#7643]: https://github.com/dgraph-io/dgraph/issues/7643
-[#7683]: https://github.com/dgraph-io/dgraph/issues/7683
-[#7599]: https://github.com/dgraph-io/dgraph/issues/7599
-[#7109]: https://github.com/dgraph-io/dgraph/issues/7109
-[#7478]: https://github.com/dgraph-io/dgraph/issues/7478
-[#7492]: https://github.com/dgraph-io/dgraph/issues/7492
-[#7165]: https://github.com/dgraph-io/dgraph/issues/7165
-[#7339]: https://github.com/dgraph-io/dgraph/issues/7339
-[#7359]: https://github.com/dgraph-io/dgraph/issues/7359
-[#7338]: https://github.com/dgraph-io/dgraph/issues/7338
-[#7415]: https://github.com/dgraph-io/dgraph/issues/7415
-[#7404]: https://github.com/dgraph-io/dgraph/issues/7404
-[#7316]: https://github.com/dgraph-io/dgraph/issues/7316
-[#7601]: https://github.com/dgraph-io/dgraph/issues/7601
-[#7435]: https://github.com/dgraph-io/dgraph/issues/7435
-[#7446]: https://github.com/dgraph-io/dgraph/issues/7446
-[#7293]: https://github.com/dgraph-io/dgraph/issues/7293
-[#7400]: https://github.com/dgraph-io/dgraph/issues/7400
-[#7397]: https://github.com/dgraph-io/dgraph/issues/7397
-[#7399]: https://github.com/dgraph-io/dgraph/issues/7399
-[#7377]: https://github.com/dgraph-io/dgraph/issues/7377
-[#7414]: https://github.com/dgraph-io/dgraph/issues/7414
-[#7418]: https://github.com/dgraph-io/dgraph/issues/7418
-[#7295]: https://github.com/dgraph-io/dgraph/issues/7295
-[#7395]: https://github.com/dgraph-io/dgraph/issues/7395
-[#7392]: https://github.com/dgraph-io/dgraph/issues/7392
-[#7354]: https://github.com/dgraph-io/dgraph/issues/7354
-[#7656]: https://github.com/dgraph-io/dgraph/issues/7656
-[#7612]: https://github.com/dgraph-io/dgraph/issues/7612
-[#7630]: https://github.com/dgraph-io/dgraph/issues/7630
-[#7617]: https://github.com/dgraph-io/dgraph/issues/7617
-[#7610]: https://github.com/dgraph-io/dgraph/issues/7610
-[#7602]: https://github.com/dgraph-io/dgraph/issues/7602
-[#7595]: https://github.com/dgraph-io/dgraph/issues/7595
-[#7570]: https://github.com/dgraph-io/dgraph/issues/7570
-[#7583]: https://github.com/dgraph-io/dgraph/issues/7583
-[#7565]: https://github.com/dgraph-io/dgraph/issues/7565
-[#7588]: https://github.com/dgraph-io/dgraph/issues/7588
-[#7569]: https://github.com/dgraph-io/dgraph/issues/7569
-[#7559]: https://github.com/dgraph-io/dgraph/issues/7559
-[#7558]: https://github.com/dgraph-io/dgraph/issues/7558
-[#7563]: https://github.com/dgraph-io/dgraph/issues/7563
-[#7542]: https://github.com/dgraph-io/dgraph/issues/7542
-[#7556]: https://github.com/dgraph-io/dgraph/issues/7556
-[#7546]: https://github.com/dgraph-io/dgraph/issues/7546
-[#7523]: https://github.com/dgraph-io/dgraph/issues/7523
-[#7517]: https://github.com/dgraph-io/dgraph/issues/7517
-[#7477]: https://github.com/dgraph-io/dgraph/issues/7477
-[#7467]: https://github.com/dgraph-io/dgraph/issues/7467
-[#7409]: https://github.com/dgraph-io/dgraph/issues/7409
-[#7380]: https://github.com/dgraph-io/dgraph/issues/7380
-[#7401]: https://github.com/dgraph-io/dgraph/issues/7401
-[#7368]: https://github.com/dgraph-io/dgraph/issues/7368
-[#7349]: https://github.com/dgraph-io/dgraph/issues/7349
-[#7325]: https://github.com/dgraph-io/dgraph/issues/7325
-[#7270]: https://github.com/dgraph-io/dgraph/issues/7270
-[#7285]: https://github.com/dgraph-io/dgraph/issues/7285
-[#7245]: https://github.com/dgraph-io/dgraph/issues/7245
-[#7133]: https://github.com/dgraph-io/dgraph/issues/7133
-[#7019]: https://github.com/dgraph-io/dgraph/issues/7019
-[#7405]: https://github.com/dgraph-io/dgraph/issues/7405
-[#7679]: https://github.com/dgraph-io/dgraph/issues/7679
-[#7668]: https://github.com/dgraph-io/dgraph/issues/7668
-[#7632]: https://github.com/dgraph-io/dgraph/issues/7632
-[#7568]: https://github.com/dgraph-io/dgraph/issues/7568
-[#7614]: https://github.com/dgraph-io/dgraph/issues/7614
-[#7608]: https://github.com/dgraph-io/dgraph/issues/7608
-[#7637]: https://github.com/dgraph-io/dgraph/issues/7637
-[#7636]: https://github.com/dgraph-io/dgraph/issues/7636
-[#7495]: https://github.com/dgraph-io/dgraph/issues/7495
-[#7543]: https://github.com/dgraph-io/dgraph/issues/7543
-[#7524]: https://github.com/dgraph-io/dgraph/issues/7524
-[#7526]: https://github.com/dgraph-io/dgraph/issues/7526
-[#7498]: https://github.com/dgraph-io/dgraph/issues/7498
-[#7515]: https://github.com/dgraph-io/dgraph/issues/7515
-[#7511]: https://github.com/dgraph-io/dgraph/issues/7511
-[#7480]: https://github.com/dgraph-io/dgraph/issues/7480
-[#7488]: https://github.com/dgraph-io/dgraph/issues/7488
-[#7502]: https://github.com/dgraph-io/dgraph/issues/7502
-[#7468]: https://github.com/dgraph-io/dgraph/issues/7468
-[#7461]: https://github.com/dgraph-io/dgraph/issues/7461
-[#7440]: https://github.com/dgraph-io/dgraph/issues/7440
-[#7455]: https://github.com/dgraph-io/dgraph/issues/7455
-[#7445]: https://github.com/dgraph-io/dgraph/issues/7445
-[#7432]: https://github.com/dgraph-io/dgraph/issues/7432
-[#7412]: https://github.com/dgraph-io/dgraph/issues/7412
-[#7382]: https://github.com/dgraph-io/dgraph/issues/7382
-[#7365]: https://github.com/dgraph-io/dgraph/issues/7365
-[#7288]: https://github.com/dgraph-io/dgraph/issues/7288
-[#7241]: https://github.com/dgraph-io/dgraph/issues/7241
-[#7269]: https://github.com/dgraph-io/dgraph/issues/7269
-[#7258]: https://github.com/dgraph-io/dgraph/issues/7258
-[#6828]: https://github.com/dgraph-io/dgraph/issues/6828
-[#7188]: https://github.com/dgraph-io/dgraph/issues/7188
-[#7176]: https://github.com/dgraph-io/dgraph/issues/7176
-[#7218]: https://github.com/dgraph-io/dgraph/issues/7218
-[#7171]: https://github.com/dgraph-io/dgraph/issues/7171
-[#7161]: https://github.com/dgraph-io/dgraph/issues/7161
-[#7154]: https://github.com/dgraph-io/dgraph/issues/7154
-[#7686]: https://github.com/dgraph-io/dgraph/issues/7686
-[#7456]: https://github.com/dgraph-io/dgraph/issues/7456
-[#7434]: https://github.com/dgraph-io/dgraph/issues/7434
-[#7452]: https://github.com/dgraph-io/dgraph/issues/7452
-[#7420]: https://github.com/dgraph-io/dgraph/issues/7420
-[#7202]: https://github.com/dgraph-io/dgraph/issues/7202
-[#7118]: https://github.com/dgraph-io/dgraph/issues/7118
+[#7677]: https://github.com/hypermodeinc/dgraph/issues/7677
+[#7272]: https://github.com/hypermodeinc/dgraph/issues/7272
+[#7436]: https://github.com/hypermodeinc/dgraph/issues/7436
+[#7337]: https://github.com/hypermodeinc/dgraph/issues/7337
+[#7560]: https://github.com/hypermodeinc/dgraph/issues/7560
+[#7652]: https://github.com/hypermodeinc/dgraph/issues/7652
+[#7675]: https://github.com/hypermodeinc/dgraph/issues/7675
+[#7341]: https://github.com/hypermodeinc/dgraph/issues/7341
+[#7659]: https://github.com/hypermodeinc/dgraph/issues/7659
+[#7631]: https://github.com/hypermodeinc/dgraph/issues/7631
+[#7507]: https://github.com/hypermodeinc/dgraph/issues/7507
+[#7387]: https://github.com/hypermodeinc/dgraph/issues/7387
+[#7148]: https://github.com/hypermodeinc/dgraph/issues/7148
+[#7143]: https://github.com/hypermodeinc/dgraph/issues/7143
+[#7451]: https://github.com/hypermodeinc/dgraph/issues/7451
+[#6649]: https://github.com/hypermodeinc/dgraph/issues/6649
+[#7670]: https://github.com/hypermodeinc/dgraph/issues/7670
+[#7494]: https://github.com/hypermodeinc/dgraph/issues/7494
+[#7616]: https://github.com/hypermodeinc/dgraph/issues/7616
+[#7528]: https://github.com/hypermodeinc/dgraph/issues/7528
+[#7581]: https://github.com/hypermodeinc/dgraph/issues/7581
+[#7584]: https://github.com/hypermodeinc/dgraph/issues/7584
+[#7503]: https://github.com/hypermodeinc/dgraph/issues/7503
+[#7472]: https://github.com/hypermodeinc/dgraph/issues/7472
+[#7469]: https://github.com/hypermodeinc/dgraph/issues/7469
+[#7441]: https://github.com/hypermodeinc/dgraph/issues/7441
+[#7235]: https://github.com/hypermodeinc/dgraph/issues/7235
+[#7433]: https://github.com/hypermodeinc/dgraph/issues/7433
+[#7385]: https://github.com/hypermodeinc/dgraph/issues/7385
+[#7448]: https://github.com/hypermodeinc/dgraph/issues/7448
+[#7410]: https://github.com/hypermodeinc/dgraph/issues/7410
+[#7039]: https://github.com/hypermodeinc/dgraph/issues/7039
+[#7340]: https://github.com/hypermodeinc/dgraph/issues/7340
+[#7314]: https://github.com/hypermodeinc/dgraph/issues/7314
+[#7406]: https://github.com/hypermodeinc/dgraph/issues/7406
+[#7363]: https://github.com/hypermodeinc/dgraph/issues/7363
+[#7381]: https://github.com/hypermodeinc/dgraph/issues/7381
+[#7371]: https://github.com/hypermodeinc/dgraph/issues/7371
+[#7275]: https://github.com/hypermodeinc/dgraph/issues/7275
+[#7476]: https://github.com/hypermodeinc/dgraph/issues/7476
+[#7490]: https://github.com/hypermodeinc/dgraph/issues/7490
+[#7603]: https://github.com/hypermodeinc/dgraph/issues/7603
+[#7360]: https://github.com/hypermodeinc/dgraph/issues/7360
+[#7643]: https://github.com/hypermodeinc/dgraph/issues/7643
+[#7683]: https://github.com/hypermodeinc/dgraph/issues/7683
+[#7599]: https://github.com/hypermodeinc/dgraph/issues/7599
+[#7109]: https://github.com/hypermodeinc/dgraph/issues/7109
+[#7478]: https://github.com/hypermodeinc/dgraph/issues/7478
+[#7492]: https://github.com/hypermodeinc/dgraph/issues/7492
+[#7165]: https://github.com/hypermodeinc/dgraph/issues/7165
+[#7339]: https://github.com/hypermodeinc/dgraph/issues/7339
+[#7359]: https://github.com/hypermodeinc/dgraph/issues/7359
+[#7338]: https://github.com/hypermodeinc/dgraph/issues/7338
+[#7415]: https://github.com/hypermodeinc/dgraph/issues/7415
+[#7404]: https://github.com/hypermodeinc/dgraph/issues/7404
+[#7316]: https://github.com/hypermodeinc/dgraph/issues/7316
+[#7601]: https://github.com/hypermodeinc/dgraph/issues/7601
+[#7435]: https://github.com/hypermodeinc/dgraph/issues/7435
+[#7446]: https://github.com/hypermodeinc/dgraph/issues/7446
+[#7293]: https://github.com/hypermodeinc/dgraph/issues/7293
+[#7400]: https://github.com/hypermodeinc/dgraph/issues/7400
+[#7397]: https://github.com/hypermodeinc/dgraph/issues/7397
+[#7399]: https://github.com/hypermodeinc/dgraph/issues/7399
+[#7377]: https://github.com/hypermodeinc/dgraph/issues/7377
+[#7414]: https://github.com/hypermodeinc/dgraph/issues/7414
+[#7418]: https://github.com/hypermodeinc/dgraph/issues/7418
+[#7295]: https://github.com/hypermodeinc/dgraph/issues/7295
+[#7395]: https://github.com/hypermodeinc/dgraph/issues/7395
+[#7392]: https://github.com/hypermodeinc/dgraph/issues/7392
+[#7354]: https://github.com/hypermodeinc/dgraph/issues/7354
+[#7656]: https://github.com/hypermodeinc/dgraph/issues/7656
+[#7612]: https://github.com/hypermodeinc/dgraph/issues/7612
+[#7630]: https://github.com/hypermodeinc/dgraph/issues/7630
+[#7617]: https://github.com/hypermodeinc/dgraph/issues/7617
+[#7610]: https://github.com/hypermodeinc/dgraph/issues/7610
+[#7602]: https://github.com/hypermodeinc/dgraph/issues/7602
+[#7595]: https://github.com/hypermodeinc/dgraph/issues/7595
+[#7570]: https://github.com/hypermodeinc/dgraph/issues/7570
+[#7583]: https://github.com/hypermodeinc/dgraph/issues/7583
+[#7565]: https://github.com/hypermodeinc/dgraph/issues/7565
+[#7588]: https://github.com/hypermodeinc/dgraph/issues/7588
+[#7569]: https://github.com/hypermodeinc/dgraph/issues/7569
+[#7559]: https://github.com/hypermodeinc/dgraph/issues/7559
+[#7558]: https://github.com/hypermodeinc/dgraph/issues/7558
+[#7563]: https://github.com/hypermodeinc/dgraph/issues/7563
+[#7542]: https://github.com/hypermodeinc/dgraph/issues/7542
+[#7556]: https://github.com/hypermodeinc/dgraph/issues/7556
+[#7546]: https://github.com/hypermodeinc/dgraph/issues/7546
+[#7523]: https://github.com/hypermodeinc/dgraph/issues/7523
+[#7517]: https://github.com/hypermodeinc/dgraph/issues/7517
+[#7477]: https://github.com/hypermodeinc/dgraph/issues/7477
+[#7467]: https://github.com/hypermodeinc/dgraph/issues/7467
+[#7409]: https://github.com/hypermodeinc/dgraph/issues/7409
+[#7380]: https://github.com/hypermodeinc/dgraph/issues/7380
+[#7401]: https://github.com/hypermodeinc/dgraph/issues/7401
+[#7368]: https://github.com/hypermodeinc/dgraph/issues/7368
+[#7349]: https://github.com/hypermodeinc/dgraph/issues/7349
+[#7325]: https://github.com/hypermodeinc/dgraph/issues/7325
+[#7270]: https://github.com/hypermodeinc/dgraph/issues/7270
+[#7285]: https://github.com/hypermodeinc/dgraph/issues/7285
+[#7245]: https://github.com/hypermodeinc/dgraph/issues/7245
+[#7133]: https://github.com/hypermodeinc/dgraph/issues/7133
+[#7019]: https://github.com/hypermodeinc/dgraph/issues/7019
+[#7405]: https://github.com/hypermodeinc/dgraph/issues/7405
+[#7679]: https://github.com/hypermodeinc/dgraph/issues/7679
+[#7668]: https://github.com/hypermodeinc/dgraph/issues/7668
+[#7632]: https://github.com/hypermodeinc/dgraph/issues/7632
+[#7568]: https://github.com/hypermodeinc/dgraph/issues/7568
+[#7614]: https://github.com/hypermodeinc/dgraph/issues/7614
+[#7608]: https://github.com/hypermodeinc/dgraph/issues/7608
+[#7637]: https://github.com/hypermodeinc/dgraph/issues/7637
+[#7636]: https://github.com/hypermodeinc/dgraph/issues/7636
+[#7495]: https://github.com/hypermodeinc/dgraph/issues/7495
+[#7543]: https://github.com/hypermodeinc/dgraph/issues/7543
+[#7524]: https://github.com/hypermodeinc/dgraph/issues/7524
+[#7526]: https://github.com/hypermodeinc/dgraph/issues/7526
+[#7498]: https://github.com/hypermodeinc/dgraph/issues/7498
+[#7515]: https://github.com/hypermodeinc/dgraph/issues/7515
+[#7511]: https://github.com/hypermodeinc/dgraph/issues/7511
+[#7480]: https://github.com/hypermodeinc/dgraph/issues/7480
+[#7488]: https://github.com/hypermodeinc/dgraph/issues/7488
+[#7502]: https://github.com/hypermodeinc/dgraph/issues/7502
+[#7468]: https://github.com/hypermodeinc/dgraph/issues/7468
+[#7461]: https://github.com/hypermodeinc/dgraph/issues/7461
+[#7440]: https://github.com/hypermodeinc/dgraph/issues/7440
+[#7455]: https://github.com/hypermodeinc/dgraph/issues/7455
+[#7445]: https://github.com/hypermodeinc/dgraph/issues/7445
+[#7432]: https://github.com/hypermodeinc/dgraph/issues/7432
+[#7412]: https://github.com/hypermodeinc/dgraph/issues/7412
+[#7382]: https://github.com/hypermodeinc/dgraph/issues/7382
+[#7365]: https://github.com/hypermodeinc/dgraph/issues/7365
+[#7288]: https://github.com/hypermodeinc/dgraph/issues/7288
+[#7241]: https://github.com/hypermodeinc/dgraph/issues/7241
+[#7269]: https://github.com/hypermodeinc/dgraph/issues/7269
+[#7258]: https://github.com/hypermodeinc/dgraph/issues/7258
+[#6828]: https://github.com/hypermodeinc/dgraph/issues/6828
+[#7188]: https://github.com/hypermodeinc/dgraph/issues/7188
+[#7176]: https://github.com/hypermodeinc/dgraph/issues/7176
+[#7218]: https://github.com/hypermodeinc/dgraph/issues/7218
+[#7171]: https://github.com/hypermodeinc/dgraph/issues/7171
+[#7161]: https://github.com/hypermodeinc/dgraph/issues/7161
+[#7154]: https://github.com/hypermodeinc/dgraph/issues/7154
+[#7686]: https://github.com/hypermodeinc/dgraph/issues/7686
+[#7456]: https://github.com/hypermodeinc/dgraph/issues/7456
+[#7434]: https://github.com/hypermodeinc/dgraph/issues/7434
+[#7452]: https://github.com/hypermodeinc/dgraph/issues/7452
+[#7420]: https://github.com/hypermodeinc/dgraph/issues/7420
+[#7202]: https://github.com/hypermodeinc/dgraph/issues/7202
+[#7118]: https://github.com/hypermodeinc/dgraph/issues/7118
 
 ## [20.07.1] - 2020-09-17
-[20.07.1]: https://github.com/dgraph-io/dgraph/compare/v20.07.0...v20.07.1
+[20.07.1]: https://github.com/hypermodeinc/dgraph/compare/v20.07.0...v20.07.1
 
 ### Changed
 
@@ -1670,54 +1670,54 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Add a lock to backups to process one request at a time. ([#6339][])
   - Fix Star_All delete query when used with ACL enabled. ([#6336][])
 
-[#6407]: https://github.com/dgraph-io/dgraph/issues/6407
-[#6336]: https://github.com/dgraph-io/dgraph/issues/6336
-[#6446]: https://github.com/dgraph-io/dgraph/issues/6446
-[#6402]: https://github.com/dgraph-io/dgraph/issues/6402
-[#6399]: https://github.com/dgraph-io/dgraph/issues/6399
-[#6346]: https://github.com/dgraph-io/dgraph/issues/6346
-[#6332]: https://github.com/dgraph-io/dgraph/issues/6332
-[#6243]: https://github.com/dgraph-io/dgraph/issues/6243
-[#6302]: https://github.com/dgraph-io/dgraph/issues/6302
-[#6339]: https://github.com/dgraph-io/dgraph/issues/6339
-[#6355]: https://github.com/dgraph-io/dgraph/issues/6355
-[#6342]: https://github.com/dgraph-io/dgraph/issues/6342
-[#6286]: https://github.com/dgraph-io/dgraph/issues/6286
-[#6201]: https://github.com/dgraph-io/dgraph/issues/6201
-[#6203]: https://github.com/dgraph-io/dgraph/issues/6203
-[#6196]: https://github.com/dgraph-io/dgraph/issues/6196
-[#6124]: https://github.com/dgraph-io/dgraph/issues/6124
-[#6137]: https://github.com/dgraph-io/dgraph/issues/6137
-[#6070]: https://github.com/dgraph-io/dgraph/issues/6070
-[#6192]: https://github.com/dgraph-io/dgraph/issues/6192
-[#6199]: https://github.com/dgraph-io/dgraph/issues/6199
-[#6158]: https://github.com/dgraph-io/dgraph/issues/6158
-[#6160]: https://github.com/dgraph-io/dgraph/issues/6160
-[#6161]: https://github.com/dgraph-io/dgraph/issues/6161
-[#6167]: https://github.com/dgraph-io/dgraph/issues/6167
-[#6173]: https://github.com/dgraph-io/dgraph/issues/6173
-[#6175]: https://github.com/dgraph-io/dgraph/issues/6175
-[#6180]: https://github.com/dgraph-io/dgraph/issues/6180
-[#6183]: https://github.com/dgraph-io/dgraph/issues/6183
-[#6179]: https://github.com/dgraph-io/dgraph/issues/6179
-[#6009]: https://github.com/dgraph-io/dgraph/issues/6009
-[#6095]: https://github.com/dgraph-io/dgraph/issues/6095
-[#6098]: https://github.com/dgraph-io/dgraph/issues/6098
-[#6151]: https://github.com/dgraph-io/dgraph/issues/6151
-[#6165]: https://github.com/dgraph-io/dgraph/issues/6165
-[#6259]: https://github.com/dgraph-io/dgraph/issues/6259
-[#6299]: https://github.com/dgraph-io/dgraph/issues/6299
-[#6279]: https://github.com/dgraph-io/dgraph/issues/6279
-[#6290]: https://github.com/dgraph-io/dgraph/issues/6290
-[#6274]: https://github.com/dgraph-io/dgraph/issues/6274
-[#6320]: https://github.com/dgraph-io/dgraph/issues/6320
-[#6331]: https://github.com/dgraph-io/dgraph/issues/6331
-[#6354]: https://github.com/dgraph-io/dgraph/issues/6354
-[#6374]: https://github.com/dgraph-io/dgraph/issues/6374
-[#6213]: https://github.com/dgraph-io/dgraph/issues/6213
+[#6407]: https://github.com/hypermodeinc/dgraph/issues/6407
+[#6336]: https://github.com/hypermodeinc/dgraph/issues/6336
+[#6446]: https://github.com/hypermodeinc/dgraph/issues/6446
+[#6402]: https://github.com/hypermodeinc/dgraph/issues/6402
+[#6399]: https://github.com/hypermodeinc/dgraph/issues/6399
+[#6346]: https://github.com/hypermodeinc/dgraph/issues/6346
+[#6332]: https://github.com/hypermodeinc/dgraph/issues/6332
+[#6243]: https://github.com/hypermodeinc/dgraph/issues/6243
+[#6302]: https://github.com/hypermodeinc/dgraph/issues/6302
+[#6339]: https://github.com/hypermodeinc/dgraph/issues/6339
+[#6355]: https://github.com/hypermodeinc/dgraph/issues/6355
+[#6342]: https://github.com/hypermodeinc/dgraph/issues/6342
+[#6286]: https://github.com/hypermodeinc/dgraph/issues/6286
+[#6201]: https://github.com/hypermodeinc/dgraph/issues/6201
+[#6203]: https://github.com/hypermodeinc/dgraph/issues/6203
+[#6196]: https://github.com/hypermodeinc/dgraph/issues/6196
+[#6124]: https://github.com/hypermodeinc/dgraph/issues/6124
+[#6137]: https://github.com/hypermodeinc/dgraph/issues/6137
+[#6070]: https://github.com/hypermodeinc/dgraph/issues/6070
+[#6192]: https://github.com/hypermodeinc/dgraph/issues/6192
+[#6199]: https://github.com/hypermodeinc/dgraph/issues/6199
+[#6158]: https://github.com/hypermodeinc/dgraph/issues/6158
+[#6160]: https://github.com/hypermodeinc/dgraph/issues/6160
+[#6161]: https://github.com/hypermodeinc/dgraph/issues/6161
+[#6167]: https://github.com/hypermodeinc/dgraph/issues/6167
+[#6173]: https://github.com/hypermodeinc/dgraph/issues/6173
+[#6175]: https://github.com/hypermodeinc/dgraph/issues/6175
+[#6180]: https://github.com/hypermodeinc/dgraph/issues/6180
+[#6183]: https://github.com/hypermodeinc/dgraph/issues/6183
+[#6179]: https://github.com/hypermodeinc/dgraph/issues/6179
+[#6009]: https://github.com/hypermodeinc/dgraph/issues/6009
+[#6095]: https://github.com/hypermodeinc/dgraph/issues/6095
+[#6098]: https://github.com/hypermodeinc/dgraph/issues/6098
+[#6151]: https://github.com/hypermodeinc/dgraph/issues/6151
+[#6165]: https://github.com/hypermodeinc/dgraph/issues/6165
+[#6259]: https://github.com/hypermodeinc/dgraph/issues/6259
+[#6299]: https://github.com/hypermodeinc/dgraph/issues/6299
+[#6279]: https://github.com/hypermodeinc/dgraph/issues/6279
+[#6290]: https://github.com/hypermodeinc/dgraph/issues/6290
+[#6274]: https://github.com/hypermodeinc/dgraph/issues/6274
+[#6320]: https://github.com/hypermodeinc/dgraph/issues/6320
+[#6331]: https://github.com/hypermodeinc/dgraph/issues/6331
+[#6354]: https://github.com/hypermodeinc/dgraph/issues/6354
+[#6374]: https://github.com/hypermodeinc/dgraph/issues/6374
+[#6213]: https://github.com/hypermodeinc/dgraph/issues/6213
 
 ## [20.03.5] - 2020-09-17
-[20.03.5]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.03.5
+[20.03.5]: https://github.com/hypermodeinc/dgraph/compare/v20.03.4...v20.03.5
 
 ### Changed
 
@@ -1755,36 +1755,36 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   -  Make backups cancel other tasks. ([#6244][])
   - Add a lock to backups to process one request at a time. ([#6340][])
 
-[#6409]: https://github.com/dgraph-io/dgraph/issues/6409
-[#6445]: https://github.com/dgraph-io/dgraph/issues/6445
-[#6398]: https://github.com/dgraph-io/dgraph/issues/6398
-[#6403]: https://github.com/dgraph-io/dgraph/issues/6403
-[#6260]: https://github.com/dgraph-io/dgraph/issues/6260
-[#6300]: https://github.com/dgraph-io/dgraph/issues/6300
-[#6280]: https://github.com/dgraph-io/dgraph/issues/6280
-[#6214]: https://github.com/dgraph-io/dgraph/issues/6214
-[#6006]: https://github.com/dgraph-io/dgraph/issues/6006
-[#6321]: https://github.com/dgraph-io/dgraph/issues/6321
-[#6244]: https://github.com/dgraph-io/dgraph/issues/6244
-[#6333]: https://github.com/dgraph-io/dgraph/issues/6333
-[#6340]: https://github.com/dgraph-io/dgraph/issues/6340
-[#6343]: https://github.com/dgraph-io/dgraph/issues/6343
-[#6197]: https://github.com/dgraph-io/dgraph/issues/6197
-[#6375]: https://github.com/dgraph-io/dgraph/issues/6375
-[#6287]: https://github.com/dgraph-io/dgraph/issues/6287
-[#6356]: https://github.com/dgraph-io/dgraph/issues/6356
-[#5988]: https://github.com/dgraph-io/dgraph/issues/5988
-[#6097]: https://github.com/dgraph-io/dgraph/issues/6097
-[#6094]: https://github.com/dgraph-io/dgraph/issues/6094
-[#6150]: https://github.com/dgraph-io/dgraph/issues/6150
-[#6125]: https://github.com/dgraph-io/dgraph/issues/6125
-[#6138]: https://github.com/dgraph-io/dgraph/issues/6138
-[#6071]: https://github.com/dgraph-io/dgraph/issues/6071
-[#6156]: https://github.com/dgraph-io/dgraph/issues/6156
-[#6147]: https://github.com/dgraph-io/dgraph/issues/6147
+[#6409]: https://github.com/hypermodeinc/dgraph/issues/6409
+[#6445]: https://github.com/hypermodeinc/dgraph/issues/6445
+[#6398]: https://github.com/hypermodeinc/dgraph/issues/6398
+[#6403]: https://github.com/hypermodeinc/dgraph/issues/6403
+[#6260]: https://github.com/hypermodeinc/dgraph/issues/6260
+[#6300]: https://github.com/hypermodeinc/dgraph/issues/6300
+[#6280]: https://github.com/hypermodeinc/dgraph/issues/6280
+[#6214]: https://github.com/hypermodeinc/dgraph/issues/6214
+[#6006]: https://github.com/hypermodeinc/dgraph/issues/6006
+[#6321]: https://github.com/hypermodeinc/dgraph/issues/6321
+[#6244]: https://github.com/hypermodeinc/dgraph/issues/6244
+[#6333]: https://github.com/hypermodeinc/dgraph/issues/6333
+[#6340]: https://github.com/hypermodeinc/dgraph/issues/6340
+[#6343]: https://github.com/hypermodeinc/dgraph/issues/6343
+[#6197]: https://github.com/hypermodeinc/dgraph/issues/6197
+[#6375]: https://github.com/hypermodeinc/dgraph/issues/6375
+[#6287]: https://github.com/hypermodeinc/dgraph/issues/6287
+[#6356]: https://github.com/hypermodeinc/dgraph/issues/6356
+[#5988]: https://github.com/hypermodeinc/dgraph/issues/5988
+[#6097]: https://github.com/hypermodeinc/dgraph/issues/6097
+[#6094]: https://github.com/hypermodeinc/dgraph/issues/6094
+[#6150]: https://github.com/hypermodeinc/dgraph/issues/6150
+[#6125]: https://github.com/hypermodeinc/dgraph/issues/6125
+[#6138]: https://github.com/hypermodeinc/dgraph/issues/6138
+[#6071]: https://github.com/hypermodeinc/dgraph/issues/6071
+[#6156]: https://github.com/hypermodeinc/dgraph/issues/6156
+[#6147]: https://github.com/hypermodeinc/dgraph/issues/6147
 
 ## [1.2.7] - 2020-09-21
-[1.2.7]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.7
+[1.2.7]: https://github.com/hypermodeinc/dgraph/compare/v1.2.6...v1.2.7
 
 ### Added
 
@@ -1807,24 +1807,24 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Sort manifests by backup number. ([#6281][])
   - Skip backing up nil lists. ([#6314][])
 
-[#6408]: https://github.com/dgraph-io/dgraph/issues/6408
-[#6406]: https://github.com/dgraph-io/dgraph/issues/6406
-[#6396]: https://github.com/dgraph-io/dgraph/issues/6396
-[#6261]: https://github.com/dgraph-io/dgraph/issues/6261
-[#6319]: https://github.com/dgraph-io/dgraph/issues/6319
-[#6212]: https://github.com/dgraph-io/dgraph/issues/6212
-[#6334]: https://github.com/dgraph-io/dgraph/issues/6334
-[#6341]: https://github.com/dgraph-io/dgraph/issues/6341
-[#6281]: https://github.com/dgraph-io/dgraph/issues/6281
-[#6314]: https://github.com/dgraph-io/dgraph/issues/6314
-[#6288]: https://github.com/dgraph-io/dgraph/issues/6288
-[#6357]: https://github.com/dgraph-io/dgraph/issues/6357
-[#6344]: https://github.com/dgraph-io/dgraph/issues/6344
-[#5987]: https://github.com/dgraph-io/dgraph/issues/5987
-[#6193]: https://github.com/dgraph-io/dgraph/issues/6193
+[#6408]: https://github.com/hypermodeinc/dgraph/issues/6408
+[#6406]: https://github.com/hypermodeinc/dgraph/issues/6406
+[#6396]: https://github.com/hypermodeinc/dgraph/issues/6396
+[#6261]: https://github.com/hypermodeinc/dgraph/issues/6261
+[#6319]: https://github.com/hypermodeinc/dgraph/issues/6319
+[#6212]: https://github.com/hypermodeinc/dgraph/issues/6212
+[#6334]: https://github.com/hypermodeinc/dgraph/issues/6334
+[#6341]: https://github.com/hypermodeinc/dgraph/issues/6341
+[#6281]: https://github.com/hypermodeinc/dgraph/issues/6281
+[#6314]: https://github.com/hypermodeinc/dgraph/issues/6314
+[#6288]: https://github.com/hypermodeinc/dgraph/issues/6288
+[#6357]: https://github.com/hypermodeinc/dgraph/issues/6357
+[#6344]: https://github.com/hypermodeinc/dgraph/issues/6344
+[#5987]: https://github.com/hypermodeinc/dgraph/issues/5987
+[#6193]: https://github.com/hypermodeinc/dgraph/issues/6193
 
 ## [20.07.0] - 2020-07-28
-[20.07.0]: https://github.com/dgraph-io/dgraph/compare/v20.03.4...v20.07.0
+[20.07.0]: https://github.com/hypermodeinc/dgraph/compare/v20.03.4...v20.07.0
 
 ### Changed
 
@@ -1969,7 +1969,7 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Restore: Only processes backups for the alpha's group. ([#5588][])
   - vault_format support for online restore and gql ([#5758][])
 
-[#5661]: https://github.com/dgraph-io/dgraph/issues/5661
+[#5661]: https://github.com/hypermodeinc/dgraph/issues/5661
 [dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
 [dgraph-io/badger#1357]: https://github.com/dgraph-io/badger/issues/1357
 [dgraph-io/badger#1358]: https://github.com/dgraph-io/badger/issues/1358
@@ -1981,151 +1981,151 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 [dgraph-io/badger#1328]: https://github.com/dgraph-io/badger/issues/1328
 [dgraph-io/badger#1341]: https://github.com/dgraph-io/badger/issues/1341
 [dgraph-io/badger#1345]: https://github.com/dgraph-io/badger/issues/1345
-[#6050]: https://github.com/dgraph-io/dgraph/issues/6050
-[#6045]: https://github.com/dgraph-io/dgraph/issues/6045
-[#5725]: https://github.com/dgraph-io/dgraph/issues/5725
-[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
-[#5685]: https://github.com/dgraph-io/dgraph/issues/5685
-[#5682]: https://github.com/dgraph-io/dgraph/issues/5682
-[#5572]: https://github.com/dgraph-io/dgraph/issues/5572
-[#4789]: https://github.com/dgraph-io/dgraph/issues/4789
-[#5511]: https://github.com/dgraph-io/dgraph/issues/5511
-[#4758]: https://github.com/dgraph-io/dgraph/issues/4758
-[#5162]: https://github.com/dgraph-io/dgraph/issues/5162
-[#5457]: https://github.com/dgraph-io/dgraph/issues/5457
-[#5004]: https://github.com/dgraph-io/dgraph/issues/5004
-[#5134]: https://github.com/dgraph-io/dgraph/issues/5134
-[#5157]: https://github.com/dgraph-io/dgraph/issues/5157
-[#5197]: https://github.com/dgraph-io/dgraph/issues/5197
-[#5387]: https://github.com/dgraph-io/dgraph/issues/5387
-[#5226]: https://github.com/dgraph-io/dgraph/issues/5226
-[#5208]: https://github.com/dgraph-io/dgraph/issues/5208
-[#5125]: https://github.com/dgraph-io/dgraph/issues/5125
-[#5095]: https://github.com/dgraph-io/dgraph/issues/5095
-[#4917]: https://github.com/dgraph-io/dgraph/issues/4917
-[#5090]: https://github.com/dgraph-io/dgraph/issues/5090
-[#5307]: https://github.com/dgraph-io/dgraph/issues/5307
-[#5402]: https://github.com/dgraph-io/dgraph/issues/5402
-[#5540]: https://github.com/dgraph-io/dgraph/issues/5540
-[#5576]: https://github.com/dgraph-io/dgraph/issues/5576
-[#5625]: https://github.com/dgraph-io/dgraph/issues/5625
-[#5562]: https://github.com/dgraph-io/dgraph/issues/5562
-[#5552]: https://github.com/dgraph-io/dgraph/issues/5552
-[#5369]: https://github.com/dgraph-io/dgraph/issues/5369
-[#5292]: https://github.com/dgraph-io/dgraph/issues/5292
-[#5234]: https://github.com/dgraph-io/dgraph/issues/5234
-[#5293]: https://github.com/dgraph-io/dgraph/issues/5293
-[#5234]: https://github.com/dgraph-io/dgraph/issues/5234
-[#5308]: https://github.com/dgraph-io/dgraph/issues/5308
-[#4963]: https://github.com/dgraph-io/dgraph/issues/4963
-[#5380]: https://github.com/dgraph-io/dgraph/issues/5380
-[#5547]: https://github.com/dgraph-io/dgraph/issues/5547
-[#5534]: https://github.com/dgraph-io/dgraph/issues/5534
-[#5497]: https://github.com/dgraph-io/dgraph/issues/5497
-[#5296]: https://github.com/dgraph-io/dgraph/issues/5296
-[#5526]: https://github.com/dgraph-io/dgraph/issues/5526
-[#5531]: https://github.com/dgraph-io/dgraph/issues/5531
-[#5487]: https://github.com/dgraph-io/dgraph/issues/5487
-[#5316]: https://github.com/dgraph-io/dgraph/issues/5316
-[#5425]: https://github.com/dgraph-io/dgraph/issues/5425
-[#5362]: https://github.com/dgraph-io/dgraph/issues/5362
-[#5354]: https://github.com/dgraph-io/dgraph/issues/5354
-[#5329]: https://github.com/dgraph-io/dgraph/issues/5329
-[#5328]: https://github.com/dgraph-io/dgraph/issues/5328
-[#5317]: https://github.com/dgraph-io/dgraph/issues/5317
-[#5588]: https://github.com/dgraph-io/dgraph/issues/5588
-[#5605]: https://github.com/dgraph-io/dgraph/issues/5605
-[#5571]: https://github.com/dgraph-io/dgraph/issues/5571
-[#5561]: https://github.com/dgraph-io/dgraph/issues/5561
-[#5503]: https://github.com/dgraph-io/dgraph/issues/5503
-[#5551]: https://github.com/dgraph-io/dgraph/issues/5551
-[#5544]: https://github.com/dgraph-io/dgraph/issues/5544
-[#5524]: https://github.com/dgraph-io/dgraph/issues/5524
-[#5467]: https://github.com/dgraph-io/dgraph/issues/5467
-[#5498]: https://github.com/dgraph-io/dgraph/issues/5498
-[#5492]: https://github.com/dgraph-io/dgraph/issues/5492
-[#5478]: https://github.com/dgraph-io/dgraph/issues/5478
-[#5418]: https://github.com/dgraph-io/dgraph/issues/5418
-[#5426]: https://github.com/dgraph-io/dgraph/issues/5426
-[#5410]: https://github.com/dgraph-io/dgraph/issues/5410
-[#5414]: https://github.com/dgraph-io/dgraph/issues/5414
-[#5397]: https://github.com/dgraph-io/dgraph/issues/5397
-[#5007]: https://github.com/dgraph-io/dgraph/issues/5007
-[#5334]: https://github.com/dgraph-io/dgraph/issues/5334
-[#5333]: https://github.com/dgraph-io/dgraph/issues/5333
-[#5209]: https://github.com/dgraph-io/dgraph/issues/5209
-[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
-[#5138]: https://github.com/dgraph-io/dgraph/issues/5138
-[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
-[#5137]: https://github.com/dgraph-io/dgraph/issues/5137
-[#5126]: https://github.com/dgraph-io/dgraph/issues/5126
-[#5085]: https://github.com/dgraph-io/dgraph/issues/5085
-[#5051]: https://github.com/dgraph-io/dgraph/issues/5051
-[#5023]: https://github.com/dgraph-io/dgraph/issues/5023
-[#4878]: https://github.com/dgraph-io/dgraph/issues/4878
-[#5185]: https://github.com/dgraph-io/dgraph/issues/5185
-[#5148]: https://github.com/dgraph-io/dgraph/issues/5148
-[#4798]: https://github.com/dgraph-io/dgraph/issues/4798
-[#4581]: https://github.com/dgraph-io/dgraph/issues/4581
-[#4907]: https://github.com/dgraph-io/dgraph/issues/4907
-[#5424]: https://github.com/dgraph-io/dgraph/issues/5424
-[#5436]: https://github.com/dgraph-io/dgraph/issues/5436
-[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
-[#5657]: https://github.com/dgraph-io/dgraph/issues/5657
-[#5726]: https://github.com/dgraph-io/dgraph/issues/5726
-[#5727]: https://github.com/dgraph-io/dgraph/issues/5727
-[#5408]: https://github.com/dgraph-io/dgraph/issues/5408
-[#5684]: https://github.com/dgraph-io/dgraph/issues/5684
+[#6050]: https://github.com/hypermodeinc/dgraph/issues/6050
+[#6045]: https://github.com/hypermodeinc/dgraph/issues/6045
+[#5725]: https://github.com/hypermodeinc/dgraph/issues/5725
+[#5579]: https://github.com/hypermodeinc/dgraph/issues/5579
+[#5685]: https://github.com/hypermodeinc/dgraph/issues/5685
+[#5682]: https://github.com/hypermodeinc/dgraph/issues/5682
+[#5572]: https://github.com/hypermodeinc/dgraph/issues/5572
+[#4789]: https://github.com/hypermodeinc/dgraph/issues/4789
+[#5511]: https://github.com/hypermodeinc/dgraph/issues/5511
+[#4758]: https://github.com/hypermodeinc/dgraph/issues/4758
+[#5162]: https://github.com/hypermodeinc/dgraph/issues/5162
+[#5457]: https://github.com/hypermodeinc/dgraph/issues/5457
+[#5004]: https://github.com/hypermodeinc/dgraph/issues/5004
+[#5134]: https://github.com/hypermodeinc/dgraph/issues/5134
+[#5157]: https://github.com/hypermodeinc/dgraph/issues/5157
+[#5197]: https://github.com/hypermodeinc/dgraph/issues/5197
+[#5387]: https://github.com/hypermodeinc/dgraph/issues/5387
+[#5226]: https://github.com/hypermodeinc/dgraph/issues/5226
+[#5208]: https://github.com/hypermodeinc/dgraph/issues/5208
+[#5125]: https://github.com/hypermodeinc/dgraph/issues/5125
+[#5095]: https://github.com/hypermodeinc/dgraph/issues/5095
+[#4917]: https://github.com/hypermodeinc/dgraph/issues/4917
+[#5090]: https://github.com/hypermodeinc/dgraph/issues/5090
+[#5307]: https://github.com/hypermodeinc/dgraph/issues/5307
+[#5402]: https://github.com/hypermodeinc/dgraph/issues/5402
+[#5540]: https://github.com/hypermodeinc/dgraph/issues/5540
+[#5576]: https://github.com/hypermodeinc/dgraph/issues/5576
+[#5625]: https://github.com/hypermodeinc/dgraph/issues/5625
+[#5562]: https://github.com/hypermodeinc/dgraph/issues/5562
+[#5552]: https://github.com/hypermodeinc/dgraph/issues/5552
+[#5369]: https://github.com/hypermodeinc/dgraph/issues/5369
+[#5292]: https://github.com/hypermodeinc/dgraph/issues/5292
+[#5234]: https://github.com/hypermodeinc/dgraph/issues/5234
+[#5293]: https://github.com/hypermodeinc/dgraph/issues/5293
+[#5234]: https://github.com/hypermodeinc/dgraph/issues/5234
+[#5308]: https://github.com/hypermodeinc/dgraph/issues/5308
+[#4963]: https://github.com/hypermodeinc/dgraph/issues/4963
+[#5380]: https://github.com/hypermodeinc/dgraph/issues/5380
+[#5547]: https://github.com/hypermodeinc/dgraph/issues/5547
+[#5534]: https://github.com/hypermodeinc/dgraph/issues/5534
+[#5497]: https://github.com/hypermodeinc/dgraph/issues/5497
+[#5296]: https://github.com/hypermodeinc/dgraph/issues/5296
+[#5526]: https://github.com/hypermodeinc/dgraph/issues/5526
+[#5531]: https://github.com/hypermodeinc/dgraph/issues/5531
+[#5487]: https://github.com/hypermodeinc/dgraph/issues/5487
+[#5316]: https://github.com/hypermodeinc/dgraph/issues/5316
+[#5425]: https://github.com/hypermodeinc/dgraph/issues/5425
+[#5362]: https://github.com/hypermodeinc/dgraph/issues/5362
+[#5354]: https://github.com/hypermodeinc/dgraph/issues/5354
+[#5329]: https://github.com/hypermodeinc/dgraph/issues/5329
+[#5328]: https://github.com/hypermodeinc/dgraph/issues/5328
+[#5317]: https://github.com/hypermodeinc/dgraph/issues/5317
+[#5588]: https://github.com/hypermodeinc/dgraph/issues/5588
+[#5605]: https://github.com/hypermodeinc/dgraph/issues/5605
+[#5571]: https://github.com/hypermodeinc/dgraph/issues/5571
+[#5561]: https://github.com/hypermodeinc/dgraph/issues/5561
+[#5503]: https://github.com/hypermodeinc/dgraph/issues/5503
+[#5551]: https://github.com/hypermodeinc/dgraph/issues/5551
+[#5544]: https://github.com/hypermodeinc/dgraph/issues/5544
+[#5524]: https://github.com/hypermodeinc/dgraph/issues/5524
+[#5467]: https://github.com/hypermodeinc/dgraph/issues/5467
+[#5498]: https://github.com/hypermodeinc/dgraph/issues/5498
+[#5492]: https://github.com/hypermodeinc/dgraph/issues/5492
+[#5478]: https://github.com/hypermodeinc/dgraph/issues/5478
+[#5418]: https://github.com/hypermodeinc/dgraph/issues/5418
+[#5426]: https://github.com/hypermodeinc/dgraph/issues/5426
+[#5410]: https://github.com/hypermodeinc/dgraph/issues/5410
+[#5414]: https://github.com/hypermodeinc/dgraph/issues/5414
+[#5397]: https://github.com/hypermodeinc/dgraph/issues/5397
+[#5007]: https://github.com/hypermodeinc/dgraph/issues/5007
+[#5334]: https://github.com/hypermodeinc/dgraph/issues/5334
+[#5333]: https://github.com/hypermodeinc/dgraph/issues/5333
+[#5209]: https://github.com/hypermodeinc/dgraph/issues/5209
+[#3873]: https://github.com/hypermodeinc/dgraph/issues/3873
+[#5138]: https://github.com/hypermodeinc/dgraph/issues/5138
+[#3873]: https://github.com/hypermodeinc/dgraph/issues/3873
+[#5137]: https://github.com/hypermodeinc/dgraph/issues/5137
+[#5126]: https://github.com/hypermodeinc/dgraph/issues/5126
+[#5085]: https://github.com/hypermodeinc/dgraph/issues/5085
+[#5051]: https://github.com/hypermodeinc/dgraph/issues/5051
+[#5023]: https://github.com/hypermodeinc/dgraph/issues/5023
+[#4878]: https://github.com/hypermodeinc/dgraph/issues/4878
+[#5185]: https://github.com/hypermodeinc/dgraph/issues/5185
+[#5148]: https://github.com/hypermodeinc/dgraph/issues/5148
+[#4798]: https://github.com/hypermodeinc/dgraph/issues/4798
+[#4581]: https://github.com/hypermodeinc/dgraph/issues/4581
+[#4907]: https://github.com/hypermodeinc/dgraph/issues/4907
+[#5424]: https://github.com/hypermodeinc/dgraph/issues/5424
+[#5436]: https://github.com/hypermodeinc/dgraph/issues/5436
+[#5537]: https://github.com/hypermodeinc/dgraph/issues/5537
+[#5657]: https://github.com/hypermodeinc/dgraph/issues/5657
+[#5726]: https://github.com/hypermodeinc/dgraph/issues/5726
+[#5727]: https://github.com/hypermodeinc/dgraph/issues/5727
+[#5408]: https://github.com/hypermodeinc/dgraph/issues/5408
+[#5684]: https://github.com/hypermodeinc/dgraph/issues/5684
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
-[#5949]: https://github.com/dgraph-io/dgraph/issues/5949
-[#5704]: https://github.com/dgraph-io/dgraph/issues/5704
-[#5765]: https://github.com/dgraph-io/dgraph/issues/5765
-[#5809]: https://github.com/dgraph-io/dgraph/issues/5809
-[#5830]: https://github.com/dgraph-io/dgraph/issues/5830
-[#5855]: https://github.com/dgraph-io/dgraph/issues/5855
-[#5856]: https://github.com/dgraph-io/dgraph/issues/5856
-[#5858]: https://github.com/dgraph-io/dgraph/issues/5858
-[#5833]: https://github.com/dgraph-io/dgraph/issues/5833
-[#5875]: https://github.com/dgraph-io/dgraph/issues/5875
-[#5980]: https://github.com/dgraph-io/dgraph/issues/5980
-[#5560]: https://github.com/dgraph-io/dgraph/issues/5560
-[#5912]: https://github.com/dgraph-io/dgraph/issues/5912
-[#5601]: https://github.com/dgraph-io/dgraph/issues/5601
-[#5970]: https://github.com/dgraph-io/dgraph/issues/5970
-[#6008]: https://github.com/dgraph-io/dgraph/issues/6008
-[#6005]: https://github.com/dgraph-io/dgraph/issues/6005
-[#6015]: https://github.com/dgraph-io/dgraph/issues/6015
-[#5732]: https://github.com/dgraph-io/dgraph/issues/5732
-[#5863]: https://github.com/dgraph-io/dgraph/issues/5863
-[#5862]: https://github.com/dgraph-io/dgraph/issues/5862
-[#5982]: https://github.com/dgraph-io/dgraph/issues/5982
-[#5744]: https://github.com/dgraph-io/dgraph/issues/5744
-[#5828]: https://github.com/dgraph-io/dgraph/issues/5828
-[#5311]: https://github.com/dgraph-io/dgraph/issues/5311
-[#5921]: https://github.com/dgraph-io/dgraph/issues/5921
-[#5854]: https://github.com/dgraph-io/dgraph/issues/5854
-[#5840]: https://github.com/dgraph-io/dgraph/issues/5840
-[#5758]: https://github.com/dgraph-io/dgraph/issues/5758
-[#5983]: https://github.com/dgraph-io/dgraph/issues/5983
-[#5957]: https://github.com/dgraph-io/dgraph/issues/5957
-[#6014]: https://github.com/dgraph-io/dgraph/issues/6014
-[#5824]: https://github.com/dgraph-io/dgraph/issues/5824
-[#5823]: https://github.com/dgraph-io/dgraph/issues/5823
-[#5891]: https://github.com/dgraph-io/dgraph/issues/5891
-[#5792]: https://github.com/dgraph-io/dgraph/issues/5792
-[#5829]: https://github.com/dgraph-io/dgraph/issues/5829
-[#5993]: https://github.com/dgraph-io/dgraph/issues/5993
-[#5687]: https://github.com/dgraph-io/dgraph/issues/5687
-[#5995]: https://github.com/dgraph-io/dgraph/issues/5995
-[#5687]: https://github.com/dgraph-io/dgraph/issues/5687
-[#6020]: https://github.com/dgraph-io/dgraph/issues/6020
-[#5950]: https://github.com/dgraph-io/dgraph/issues/5950
-[#5809]: https://github.com/dgraph-io/dgraph/issues/5809
-[#6034]: https://github.com/dgraph-io/dgraph/issues/6034
-[#6043]: https://github.com/dgraph-io/dgraph/issues/6043
+[#5949]: https://github.com/hypermodeinc/dgraph/issues/5949
+[#5704]: https://github.com/hypermodeinc/dgraph/issues/5704
+[#5765]: https://github.com/hypermodeinc/dgraph/issues/5765
+[#5809]: https://github.com/hypermodeinc/dgraph/issues/5809
+[#5830]: https://github.com/hypermodeinc/dgraph/issues/5830
+[#5855]: https://github.com/hypermodeinc/dgraph/issues/5855
+[#5856]: https://github.com/hypermodeinc/dgraph/issues/5856
+[#5858]: https://github.com/hypermodeinc/dgraph/issues/5858
+[#5833]: https://github.com/hypermodeinc/dgraph/issues/5833
+[#5875]: https://github.com/hypermodeinc/dgraph/issues/5875
+[#5980]: https://github.com/hypermodeinc/dgraph/issues/5980
+[#5560]: https://github.com/hypermodeinc/dgraph/issues/5560
+[#5912]: https://github.com/hypermodeinc/dgraph/issues/5912
+[#5601]: https://github.com/hypermodeinc/dgraph/issues/5601
+[#5970]: https://github.com/hypermodeinc/dgraph/issues/5970
+[#6008]: https://github.com/hypermodeinc/dgraph/issues/6008
+[#6005]: https://github.com/hypermodeinc/dgraph/issues/6005
+[#6015]: https://github.com/hypermodeinc/dgraph/issues/6015
+[#5732]: https://github.com/hypermodeinc/dgraph/issues/5732
+[#5863]: https://github.com/hypermodeinc/dgraph/issues/5863
+[#5862]: https://github.com/hypermodeinc/dgraph/issues/5862
+[#5982]: https://github.com/hypermodeinc/dgraph/issues/5982
+[#5744]: https://github.com/hypermodeinc/dgraph/issues/5744
+[#5828]: https://github.com/hypermodeinc/dgraph/issues/5828
+[#5311]: https://github.com/hypermodeinc/dgraph/issues/5311
+[#5921]: https://github.com/hypermodeinc/dgraph/issues/5921
+[#5854]: https://github.com/hypermodeinc/dgraph/issues/5854
+[#5840]: https://github.com/hypermodeinc/dgraph/issues/5840
+[#5758]: https://github.com/hypermodeinc/dgraph/issues/5758
+[#5983]: https://github.com/hypermodeinc/dgraph/issues/5983
+[#5957]: https://github.com/hypermodeinc/dgraph/issues/5957
+[#6014]: https://github.com/hypermodeinc/dgraph/issues/6014
+[#5824]: https://github.com/hypermodeinc/dgraph/issues/5824
+[#5823]: https://github.com/hypermodeinc/dgraph/issues/5823
+[#5891]: https://github.com/hypermodeinc/dgraph/issues/5891
+[#5792]: https://github.com/hypermodeinc/dgraph/issues/5792
+[#5829]: https://github.com/hypermodeinc/dgraph/issues/5829
+[#5993]: https://github.com/hypermodeinc/dgraph/issues/5993
+[#5687]: https://github.com/hypermodeinc/dgraph/issues/5687
+[#5995]: https://github.com/hypermodeinc/dgraph/issues/5995
+[#5687]: https://github.com/hypermodeinc/dgraph/issues/5687
+[#6020]: https://github.com/hypermodeinc/dgraph/issues/6020
+[#5950]: https://github.com/hypermodeinc/dgraph/issues/5950
+[#5809]: https://github.com/hypermodeinc/dgraph/issues/5809
+[#6034]: https://github.com/hypermodeinc/dgraph/issues/6034
+[#6043]: https://github.com/hypermodeinc/dgraph/issues/6043
 
 ## [20.03.4] - 2020-07-23
-[20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
+[20.03.4]: https://github.com/hypermodeinc/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
 - Update Badger 07/13/2020. ([#5941][], [#5616][])
@@ -2168,47 +2168,47 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Backup: Change groupId from int to uint32. ([#5614][])
   - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
 
-[#5241]: https://github.com/dgraph-io/dgraph/issues/5241
-[#5691]: https://github.com/dgraph-io/dgraph/issues/5691
-[#5916]: https://github.com/dgraph-io/dgraph/issues/5916
-[#5914]: https://github.com/dgraph-io/dgraph/issues/5914
-[#5907]: https://github.com/dgraph-io/dgraph/issues/5907
-[#5860]: https://github.com/dgraph-io/dgraph/issues/5860
-[#5971]: https://github.com/dgraph-io/dgraph/issues/5971
-[#5311]: https://github.com/dgraph-io/dgraph/issues/5311
-[#5844]: https://github.com/dgraph-io/dgraph/issues/5844
-[#5857]: https://github.com/dgraph-io/dgraph/issues/5857
-[#5941]: https://github.com/dgraph-io/dgraph/issues/5941
-[#5729]: https://github.com/dgraph-io/dgraph/issues/5729
-[#5728]: https://github.com/dgraph-io/dgraph/issues/5728
-[#5616]: https://github.com/dgraph-io/dgraph/issues/5616
-[#5564]: https://github.com/dgraph-io/dgraph/issues/5564
-[#5582]: https://github.com/dgraph-io/dgraph/issues/5582
-[#5577]: https://github.com/dgraph-io/dgraph/issues/5577
-[#5536]: https://github.com/dgraph-io/dgraph/issues/5536
-[#5557]: https://github.com/dgraph-io/dgraph/issues/5557
-[#5555]: https://github.com/dgraph-io/dgraph/issues/5555
-[#5584]: https://github.com/dgraph-io/dgraph/issues/5584
-[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
-[#5597]: https://github.com/dgraph-io/dgraph/issues/5597
-[#5548]: https://github.com/dgraph-io/dgraph/issues/5548
-[#5594]: https://github.com/dgraph-io/dgraph/issues/5594
-[#5591]: https://github.com/dgraph-io/dgraph/issues/5591
-[#4536]: https://github.com/dgraph-io/dgraph/issues/4536
-[#5604]: https://github.com/dgraph-io/dgraph/issues/5604
-[#5633]: https://github.com/dgraph-io/dgraph/issues/5633
-[#5503]: https://github.com/dgraph-io/dgraph/issues/5503
-[#5636]: https://github.com/dgraph-io/dgraph/issues/5636
-[#5680]: https://github.com/dgraph-io/dgraph/issues/5680
-[#5614]: https://github.com/dgraph-io/dgraph/issues/5614
-[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
-[#5678]: https://github.com/dgraph-io/dgraph/issues/5678
-[#5969]: https://github.com/dgraph-io/dgraph/issues/5969
-[#6007]: https://github.com/dgraph-io/dgraph/issues/6007
-[#6021]: https://github.com/dgraph-io/dgraph/issues/6021
+[#5241]: https://github.com/hypermodeinc/dgraph/issues/5241
+[#5691]: https://github.com/hypermodeinc/dgraph/issues/5691
+[#5916]: https://github.com/hypermodeinc/dgraph/issues/5916
+[#5914]: https://github.com/hypermodeinc/dgraph/issues/5914
+[#5907]: https://github.com/hypermodeinc/dgraph/issues/5907
+[#5860]: https://github.com/hypermodeinc/dgraph/issues/5860
+[#5971]: https://github.com/hypermodeinc/dgraph/issues/5971
+[#5311]: https://github.com/hypermodeinc/dgraph/issues/5311
+[#5844]: https://github.com/hypermodeinc/dgraph/issues/5844
+[#5857]: https://github.com/hypermodeinc/dgraph/issues/5857
+[#5941]: https://github.com/hypermodeinc/dgraph/issues/5941
+[#5729]: https://github.com/hypermodeinc/dgraph/issues/5729
+[#5728]: https://github.com/hypermodeinc/dgraph/issues/5728
+[#5616]: https://github.com/hypermodeinc/dgraph/issues/5616
+[#5564]: https://github.com/hypermodeinc/dgraph/issues/5564
+[#5582]: https://github.com/hypermodeinc/dgraph/issues/5582
+[#5577]: https://github.com/hypermodeinc/dgraph/issues/5577
+[#5536]: https://github.com/hypermodeinc/dgraph/issues/5536
+[#5557]: https://github.com/hypermodeinc/dgraph/issues/5557
+[#5555]: https://github.com/hypermodeinc/dgraph/issues/5555
+[#5584]: https://github.com/hypermodeinc/dgraph/issues/5584
+[#3873]: https://github.com/hypermodeinc/dgraph/issues/3873
+[#5597]: https://github.com/hypermodeinc/dgraph/issues/5597
+[#5548]: https://github.com/hypermodeinc/dgraph/issues/5548
+[#5594]: https://github.com/hypermodeinc/dgraph/issues/5594
+[#5591]: https://github.com/hypermodeinc/dgraph/issues/5591
+[#4536]: https://github.com/hypermodeinc/dgraph/issues/4536
+[#5604]: https://github.com/hypermodeinc/dgraph/issues/5604
+[#5633]: https://github.com/hypermodeinc/dgraph/issues/5633
+[#5503]: https://github.com/hypermodeinc/dgraph/issues/5503
+[#5636]: https://github.com/hypermodeinc/dgraph/issues/5636
+[#5680]: https://github.com/hypermodeinc/dgraph/issues/5680
+[#5614]: https://github.com/hypermodeinc/dgraph/issues/5614
+[#5579]: https://github.com/hypermodeinc/dgraph/issues/5579
+[#5678]: https://github.com/hypermodeinc/dgraph/issues/5678
+[#5969]: https://github.com/hypermodeinc/dgraph/issues/5969
+[#6007]: https://github.com/hypermodeinc/dgraph/issues/6007
+[#6021]: https://github.com/hypermodeinc/dgraph/issues/6021
 
 ## [1.2.6] - 2020-07-31
-[1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
+[1.2.6]: https://github.com/hypermodeinc/dgraph/compare/v1.2.5...v1.2.6
 
 ### Changed
 
@@ -2254,29 +2254,29 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
   - Backup: During backup, collapse split posting lists into a single list. ([#4682][])
   - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
 
-[#5730]: https://github.com/dgraph-io/dgraph/issues/5730
-[#4600]: https://github.com/dgraph-io/dgraph/issues/4600
-[#4682]: https://github.com/dgraph-io/dgraph/issues/4682
-[#4867]: https://github.com/dgraph-io/dgraph/issues/4867
-[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
-[#4945]: https://github.com/dgraph-io/dgraph/issues/4945
-[#5908]: https://github.com/dgraph-io/dgraph/issues/5908
-[#5749]: https://github.com/dgraph-io/dgraph/issues/5749
-[#6022]: https://github.com/dgraph-io/dgraph/issues/6022
-[#5554]: https://github.com/dgraph-io/dgraph/issues/5554
-[#5596]: https://github.com/dgraph-io/dgraph/issues/5596
-[#5595]: https://github.com/dgraph-io/dgraph/issues/5595
-[#5593]: https://github.com/dgraph-io/dgraph/issues/5593
-[#5592]: https://github.com/dgraph-io/dgraph/issues/5592
-[#5436]: https://github.com/dgraph-io/dgraph/issues/5436
-[#5603]: https://github.com/dgraph-io/dgraph/issues/5603
-[#5615]: https://github.com/dgraph-io/dgraph/issues/5615
-[#5613]: https://github.com/dgraph-io/dgraph/issues/5613
-[#5940]: https://github.com/dgraph-io/dgraph/issues/5940
-[#5990]: https://github.com/dgraph-io/dgraph/issues/5613
+[#5730]: https://github.com/hypermodeinc/dgraph/issues/5730
+[#4600]: https://github.com/hypermodeinc/dgraph/issues/4600
+[#4682]: https://github.com/hypermodeinc/dgraph/issues/4682
+[#4867]: https://github.com/hypermodeinc/dgraph/issues/4867
+[#5579]: https://github.com/hypermodeinc/dgraph/issues/5579
+[#4945]: https://github.com/hypermodeinc/dgraph/issues/4945
+[#5908]: https://github.com/hypermodeinc/dgraph/issues/5908
+[#5749]: https://github.com/hypermodeinc/dgraph/issues/5749
+[#6022]: https://github.com/hypermodeinc/dgraph/issues/6022
+[#5554]: https://github.com/hypermodeinc/dgraph/issues/5554
+[#5596]: https://github.com/hypermodeinc/dgraph/issues/5596
+[#5595]: https://github.com/hypermodeinc/dgraph/issues/5595
+[#5593]: https://github.com/hypermodeinc/dgraph/issues/5593
+[#5592]: https://github.com/hypermodeinc/dgraph/issues/5592
+[#5436]: https://github.com/hypermodeinc/dgraph/issues/5436
+[#5603]: https://github.com/hypermodeinc/dgraph/issues/5603
+[#5615]: https://github.com/hypermodeinc/dgraph/issues/5615
+[#5613]: https://github.com/hypermodeinc/dgraph/issues/5613
+[#5940]: https://github.com/hypermodeinc/dgraph/issues/5940
+[#5990]: https://github.com/hypermodeinc/dgraph/issues/5613
 
 ## [20.03.3] - 2020-06-02
-[20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
+[20.03.3]: https://github.com/hypermodeinc/dgraph/compare/v20.03.1...v20.03.3
 
 ### Changed
 
@@ -2320,43 +2320,43 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 - Use SensitiveByteSlice type for hmac secret. ([#5450][])
 
 
-[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
-[#5305]: https://github.com/dgraph-io/dgraph/issues/5305
-[#5304]: https://github.com/dgraph-io/dgraph/issues/5304
-[#5359]: https://github.com/dgraph-io/dgraph/issues/5359
-[#5429]: https://github.com/dgraph-io/dgraph/issues/5429
-[#5342]: https://github.com/dgraph-io/dgraph/issues/5342
-[#5326]: https://github.com/dgraph-io/dgraph/issues/5326
-[#5356]: https://github.com/dgraph-io/dgraph/issues/5356
-[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
-[#5384]: https://github.com/dgraph-io/dgraph/issues/5384
-[#5390]: https://github.com/dgraph-io/dgraph/issues/5390
-[#5394]: https://github.com/dgraph-io/dgraph/issues/5394
-[#5405]: https://github.com/dgraph-io/dgraph/issues/5405
-[#5053]: https://github.com/dgraph-io/dgraph/issues/5053
-[#5355]: https://github.com/dgraph-io/dgraph/issues/5355
-[#5368]: https://github.com/dgraph-io/dgraph/issues/5368
-[#5450]: https://github.com/dgraph-io/dgraph/issues/5450
-[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
-[#5528]: https://github.com/dgraph-io/dgraph/issues/5528
-[#5473]: https://github.com/dgraph-io/dgraph/issues/5473
-[#5494]: https://github.com/dgraph-io/dgraph/issues/5494
-[#5469]: https://github.com/dgraph-io/dgraph/issues/5469
-[#5404]: https://github.com/dgraph-io/dgraph/issues/5404
-[#5476]: https://github.com/dgraph-io/dgraph/issues/5476
-[#5488]: https://github.com/dgraph-io/dgraph/issues/5488
-[#5483]: https://github.com/dgraph-io/dgraph/issues/5483
-[#5481]: https://github.com/dgraph-io/dgraph/issues/5481
-[#5481]: https://github.com/dgraph-io/dgraph/issues/5481
-[#5235]: https://github.com/dgraph-io/dgraph/issues/5235
-[#5419]: https://github.com/dgraph-io/dgraph/issues/5419
-[#5485]: https://github.com/dgraph-io/dgraph/issues/5485
-[#5479]: https://github.com/dgraph-io/dgraph/issues/5479
-[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
-[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
+[#5444]: https://github.com/hypermodeinc/dgraph/issues/5444
+[#5305]: https://github.com/hypermodeinc/dgraph/issues/5305
+[#5304]: https://github.com/hypermodeinc/dgraph/issues/5304
+[#5359]: https://github.com/hypermodeinc/dgraph/issues/5359
+[#5429]: https://github.com/hypermodeinc/dgraph/issues/5429
+[#5342]: https://github.com/hypermodeinc/dgraph/issues/5342
+[#5326]: https://github.com/hypermodeinc/dgraph/issues/5326
+[#5356]: https://github.com/hypermodeinc/dgraph/issues/5356
+[#5377]: https://github.com/hypermodeinc/dgraph/issues/5377
+[#5384]: https://github.com/hypermodeinc/dgraph/issues/5384
+[#5390]: https://github.com/hypermodeinc/dgraph/issues/5390
+[#5394]: https://github.com/hypermodeinc/dgraph/issues/5394
+[#5405]: https://github.com/hypermodeinc/dgraph/issues/5405
+[#5053]: https://github.com/hypermodeinc/dgraph/issues/5053
+[#5355]: https://github.com/hypermodeinc/dgraph/issues/5355
+[#5368]: https://github.com/hypermodeinc/dgraph/issues/5368
+[#5450]: https://github.com/hypermodeinc/dgraph/issues/5450
+[#5381]: https://github.com/hypermodeinc/dgraph/issues/5381
+[#5528]: https://github.com/hypermodeinc/dgraph/issues/5528
+[#5473]: https://github.com/hypermodeinc/dgraph/issues/5473
+[#5494]: https://github.com/hypermodeinc/dgraph/issues/5494
+[#5469]: https://github.com/hypermodeinc/dgraph/issues/5469
+[#5404]: https://github.com/hypermodeinc/dgraph/issues/5404
+[#5476]: https://github.com/hypermodeinc/dgraph/issues/5476
+[#5488]: https://github.com/hypermodeinc/dgraph/issues/5488
+[#5483]: https://github.com/hypermodeinc/dgraph/issues/5483
+[#5481]: https://github.com/hypermodeinc/dgraph/issues/5481
+[#5481]: https://github.com/hypermodeinc/dgraph/issues/5481
+[#5235]: https://github.com/hypermodeinc/dgraph/issues/5235
+[#5419]: https://github.com/hypermodeinc/dgraph/issues/5419
+[#5485]: https://github.com/hypermodeinc/dgraph/issues/5485
+[#5479]: https://github.com/hypermodeinc/dgraph/issues/5479
+[#5361]: https://github.com/hypermodeinc/dgraph/issues/5361
+[#5537]: https://github.com/hypermodeinc/dgraph/issues/5537
 
 ## [1.2.5] - 2020-06-02
-[1.2.5]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.5
+[1.2.5]: https://github.com/hypermodeinc/dgraph/compare/v1.2.3...v1.2.5
 
 ### Changed
 
@@ -2383,27 +2383,27 @@ and this project will adhere to [Semantic Versioning](https://semver.org) starti
 
 - Use SensitiveByteSlice type for hmac secret. ([#5451][])
 
-[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
-[#5359]: https://github.com/dgraph-io/dgraph/issues/5359
-[#5405]: https://github.com/dgraph-io/dgraph/issues/5405
-[#5327]: https://github.com/dgraph-io/dgraph/issues/5327
-[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
-[#5394]: https://github.com/dgraph-io/dgraph/issues/5394
-[#5396]: https://github.com/dgraph-io/dgraph/issues/5396
-[#5053]: https://github.com/dgraph-io/dgraph/issues/5053
-[#5368]: https://github.com/dgraph-io/dgraph/issues/5368
-[#5451]: https://github.com/dgraph-io/dgraph/issues/5451
-[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
-[#5327]: https://github.com/dgraph-io/dgraph/issues/5327
-[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
-[#5508]: https://github.com/dgraph-io/dgraph/issues/5508
-[#5494]: https://github.com/dgraph-io/dgraph/issues/5494
-[#5469]: https://github.com/dgraph-io/dgraph/issues/5469
-[#5476]: https://github.com/dgraph-io/dgraph/issues/5476
-[#5488]: https://github.com/dgraph-io/dgraph/issues/5488
-[#5468]: https://github.com/dgraph-io/dgraph/issues/5468
-[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
-[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
+[#5444]: https://github.com/hypermodeinc/dgraph/issues/5444
+[#5359]: https://github.com/hypermodeinc/dgraph/issues/5359
+[#5405]: https://github.com/hypermodeinc/dgraph/issues/5405
+[#5327]: https://github.com/hypermodeinc/dgraph/issues/5327
+[#5377]: https://github.com/hypermodeinc/dgraph/issues/5377
+[#5394]: https://github.com/hypermodeinc/dgraph/issues/5394
+[#5396]: https://github.com/hypermodeinc/dgraph/issues/5396
+[#5053]: https://github.com/hypermodeinc/dgraph/issues/5053
+[#5368]: https://github.com/hypermodeinc/dgraph/issues/5368
+[#5451]: https://github.com/hypermodeinc/dgraph/issues/5451
+[#5381]: https://github.com/hypermodeinc/dgraph/issues/5381
+[#5327]: https://github.com/hypermodeinc/dgraph/issues/5327
+[#5377]: https://github.com/hypermodeinc/dgraph/issues/5377
+[#5508]: https://github.com/hypermodeinc/dgraph/issues/5508
+[#5494]: https://github.com/hypermodeinc/dgraph/issues/5494
+[#5469]: https://github.com/hypermodeinc/dgraph/issues/5469
+[#5476]: https://github.com/hypermodeinc/dgraph/issues/5476
+[#5488]: https://github.com/hypermodeinc/dgraph/issues/5488
+[#5468]: https://github.com/hypermodeinc/dgraph/issues/5468
+[#5361]: https://github.com/hypermodeinc/dgraph/issues/5361
+[#5537]: https://github.com/hypermodeinc/dgraph/issues/5537
 
 ## [20.03.2] - 2020-05-15
 This release was removed
@@ -2412,7 +2412,7 @@ This release was removed
 This release was removed
 
 ## [20.03.1] - 2020-04-24
-[20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
+[20.03.1]: https://github.com/hypermodeinc/dgraph/compare/v20.03.0...v20.03.1
 
 ### Changed
 
@@ -2466,42 +2466,42 @@ This release was removed
   - Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
   - Add option to apply enterprise license at zero's startup. ([#5170][])
 
-[#4979]: https://github.com/dgraph-io/dgraph/issues/4979
-[#5230]: https://github.com/dgraph-io/dgraph/issues/5230
-[#4965]: https://github.com/dgraph-io/dgraph/issues/4965
-[#4992]: https://github.com/dgraph-io/dgraph/issues/4992
-[#4946]: https://github.com/dgraph-io/dgraph/issues/4946
-[#4961]: https://github.com/dgraph-io/dgraph/issues/4961
-[#5005]: https://github.com/dgraph-io/dgraph/issues/5005
-[#5024]: https://github.com/dgraph-io/dgraph/issues/5024
-[#5073]: https://github.com/dgraph-io/dgraph/issues/5073
-[#5280]: https://github.com/dgraph-io/dgraph/issues/5280
-[#5097]: https://github.com/dgraph-io/dgraph/issues/5097
-[#5150]: https://github.com/dgraph-io/dgraph/issues/5150
-[#5132]: https://github.com/dgraph-io/dgraph/issues/5132
-[#4959]: https://github.com/dgraph-io/dgraph/issues/4959
-[#5019]: https://github.com/dgraph-io/dgraph/issues/5019
-[#5081]: https://github.com/dgraph-io/dgraph/issues/5081
-[#5034]: https://github.com/dgraph-io/dgraph/issues/5034
-[#5169]: https://github.com/dgraph-io/dgraph/issues/5169
-[#5170]: https://github.com/dgraph-io/dgraph/issues/5170
-[#4892]: https://github.com/dgraph-io/dgraph/issues/4892
-[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
-[#5206]: https://github.com/dgraph-io/dgraph/issues/5206
-[#5152]: https://github.com/dgraph-io/dgraph/issues/5152
-[#5252]: https://github.com/dgraph-io/dgraph/issues/5252
-[#5199]: https://github.com/dgraph-io/dgraph/issues/5199
-[#5158]: https://github.com/dgraph-io/dgraph/issues/5158
-[#5213]: https://github.com/dgraph-io/dgraph/issues/5213
-[#5144]: https://github.com/dgraph-io/dgraph/issues/5144
-[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
-[#5103]: https://github.com/dgraph-io/dgraph/issues/5103
-[#5155]: https://github.com/dgraph-io/dgraph/issues/5155
-[#5238]: https://github.com/dgraph-io/dgraph/issues/5238
-[#5272]: https://github.com/dgraph-io/dgraph/issues/5272
+[#4979]: https://github.com/hypermodeinc/dgraph/issues/4979
+[#5230]: https://github.com/hypermodeinc/dgraph/issues/5230
+[#4965]: https://github.com/hypermodeinc/dgraph/issues/4965
+[#4992]: https://github.com/hypermodeinc/dgraph/issues/4992
+[#4946]: https://github.com/hypermodeinc/dgraph/issues/4946
+[#4961]: https://github.com/hypermodeinc/dgraph/issues/4961
+[#5005]: https://github.com/hypermodeinc/dgraph/issues/5005
+[#5024]: https://github.com/hypermodeinc/dgraph/issues/5024
+[#5073]: https://github.com/hypermodeinc/dgraph/issues/5073
+[#5280]: https://github.com/hypermodeinc/dgraph/issues/5280
+[#5097]: https://github.com/hypermodeinc/dgraph/issues/5097
+[#5150]: https://github.com/hypermodeinc/dgraph/issues/5150
+[#5132]: https://github.com/hypermodeinc/dgraph/issues/5132
+[#4959]: https://github.com/hypermodeinc/dgraph/issues/4959
+[#5019]: https://github.com/hypermodeinc/dgraph/issues/5019
+[#5081]: https://github.com/hypermodeinc/dgraph/issues/5081
+[#5034]: https://github.com/hypermodeinc/dgraph/issues/5034
+[#5169]: https://github.com/hypermodeinc/dgraph/issues/5169
+[#5170]: https://github.com/hypermodeinc/dgraph/issues/5170
+[#4892]: https://github.com/hypermodeinc/dgraph/issues/4892
+[#5146]: https://github.com/hypermodeinc/dgraph/issues/5146
+[#5206]: https://github.com/hypermodeinc/dgraph/issues/5206
+[#5152]: https://github.com/hypermodeinc/dgraph/issues/5152
+[#5252]: https://github.com/hypermodeinc/dgraph/issues/5252
+[#5199]: https://github.com/hypermodeinc/dgraph/issues/5199
+[#5158]: https://github.com/hypermodeinc/dgraph/issues/5158
+[#5213]: https://github.com/hypermodeinc/dgraph/issues/5213
+[#5144]: https://github.com/hypermodeinc/dgraph/issues/5144
+[#5146]: https://github.com/hypermodeinc/dgraph/issues/5146
+[#5103]: https://github.com/hypermodeinc/dgraph/issues/5103
+[#5155]: https://github.com/hypermodeinc/dgraph/issues/5155
+[#5238]: https://github.com/hypermodeinc/dgraph/issues/5238
+[#5272]: https://github.com/hypermodeinc/dgraph/issues/5272
 
 ## [1.2.3] - 2020-04-24
-[1.2.3]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v1.2.3
+[1.2.3]: https://github.com/hypermodeinc/dgraph/compare/v1.2.2...v1.2.3
 
 ### Changed
 
@@ -2538,37 +2538,37 @@ This release was removed
   - Support for encrypted backups/restore. **Note**: Older backups without encryption will be incompatible with this Dgraph version. Solution is to force a full backup before creating further incremental backups. ([#5103][])
   - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
 
-[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
-[#5206]: https://github.com/dgraph-io/dgraph/issues/5206
-[#5152]: https://github.com/dgraph-io/dgraph/issues/5152
-[#5252]: https://github.com/dgraph-io/dgraph/issues/5252
-[#5199]: https://github.com/dgraph-io/dgraph/issues/5199
-[#5163]: https://github.com/dgraph-io/dgraph/issues/5163
-[#5158]: https://github.com/dgraph-io/dgraph/issues/5158
-[#5213]: https://github.com/dgraph-io/dgraph/issues/5213
-[#5144]: https://github.com/dgraph-io/dgraph/issues/5144
-[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
-[#5103]: https://github.com/dgraph-io/dgraph/issues/5103
-[#5155]: https://github.com/dgraph-io/dgraph/issues/5155
-[#5238]: https://github.com/dgraph-io/dgraph/issues/5238
-[#5012]: https://github.com/dgraph-io/dgraph/issues/5012
-[#4674]: https://github.com/dgraph-io/dgraph/issues/4674
-[#4842]: https://github.com/dgraph-io/dgraph/issues/4842
-[#5116]: https://github.com/dgraph-io/dgraph/issues/5116
-[#5258]: https://github.com/dgraph-io/dgraph/issues/5258
-[#4901]: https://github.com/dgraph-io/dgraph/issues/4901
-[#5184]: https://github.com/dgraph-io/dgraph/issues/5184
-[#5088]: https://github.com/dgraph-io/dgraph/issues/5088
-[#5273]: https://github.com/dgraph-io/dgraph/issues/5273
-[#5216]: https://github.com/dgraph-io/dgraph/issues/5216
-[#5268]: https://github.com/dgraph-io/dgraph/issues/5268
-[#5102]: https://github.com/dgraph-io/dgraph/issues/5102
-[#5255]: https://github.com/dgraph-io/dgraph/issues/5255
-[#4772]: https://github.com/dgraph-io/dgraph/issues/4772
-[#5094]: https://github.com/dgraph-io/dgraph/issues/5094
+[#5146]: https://github.com/hypermodeinc/dgraph/issues/5146
+[#5206]: https://github.com/hypermodeinc/dgraph/issues/5206
+[#5152]: https://github.com/hypermodeinc/dgraph/issues/5152
+[#5252]: https://github.com/hypermodeinc/dgraph/issues/5252
+[#5199]: https://github.com/hypermodeinc/dgraph/issues/5199
+[#5163]: https://github.com/hypermodeinc/dgraph/issues/5163
+[#5158]: https://github.com/hypermodeinc/dgraph/issues/5158
+[#5213]: https://github.com/hypermodeinc/dgraph/issues/5213
+[#5144]: https://github.com/hypermodeinc/dgraph/issues/5144
+[#5146]: https://github.com/hypermodeinc/dgraph/issues/5146
+[#5103]: https://github.com/hypermodeinc/dgraph/issues/5103
+[#5155]: https://github.com/hypermodeinc/dgraph/issues/5155
+[#5238]: https://github.com/hypermodeinc/dgraph/issues/5238
+[#5012]: https://github.com/hypermodeinc/dgraph/issues/5012
+[#4674]: https://github.com/hypermodeinc/dgraph/issues/4674
+[#4842]: https://github.com/hypermodeinc/dgraph/issues/4842
+[#5116]: https://github.com/hypermodeinc/dgraph/issues/5116
+[#5258]: https://github.com/hypermodeinc/dgraph/issues/5258
+[#4901]: https://github.com/hypermodeinc/dgraph/issues/4901
+[#5184]: https://github.com/hypermodeinc/dgraph/issues/5184
+[#5088]: https://github.com/hypermodeinc/dgraph/issues/5088
+[#5273]: https://github.com/hypermodeinc/dgraph/issues/5273
+[#5216]: https://github.com/hypermodeinc/dgraph/issues/5216
+[#5268]: https://github.com/hypermodeinc/dgraph/issues/5268
+[#5102]: https://github.com/hypermodeinc/dgraph/issues/5102
+[#5255]: https://github.com/hypermodeinc/dgraph/issues/5255
+[#4772]: https://github.com/hypermodeinc/dgraph/issues/4772
+[#5094]: https://github.com/hypermodeinc/dgraph/issues/5094
 
 ## [20.03.0] - 2020-03-30
-[20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
+[20.03.0]: https://github.com/hypermodeinc/dgraph/compare/v1.2.2...v20.03.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
 
 ### Changed
@@ -2625,59 +2625,59 @@ This release was removed
 - **Breaking changes**
   - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][])
 
-[#5016]: https://github.com/dgraph-io/dgraph/issues/5016
-[#5012]: https://github.com/dgraph-io/dgraph/issues/5012
-[#4889]: https://github.com/dgraph-io/dgraph/issues/4889
-[#4958]: https://github.com/dgraph-io/dgraph/issues/4958
-[#4905]: https://github.com/dgraph-io/dgraph/issues/4905
-[#4659]: https://github.com/dgraph-io/dgraph/issues/4659
-[#4712]: https://github.com/dgraph-io/dgraph/issues/4712
-[#4893]: https://github.com/dgraph-io/dgraph/issues/4893
-[#4767]: https://github.com/dgraph-io/dgraph/issues/4767
-[#4751]: https://github.com/dgraph-io/dgraph/issues/4751
-[#4908]: https://github.com/dgraph-io/dgraph/issues/4908
-[#4923]: https://github.com/dgraph-io/dgraph/issues/4923
-[#4970]: https://github.com/dgraph-io/dgraph/issues/4970
-[#4981]: https://github.com/dgraph-io/dgraph/issues/4981
-[#4841]: https://github.com/dgraph-io/dgraph/issues/4841
-[#4782]: https://github.com/dgraph-io/dgraph/issues/4782
-[#4935]: https://github.com/dgraph-io/dgraph/issues/4935
-[#4972]: https://github.com/dgraph-io/dgraph/issues/4972
-[#4916]: https://github.com/dgraph-io/dgraph/issues/4916
-[#4945]: https://github.com/dgraph-io/dgraph/issues/4945
-[#4875]: https://github.com/dgraph-io/dgraph/issues/4875
-[#4867]: https://github.com/dgraph-io/dgraph/issues/4867
-[#4872]: https://github.com/dgraph-io/dgraph/issues/4872
-[#4756]: https://github.com/dgraph-io/dgraph/issues/4756
-[#4819]: https://github.com/dgraph-io/dgraph/issues/4819
-[#4755]: https://github.com/dgraph-io/dgraph/issues/4755
-[#4600]: https://github.com/dgraph-io/dgraph/issues/4600
-[#4766]: https://github.com/dgraph-io/dgraph/issues/4766
-[#4468]: https://github.com/dgraph-io/dgraph/issues/4468
-[#4793]: https://github.com/dgraph-io/dgraph/issues/4793
-[#4777]: https://github.com/dgraph-io/dgraph/issues/4777
-[#4768]: https://github.com/dgraph-io/dgraph/issues/4768
-[#4760]: https://github.com/dgraph-io/dgraph/issues/4760
-[#4739]: https://github.com/dgraph-io/dgraph/issues/4739
-[#4706]: https://github.com/dgraph-io/dgraph/issues/4706
-[#4607]: https://github.com/dgraph-io/dgraph/issues/4607
-[#933]: https://github.com/dgraph-io/dgraph/issues/933
-[#3638]: https://github.com/dgraph-io/dgraph/issues/3638
-[#4579]: https://github.com/dgraph-io/dgraph/issues/4579
-[#4682]: https://github.com/dgraph-io/dgraph/issues/4682
-[#4725]: https://github.com/dgraph-io/dgraph/issues/4725
-[#4669]: https://github.com/dgraph-io/dgraph/issues/4669
-[#4774]: https://github.com/dgraph-io/dgraph/issues/4774
-[#4726]: https://github.com/dgraph-io/dgraph/issues/4726
-[#4695]: https://github.com/dgraph-io/dgraph/issues/4695
-[#4702]: https://github.com/dgraph-io/dgraph/issues/4702
-[#3610]: https://github.com/dgraph-io/dgraph/issues/3610
-[#4773]: https://github.com/dgraph-io/dgraph/issues/4773
-[#4005]: https://github.com/dgraph-io/dgraph/issues/4005
-[#4316]: https://github.com/dgraph-io/dgraph/issues/4316
+[#5016]: https://github.com/hypermodeinc/dgraph/issues/5016
+[#5012]: https://github.com/hypermodeinc/dgraph/issues/5012
+[#4889]: https://github.com/hypermodeinc/dgraph/issues/4889
+[#4958]: https://github.com/hypermodeinc/dgraph/issues/4958
+[#4905]: https://github.com/hypermodeinc/dgraph/issues/4905
+[#4659]: https://github.com/hypermodeinc/dgraph/issues/4659
+[#4712]: https://github.com/hypermodeinc/dgraph/issues/4712
+[#4893]: https://github.com/hypermodeinc/dgraph/issues/4893
+[#4767]: https://github.com/hypermodeinc/dgraph/issues/4767
+[#4751]: https://github.com/hypermodeinc/dgraph/issues/4751
+[#4908]: https://github.com/hypermodeinc/dgraph/issues/4908
+[#4923]: https://github.com/hypermodeinc/dgraph/issues/4923
+[#4970]: https://github.com/hypermodeinc/dgraph/issues/4970
+[#4981]: https://github.com/hypermodeinc/dgraph/issues/4981
+[#4841]: https://github.com/hypermodeinc/dgraph/issues/4841
+[#4782]: https://github.com/hypermodeinc/dgraph/issues/4782
+[#4935]: https://github.com/hypermodeinc/dgraph/issues/4935
+[#4972]: https://github.com/hypermodeinc/dgraph/issues/4972
+[#4916]: https://github.com/hypermodeinc/dgraph/issues/4916
+[#4945]: https://github.com/hypermodeinc/dgraph/issues/4945
+[#4875]: https://github.com/hypermodeinc/dgraph/issues/4875
+[#4867]: https://github.com/hypermodeinc/dgraph/issues/4867
+[#4872]: https://github.com/hypermodeinc/dgraph/issues/4872
+[#4756]: https://github.com/hypermodeinc/dgraph/issues/4756
+[#4819]: https://github.com/hypermodeinc/dgraph/issues/4819
+[#4755]: https://github.com/hypermodeinc/dgraph/issues/4755
+[#4600]: https://github.com/hypermodeinc/dgraph/issues/4600
+[#4766]: https://github.com/hypermodeinc/dgraph/issues/4766
+[#4468]: https://github.com/hypermodeinc/dgraph/issues/4468
+[#4793]: https://github.com/hypermodeinc/dgraph/issues/4793
+[#4777]: https://github.com/hypermodeinc/dgraph/issues/4777
+[#4768]: https://github.com/hypermodeinc/dgraph/issues/4768
+[#4760]: https://github.com/hypermodeinc/dgraph/issues/4760
+[#4739]: https://github.com/hypermodeinc/dgraph/issues/4739
+[#4706]: https://github.com/hypermodeinc/dgraph/issues/4706
+[#4607]: https://github.com/hypermodeinc/dgraph/issues/4607
+[#933]: https://github.com/hypermodeinc/dgraph/issues/933
+[#3638]: https://github.com/hypermodeinc/dgraph/issues/3638
+[#4579]: https://github.com/hypermodeinc/dgraph/issues/4579
+[#4682]: https://github.com/hypermodeinc/dgraph/issues/4682
+[#4725]: https://github.com/hypermodeinc/dgraph/issues/4725
+[#4669]: https://github.com/hypermodeinc/dgraph/issues/4669
+[#4774]: https://github.com/hypermodeinc/dgraph/issues/4774
+[#4726]: https://github.com/hypermodeinc/dgraph/issues/4726
+[#4695]: https://github.com/hypermodeinc/dgraph/issues/4695
+[#4702]: https://github.com/hypermodeinc/dgraph/issues/4702
+[#3610]: https://github.com/hypermodeinc/dgraph/issues/3610
+[#4773]: https://github.com/hypermodeinc/dgraph/issues/4773
+[#4005]: https://github.com/hypermodeinc/dgraph/issues/4005
+[#4316]: https://github.com/hypermodeinc/dgraph/issues/4316
 
 ## [1.2.2] - 2020-03-19
-[1.2.2]: https://github.com/dgraph-io/dgraph/compare/v1.2.1...v1.2.2
+[1.2.2]: https://github.com/hypermodeinc/dgraph/compare/v1.2.1...v1.2.2
 
 ### Changed
 
@@ -2704,44 +2704,44 @@ This release was removed
   - Backups: Split lists when restoring from backup. ([#4912][])
 
 
-[#4967]: https://github.com/dgraph-io/dgraph/issues/4967
-[#4951]: https://github.com/dgraph-io/dgraph/issues/4951
-[#4532]: https://github.com/dgraph-io/dgraph/issues/4532
-[#4948]: https://github.com/dgraph-io/dgraph/issues/4948
-[#4893]: https://github.com/dgraph-io/dgraph/issues/4893
-[#4784]: https://github.com/dgraph-io/dgraph/issues/4784
-[#4896]: https://github.com/dgraph-io/dgraph/issues/4896
-[#4856]: https://github.com/dgraph-io/dgraph/issues/4856
-[#4857]: https://github.com/dgraph-io/dgraph/issues/4857
-[#4881]: https://github.com/dgraph-io/dgraph/issues/4881
-[#4912]: https://github.com/dgraph-io/dgraph/issues/4912
-[#4855]: https://github.com/dgraph-io/dgraph/issues/4855
-[#4858]: https://github.com/dgraph-io/dgraph/issues/4858
-[#4879]: https://github.com/dgraph-io/dgraph/issues/4879
-[#4883]: https://github.com/dgraph-io/dgraph/issues/4883
-[#4933]: https://github.com/dgraph-io/dgraph/issues/4933
-[#4937]: https://github.com/dgraph-io/dgraph/issues/4937
-[#4891]: https://github.com/dgraph-io/dgraph/issues/4891
-[#4880]: https://github.com/dgraph-io/dgraph/issues/4880
-[#4816]: https://github.com/dgraph-io/dgraph/issues/4816
-[#4877]: https://github.com/dgraph-io/dgraph/issues/4877
-[#4922]: https://github.com/dgraph-io/dgraph/issues/4922
-[#4707]: https://github.com/dgraph-io/dgraph/issues/4707
-[#4860]: https://github.com/dgraph-io/dgraph/issues/4860
+[#4967]: https://github.com/hypermodeinc/dgraph/issues/4967
+[#4951]: https://github.com/hypermodeinc/dgraph/issues/4951
+[#4532]: https://github.com/hypermodeinc/dgraph/issues/4532
+[#4948]: https://github.com/hypermodeinc/dgraph/issues/4948
+[#4893]: https://github.com/hypermodeinc/dgraph/issues/4893
+[#4784]: https://github.com/hypermodeinc/dgraph/issues/4784
+[#4896]: https://github.com/hypermodeinc/dgraph/issues/4896
+[#4856]: https://github.com/hypermodeinc/dgraph/issues/4856
+[#4857]: https://github.com/hypermodeinc/dgraph/issues/4857
+[#4881]: https://github.com/hypermodeinc/dgraph/issues/4881
+[#4912]: https://github.com/hypermodeinc/dgraph/issues/4912
+[#4855]: https://github.com/hypermodeinc/dgraph/issues/4855
+[#4858]: https://github.com/hypermodeinc/dgraph/issues/4858
+[#4879]: https://github.com/hypermodeinc/dgraph/issues/4879
+[#4883]: https://github.com/hypermodeinc/dgraph/issues/4883
+[#4933]: https://github.com/hypermodeinc/dgraph/issues/4933
+[#4937]: https://github.com/hypermodeinc/dgraph/issues/4937
+[#4891]: https://github.com/hypermodeinc/dgraph/issues/4891
+[#4880]: https://github.com/hypermodeinc/dgraph/issues/4880
+[#4816]: https://github.com/hypermodeinc/dgraph/issues/4816
+[#4877]: https://github.com/hypermodeinc/dgraph/issues/4877
+[#4922]: https://github.com/hypermodeinc/dgraph/issues/4922
+[#4707]: https://github.com/hypermodeinc/dgraph/issues/4707
+[#4860]: https://github.com/hypermodeinc/dgraph/issues/4860
 
 
 ## [1.2.1] - 2020-02-06
-[1.2.1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v1.2.1
+[1.2.1]: https://github.com/hypermodeinc/dgraph/compare/v1.2.0...v1.2.1
 
 ### Fixed
 
 - Fix bug related to posting list split, and re-enable posting list splits. Fixes [#4733][]. ([#4742][])
 
-[#4733]: https://github.com/dgraph-io/dgraph/issues/4733
-[#4742]: https://github.com/dgraph-io/dgraph/issues/4742
+[#4733]: https://github.com/hypermodeinc/dgraph/issues/4733
+[#4742]: https://github.com/hypermodeinc/dgraph/issues/4742
 
 ## [1.2.0] - 2020-01-27
-[1.2.0]: https://github.com/dgraph-io/dgraph/compare/v1.1.1...v1.2.0
+[1.2.0]: https://github.com/hypermodeinc/dgraph/compare/v1.1.1...v1.2.0
 
 ### Changed
 
@@ -2783,48 +2783,48 @@ This release was removed
 - Enterprise features
   - Backup types. Fixes [#4507][]. ([#4514][])
 
-[#4440]: https://github.com/dgraph-io/dgraph/pull/4440
-[#4574]: https://github.com/dgraph-io/dgraph/pull/4574
-[#4672]: https://github.com/dgraph-io/dgraph/pull/4672
-[#4530]: https://github.com/dgraph-io/dgraph/issues/4530
-[#4310]: https://github.com/dgraph-io/dgraph/issues/4310
-[#4517]: https://github.com/dgraph-io/dgraph/issues/4517
-[#4473]: https://github.com/dgraph-io/dgraph/issues/4473
-[#4545]: https://github.com/dgraph-io/dgraph/issues/4545
-[#4494]: https://github.com/dgraph-io/dgraph/issues/4494
-[#4460]: https://github.com/dgraph-io/dgraph/issues/4460
-[#4465]: https://github.com/dgraph-io/dgraph/issues/4465
-[#4404]: https://github.com/dgraph-io/dgraph/issues/4404
-[#3904]: https://github.com/dgraph-io/dgraph/issues/3904
-[#4514]: https://github.com/dgraph-io/dgraph/issues/4514
-[#4507]: https://github.com/dgraph-io/dgraph/issues/4507
-[#4328]: https://github.com/dgraph-io/dgraph/issues/4328
-[#3788]: https://github.com/dgraph-io/dgraph/issues/3788
-[#4447]: https://github.com/dgraph-io/dgraph/issues/4447
-[#4411]: https://github.com/dgraph-io/dgraph/issues/4411
-[#4321]: https://github.com/dgraph-io/dgraph/issues/4321
-[#4362]: https://github.com/dgraph-io/dgraph/issues/4362
-[#4572]: https://github.com/dgraph-io/dgraph/issues/4572
-[#4390]: https://github.com/dgraph-io/dgraph/issues/4390
-[#4479]: https://github.com/dgraph-io/dgraph/issues/4479
-[#4136]: https://github.com/dgraph-io/dgraph/issues/4136
-[#4411]: https://github.com/dgraph-io/dgraph/issues/4411
-[#4464]: https://github.com/dgraph-io/dgraph/issues/4464
-[#4531]: https://github.com/dgraph-io/dgraph/issues/4531
-[#4305]: https://github.com/dgraph-io/dgraph/issues/4305
-[#4454]: https://github.com/dgraph-io/dgraph/issues/4454
-[#4079]: https://github.com/dgraph-io/dgraph/issues/4079
-[#4405]: https://github.com/dgraph-io/dgraph/issues/4405
-[#4267]: https://github.com/dgraph-io/dgraph/issues/4267
-[#4081]: https://github.com/dgraph-io/dgraph/issues/4081
-[#4447]: https://github.com/dgraph-io/dgraph/issues/4447
-[#4535]: https://github.com/dgraph-io/dgraph/issues/4535
-[#4385]: https://github.com/dgraph-io/dgraph/issues/4385
-[#3301]: https://github.com/dgraph-io/dgraph/issues/3301
-[#4435]: https://github.com/dgraph-io/dgraph/issues/4435
+[#4440]: https://github.com/hypermodeinc/dgraph/pull/4440
+[#4574]: https://github.com/hypermodeinc/dgraph/pull/4574
+[#4672]: https://github.com/hypermodeinc/dgraph/pull/4672
+[#4530]: https://github.com/hypermodeinc/dgraph/issues/4530
+[#4310]: https://github.com/hypermodeinc/dgraph/issues/4310
+[#4517]: https://github.com/hypermodeinc/dgraph/issues/4517
+[#4473]: https://github.com/hypermodeinc/dgraph/issues/4473
+[#4545]: https://github.com/hypermodeinc/dgraph/issues/4545
+[#4494]: https://github.com/hypermodeinc/dgraph/issues/4494
+[#4460]: https://github.com/hypermodeinc/dgraph/issues/4460
+[#4465]: https://github.com/hypermodeinc/dgraph/issues/4465
+[#4404]: https://github.com/hypermodeinc/dgraph/issues/4404
+[#3904]: https://github.com/hypermodeinc/dgraph/issues/3904
+[#4514]: https://github.com/hypermodeinc/dgraph/issues/4514
+[#4507]: https://github.com/hypermodeinc/dgraph/issues/4507
+[#4328]: https://github.com/hypermodeinc/dgraph/issues/4328
+[#3788]: https://github.com/hypermodeinc/dgraph/issues/3788
+[#4447]: https://github.com/hypermodeinc/dgraph/issues/4447
+[#4411]: https://github.com/hypermodeinc/dgraph/issues/4411
+[#4321]: https://github.com/hypermodeinc/dgraph/issues/4321
+[#4362]: https://github.com/hypermodeinc/dgraph/issues/4362
+[#4572]: https://github.com/hypermodeinc/dgraph/issues/4572
+[#4390]: https://github.com/hypermodeinc/dgraph/issues/4390
+[#4479]: https://github.com/hypermodeinc/dgraph/issues/4479
+[#4136]: https://github.com/hypermodeinc/dgraph/issues/4136
+[#4411]: https://github.com/hypermodeinc/dgraph/issues/4411
+[#4464]: https://github.com/hypermodeinc/dgraph/issues/4464
+[#4531]: https://github.com/hypermodeinc/dgraph/issues/4531
+[#4305]: https://github.com/hypermodeinc/dgraph/issues/4305
+[#4454]: https://github.com/hypermodeinc/dgraph/issues/4454
+[#4079]: https://github.com/hypermodeinc/dgraph/issues/4079
+[#4405]: https://github.com/hypermodeinc/dgraph/issues/4405
+[#4267]: https://github.com/hypermodeinc/dgraph/issues/4267
+[#4081]: https://github.com/hypermodeinc/dgraph/issues/4081
+[#4447]: https://github.com/hypermodeinc/dgraph/issues/4447
+[#4535]: https://github.com/hypermodeinc/dgraph/issues/4535
+[#4385]: https://github.com/hypermodeinc/dgraph/issues/4385
+[#3301]: https://github.com/hypermodeinc/dgraph/issues/3301
+[#4435]: https://github.com/hypermodeinc/dgraph/issues/4435
 
 ## [1.1.1] - 2019-12-16
-[1.1.1]: https://github.com/dgraph-io/dgraph/compare/v1.1.0...v1.1.1
+[1.1.1]: https://github.com/hypermodeinc/dgraph/compare/v1.1.0...v1.1.1
 
 ### Changed
 
@@ -2932,118 +2932,118 @@ Enterprise features:
 - Create restore directory when running "dgraph restore". Fixes [#4315][]. ([#4352][])
 - Write group_id files to postings directories during restore. ([#4365][])
 
-[#4119]: https://github.com/dgraph-io/dgraph/issues/4119
-[#4171]: https://github.com/dgraph-io/dgraph/issues/4171
-[#4146]: https://github.com/dgraph-io/dgraph/issues/4146
-[#4017]: https://github.com/dgraph-io/dgraph/issues/4017
-[#3889]: https://github.com/dgraph-io/dgraph/issues/3889
-[#3846]: https://github.com/dgraph-io/dgraph/issues/3846
-[#3368]: https://github.com/dgraph-io/dgraph/issues/3368
-[#4032]: https://github.com/dgraph-io/dgraph/issues/4032
-[#4075]: https://github.com/dgraph-io/dgraph/issues/4075
-[#4253]: https://github.com/dgraph-io/dgraph/issues/4253
-[#3970]: https://github.com/dgraph-io/dgraph/issues/3970
-[#4066]: https://github.com/dgraph-io/dgraph/issues/4066
-[#4076]: https://github.com/dgraph-io/dgraph/issues/4076
-[#4012]: https://github.com/dgraph-io/dgraph/issues/4012
-[#4030]: https://github.com/dgraph-io/dgraph/issues/4030
-[#4065]: https://github.com/dgraph-io/dgraph/issues/4065
-[#4089]: https://github.com/dgraph-io/dgraph/issues/4089
-[#4114]: https://github.com/dgraph-io/dgraph/issues/4114
-[#4107]: https://github.com/dgraph-io/dgraph/issues/4107
-[#4006]: https://github.com/dgraph-io/dgraph/issues/4006
-[#4042]: https://github.com/dgraph-io/dgraph/issues/4042
-[#3877]: https://github.com/dgraph-io/dgraph/issues/3877
-[#3947]: https://github.com/dgraph-io/dgraph/issues/3947
-[#4061]: https://github.com/dgraph-io/dgraph/issues/4061
-[#4217]: https://github.com/dgraph-io/dgraph/issues/4217
-[#3920]: https://github.com/dgraph-io/dgraph/issues/3920
-[#4033]: https://github.com/dgraph-io/dgraph/issues/4033
-[#4016]: https://github.com/dgraph-io/dgraph/issues/4016
-[#3893]: https://github.com/dgraph-io/dgraph/issues/3893
-[#3932]: https://github.com/dgraph-io/dgraph/issues/3932
-[#3937]: https://github.com/dgraph-io/dgraph/issues/3937
-[#3926]: https://github.com/dgraph-io/dgraph/issues/3926
-[#3924]: https://github.com/dgraph-io/dgraph/issues/3924
-[#3925]: https://github.com/dgraph-io/dgraph/issues/3925
-[#3922]: https://github.com/dgraph-io/dgraph/issues/3922
-[#3950]: https://github.com/dgraph-io/dgraph/issues/3950
-[#3966]: https://github.com/dgraph-io/dgraph/issues/3966
-[#3990]: https://github.com/dgraph-io/dgraph/issues/3990
-[#3959]: https://github.com/dgraph-io/dgraph/issues/3959
-[#3960]: https://github.com/dgraph-io/dgraph/issues/3960
-[#3725]: https://github.com/dgraph-io/dgraph/issues/3725
-[#3991]: https://github.com/dgraph-io/dgraph/issues/3991
-[#3992]: https://github.com/dgraph-io/dgraph/issues/3992
-[#3994]: https://github.com/dgraph-io/dgraph/issues/3994
-[#4028]: https://github.com/dgraph-io/dgraph/issues/4028
-[#4036]: https://github.com/dgraph-io/dgraph/issues/4036
-[#4053]: https://github.com/dgraph-io/dgraph/issues/4053
-[#4084]: https://github.com/dgraph-io/dgraph/issues/4084
-[#4088]: https://github.com/dgraph-io/dgraph/issues/4088
-[#4144]: https://github.com/dgraph-io/dgraph/issues/4144
-[#4157]: https://github.com/dgraph-io/dgraph/issues/4157
-[#4175]: https://github.com/dgraph-io/dgraph/issues/4175
-[#4038]: https://github.com/dgraph-io/dgraph/issues/4038
-[#4122]: https://github.com/dgraph-io/dgraph/issues/4122
-[#4182]: https://github.com/dgraph-io/dgraph/issues/4182
-[#4204]: https://github.com/dgraph-io/dgraph/issues/4204
-[#3968]: https://github.com/dgraph-io/dgraph/issues/3968
-[#4202]: https://github.com/dgraph-io/dgraph/issues/4202
-[#4236]: https://github.com/dgraph-io/dgraph/issues/4236
-[#4254]: https://github.com/dgraph-io/dgraph/issues/4254
-[#4219]: https://github.com/dgraph-io/dgraph/issues/4219
-[#4044]: https://github.com/dgraph-io/dgraph/issues/4044
-[#4047]: https://github.com/dgraph-io/dgraph/issues/4047
-[#4273]: https://github.com/dgraph-io/dgraph/issues/4273
-[#4230]: https://github.com/dgraph-io/dgraph/issues/4230
-[#4279]: https://github.com/dgraph-io/dgraph/issues/4279
-[#4257]: https://github.com/dgraph-io/dgraph/issues/4257
-[#4274]: https://github.com/dgraph-io/dgraph/issues/4274
-[#4200]: https://github.com/dgraph-io/dgraph/issues/4200
-[#4260]: https://github.com/dgraph-io/dgraph/issues/4260
-[#4269]: https://github.com/dgraph-io/dgraph/issues/4269
-[#4287]: https://github.com/dgraph-io/dgraph/issues/4287
-[#4303]: https://github.com/dgraph-io/dgraph/issues/4303
-[#4317]: https://github.com/dgraph-io/dgraph/issues/4317
-[#4210]: https://github.com/dgraph-io/dgraph/issues/4210
-[#4312]: https://github.com/dgraph-io/dgraph/issues/4312
-[#4268]: https://github.com/dgraph-io/dgraph/issues/4268
-[#4318]: https://github.com/dgraph-io/dgraph/issues/4318
-[#4297]: https://github.com/dgraph-io/dgraph/issues/4297
-[#4296]: https://github.com/dgraph-io/dgraph/issues/4296
-[#4314]: https://github.com/dgraph-io/dgraph/issues/4314
-[#4356]: https://github.com/dgraph-io/dgraph/issues/4356
-[#4343]: https://github.com/dgraph-io/dgraph/issues/4343
-[#4344]: https://github.com/dgraph-io/dgraph/issues/4344
-[#4351]: https://github.com/dgraph-io/dgraph/issues/4351
-[#3268]: https://github.com/dgraph-io/dgraph/issues/3268
-[#4132]: https://github.com/dgraph-io/dgraph/issues/4132
-[#4005]: https://github.com/dgraph-io/dgraph/issues/4005
-[#4298]: https://github.com/dgraph-io/dgraph/issues/4298
-[#4021]: https://github.com/dgraph-io/dgraph/issues/4021
-[#3740]: https://github.com/dgraph-io/dgraph/issues/3740
-[#4311]: https://github.com/dgraph-io/dgraph/issues/4311
-[#4047]: https://github.com/dgraph-io/dgraph/issues/4047
-[#4375]: https://github.com/dgraph-io/dgraph/issues/4375
-[#4394]: https://github.com/dgraph-io/dgraph/issues/4394
-[#4288]: https://github.com/dgraph-io/dgraph/issues/4288
-[#4360]: https://github.com/dgraph-io/dgraph/issues/4360
-[#4265]: https://github.com/dgraph-io/dgraph/issues/4265
-[#4349]: https://github.com/dgraph-io/dgraph/issues/4349
-[#4169]: https://github.com/dgraph-io/dgraph/issues/4169
-[#4347]: https://github.com/dgraph-io/dgraph/issues/4347
-[#4389]: https://github.com/dgraph-io/dgraph/issues/4389
-[#4352]: https://github.com/dgraph-io/dgraph/issues/4352
-[#4315]: https://github.com/dgraph-io/dgraph/issues/4315
-[#4365]: https://github.com/dgraph-io/dgraph/issues/4365
-[#4282]: https://github.com/dgraph-io/dgraph/issues/4282
-[#4331]: https://github.com/dgraph-io/dgraph/issues/4331
-[#4424]: https://github.com/dgraph-io/dgraph/issues/4424
-[#4425]: https://github.com/dgraph-io/dgraph/issues/4425
+[#4119]: https://github.com/hypermodeinc/dgraph/issues/4119
+[#4171]: https://github.com/hypermodeinc/dgraph/issues/4171
+[#4146]: https://github.com/hypermodeinc/dgraph/issues/4146
+[#4017]: https://github.com/hypermodeinc/dgraph/issues/4017
+[#3889]: https://github.com/hypermodeinc/dgraph/issues/3889
+[#3846]: https://github.com/hypermodeinc/dgraph/issues/3846
+[#3368]: https://github.com/hypermodeinc/dgraph/issues/3368
+[#4032]: https://github.com/hypermodeinc/dgraph/issues/4032
+[#4075]: https://github.com/hypermodeinc/dgraph/issues/4075
+[#4253]: https://github.com/hypermodeinc/dgraph/issues/4253
+[#3970]: https://github.com/hypermodeinc/dgraph/issues/3970
+[#4066]: https://github.com/hypermodeinc/dgraph/issues/4066
+[#4076]: https://github.com/hypermodeinc/dgraph/issues/4076
+[#4012]: https://github.com/hypermodeinc/dgraph/issues/4012
+[#4030]: https://github.com/hypermodeinc/dgraph/issues/4030
+[#4065]: https://github.com/hypermodeinc/dgraph/issues/4065
+[#4089]: https://github.com/hypermodeinc/dgraph/issues/4089
+[#4114]: https://github.com/hypermodeinc/dgraph/issues/4114
+[#4107]: https://github.com/hypermodeinc/dgraph/issues/4107
+[#4006]: https://github.com/hypermodeinc/dgraph/issues/4006
+[#4042]: https://github.com/hypermodeinc/dgraph/issues/4042
+[#3877]: https://github.com/hypermodeinc/dgraph/issues/3877
+[#3947]: https://github.com/hypermodeinc/dgraph/issues/3947
+[#4061]: https://github.com/hypermodeinc/dgraph/issues/4061
+[#4217]: https://github.com/hypermodeinc/dgraph/issues/4217
+[#3920]: https://github.com/hypermodeinc/dgraph/issues/3920
+[#4033]: https://github.com/hypermodeinc/dgraph/issues/4033
+[#4016]: https://github.com/hypermodeinc/dgraph/issues/4016
+[#3893]: https://github.com/hypermodeinc/dgraph/issues/3893
+[#3932]: https://github.com/hypermodeinc/dgraph/issues/3932
+[#3937]: https://github.com/hypermodeinc/dgraph/issues/3937
+[#3926]: https://github.com/hypermodeinc/dgraph/issues/3926
+[#3924]: https://github.com/hypermodeinc/dgraph/issues/3924
+[#3925]: https://github.com/hypermodeinc/dgraph/issues/3925
+[#3922]: https://github.com/hypermodeinc/dgraph/issues/3922
+[#3950]: https://github.com/hypermodeinc/dgraph/issues/3950
+[#3966]: https://github.com/hypermodeinc/dgraph/issues/3966
+[#3990]: https://github.com/hypermodeinc/dgraph/issues/3990
+[#3959]: https://github.com/hypermodeinc/dgraph/issues/3959
+[#3960]: https://github.com/hypermodeinc/dgraph/issues/3960
+[#3725]: https://github.com/hypermodeinc/dgraph/issues/3725
+[#3991]: https://github.com/hypermodeinc/dgraph/issues/3991
+[#3992]: https://github.com/hypermodeinc/dgraph/issues/3992
+[#3994]: https://github.com/hypermodeinc/dgraph/issues/3994
+[#4028]: https://github.com/hypermodeinc/dgraph/issues/4028
+[#4036]: https://github.com/hypermodeinc/dgraph/issues/4036
+[#4053]: https://github.com/hypermodeinc/dgraph/issues/4053
+[#4084]: https://github.com/hypermodeinc/dgraph/issues/4084
+[#4088]: https://github.com/hypermodeinc/dgraph/issues/4088
+[#4144]: https://github.com/hypermodeinc/dgraph/issues/4144
+[#4157]: https://github.com/hypermodeinc/dgraph/issues/4157
+[#4175]: https://github.com/hypermodeinc/dgraph/issues/4175
+[#4038]: https://github.com/hypermodeinc/dgraph/issues/4038
+[#4122]: https://github.com/hypermodeinc/dgraph/issues/4122
+[#4182]: https://github.com/hypermodeinc/dgraph/issues/4182
+[#4204]: https://github.com/hypermodeinc/dgraph/issues/4204
+[#3968]: https://github.com/hypermodeinc/dgraph/issues/3968
+[#4202]: https://github.com/hypermodeinc/dgraph/issues/4202
+[#4236]: https://github.com/hypermodeinc/dgraph/issues/4236
+[#4254]: https://github.com/hypermodeinc/dgraph/issues/4254
+[#4219]: https://github.com/hypermodeinc/dgraph/issues/4219
+[#4044]: https://github.com/hypermodeinc/dgraph/issues/4044
+[#4047]: https://github.com/hypermodeinc/dgraph/issues/4047
+[#4273]: https://github.com/hypermodeinc/dgraph/issues/4273
+[#4230]: https://github.com/hypermodeinc/dgraph/issues/4230
+[#4279]: https://github.com/hypermodeinc/dgraph/issues/4279
+[#4257]: https://github.com/hypermodeinc/dgraph/issues/4257
+[#4274]: https://github.com/hypermodeinc/dgraph/issues/4274
+[#4200]: https://github.com/hypermodeinc/dgraph/issues/4200
+[#4260]: https://github.com/hypermodeinc/dgraph/issues/4260
+[#4269]: https://github.com/hypermodeinc/dgraph/issues/4269
+[#4287]: https://github.com/hypermodeinc/dgraph/issues/4287
+[#4303]: https://github.com/hypermodeinc/dgraph/issues/4303
+[#4317]: https://github.com/hypermodeinc/dgraph/issues/4317
+[#4210]: https://github.com/hypermodeinc/dgraph/issues/4210
+[#4312]: https://github.com/hypermodeinc/dgraph/issues/4312
+[#4268]: https://github.com/hypermodeinc/dgraph/issues/4268
+[#4318]: https://github.com/hypermodeinc/dgraph/issues/4318
+[#4297]: https://github.com/hypermodeinc/dgraph/issues/4297
+[#4296]: https://github.com/hypermodeinc/dgraph/issues/4296
+[#4314]: https://github.com/hypermodeinc/dgraph/issues/4314
+[#4356]: https://github.com/hypermodeinc/dgraph/issues/4356
+[#4343]: https://github.com/hypermodeinc/dgraph/issues/4343
+[#4344]: https://github.com/hypermodeinc/dgraph/issues/4344
+[#4351]: https://github.com/hypermodeinc/dgraph/issues/4351
+[#3268]: https://github.com/hypermodeinc/dgraph/issues/3268
+[#4132]: https://github.com/hypermodeinc/dgraph/issues/4132
+[#4005]: https://github.com/hypermodeinc/dgraph/issues/4005
+[#4298]: https://github.com/hypermodeinc/dgraph/issues/4298
+[#4021]: https://github.com/hypermodeinc/dgraph/issues/4021
+[#3740]: https://github.com/hypermodeinc/dgraph/issues/3740
+[#4311]: https://github.com/hypermodeinc/dgraph/issues/4311
+[#4047]: https://github.com/hypermodeinc/dgraph/issues/4047
+[#4375]: https://github.com/hypermodeinc/dgraph/issues/4375
+[#4394]: https://github.com/hypermodeinc/dgraph/issues/4394
+[#4288]: https://github.com/hypermodeinc/dgraph/issues/4288
+[#4360]: https://github.com/hypermodeinc/dgraph/issues/4360
+[#4265]: https://github.com/hypermodeinc/dgraph/issues/4265
+[#4349]: https://github.com/hypermodeinc/dgraph/issues/4349
+[#4169]: https://github.com/hypermodeinc/dgraph/issues/4169
+[#4347]: https://github.com/hypermodeinc/dgraph/issues/4347
+[#4389]: https://github.com/hypermodeinc/dgraph/issues/4389
+[#4352]: https://github.com/hypermodeinc/dgraph/issues/4352
+[#4315]: https://github.com/hypermodeinc/dgraph/issues/4315
+[#4365]: https://github.com/hypermodeinc/dgraph/issues/4365
+[#4282]: https://github.com/hypermodeinc/dgraph/issues/4282
+[#4331]: https://github.com/hypermodeinc/dgraph/issues/4331
+[#4424]: https://github.com/hypermodeinc/dgraph/issues/4424
+[#4425]: https://github.com/hypermodeinc/dgraph/issues/4425
 
 ## [1.1.0] - 2019-09-03
-[1.1.0]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.1.0
+[1.1.0]: https://github.com/hypermodeinc/dgraph/compare/v1.0.17...v1.1.0
 
 ### Changed
 
@@ -3374,235 +3374,235 @@ Tracing
 - Bug Fix: Remove Check2 at writeResponse. ([#3900][])
 - Bug Fix: Do not call posting.List.release.
 
-[#3251]: https://github.com/dgraph-io/dgraph/issues/3251
-[#3020]: https://github.com/dgraph-io/dgraph/issues/3020
-[#3365]: https://github.com/dgraph-io/dgraph/issues/3365
-[#3550]: https://github.com/dgraph-io/dgraph/issues/3550
-[#3532]: https://github.com/dgraph-io/dgraph/issues/3532
-[#3526]: https://github.com/dgraph-io/dgraph/issues/3526
-[#3528]: https://github.com/dgraph-io/dgraph/issues/3528
-[#3565]: https://github.com/dgraph-io/dgraph/issues/3565
-[#2914]: https://github.com/dgraph-io/dgraph/issues/2914
-[#2887]: https://github.com/dgraph-io/dgraph/issues/2887
-[#2956]: https://github.com/dgraph-io/dgraph/issues/2956
-[#2962]: https://github.com/dgraph-io/dgraph/issues/2962
-[#2970]: https://github.com/dgraph-io/dgraph/issues/2970
-[#2974]: https://github.com/dgraph-io/dgraph/issues/2974
-[#2976]: https://github.com/dgraph-io/dgraph/issues/2976
-[#2989]: https://github.com/dgraph-io/dgraph/issues/2989
-[#3078]: https://github.com/dgraph-io/dgraph/issues/3078
-[#3322]: https://github.com/dgraph-io/dgraph/issues/3322
-[#3523]: https://github.com/dgraph-io/dgraph/issues/3523
-[#3412]: https://github.com/dgraph-io/dgraph/issues/3412
-[#3357]: https://github.com/dgraph-io/dgraph/issues/3357
-[#3502]: https://github.com/dgraph-io/dgraph/issues/3502
-[#3606]: https://github.com/dgraph-io/dgraph/issues/3606
-[#3784]: https://github.com/dgraph-io/dgraph/issues/3784
-[#3906]: https://github.com/dgraph-io/dgraph/issues/3906
-[#2986]: https://github.com/dgraph-io/dgraph/issues/2986
-[#3015]: https://github.com/dgraph-io/dgraph/issues/3015
-[#2979]: https://github.com/dgraph-io/dgraph/issues/2979
-[#2880]: https://github.com/dgraph-io/dgraph/issues/2880
-[#3051]: https://github.com/dgraph-io/dgraph/issues/3051
-[#3092]: https://github.com/dgraph-io/dgraph/issues/3092
-[#3091]: https://github.com/dgraph-io/dgraph/issues/3091
-[#3194]: https://github.com/dgraph-io/dgraph/issues/3194
-[#3243]: https://github.com/dgraph-io/dgraph/issues/3243
-[#3228]: https://github.com/dgraph-io/dgraph/issues/3228
-[#3254]: https://github.com/dgraph-io/dgraph/issues/3254
-[#3274]: https://github.com/dgraph-io/dgraph/issues/3274
-[#3253]: https://github.com/dgraph-io/dgraph/issues/3253
-[#3105]: https://github.com/dgraph-io/dgraph/issues/3105
-[#3310]: https://github.com/dgraph-io/dgraph/issues/3310
-[#3402]: https://github.com/dgraph-io/dgraph/issues/3402
-[#3442]: https://github.com/dgraph-io/dgraph/issues/3442
-[#3387]: https://github.com/dgraph-io/dgraph/issues/3387
-[#3444]: https://github.com/dgraph-io/dgraph/issues/3444
-[#3481]: https://github.com/dgraph-io/dgraph/issues/3481
-[#2953]: https://github.com/dgraph-io/dgraph/issues/2953
-[#3060]: https://github.com/dgraph-io/dgraph/issues/3060
-[#3527]: https://github.com/dgraph-io/dgraph/issues/3527
-[#3650]: https://github.com/dgraph-io/dgraph/issues/3650
-[#3627]: https://github.com/dgraph-io/dgraph/issues/3627
-[#3686]: https://github.com/dgraph-io/dgraph/issues/3686
-[#3688]: https://github.com/dgraph-io/dgraph/issues/3688
-[#3696]: https://github.com/dgraph-io/dgraph/issues/3696
-[#3682]: https://github.com/dgraph-io/dgraph/issues/3682
-[#3695]: https://github.com/dgraph-io/dgraph/issues/3695
-[#3713]: https://github.com/dgraph-io/dgraph/issues/3713
-[#3724]: https://github.com/dgraph-io/dgraph/issues/3724
-[#3747]: https://github.com/dgraph-io/dgraph/issues/3747
-[#3762]: https://github.com/dgraph-io/dgraph/issues/3762
-[#3767]: https://github.com/dgraph-io/dgraph/issues/3767
-[#3805]: https://github.com/dgraph-io/dgraph/issues/3805
-[#3795]: https://github.com/dgraph-io/dgraph/issues/3795
-[#3825]: https://github.com/dgraph-io/dgraph/issues/3825
-[#3746]: https://github.com/dgraph-io/dgraph/issues/3746
-[#3786]: https://github.com/dgraph-io/dgraph/issues/3786
-[#3828]: https://github.com/dgraph-io/dgraph/issues/3828
-[#3872]: https://github.com/dgraph-io/dgraph/issues/3872
-[#3839]: https://github.com/dgraph-io/dgraph/issues/3839
-[#3898]: https://github.com/dgraph-io/dgraph/issues/3898
-[#3901]: https://github.com/dgraph-io/dgraph/issues/3901
-[#3311]: https://github.com/dgraph-io/dgraph/issues/3311
-[#3319]: https://github.com/dgraph-io/dgraph/issues/3319
-[#3345]: https://github.com/dgraph-io/dgraph/issues/3345
-[#3364]: https://github.com/dgraph-io/dgraph/issues/3364
-[#2991]: https://github.com/dgraph-io/dgraph/issues/2991
-[#3278]: https://github.com/dgraph-io/dgraph/issues/3278
-[#3313]: https://github.com/dgraph-io/dgraph/issues/3313
-[#2998]: https://github.com/dgraph-io/dgraph/issues/2998
-[#3004]: https://github.com/dgraph-io/dgraph/issues/3004
-[#3045]: https://github.com/dgraph-io/dgraph/issues/3045
-[#3542]: https://github.com/dgraph-io/dgraph/issues/3542
-[#3635]: https://github.com/dgraph-io/dgraph/issues/3635
-[#3649]: https://github.com/dgraph-io/dgraph/issues/3649
-[#3287]: https://github.com/dgraph-io/dgraph/issues/3287
-[#3333]: https://github.com/dgraph-io/dgraph/issues/3333
-[#3560]: https://github.com/dgraph-io/dgraph/issues/3560
-[#3613]: https://github.com/dgraph-io/dgraph/issues/3613
-[#3560]: https://github.com/dgraph-io/dgraph/issues/3560
-[#3628]: https://github.com/dgraph-io/dgraph/issues/3628
-[#3681]: https://github.com/dgraph-io/dgraph/issues/3681
-[#3659]: https://github.com/dgraph-io/dgraph/issues/3659
-[#3763]: https://github.com/dgraph-io/dgraph/issues/3763
-[#3728]: https://github.com/dgraph-io/dgraph/issues/3728
-[#3422]: https://github.com/dgraph-io/dgraph/issues/3422
-[#3584]: https://github.com/dgraph-io/dgraph/issues/3584
-[#3084]: https://github.com/dgraph-io/dgraph/issues/3084
-[#3257]: https://github.com/dgraph-io/dgraph/issues/3257
-[#3269]: https://github.com/dgraph-io/dgraph/issues/3269
-[#3309]: https://github.com/dgraph-io/dgraph/issues/3309
-[#3295]: https://github.com/dgraph-io/dgraph/issues/3295
-[#3398]: https://github.com/dgraph-io/dgraph/issues/3398
-[#3824]: https://github.com/dgraph-io/dgraph/issues/3824
-[#3847]: https://github.com/dgraph-io/dgraph/issues/3847
-[#3880]: https://github.com/dgraph-io/dgraph/issues/3880
-[#2933]: https://github.com/dgraph-io/dgraph/issues/2933
-[#2950]: https://github.com/dgraph-io/dgraph/issues/2950
-[#3003]: https://github.com/dgraph-io/dgraph/issues/3003
-[#3018]: https://github.com/dgraph-io/dgraph/issues/3018
-[#3204]: https://github.com/dgraph-io/dgraph/issues/3204
-[#3235]: https://github.com/dgraph-io/dgraph/issues/3235
-[#3214]: https://github.com/dgraph-io/dgraph/issues/3214
-[#3493]: https://github.com/dgraph-io/dgraph/issues/3493
-[#3506]: https://github.com/dgraph-io/dgraph/issues/3506
-[#3059]: https://github.com/dgraph-io/dgraph/issues/3059
-[#3412]: https://github.com/dgraph-io/dgraph/issues/3412
-[#3612]: https://github.com/dgraph-io/dgraph/issues/3612
-[#2910]: https://github.com/dgraph-io/dgraph/issues/2910
-[#2913]: https://github.com/dgraph-io/dgraph/issues/2913
-[#2915]: https://github.com/dgraph-io/dgraph/issues/2915
-[#2947]: https://github.com/dgraph-io/dgraph/issues/2947
-[#3374]: https://github.com/dgraph-io/dgraph/issues/3374
-[#3531]: https://github.com/dgraph-io/dgraph/issues/3531
-[#2916]: https://github.com/dgraph-io/dgraph/issues/2916
-[#2981]: https://github.com/dgraph-io/dgraph/issues/2981
-[#2954]: https://github.com/dgraph-io/dgraph/issues/2954
-[#3273]: https://github.com/dgraph-io/dgraph/issues/3273
-[#1243]: https://github.com/dgraph-io/dgraph/issues/1243
-[#3710]: https://github.com/dgraph-io/dgraph/issues/3710
-[#3756]: https://github.com/dgraph-io/dgraph/issues/3756
-[#3769]: https://github.com/dgraph-io/dgraph/issues/3769
-[#2899]: https://github.com/dgraph-io/dgraph/issues/2899
-[#3843]: https://github.com/dgraph-io/dgraph/issues/3843
-[#3242]: https://github.com/dgraph-io/dgraph/issues/3242
-[#3271]: https://github.com/dgraph-io/dgraph/issues/3271
-[#2511]: https://github.com/dgraph-io/dgraph/issues/2511
-[#2895]: https://github.com/dgraph-io/dgraph/issues/2895
-[#3173]: https://github.com/dgraph-io/dgraph/issues/3173
-[#2921]: https://github.com/dgraph-io/dgraph/issues/2921
-[#2967]: https://github.com/dgraph-io/dgraph/issues/2967
-[#2997]: https://github.com/dgraph-io/dgraph/issues/2997
-[#3133]: https://github.com/dgraph-io/dgraph/issues/3133
-[#2862]: https://github.com/dgraph-io/dgraph/issues/2862
-[#2924]: https://github.com/dgraph-io/dgraph/issues/2924
-[#2951]: https://github.com/dgraph-io/dgraph/issues/2951
-[#3124]: https://github.com/dgraph-io/dgraph/issues/3124
-[#3141]: https://github.com/dgraph-io/dgraph/issues/3141
-[#3164]: https://github.com/dgraph-io/dgraph/issues/3164
-[#3218]: https://github.com/dgraph-io/dgraph/issues/3218
-[#3207]: https://github.com/dgraph-io/dgraph/issues/3207
-[#3256]: https://github.com/dgraph-io/dgraph/issues/3256
-[#3275]: https://github.com/dgraph-io/dgraph/issues/3275
-[#3494]: https://github.com/dgraph-io/dgraph/issues/3494
-[#3734]: https://github.com/dgraph-io/dgraph/issues/3734
-[#2973]: https://github.com/dgraph-io/dgraph/issues/2973
-[#2963]: https://github.com/dgraph-io/dgraph/issues/2963
-[#3172]: https://github.com/dgraph-io/dgraph/issues/3172
-[#3219]: https://github.com/dgraph-io/dgraph/issues/3219
-[#3227]: https://github.com/dgraph-io/dgraph/issues/3227
-[#3387]: https://github.com/dgraph-io/dgraph/issues/3387
-[#3515]: https://github.com/dgraph-io/dgraph/issues/3515
-[#3536]: https://github.com/dgraph-io/dgraph/issues/3536
-[#3547]: https://github.com/dgraph-io/dgraph/issues/3547
-[#3570]: https://github.com/dgraph-io/dgraph/issues/3570
-[#3621]: https://github.com/dgraph-io/dgraph/issues/3621
-[#3575]: https://github.com/dgraph-io/dgraph/issues/3575
-[#3559]: https://github.com/dgraph-io/dgraph/issues/3559
-[#3629]: https://github.com/dgraph-io/dgraph/issues/3629
-[#3648]: https://github.com/dgraph-io/dgraph/issues/3648
-[#3869]: https://github.com/dgraph-io/dgraph/issues/3869
-[#2928]: https://github.com/dgraph-io/dgraph/issues/2928
-[#2961]: https://github.com/dgraph-io/dgraph/issues/2961
-[#3106]: https://github.com/dgraph-io/dgraph/issues/3106
-[#3266]: https://github.com/dgraph-io/dgraph/issues/3266
-[#3089]: https://github.com/dgraph-io/dgraph/issues/3089
-[#3262]: https://github.com/dgraph-io/dgraph/issues/3262
-[#3441]: https://github.com/dgraph-io/dgraph/issues/3441
-[#3854]: https://github.com/dgraph-io/dgraph/issues/3854
-[#3824]: https://github.com/dgraph-io/dgraph/issues/3824
-[#2867]: https://github.com/dgraph-io/dgraph/issues/2867
-[#2885]: https://github.com/dgraph-io/dgraph/issues/2885
-[#2914]: https://github.com/dgraph-io/dgraph/issues/2914
-[#2893]: https://github.com/dgraph-io/dgraph/issues/2893
-[#2891]: https://github.com/dgraph-io/dgraph/issues/2891
-[#2925]: https://github.com/dgraph-io/dgraph/issues/2925
-[#2929]: https://github.com/dgraph-io/dgraph/issues/2929
-[#2995]: https://github.com/dgraph-io/dgraph/issues/2995
-[#3021]: https://github.com/dgraph-io/dgraph/issues/3021
-[#3042]: https://github.com/dgraph-io/dgraph/issues/3042
-[#3027]: https://github.com/dgraph-io/dgraph/issues/3027
-[#3182]: https://github.com/dgraph-io/dgraph/issues/3182
-[#3505]: https://github.com/dgraph-io/dgraph/issues/3505
-[#3402]: https://github.com/dgraph-io/dgraph/issues/3402
-[#3417]: https://github.com/dgraph-io/dgraph/issues/3417
-[#3516]: https://github.com/dgraph-io/dgraph/issues/3516
-[#3052]: https://github.com/dgraph-io/dgraph/issues/3052
-[#3062]: https://github.com/dgraph-io/dgraph/issues/3062
-[#3077]: https://github.com/dgraph-io/dgraph/issues/3077
-[#3085]: https://github.com/dgraph-io/dgraph/issues/3085
-[#3112]: https://github.com/dgraph-io/dgraph/issues/3112
-[#3190]: https://github.com/dgraph-io/dgraph/issues/3190
-[#3172]: https://github.com/dgraph-io/dgraph/issues/3172
-[#3216]: https://github.com/dgraph-io/dgraph/issues/3216
-[#3205]: https://github.com/dgraph-io/dgraph/issues/3205
-[#3169]: https://github.com/dgraph-io/dgraph/issues/3169
-[#3149]: https://github.com/dgraph-io/dgraph/issues/3149
-[#3323]: https://github.com/dgraph-io/dgraph/issues/3323
-[#3137]: https://github.com/dgraph-io/dgraph/issues/3137
-[#3143]: https://github.com/dgraph-io/dgraph/issues/3143
-[#3657]: https://github.com/dgraph-io/dgraph/issues/3657
-[#3662]: https://github.com/dgraph-io/dgraph/issues/3662
-[#3642]: https://github.com/dgraph-io/dgraph/issues/3642
-[#3670]: https://github.com/dgraph-io/dgraph/issues/3670
-[#3645]: https://github.com/dgraph-io/dgraph/issues/3645
-[#3664]: https://github.com/dgraph-io/dgraph/issues/3664
-[#3668]: https://github.com/dgraph-io/dgraph/issues/3668
-[#3692]: https://github.com/dgraph-io/dgraph/issues/3692
-[#3711]: https://github.com/dgraph-io/dgraph/issues/3711
-[#3685]: https://github.com/dgraph-io/dgraph/issues/3685
-[#3749]: https://github.com/dgraph-io/dgraph/issues/3749
-[#3794]: https://github.com/dgraph-io/dgraph/issues/3794
-[#3874]: https://github.com/dgraph-io/dgraph/issues/3874
-[#3900]: https://github.com/dgraph-io/dgraph/issues/3900
-[3271f64e0]: https://github.com/dgraph-io/dgraph/commit/3271f64e0
-[63f545568]: https://github.com/dgraph-io/dgraph/commit/63f545568
-[18277872f]: https://github.com/dgraph-io/dgraph/commit/18277872f
-[802ec4c39]: https://github.com/dgraph-io/dgraph/commit/802ec4c39
+[#3251]: https://github.com/hypermodeinc/dgraph/issues/3251
+[#3020]: https://github.com/hypermodeinc/dgraph/issues/3020
+[#3365]: https://github.com/hypermodeinc/dgraph/issues/3365
+[#3550]: https://github.com/hypermodeinc/dgraph/issues/3550
+[#3532]: https://github.com/hypermodeinc/dgraph/issues/3532
+[#3526]: https://github.com/hypermodeinc/dgraph/issues/3526
+[#3528]: https://github.com/hypermodeinc/dgraph/issues/3528
+[#3565]: https://github.com/hypermodeinc/dgraph/issues/3565
+[#2914]: https://github.com/hypermodeinc/dgraph/issues/2914
+[#2887]: https://github.com/hypermodeinc/dgraph/issues/2887
+[#2956]: https://github.com/hypermodeinc/dgraph/issues/2956
+[#2962]: https://github.com/hypermodeinc/dgraph/issues/2962
+[#2970]: https://github.com/hypermodeinc/dgraph/issues/2970
+[#2974]: https://github.com/hypermodeinc/dgraph/issues/2974
+[#2976]: https://github.com/hypermodeinc/dgraph/issues/2976
+[#2989]: https://github.com/hypermodeinc/dgraph/issues/2989
+[#3078]: https://github.com/hypermodeinc/dgraph/issues/3078
+[#3322]: https://github.com/hypermodeinc/dgraph/issues/3322
+[#3523]: https://github.com/hypermodeinc/dgraph/issues/3523
+[#3412]: https://github.com/hypermodeinc/dgraph/issues/3412
+[#3357]: https://github.com/hypermodeinc/dgraph/issues/3357
+[#3502]: https://github.com/hypermodeinc/dgraph/issues/3502
+[#3606]: https://github.com/hypermodeinc/dgraph/issues/3606
+[#3784]: https://github.com/hypermodeinc/dgraph/issues/3784
+[#3906]: https://github.com/hypermodeinc/dgraph/issues/3906
+[#2986]: https://github.com/hypermodeinc/dgraph/issues/2986
+[#3015]: https://github.com/hypermodeinc/dgraph/issues/3015
+[#2979]: https://github.com/hypermodeinc/dgraph/issues/2979
+[#2880]: https://github.com/hypermodeinc/dgraph/issues/2880
+[#3051]: https://github.com/hypermodeinc/dgraph/issues/3051
+[#3092]: https://github.com/hypermodeinc/dgraph/issues/3092
+[#3091]: https://github.com/hypermodeinc/dgraph/issues/3091
+[#3194]: https://github.com/hypermodeinc/dgraph/issues/3194
+[#3243]: https://github.com/hypermodeinc/dgraph/issues/3243
+[#3228]: https://github.com/hypermodeinc/dgraph/issues/3228
+[#3254]: https://github.com/hypermodeinc/dgraph/issues/3254
+[#3274]: https://github.com/hypermodeinc/dgraph/issues/3274
+[#3253]: https://github.com/hypermodeinc/dgraph/issues/3253
+[#3105]: https://github.com/hypermodeinc/dgraph/issues/3105
+[#3310]: https://github.com/hypermodeinc/dgraph/issues/3310
+[#3402]: https://github.com/hypermodeinc/dgraph/issues/3402
+[#3442]: https://github.com/hypermodeinc/dgraph/issues/3442
+[#3387]: https://github.com/hypermodeinc/dgraph/issues/3387
+[#3444]: https://github.com/hypermodeinc/dgraph/issues/3444
+[#3481]: https://github.com/hypermodeinc/dgraph/issues/3481
+[#2953]: https://github.com/hypermodeinc/dgraph/issues/2953
+[#3060]: https://github.com/hypermodeinc/dgraph/issues/3060
+[#3527]: https://github.com/hypermodeinc/dgraph/issues/3527
+[#3650]: https://github.com/hypermodeinc/dgraph/issues/3650
+[#3627]: https://github.com/hypermodeinc/dgraph/issues/3627
+[#3686]: https://github.com/hypermodeinc/dgraph/issues/3686
+[#3688]: https://github.com/hypermodeinc/dgraph/issues/3688
+[#3696]: https://github.com/hypermodeinc/dgraph/issues/3696
+[#3682]: https://github.com/hypermodeinc/dgraph/issues/3682
+[#3695]: https://github.com/hypermodeinc/dgraph/issues/3695
+[#3713]: https://github.com/hypermodeinc/dgraph/issues/3713
+[#3724]: https://github.com/hypermodeinc/dgraph/issues/3724
+[#3747]: https://github.com/hypermodeinc/dgraph/issues/3747
+[#3762]: https://github.com/hypermodeinc/dgraph/issues/3762
+[#3767]: https://github.com/hypermodeinc/dgraph/issues/3767
+[#3805]: https://github.com/hypermodeinc/dgraph/issues/3805
+[#3795]: https://github.com/hypermodeinc/dgraph/issues/3795
+[#3825]: https://github.com/hypermodeinc/dgraph/issues/3825
+[#3746]: https://github.com/hypermodeinc/dgraph/issues/3746
+[#3786]: https://github.com/hypermodeinc/dgraph/issues/3786
+[#3828]: https://github.com/hypermodeinc/dgraph/issues/3828
+[#3872]: https://github.com/hypermodeinc/dgraph/issues/3872
+[#3839]: https://github.com/hypermodeinc/dgraph/issues/3839
+[#3898]: https://github.com/hypermodeinc/dgraph/issues/3898
+[#3901]: https://github.com/hypermodeinc/dgraph/issues/3901
+[#3311]: https://github.com/hypermodeinc/dgraph/issues/3311
+[#3319]: https://github.com/hypermodeinc/dgraph/issues/3319
+[#3345]: https://github.com/hypermodeinc/dgraph/issues/3345
+[#3364]: https://github.com/hypermodeinc/dgraph/issues/3364
+[#2991]: https://github.com/hypermodeinc/dgraph/issues/2991
+[#3278]: https://github.com/hypermodeinc/dgraph/issues/3278
+[#3313]: https://github.com/hypermodeinc/dgraph/issues/3313
+[#2998]: https://github.com/hypermodeinc/dgraph/issues/2998
+[#3004]: https://github.com/hypermodeinc/dgraph/issues/3004
+[#3045]: https://github.com/hypermodeinc/dgraph/issues/3045
+[#3542]: https://github.com/hypermodeinc/dgraph/issues/3542
+[#3635]: https://github.com/hypermodeinc/dgraph/issues/3635
+[#3649]: https://github.com/hypermodeinc/dgraph/issues/3649
+[#3287]: https://github.com/hypermodeinc/dgraph/issues/3287
+[#3333]: https://github.com/hypermodeinc/dgraph/issues/3333
+[#3560]: https://github.com/hypermodeinc/dgraph/issues/3560
+[#3613]: https://github.com/hypermodeinc/dgraph/issues/3613
+[#3560]: https://github.com/hypermodeinc/dgraph/issues/3560
+[#3628]: https://github.com/hypermodeinc/dgraph/issues/3628
+[#3681]: https://github.com/hypermodeinc/dgraph/issues/3681
+[#3659]: https://github.com/hypermodeinc/dgraph/issues/3659
+[#3763]: https://github.com/hypermodeinc/dgraph/issues/3763
+[#3728]: https://github.com/hypermodeinc/dgraph/issues/3728
+[#3422]: https://github.com/hypermodeinc/dgraph/issues/3422
+[#3584]: https://github.com/hypermodeinc/dgraph/issues/3584
+[#3084]: https://github.com/hypermodeinc/dgraph/issues/3084
+[#3257]: https://github.com/hypermodeinc/dgraph/issues/3257
+[#3269]: https://github.com/hypermodeinc/dgraph/issues/3269
+[#3309]: https://github.com/hypermodeinc/dgraph/issues/3309
+[#3295]: https://github.com/hypermodeinc/dgraph/issues/3295
+[#3398]: https://github.com/hypermodeinc/dgraph/issues/3398
+[#3824]: https://github.com/hypermodeinc/dgraph/issues/3824
+[#3847]: https://github.com/hypermodeinc/dgraph/issues/3847
+[#3880]: https://github.com/hypermodeinc/dgraph/issues/3880
+[#2933]: https://github.com/hypermodeinc/dgraph/issues/2933
+[#2950]: https://github.com/hypermodeinc/dgraph/issues/2950
+[#3003]: https://github.com/hypermodeinc/dgraph/issues/3003
+[#3018]: https://github.com/hypermodeinc/dgraph/issues/3018
+[#3204]: https://github.com/hypermodeinc/dgraph/issues/3204
+[#3235]: https://github.com/hypermodeinc/dgraph/issues/3235
+[#3214]: https://github.com/hypermodeinc/dgraph/issues/3214
+[#3493]: https://github.com/hypermodeinc/dgraph/issues/3493
+[#3506]: https://github.com/hypermodeinc/dgraph/issues/3506
+[#3059]: https://github.com/hypermodeinc/dgraph/issues/3059
+[#3412]: https://github.com/hypermodeinc/dgraph/issues/3412
+[#3612]: https://github.com/hypermodeinc/dgraph/issues/3612
+[#2910]: https://github.com/hypermodeinc/dgraph/issues/2910
+[#2913]: https://github.com/hypermodeinc/dgraph/issues/2913
+[#2915]: https://github.com/hypermodeinc/dgraph/issues/2915
+[#2947]: https://github.com/hypermodeinc/dgraph/issues/2947
+[#3374]: https://github.com/hypermodeinc/dgraph/issues/3374
+[#3531]: https://github.com/hypermodeinc/dgraph/issues/3531
+[#2916]: https://github.com/hypermodeinc/dgraph/issues/2916
+[#2981]: https://github.com/hypermodeinc/dgraph/issues/2981
+[#2954]: https://github.com/hypermodeinc/dgraph/issues/2954
+[#3273]: https://github.com/hypermodeinc/dgraph/issues/3273
+[#1243]: https://github.com/hypermodeinc/dgraph/issues/1243
+[#3710]: https://github.com/hypermodeinc/dgraph/issues/3710
+[#3756]: https://github.com/hypermodeinc/dgraph/issues/3756
+[#3769]: https://github.com/hypermodeinc/dgraph/issues/3769
+[#2899]: https://github.com/hypermodeinc/dgraph/issues/2899
+[#3843]: https://github.com/hypermodeinc/dgraph/issues/3843
+[#3242]: https://github.com/hypermodeinc/dgraph/issues/3242
+[#3271]: https://github.com/hypermodeinc/dgraph/issues/3271
+[#2511]: https://github.com/hypermodeinc/dgraph/issues/2511
+[#2895]: https://github.com/hypermodeinc/dgraph/issues/2895
+[#3173]: https://github.com/hypermodeinc/dgraph/issues/3173
+[#2921]: https://github.com/hypermodeinc/dgraph/issues/2921
+[#2967]: https://github.com/hypermodeinc/dgraph/issues/2967
+[#2997]: https://github.com/hypermodeinc/dgraph/issues/2997
+[#3133]: https://github.com/hypermodeinc/dgraph/issues/3133
+[#2862]: https://github.com/hypermodeinc/dgraph/issues/2862
+[#2924]: https://github.com/hypermodeinc/dgraph/issues/2924
+[#2951]: https://github.com/hypermodeinc/dgraph/issues/2951
+[#3124]: https://github.com/hypermodeinc/dgraph/issues/3124
+[#3141]: https://github.com/hypermodeinc/dgraph/issues/3141
+[#3164]: https://github.com/hypermodeinc/dgraph/issues/3164
+[#3218]: https://github.com/hypermodeinc/dgraph/issues/3218
+[#3207]: https://github.com/hypermodeinc/dgraph/issues/3207
+[#3256]: https://github.com/hypermodeinc/dgraph/issues/3256
+[#3275]: https://github.com/hypermodeinc/dgraph/issues/3275
+[#3494]: https://github.com/hypermodeinc/dgraph/issues/3494
+[#3734]: https://github.com/hypermodeinc/dgraph/issues/3734
+[#2973]: https://github.com/hypermodeinc/dgraph/issues/2973
+[#2963]: https://github.com/hypermodeinc/dgraph/issues/2963
+[#3172]: https://github.com/hypermodeinc/dgraph/issues/3172
+[#3219]: https://github.com/hypermodeinc/dgraph/issues/3219
+[#3227]: https://github.com/hypermodeinc/dgraph/issues/3227
+[#3387]: https://github.com/hypermodeinc/dgraph/issues/3387
+[#3515]: https://github.com/hypermodeinc/dgraph/issues/3515
+[#3536]: https://github.com/hypermodeinc/dgraph/issues/3536
+[#3547]: https://github.com/hypermodeinc/dgraph/issues/3547
+[#3570]: https://github.com/hypermodeinc/dgraph/issues/3570
+[#3621]: https://github.com/hypermodeinc/dgraph/issues/3621
+[#3575]: https://github.com/hypermodeinc/dgraph/issues/3575
+[#3559]: https://github.com/hypermodeinc/dgraph/issues/3559
+[#3629]: https://github.com/hypermodeinc/dgraph/issues/3629
+[#3648]: https://github.com/hypermodeinc/dgraph/issues/3648
+[#3869]: https://github.com/hypermodeinc/dgraph/issues/3869
+[#2928]: https://github.com/hypermodeinc/dgraph/issues/2928
+[#2961]: https://github.com/hypermodeinc/dgraph/issues/2961
+[#3106]: https://github.com/hypermodeinc/dgraph/issues/3106
+[#3266]: https://github.com/hypermodeinc/dgraph/issues/3266
+[#3089]: https://github.com/hypermodeinc/dgraph/issues/3089
+[#3262]: https://github.com/hypermodeinc/dgraph/issues/3262
+[#3441]: https://github.com/hypermodeinc/dgraph/issues/3441
+[#3854]: https://github.com/hypermodeinc/dgraph/issues/3854
+[#3824]: https://github.com/hypermodeinc/dgraph/issues/3824
+[#2867]: https://github.com/hypermodeinc/dgraph/issues/2867
+[#2885]: https://github.com/hypermodeinc/dgraph/issues/2885
+[#2914]: https://github.com/hypermodeinc/dgraph/issues/2914
+[#2893]: https://github.com/hypermodeinc/dgraph/issues/2893
+[#2891]: https://github.com/hypermodeinc/dgraph/issues/2891
+[#2925]: https://github.com/hypermodeinc/dgraph/issues/2925
+[#2929]: https://github.com/hypermodeinc/dgraph/issues/2929
+[#2995]: https://github.com/hypermodeinc/dgraph/issues/2995
+[#3021]: https://github.com/hypermodeinc/dgraph/issues/3021
+[#3042]: https://github.com/hypermodeinc/dgraph/issues/3042
+[#3027]: https://github.com/hypermodeinc/dgraph/issues/3027
+[#3182]: https://github.com/hypermodeinc/dgraph/issues/3182
+[#3505]: https://github.com/hypermodeinc/dgraph/issues/3505
+[#3402]: https://github.com/hypermodeinc/dgraph/issues/3402
+[#3417]: https://github.com/hypermodeinc/dgraph/issues/3417
+[#3516]: https://github.com/hypermodeinc/dgraph/issues/3516
+[#3052]: https://github.com/hypermodeinc/dgraph/issues/3052
+[#3062]: https://github.com/hypermodeinc/dgraph/issues/3062
+[#3077]: https://github.com/hypermodeinc/dgraph/issues/3077
+[#3085]: https://github.com/hypermodeinc/dgraph/issues/3085
+[#3112]: https://github.com/hypermodeinc/dgraph/issues/3112
+[#3190]: https://github.com/hypermodeinc/dgraph/issues/3190
+[#3172]: https://github.com/hypermodeinc/dgraph/issues/3172
+[#3216]: https://github.com/hypermodeinc/dgraph/issues/3216
+[#3205]: https://github.com/hypermodeinc/dgraph/issues/3205
+[#3169]: https://github.com/hypermodeinc/dgraph/issues/3169
+[#3149]: https://github.com/hypermodeinc/dgraph/issues/3149
+[#3323]: https://github.com/hypermodeinc/dgraph/issues/3323
+[#3137]: https://github.com/hypermodeinc/dgraph/issues/3137
+[#3143]: https://github.com/hypermodeinc/dgraph/issues/3143
+[#3657]: https://github.com/hypermodeinc/dgraph/issues/3657
+[#3662]: https://github.com/hypermodeinc/dgraph/issues/3662
+[#3642]: https://github.com/hypermodeinc/dgraph/issues/3642
+[#3670]: https://github.com/hypermodeinc/dgraph/issues/3670
+[#3645]: https://github.com/hypermodeinc/dgraph/issues/3645
+[#3664]: https://github.com/hypermodeinc/dgraph/issues/3664
+[#3668]: https://github.com/hypermodeinc/dgraph/issues/3668
+[#3692]: https://github.com/hypermodeinc/dgraph/issues/3692
+[#3711]: https://github.com/hypermodeinc/dgraph/issues/3711
+[#3685]: https://github.com/hypermodeinc/dgraph/issues/3685
+[#3749]: https://github.com/hypermodeinc/dgraph/issues/3749
+[#3794]: https://github.com/hypermodeinc/dgraph/issues/3794
+[#3874]: https://github.com/hypermodeinc/dgraph/issues/3874
+[#3900]: https://github.com/hypermodeinc/dgraph/issues/3900
+[3271f64e0]: https://github.com/hypermodeinc/dgraph/commit/3271f64e0
+[63f545568]: https://github.com/hypermodeinc/dgraph/commit/63f545568
+[18277872f]: https://github.com/hypermodeinc/dgraph/commit/18277872f
+[802ec4c39]: https://github.com/hypermodeinc/dgraph/commit/802ec4c39
 
 ## [1.0.18] - 2019-12-16
-[1.0.18]: https://github.com/dgraph-io/dgraph/compare/v1.0.17...v1.0.18
+[1.0.18]: https://github.com/hypermodeinc/dgraph/compare/v1.0.17...v1.0.18
 
 ### Fixed
 
@@ -3614,17 +3614,17 @@ Tracing
 - Vendor in Badger to fix a vlog bug "Unable to find log file". ([#4212][])
 - Change lexer to allow unicode escape sequences. Fixes [#4157][]. ([#4252][])
 
-[#3919]: https://github.com/dgraph-io/dgraph/issues/3919
-[#3936]: https://github.com/dgraph-io/dgraph/issues/3936
-[#4071]: https://github.com/dgraph-io/dgraph/issues/4071
-[#3807]: https://github.com/dgraph-io/dgraph/issues/3807
-[#4143]: https://github.com/dgraph-io/dgraph/issues/4143
-[#4212]: https://github.com/dgraph-io/dgraph/issues/4212
-[#4157]: https://github.com/dgraph-io/dgraph/issues/4157
-[#4252]: https://github.com/dgraph-io/dgraph/issues/4252
+[#3919]: https://github.com/hypermodeinc/dgraph/issues/3919
+[#3936]: https://github.com/hypermodeinc/dgraph/issues/3936
+[#4071]: https://github.com/hypermodeinc/dgraph/issues/4071
+[#3807]: https://github.com/hypermodeinc/dgraph/issues/3807
+[#4143]: https://github.com/hypermodeinc/dgraph/issues/4143
+[#4212]: https://github.com/hypermodeinc/dgraph/issues/4212
+[#4157]: https://github.com/hypermodeinc/dgraph/issues/4157
+[#4252]: https://github.com/hypermodeinc/dgraph/issues/4252
 
 ## [1.0.17] - 2019-08-30
-[1.0.17]: https://github.com/dgraph-io/dgraph/compare/v1.0.16...v1.0.17
+[1.0.17]: https://github.com/hypermodeinc/dgraph/compare/v1.0.16...v1.0.17
 
 ### Changed
 
@@ -3640,21 +3640,21 @@ Tracing
 - Fix bug where aliases in a query incorrectly alias the response depending on alias order. Fixes [#3814][]. ([#3837][])
 - Fix for panic in fillGroupedVars. Fixes [#3768][]. ([#3781][])
 
-[#3886]: https://github.com/dgraph-io/dgraph/issues/3886
-[#2900]: https://github.com/dgraph-io/dgraph/issues/2900
-[#3772]: https://github.com/dgraph-io/dgraph/issues/3772
-[#3708]: https://github.com/dgraph-io/dgraph/issues/3708
-[#3753]: https://github.com/dgraph-io/dgraph/issues/3753
-[#3699]: https://github.com/dgraph-io/dgraph/issues/3699
-[#3701]: https://github.com/dgraph-io/dgraph/issues/3701
-[#3665]: https://github.com/dgraph-io/dgraph/issues/3665
-[#3814]: https://github.com/dgraph-io/dgraph/issues/3814
-[#3837]: https://github.com/dgraph-io/dgraph/issues/3837
-[#3768]: https://github.com/dgraph-io/dgraph/issues/3768
-[#3781]: https://github.com/dgraph-io/dgraph/issues/3781
+[#3886]: https://github.com/hypermodeinc/dgraph/issues/3886
+[#2900]: https://github.com/hypermodeinc/dgraph/issues/2900
+[#3772]: https://github.com/hypermodeinc/dgraph/issues/3772
+[#3708]: https://github.com/hypermodeinc/dgraph/issues/3708
+[#3753]: https://github.com/hypermodeinc/dgraph/issues/3753
+[#3699]: https://github.com/hypermodeinc/dgraph/issues/3699
+[#3701]: https://github.com/hypermodeinc/dgraph/issues/3701
+[#3665]: https://github.com/hypermodeinc/dgraph/issues/3665
+[#3814]: https://github.com/hypermodeinc/dgraph/issues/3814
+[#3837]: https://github.com/hypermodeinc/dgraph/issues/3837
+[#3768]: https://github.com/hypermodeinc/dgraph/issues/3768
+[#3781]: https://github.com/hypermodeinc/dgraph/issues/3781
 
 ## [1.0.16] - 2019-07-11
-[1.0.16]: https://github.com/dgraph-io/dgraph/compare/v1.0.15...v1.0.16
+[1.0.16]: https://github.com/hypermodeinc/dgraph/compare/v1.0.15...v1.0.16
 
 ### Changed
 
@@ -3666,15 +3666,15 @@ Tracing
 - Remove unused reserved predicates in the schema. Fixes [#3535][]. ([#3557][])
 - Vendor in Badger v1.6.0 for StreamWriter bug fixes. ([#3631][])
 
-[#3470]: https://github.com/dgraph-io/dgraph/issue/3470
-[#3535]: https://github.com/dgraph-io/dgraph/issue/3535
-[#3554]: https://github.com/dgraph-io/dgraph/issue/3554
-[#3557]: https://github.com/dgraph-io/dgraph/issue/3557
-[#3631]: https://github.com/dgraph-io/dgraph/issue/3631
-[#3653]: https://github.com/dgraph-io/dgraph/issue/3653
+[#3470]: https://github.com/hypermodeinc/dgraph/issue/3470
+[#3535]: https://github.com/hypermodeinc/dgraph/issue/3535
+[#3554]: https://github.com/hypermodeinc/dgraph/issue/3554
+[#3557]: https://github.com/hypermodeinc/dgraph/issue/3557
+[#3631]: https://github.com/hypermodeinc/dgraph/issue/3631
+[#3653]: https://github.com/hypermodeinc/dgraph/issue/3653
 
 ## [1.0.15] - 2019-05-30
-[1.0.15]: https://github.com/dgraph-io/dgraph/compare/v1.0.14...v1.0.15
+[1.0.15]: https://github.com/hypermodeinc/dgraph/compare/v1.0.14...v1.0.15
 
 ### Fixed
 
@@ -3719,42 +3719,42 @@ Tracing
 - Remove a `-v=2` log which can be too noisy during Raft replay. ([2377d9f56][]).
 - Remove `dgraph_conf` from /debug/vars. Dgraph config options are available via logs. ([#3337][])
 
-[#3337]: https://github.com/dgraph-io/dgraph/pull/3337
-[#3391]: https://github.com/dgraph-io/dgraph/pull/3391
-[#3400]: https://github.com/dgraph-io/dgraph/pull/3400
-[#3464]: https://github.com/dgraph-io/dgraph/pull/3464
-[#2987]: https://github.com/dgraph-io/dgraph/pull/2987
-[#3349]: https://github.com/dgraph-io/dgraph/pull/3349
-[#3393]: https://github.com/dgraph-io/dgraph/pull/3393
-[#3429]: https://github.com/dgraph-io/dgraph/pull/3429
-[#3383]: https://github.com/dgraph-io/dgraph/pull/3383
-[#3455]: https://github.com/dgraph-io/dgraph/pull/3455
-[#3366]: https://github.com/dgraph-io/dgraph/pull/3366
-[#3308]: https://github.com/dgraph-io/dgraph/pull/3308
-[#3340]: https://github.com/dgraph-io/dgraph/pull/3340
-[#3348]: https://github.com/dgraph-io/dgraph/pull/3348
-[#3371]: https://github.com/dgraph-io/dgraph/pull/3371
-[#3460]: https://github.com/dgraph-io/dgraph/pull/3460
-[#3360]: https://github.com/dgraph-io/dgraph/pull/3360
-[#3335]: https://github.com/dgraph-io/dgraph/pull/3335
-[#3367]: https://github.com/dgraph-io/dgraph/pull/3367
-[#3409]: https://github.com/dgraph-io/dgraph/pull/3409
-[#3418]: https://github.com/dgraph-io/dgraph/pull/3418
-[#3454]: https://github.com/dgraph-io/dgraph/pull/3454
-[#3457]: https://github.com/dgraph-io/dgraph/pull/3457
-[#3442]: https://github.com/dgraph-io/dgraph/pull/3442
-[#3467]: https://github.com/dgraph-io/dgraph/pull/3467
-[#3338]: https://github.com/dgraph-io/dgraph/pull/3338
-[#3444]: https://github.com/dgraph-io/dgraph/pull/3444
-[3be380b8a]: https://github.com/dgraph-io/dgraph/commit/3be380b8a
-[ecb454754]: https://github.com/dgraph-io/dgraph/commit/ecb454754
-[77b52aca1]: https://github.com/dgraph-io/dgraph/commit/77b52aca1
-[9cd628f6f]: https://github.com/dgraph-io/dgraph/commit/9cd628f6f
-[0716dc4e1]: https://github.com/dgraph-io/dgraph/commit/0716dc4e1
-[2377d9f56]: https://github.com/dgraph-io/dgraph/commit/2377d9f56
+[#3337]: https://github.com/hypermodeinc/dgraph/pull/3337
+[#3391]: https://github.com/hypermodeinc/dgraph/pull/3391
+[#3400]: https://github.com/hypermodeinc/dgraph/pull/3400
+[#3464]: https://github.com/hypermodeinc/dgraph/pull/3464
+[#2987]: https://github.com/hypermodeinc/dgraph/pull/2987
+[#3349]: https://github.com/hypermodeinc/dgraph/pull/3349
+[#3393]: https://github.com/hypermodeinc/dgraph/pull/3393
+[#3429]: https://github.com/hypermodeinc/dgraph/pull/3429
+[#3383]: https://github.com/hypermodeinc/dgraph/pull/3383
+[#3455]: https://github.com/hypermodeinc/dgraph/pull/3455
+[#3366]: https://github.com/hypermodeinc/dgraph/pull/3366
+[#3308]: https://github.com/hypermodeinc/dgraph/pull/3308
+[#3340]: https://github.com/hypermodeinc/dgraph/pull/3340
+[#3348]: https://github.com/hypermodeinc/dgraph/pull/3348
+[#3371]: https://github.com/hypermodeinc/dgraph/pull/3371
+[#3460]: https://github.com/hypermodeinc/dgraph/pull/3460
+[#3360]: https://github.com/hypermodeinc/dgraph/pull/3360
+[#3335]: https://github.com/hypermodeinc/dgraph/pull/3335
+[#3367]: https://github.com/hypermodeinc/dgraph/pull/3367
+[#3409]: https://github.com/hypermodeinc/dgraph/pull/3409
+[#3418]: https://github.com/hypermodeinc/dgraph/pull/3418
+[#3454]: https://github.com/hypermodeinc/dgraph/pull/3454
+[#3457]: https://github.com/hypermodeinc/dgraph/pull/3457
+[#3442]: https://github.com/hypermodeinc/dgraph/pull/3442
+[#3467]: https://github.com/hypermodeinc/dgraph/pull/3467
+[#3338]: https://github.com/hypermodeinc/dgraph/pull/3338
+[#3444]: https://github.com/hypermodeinc/dgraph/pull/3444
+[3be380b8a]: https://github.com/hypermodeinc/dgraph/commit/3be380b8a
+[ecb454754]: https://github.com/hypermodeinc/dgraph/commit/ecb454754
+[77b52aca1]: https://github.com/hypermodeinc/dgraph/commit/77b52aca1
+[9cd628f6f]: https://github.com/hypermodeinc/dgraph/commit/9cd628f6f
+[0716dc4e1]: https://github.com/hypermodeinc/dgraph/commit/0716dc4e1
+[2377d9f56]: https://github.com/hypermodeinc/dgraph/commit/2377d9f56
 
 ## [1.0.14] - 2019-04-12
-[1.0.14]: https://github.com/dgraph-io/dgraph/compare/v1.0.13...v1.0.14
+[1.0.14]: https://github.com/hypermodeinc/dgraph/compare/v1.0.13...v1.0.14
 
 ### Fixed
 
@@ -3768,36 +3768,36 @@ Tracing
 - Fix assorted cases of goroutine leaks. ([#3074][])
 - Increment tool: Fix best-effort flag name so best-effort queries run as intended from the tool. ([d386fa5][])
 
-[#3125]: https://github.com/dgraph-io/dgraph/pull/3125
-[#3138]: https://github.com/dgraph-io/dgraph/pull/3138
-[#3203]: https://github.com/dgraph-io/dgraph/pull/3203
-[#3232]: https://github.com/dgraph-io/dgraph/pull/3232
-[#3187]: https://github.com/dgraph-io/dgraph/pull/3187
-[#3246]: https://github.com/dgraph-io/dgraph/pull/3246
-[#3280]: https://github.com/dgraph-io/dgraph/pull/3280
-[#3179]: https://github.com/dgraph-io/dgraph/pull/3179
-[#3074]: https://github.com/dgraph-io/dgraph/pull/3074
-[d386fa5]: https://github.com/dgraph-io/dgraph/commit/d386fa5
+[#3125]: https://github.com/hypermodeinc/dgraph/pull/3125
+[#3138]: https://github.com/hypermodeinc/dgraph/pull/3138
+[#3203]: https://github.com/hypermodeinc/dgraph/pull/3203
+[#3232]: https://github.com/hypermodeinc/dgraph/pull/3232
+[#3187]: https://github.com/hypermodeinc/dgraph/pull/3187
+[#3246]: https://github.com/hypermodeinc/dgraph/pull/3246
+[#3280]: https://github.com/hypermodeinc/dgraph/pull/3280
+[#3179]: https://github.com/hypermodeinc/dgraph/pull/3179
+[#3074]: https://github.com/hypermodeinc/dgraph/pull/3074
+[d386fa5]: https://github.com/hypermodeinc/dgraph/commit/d386fa5
 
 ### Added
 
 - Add timeout option while running queries over HTTP. Setting the `timeout` query parameter `/query?timeout=60s` will timeout queries after 1 minute. ([#3238][])
 - Add `badger` tool to release binaries and Docker image.
 
-[#3238]: https://github.com/dgraph-io/dgraph/pull/3238
+[#3238]: https://github.com/hypermodeinc/dgraph/pull/3238
 
 ## [1.0.13] - 2019-03-10
-[1.0.13]: https://github.com/dgraph-io/dgraph/compare/v1.0.12...v1.0.13
+[1.0.13]: https://github.com/hypermodeinc/dgraph/compare/v1.0.12...v1.0.13
 
 **Note: This release supersedes v1.0.12 with bug fixes. If you're running v1.0.12, please upgrade to v1.0.13. It is safe to upgrade in-place without a data export and import.**
 
 ### Fixed
 
-- Fix Raft panic. ([8cb69ea](https://github.com/dgraph-io/dgraph/commit/8cb69ea))
-- Log an error instead of an assertion check for SrcUIDs being nil. ([691b3b3](https://github.com/dgraph-io/dgraph/commit/691b3b3))
+- Fix Raft panic. ([8cb69ea](https://github.com/hypermodeinc/dgraph/commit/8cb69ea))
+- Log an error instead of an assertion check for SrcUIDs being nil. ([691b3b3](https://github.com/hypermodeinc/dgraph/commit/691b3b3))
 
 ## [1.0.12] - 2019-03-05
-[1.0.12]: https://github.com/dgraph-io/dgraph/compare/v1.0.11...v1.0.12
+[1.0.12]: https://github.com/hypermodeinc/dgraph/compare/v1.0.11...v1.0.12
 
 **Note: This release requires you to export and re-import data prior to
 upgrading or rolling back. The underlying data format has been changed.**
@@ -3805,42 +3805,42 @@ upgrading or rolling back. The underlying data format has been changed.**
 ### Added
 
 - Support gzip compression for gRPC and HTTP requests.
-  ([#2843](https://github.com/dgraph-io/dgraph/issues/2843))
+  ([#2843](https://github.com/hypermodeinc/dgraph/issues/2843))
 - Restore is available from a full binary backup. This is an enterprise
   feature licensed under the Dgraph Community License.
 - Strict schema mode via `--mutations` flag. By default `--mutations=allow` is
   set to allow all mutations; `--mutations=disallow` disables all mutations;
   `--mutations=strict` allows mutations only for predicates which are defined in
-  the schema. Fixes [#2277](https://github.com/dgraph-io/dgraph/issues/2277).
+  the schema. Fixes [#2277](https://github.com/hypermodeinc/dgraph/issues/2277).
 - Add `dgraph increment` tool for debugging and testing. The increment tool
   queries for the specified predicate (default: `counter.val`), increments its
   integer counter value, and mutates the result back to Dgraph. Useful for
   testing end-to-end txns to verify cluster health.
-  ([#2955](https://github.com/dgraph-io/dgraph/issues/2955))
+  ([#2955](https://github.com/hypermodeinc/dgraph/issues/2955))
 - Support best-effort queries. This would relax the requirement of linearizible
   reads. For best-effort queries, Alpha would request timestamps from memory
   instead of making an outbound request to Zero.
-  ([#3071](https://github.com/dgraph-io/dgraph/issues/3071))
+  ([#3071](https://github.com/hypermodeinc/dgraph/issues/3071))
 
 ### Changed
 
-- Use the new Stream API from Badger instead of Dgraph's Stream framework. ([#2852](https://github.com/dgraph-io/dgraph/issues/2852))
-- Discard earlier versions of posting lists. ([#2859](https://github.com/dgraph-io/dgraph/issues/2859))
+- Use the new Stream API from Badger instead of Dgraph's Stream framework. ([#2852](https://github.com/hypermodeinc/dgraph/issues/2852))
+- Discard earlier versions of posting lists. ([#2859](https://github.com/hypermodeinc/dgraph/issues/2859))
 - Make HTTP JSON response encoding more efficient by operating on a bytes buffer
-  directly. ([ae1d9f3](https://github.com/dgraph-io/dgraph/commit/ae1d9f3))
-- Optimize and refactor facet filtering. ([#2829](https://github.com/dgraph-io/dgraph/issues/2829))
+  directly. ([ae1d9f3](https://github.com/hypermodeinc/dgraph/commit/ae1d9f3))
+- Optimize and refactor facet filtering. ([#2829](https://github.com/hypermodeinc/dgraph/issues/2829))
 - Show badger.Item meta information in `dgraph debug` output.
-- Add new option to `dgraph debug` tool to get a histogram of key and value sizes. ([#2844](https://github.com/dgraph-io/dgraph/issues/2844))
+- Add new option to `dgraph debug` tool to get a histogram of key and value sizes. ([#2844](https://github.com/hypermodeinc/dgraph/issues/2844))
 - Add new option to `dgraph debug` tool to get info from a particular read timestamp.
-- Refactor rebuild index logic. ([#2851](https://github.com/dgraph-io/dgraph/issues/2851), [#2866](https://github.com/dgraph-io/dgraph/issues/2866))
+- Refactor rebuild index logic. ([#2851](https://github.com/hypermodeinc/dgraph/issues/2851), [#2866](https://github.com/hypermodeinc/dgraph/issues/2866))
 - For gRPC clients, schema queries are returned in the Json field. The Schema proto field is deprecated.
-- Simplify design and make tablet moves robust. ([#2800](https://github.com/dgraph-io/dgraph/issues/2800))
+- Simplify design and make tablet moves robust. ([#2800](https://github.com/hypermodeinc/dgraph/issues/2800))
 - Switch all node IDs to hex in logs (e.g., ID 0xa instead of ID 10), so they are consistent with Raft logs.
-- Refactor reindexing code to only reindex specific tokenizers. ([#2948](https://github.com/dgraph-io/dgraph/issues/2948))
-- Introduce group checksums. ([#2964](https://github.com/dgraph-io/dgraph/issues/2964), [#3085](https://github.com/dgraph-io/dgraph/issues/3085))
+- Refactor reindexing code to only reindex specific tokenizers. ([#2948](https://github.com/hypermodeinc/dgraph/issues/2948))
+- Introduce group checksums. ([#2964](https://github.com/hypermodeinc/dgraph/issues/2964), [#3085](https://github.com/hypermodeinc/dgraph/issues/3085))
 - Return aborted error if commit ts is 0.
-- Reduce number of "ClusterInfoOnly" requests to Zero by making VerifyUid wait for membership information. ([#2974](https://github.com/dgraph-io/dgraph/issues/2974))
-- Simplify Raft WAL storage caching. ([#3102](https://github.com/dgraph-io/dgraph/issues/3102))
+- Reduce number of "ClusterInfoOnly" requests to Zero by making VerifyUid wait for membership information. ([#2974](https://github.com/hypermodeinc/dgraph/issues/2974))
+- Simplify Raft WAL storage caching. ([#3102](https://github.com/hypermodeinc/dgraph/issues/3102))
 - Build release binary with Go version 1.11.5.
 
 ### Removed
@@ -3855,150 +3855,150 @@ upgrading or rolling back. The underlying data format has been changed.**
 
 ### Fixed
 
-- Use json.Marshal for strings and blobs. Fixes [#2662](https://github.com/dgraph-io/dgraph/issues/2662).
-- Let eq use string "uid" as value. Fixes [#2827](https://github.com/dgraph-io/dgraph/issues/2827).
+- Use json.Marshal for strings and blobs. Fixes [#2662](https://github.com/hypermodeinc/dgraph/issues/2662).
+- Let eq use string "uid" as value. Fixes [#2827](https://github.com/hypermodeinc/dgraph/issues/2827).
 - Skip empty posting lists in `has` function.
 - Fix Rollup to pick max update commit ts.
-- Fix a race condition when processing concurrent queries. Fixes [#2849](https://github.com/dgraph-io/dgraph/issues/2849).
-- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/dgraph-io/dgraph/issues/2815).
+- Fix a race condition when processing concurrent queries. Fixes [#2849](https://github.com/hypermodeinc/dgraph/issues/2849).
+- Show an error when running multiple mutation blocks. Fixes [#2815](https://github.com/hypermodeinc/dgraph/issues/2815).
 - Bring in optimizations and bug fixes over from Badger.
 - Bulk Loader for multi-group (sharded data) clusters writes out per-group
   schema with only the predicates owned by the group instead of all predicates
   in the cluster. This fixes an issue where queries made to one group may not
   return data served by other groups.
-  ([#3065](https://github.com/dgraph-io/dgraph/issues/3065))
+  ([#3065](https://github.com/hypermodeinc/dgraph/issues/3065))
 - Remove the assert failure in raftwal/storage.go.
 
 ## [1.0.11] - 2018-12-17
-[1.0.11]: https://github.com/dgraph-io/dgraph/compare/v1.0.10...v1.0.11
+[1.0.11]: https://github.com/hypermodeinc/dgraph/compare/v1.0.10...v1.0.11
 
 ### Added
 
-- Integrate OpenCensus in Dgraph. ([#2739](https://github.com/dgraph-io/dgraph/issues/2739))
+- Integrate OpenCensus in Dgraph. ([#2739](https://github.com/hypermodeinc/dgraph/issues/2739))
 - Add Dgraph Community License for proprietary features.
-- Feature: Full binary backups. This is an enterprise feature licensed under the Dgraph Community License. ([#2710](https://github.com/dgraph-io/dgraph/issues/2710))
+- Feature: Full binary backups. This is an enterprise feature licensed under the Dgraph Community License. ([#2710](https://github.com/hypermodeinc/dgraph/issues/2710))
 - Add `--enterprise_features` flag to enable enterprise features. By enabling enterprise features, you accept the terms of the Dgraph Community License.
-- Add minio dep and its deps in govendor. ([94daeaf7](https://github.com/dgraph-io/dgraph/commit/94daeaf7), [35a73e81](https://github.com/dgraph-io/dgraph/commit/35a73e81))
-- Add network partitioning tests with blockade tool. ([./contrib/blockade](https://github.com/dgraph-io/dgraph/tree/v1.0.11/contrib/blockade))
+- Add minio dep and its deps in govendor. ([94daeaf7](https://github.com/hypermodeinc/dgraph/commit/94daeaf7), [35a73e81](https://github.com/hypermodeinc/dgraph/commit/35a73e81))
+- Add network partitioning tests with blockade tool. ([./contrib/blockade](https://github.com/hypermodeinc/dgraph/tree/v1.0.11/contrib/blockade))
 - Add Zero endpoints `/assign?what=uids&num=10` and `/assign?what=timestamps&num=10` to assign UIDs or transaction timestamp leases.
-- Adding the acl subcommand to support acl features (still work-in-progress). ([#2795](https://github.com/dgraph-io/dgraph/issues/2795))
-- Support custom tokenizer in bulk loader ([#2820](https://github.com/dgraph-io/dgraph/issues/2820))
-- Support JSON data with Dgraph Bulk Loader. ([#2799](https://github.com/dgraph-io/dgraph/issues/2799))
+- Adding the acl subcommand to support acl features (still work-in-progress). ([#2795](https://github.com/hypermodeinc/dgraph/issues/2795))
+- Support custom tokenizer in bulk loader ([#2820](https://github.com/hypermodeinc/dgraph/issues/2820))
+- Support JSON data with Dgraph Bulk Loader. ([#2799](https://github.com/hypermodeinc/dgraph/issues/2799))
 
 ### Changed
 
-- Make posting list memory rollup happen right after disk. ([#2731](https://github.com/dgraph-io/dgraph/issues/2731))
-- Do not retry proposal if already found in CommittedEntries. ([#2740](https://github.com/dgraph-io/dgraph/issues/2740))
-- Remove ExportPayload from protos. Export returns Status and ExportRequest. ([#2741](https://github.com/dgraph-io/dgraph/issues/2741))
-- Allow more escape runes to be skipped over when parsing string literal. ([#2734](https://github.com/dgraph-io/dgraph/issues/2734))
-- Clarify message of overloaded pending proposals for live loader. ([#2732](https://github.com/dgraph-io/dgraph/issues/2732))
+- Make posting list memory rollup happen right after disk. ([#2731](https://github.com/hypermodeinc/dgraph/issues/2731))
+- Do not retry proposal if already found in CommittedEntries. ([#2740](https://github.com/hypermodeinc/dgraph/issues/2740))
+- Remove ExportPayload from protos. Export returns Status and ExportRequest. ([#2741](https://github.com/hypermodeinc/dgraph/issues/2741))
+- Allow more escape runes to be skipped over when parsing string literal. ([#2734](https://github.com/hypermodeinc/dgraph/issues/2734))
+- Clarify message of overloaded pending proposals for live loader. ([#2732](https://github.com/hypermodeinc/dgraph/issues/2732))
 - Posting List Evictions. (e2bcfdad)
-- Log when removing a tablet. ([#2746](https://github.com/dgraph-io/dgraph/issues/2746))
-- Deal better with network partitions in leaders. ([#2749](https://github.com/dgraph-io/dgraph/issues/2749))
+- Log when removing a tablet. ([#2746](https://github.com/hypermodeinc/dgraph/issues/2746))
+- Deal better with network partitions in leaders. ([#2749](https://github.com/hypermodeinc/dgraph/issues/2749))
 - Keep maxDelay during timestamp req to 1s.
 - Updates to the version output info.
-  - Print the go version used to build Dgraph when running `dgraph version` and in the logs when Dgraph runs. ([#2768](https://github.com/dgraph-io/dgraph/issues/2768))
-  - Print the Dgraph version when running live or bulk loader. ([#2736](https://github.com/dgraph-io/dgraph/issues/2736))
-- Checking nil values in the equal function ([#2769](https://github.com/dgraph-io/dgraph/issues/2769))
-- Optimize query: UID expansion. ([#2772](https://github.com/dgraph-io/dgraph/issues/2772))
-- Split membership sync endpoints and remove PurgeTs endpoint. ([#2773](https://github.com/dgraph-io/dgraph/issues/2773))
-- Set the Prefix option during iteration. ([#2780](https://github.com/dgraph-io/dgraph/issues/2780))
+  - Print the go version used to build Dgraph when running `dgraph version` and in the logs when Dgraph runs. ([#2768](https://github.com/hypermodeinc/dgraph/issues/2768))
+  - Print the Dgraph version when running live or bulk loader. ([#2736](https://github.com/hypermodeinc/dgraph/issues/2736))
+- Checking nil values in the equal function ([#2769](https://github.com/hypermodeinc/dgraph/issues/2769))
+- Optimize query: UID expansion. ([#2772](https://github.com/hypermodeinc/dgraph/issues/2772))
+- Split membership sync endpoints and remove PurgeTs endpoint. ([#2773](https://github.com/hypermodeinc/dgraph/issues/2773))
+- Set the Prefix option during iteration. ([#2780](https://github.com/hypermodeinc/dgraph/issues/2780))
 - Replace Zero's `/assignIds?num=10` endpoint with `/assign?what=uids&num=10` (see Added section).
 
 ### Removed
 
-- Remove type hinting for JSON and RDF schema-less types. ([#2742](https://github.com/dgraph-io/dgraph/issues/2742))
-- Remove deprecated logic that was found using vet. ([#2758](https://github.com/dgraph-io/dgraph/issues/2758))
-- Remove assert for zero-length posting lists. ([#2763](https://github.com/dgraph-io/dgraph/issues/2763))
+- Remove type hinting for JSON and RDF schema-less types. ([#2742](https://github.com/hypermodeinc/dgraph/issues/2742))
+- Remove deprecated logic that was found using vet. ([#2758](https://github.com/hypermodeinc/dgraph/issues/2758))
+- Remove assert for zero-length posting lists. ([#2763](https://github.com/hypermodeinc/dgraph/issues/2763))
 
 ### Fixed
 
-- Restore schema states on error. ([#2730](https://github.com/dgraph-io/dgraph/issues/2730))
-- Refactor bleve tokenizer usage ([#2738](https://github.com/dgraph-io/dgraph/issues/2738)). Fixes [#2622](https://github.com/dgraph-io/dgraph/issues/2622) and [#2601](https://github.com/dgraph-io/dgraph/issues/2601).
+- Restore schema states on error. ([#2730](https://github.com/hypermodeinc/dgraph/issues/2730))
+- Refactor bleve tokenizer usage ([#2738](https://github.com/hypermodeinc/dgraph/issues/2738)). Fixes [#2622](https://github.com/hypermodeinc/dgraph/issues/2622) and [#2601](https://github.com/hypermodeinc/dgraph/issues/2601).
 - Switch to Badger's Watermark library, which has a memory leak fix. (0cd9d82e)
-- Fix tiny typo. ([#2761](https://github.com/dgraph-io/dgraph/issues/2761))
+- Fix tiny typo. ([#2761](https://github.com/hypermodeinc/dgraph/issues/2761))
 - Fix Test: TestMillion.
-- Fix Jepsen bank test. ([#2764](https://github.com/dgraph-io/dgraph/issues/2764))
-- Fix link to help_wanted. ([#2774](https://github.com/dgraph-io/dgraph/issues/2774))
-- Fix invalid division by zero error. Fixes [#2733](https://github.com/dgraph-io/dgraph/issues/2733).
-- Fix missing predicates after export and bulk load. Fixes [#2616](https://github.com/dgraph-io/dgraph/issues/2616).
-- Handle various edge cases around cluster memberships. ([#2791](https://github.com/dgraph-io/dgraph/issues/2791))
-- Change Encrypt to not re-encrypt password values. Fixes [#2765](https://github.com/dgraph-io/dgraph/issues/2765).
+- Fix Jepsen bank test. ([#2764](https://github.com/hypermodeinc/dgraph/issues/2764))
+- Fix link to help_wanted. ([#2774](https://github.com/hypermodeinc/dgraph/issues/2774))
+- Fix invalid division by zero error. Fixes [#2733](https://github.com/hypermodeinc/dgraph/issues/2733).
+- Fix missing predicates after export and bulk load. Fixes [#2616](https://github.com/hypermodeinc/dgraph/issues/2616).
+- Handle various edge cases around cluster memberships. ([#2791](https://github.com/hypermodeinc/dgraph/issues/2791))
+- Change Encrypt to not re-encrypt password values. Fixes [#2765](https://github.com/hypermodeinc/dgraph/issues/2765).
 - Correctly parse facet types for both JSON and RDF formats. Previously the
-  parsing was handled differently depending on the input format. ([#2797](https://github.com/dgraph-io/dgraph/issues/2797))
+  parsing was handled differently depending on the input format. ([#2797](https://github.com/hypermodeinc/dgraph/issues/2797))
 
 ## [1.0.10] - 2018-11-05
-[1.0.10]: https://github.com/dgraph-io/dgraph/compare/v1.0.9...v1.0.10
+[1.0.10]: https://github.com/hypermodeinc/dgraph/compare/v1.0.9...v1.0.10
 
 **Note: This release requires you to export and re-import data. We have changed the underlying storage format.**
 
 ### Added
 
-- The Alter endpoint can be protected by an auth token that is set on the Dgraph Alphas via the `--auth_token` option. This can help prevent accidental schema updates and drop all operations. ([#2692](https://github.com/dgraph-io/dgraph/issues/2692))
-- Optimize has function ([#2724](https://github.com/dgraph-io/dgraph/issues/2724))
-- Expose the health check API via gRPC. ([#2721](https://github.com/dgraph-io/dgraph/issues/2721))
+- The Alter endpoint can be protected by an auth token that is set on the Dgraph Alphas via the `--auth_token` option. This can help prevent accidental schema updates and drop all operations. ([#2692](https://github.com/hypermodeinc/dgraph/issues/2692))
+- Optimize has function ([#2724](https://github.com/hypermodeinc/dgraph/issues/2724))
+- Expose the health check API via gRPC. ([#2721](https://github.com/hypermodeinc/dgraph/issues/2721))
 
 ### Changed
 
-- Dgraph is relicensed to Apache 2.0. ([#2652](https://github.com/dgraph-io/dgraph/issues/2652))
-- **Breaking change**. Rename Dgraph Server to Dgraph Alpha to clarify discussions of the Dgraph cluster. The top-level command `dgraph server` is now `dgraph alpha`. ([#2667](https://github.com/dgraph-io/dgraph/issues/2667))
-- Prometheus metrics have been renamed for consistency for alpha, memory, and lru cache metrics. ([#2636](https://github.com/dgraph-io/dgraph/issues/2636), [#2670](https://github.com/dgraph-io/dgraph/issues/2670), [#2714](https://github.com/dgraph-io/dgraph/issues/2714))
-- The `dgraph-converter` command is available as the subcommand `dgraph conv`. ([#2635](https://github.com/dgraph-io/dgraph/issues/2635))
-- Updating protobuf version. ([#2639](https://github.com/dgraph-io/dgraph/issues/2639))
-- Allow checkpwd to be aliased ([#2641](https://github.com/dgraph-io/dgraph/issues/2641))
-- Better control excessive traffic to Dgraph ([#2678](https://github.com/dgraph-io/dgraph/issues/2678))
+- Dgraph is relicensed to Apache 2.0. ([#2652](https://github.com/hypermodeinc/dgraph/issues/2652))
+- **Breaking change**. Rename Dgraph Server to Dgraph Alpha to clarify discussions of the Dgraph cluster. The top-level command `dgraph server` is now `dgraph alpha`. ([#2667](https://github.com/hypermodeinc/dgraph/issues/2667))
+- Prometheus metrics have been renamed for consistency for alpha, memory, and lru cache metrics. ([#2636](https://github.com/hypermodeinc/dgraph/issues/2636), [#2670](https://github.com/hypermodeinc/dgraph/issues/2670), [#2714](https://github.com/hypermodeinc/dgraph/issues/2714))
+- The `dgraph-converter` command is available as the subcommand `dgraph conv`. ([#2635](https://github.com/hypermodeinc/dgraph/issues/2635))
+- Updating protobuf version. ([#2639](https://github.com/hypermodeinc/dgraph/issues/2639))
+- Allow checkpwd to be aliased ([#2641](https://github.com/hypermodeinc/dgraph/issues/2641))
+- Better control excessive traffic to Dgraph ([#2678](https://github.com/hypermodeinc/dgraph/issues/2678))
 - Export format now exports on the Alpha receiving the export request. The naming scheme of the export files has been simplified.
 - Improvements to the `dgraph debug` tool that can be used to inspect the contents of the posting lists directory.
-- Bring in Badger updates ([#2697](https://github.com/dgraph-io/dgraph/issues/2697))
+- Bring in Badger updates ([#2697](https://github.com/hypermodeinc/dgraph/issues/2697))
 
 ### Fixed
 
-- Make raft leader resume probing after snapshot crash ([#2707](https://github.com/dgraph-io/dgraph/issues/2707))
-- **Breaking change:** Create a lot simpler sorted uint64 codec ([#2716](https://github.com/dgraph-io/dgraph/issues/2716))
+- Make raft leader resume probing after snapshot crash ([#2707](https://github.com/hypermodeinc/dgraph/issues/2707))
+- **Breaking change:** Create a lot simpler sorted uint64 codec ([#2716](https://github.com/hypermodeinc/dgraph/issues/2716))
 - Increase the size of applyCh, to give Raft some breathing space. Otherwise, it fails to maintain quorum health.
 - Zero should stream last commit update
-- Send commit timestamps in order ([#2687](https://github.com/dgraph-io/dgraph/issues/2687))
+- Send commit timestamps in order ([#2687](https://github.com/hypermodeinc/dgraph/issues/2687))
 - Query blocks with the same name are no longer allowed.
-- Fix out-of-range values in query parser. ([#2690](https://github.com/dgraph-io/dgraph/issues/2690))
+- Fix out-of-range values in query parser. ([#2690](https://github.com/hypermodeinc/dgraph/issues/2690))
 
 ## [1.0.9] - 2018-10-02
-[1.0.9]: https://github.com/dgraph-io/dgraph/compare/v1.0.8...v1.0.9
+[1.0.9]: https://github.com/hypermodeinc/dgraph/compare/v1.0.8...v1.0.9
 
 ### Added
 
-- This version switches Badger Options to reasonable settings for p and w directories. This removes the need to expose `--badger.options` option and removes the `none` option from `--badger.vlog`. ([#2605](https://github.com/dgraph-io/dgraph/issues/2605))
-- Add support for ignoring parse errors in bulk loader with the option `--ignore_error`. ([#2599](https://github.com/dgraph-io/dgraph/issues/2599))
+- This version switches Badger Options to reasonable settings for p and w directories. This removes the need to expose `--badger.options` option and removes the `none` option from `--badger.vlog`. ([#2605](https://github.com/hypermodeinc/dgraph/issues/2605))
+- Add support for ignoring parse errors in bulk loader with the option `--ignore_error`. ([#2599](https://github.com/hypermodeinc/dgraph/issues/2599))
 - Introduction of new command `dgraph cert` to simplify initial TLS setup. See [TLS configuration docs](https://dgraph.io/docs/deploy/#tls-configuration) for more info.
 - Add `expand(_forward_)` and `expand(_reverse_)` to GraphQL+- query language. If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
 If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
 ### Changed
 
-- Rename intern pkg to pb ([#2608](https://github.com/dgraph-io/dgraph/issues/2608))
+- Rename intern pkg to pb ([#2608](https://github.com/hypermodeinc/dgraph/issues/2608))
 
 ### Fixed
 
-- Remove LinRead map logic from Dgraph ([#2570](https://github.com/dgraph-io/dgraph/issues/2570))
+- Remove LinRead map logic from Dgraph ([#2570](https://github.com/hypermodeinc/dgraph/issues/2570))
 - Sanity length check for facets mostly.
-- Make has function correct w.r.t. transactions ([#2585](https://github.com/dgraph-io/dgraph/issues/2585))
+- Make has function correct w.r.t. transactions ([#2585](https://github.com/hypermodeinc/dgraph/issues/2585))
 - Increase the snapshot calculation interval, while decreasing the min number of entries required; so we take snapshots even when there's little activity.
-- Convert an assert during DropAll to inf retry. ([#2578](https://github.com/dgraph-io/dgraph/issues/2578))
-- Fix a bug which caused all transactions to abort if `--expand_edge` was set to false. Fixes [#2547](https://github.com/dgraph-io/dgraph/issues/2547).
-- Set the Applied index in Raft directly, so it does not pick up an index older than the snapshot. Ensure that it is in sync with the Applied watermark. Fixes [#2581](https://github.com/dgraph-io/dgraph/issues/2581).
+- Convert an assert during DropAll to inf retry. ([#2578](https://github.com/hypermodeinc/dgraph/issues/2578))
+- Fix a bug which caused all transactions to abort if `--expand_edge` was set to false. Fixes [#2547](https://github.com/hypermodeinc/dgraph/issues/2547).
+- Set the Applied index in Raft directly, so it does not pick up an index older than the snapshot. Ensure that it is in sync with the Applied watermark. Fixes [#2581](https://github.com/hypermodeinc/dgraph/issues/2581).
 - Pull in Badger updates. This also fixes the Unable to find log file, retry error.
-- Improve efficiency of readonly transactions by reusing the same read ts ([#2604](https://github.com/dgraph-io/dgraph/issues/2604))
-- Fix a bug in Raft.Run loop. ([#2606](https://github.com/dgraph-io/dgraph/issues/2606))
+- Improve efficiency of readonly transactions by reusing the same read ts ([#2604](https://github.com/hypermodeinc/dgraph/issues/2604))
+- Fix a bug in Raft.Run loop. ([#2606](https://github.com/hypermodeinc/dgraph/issues/2606))
 - Fix a few issues regarding snapshot.Index for raft.Cfg.Applied. Do not overwrite any existing data when apply txn commits. Do not let CreateSnapshot fail.
 - Consider all future versions of the key as well, when deciding whether to write a key or not during txn commits. Otherwise, we'll end up in an endless loop of trying to write a stale key but failing to do so.
-- When testing inequality value vars with non-matching values, the response was sent as an error although it should return empty result if the query has correct syntax. ([#2611](https://github.com/dgraph-io/dgraph/issues/2611))
-- Switch traces to glogs in worker/export.go ([#2614](https://github.com/dgraph-io/dgraph/issues/2614))
-- Improve error handling for `dgraph live` for errors when processing RDF and schema files. ([#2596](https://github.com/dgraph-io/dgraph/issues/2596))
-- Fix task conversion from bool to int that used uint32 ([#2621](https://github.com/dgraph-io/dgraph/issues/2621))
-- Fix `expand(_all_)` in recurse queries ([#2600](https://github.com/dgraph-io/dgraph/issues/2600)).
-- Add language aliases for broader support for full text indices. ([#2602](https://github.com/dgraph-io/dgraph/issues/2602))
+- When testing inequality value vars with non-matching values, the response was sent as an error although it should return empty result if the query has correct syntax. ([#2611](https://github.com/hypermodeinc/dgraph/issues/2611))
+- Switch traces to glogs in worker/export.go ([#2614](https://github.com/hypermodeinc/dgraph/issues/2614))
+- Improve error handling for `dgraph live` for errors when processing RDF and schema files. ([#2596](https://github.com/hypermodeinc/dgraph/issues/2596))
+- Fix task conversion from bool to int that used uint32 ([#2621](https://github.com/hypermodeinc/dgraph/issues/2621))
+- Fix `expand(_all_)` in recurse queries ([#2600](https://github.com/hypermodeinc/dgraph/issues/2600)).
+- Add language aliases for broader support for full text indices. ([#2602](https://github.com/hypermodeinc/dgraph/issues/2602))
 
 ## [1.0.8] - 2018-08-29
-[1.0.8]: https://github.com/dgraph-io/dgraph/compare/v1.0.7...v1.0.8
+[1.0.8]: https://github.com/hypermodeinc/dgraph/compare/v1.0.7...v1.0.8
 
 ### Added
 
@@ -4007,18 +4007,18 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 
 ### Changed
 
-- This version introduces tracking of a few anonymous metrics to measure Dgraph adoption ([#2554](https://github.com/dgraph-io/dgraph/issues/2554)). These metrics do not contain any specifically identifying information about the user, so most users can leave it on. This can be turned off by setting `--telemetry=false` flag if needed in Dgraph Zero.
+- This version introduces tracking of a few anonymous metrics to measure Dgraph adoption ([#2554](https://github.com/hypermodeinc/dgraph/issues/2554)). These metrics do not contain any specifically identifying information about the user, so most users can leave it on. This can be turned off by setting `--telemetry=false` flag if needed in Dgraph Zero.
 
 ### Fixed
 
-- Correctly handle a list of type geo in json ([#2482](https://github.com/dgraph-io/dgraph/issues/2482), [#2485](https://github.com/dgraph-io/dgraph/issues/2485)).
+- Correctly handle a list of type geo in json ([#2482](https://github.com/hypermodeinc/dgraph/issues/2482), [#2485](https://github.com/hypermodeinc/dgraph/issues/2485)).
 - Fix the graceful shutdown of Dgraph server, so a single Ctrl+C would now suffice to stop it.
-- Fix various deadlocks in Dgraph and set ConfState in Raft correctly ([#2548](https://github.com/dgraph-io/dgraph/issues/2548)).
-- Significantly decrease the number of transaction aborts by using SPO as key for entity to entity connections. ([#2556](https://github.com/dgraph-io/dgraph/issues/2556)).
+- Fix various deadlocks in Dgraph and set ConfState in Raft correctly ([#2548](https://github.com/hypermodeinc/dgraph/issues/2548)).
+- Significantly decrease the number of transaction aborts by using SPO as key for entity to entity connections. ([#2556](https://github.com/hypermodeinc/dgraph/issues/2556)).
 - Do not print error while sending Raft message by default. No action needs to be taken by the user, so it is set to V(3) level.
 
 ## [1.0.7] - 2018-08-10
-[1.0.7]: https://github.com/dgraph-io/dgraph/compare/v1.0.6...v1.0.7
+[1.0.7]: https://github.com/hypermodeinc/dgraph/compare/v1.0.6...v1.0.7
 
 ### Changed
 
@@ -4026,45 +4026,45 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 
 ### Fixed
 
-- All Oracle delta streams are applied via Raft proposals. This deals better with network partition like edge-cases. [#2463](https://github.com/dgraph-io/dgraph/issues/2463)
-- Fix deadlock in 10-node cluster convergence. Fixes [#2286](https://github.com/dgraph-io/dgraph/issues/2286).
-- Make ReadIndex work safely. [#2469](https://github.com/dgraph-io/dgraph/issues/2469)
-- Simplify snapshots, leader now calculates and proposes snapshots to the group. [#2475](https://github.com/dgraph-io/dgraph/issues/2475).
-- Make snapshot streaming more robust. [#2487](https://github.com/dgraph-io/dgraph/issues/2487)
-- Consolidate all txn tracking logic into Oracle, remove inSnapshot logic. [#2480](https://github.com/dgraph-io/dgraph/issues/2480).
+- All Oracle delta streams are applied via Raft proposals. This deals better with network partition like edge-cases. [#2463](https://github.com/hypermodeinc/dgraph/issues/2463)
+- Fix deadlock in 10-node cluster convergence. Fixes [#2286](https://github.com/hypermodeinc/dgraph/issues/2286).
+- Make ReadIndex work safely. [#2469](https://github.com/hypermodeinc/dgraph/issues/2469)
+- Simplify snapshots, leader now calculates and proposes snapshots to the group. [#2475](https://github.com/hypermodeinc/dgraph/issues/2475).
+- Make snapshot streaming more robust. [#2487](https://github.com/hypermodeinc/dgraph/issues/2487)
+- Consolidate all txn tracking logic into Oracle, remove inSnapshot logic. [#2480](https://github.com/hypermodeinc/dgraph/issues/2480).
 - Bug fix in Badger, to stop panics when exporting.
 - Use PreVote to avoid leader change on a node join.
 - Fix a long-standing bug where `raft.Step` was being called via goroutines. It is now called serially.
-- Fix context deadline issues with proposals. [#2501](https://github.com/dgraph-io/dgraph/issues/2501).
+- Fix context deadline issues with proposals. [#2501](https://github.com/hypermodeinc/dgraph/issues/2501).
 
 ## [1.0.6] - 2018-06-20
-[1.0.6]: https://github.com/dgraph-io/dgraph/compare/v1.0.5...v1.0.6
+[1.0.6]: https://github.com/hypermodeinc/dgraph/compare/v1.0.5...v1.0.6
 
 ### Added
 
-* Support GraphQL vars as args for Regexp function. [#2353](https://github.com/dgraph-io/dgraph/issues/2353)
-* Support GraphQL vars with filters. [#2359](https://github.com/dgraph-io/dgraph/issues/2359)
-* Add JSON mutations to raw HTTP. [#2396](https://github.com/dgraph-io/dgraph/issues/2396)
+* Support GraphQL vars as args for Regexp function. [#2353](https://github.com/hypermodeinc/dgraph/issues/2353)
+* Support GraphQL vars with filters. [#2359](https://github.com/hypermodeinc/dgraph/issues/2359)
+* Add JSON mutations to raw HTTP. [#2396](https://github.com/hypermodeinc/dgraph/issues/2396)
 
 ### Fixed
 
-* Fix math >= evaluation. [#2365](https://github.com/dgraph-io/dgraph/issues/2365)
-* Avoid race condition between mutation commit and predicate move. [#2392](https://github.com/dgraph-io/dgraph/issues/2392)
-* Ability to correctly distinguish float from int in JSON. [#2398](https://github.com/dgraph-io/dgraph/issues/2398)
-* Remove _dummy_ data key. [#2401](https://github.com/dgraph-io/dgraph/issues/2401)
+* Fix math >= evaluation. [#2365](https://github.com/hypermodeinc/dgraph/issues/2365)
+* Avoid race condition between mutation commit and predicate move. [#2392](https://github.com/hypermodeinc/dgraph/issues/2392)
+* Ability to correctly distinguish float from int in JSON. [#2398](https://github.com/hypermodeinc/dgraph/issues/2398)
+* Remove _dummy_ data key. [#2401](https://github.com/hypermodeinc/dgraph/issues/2401)
 * Serialize applying of Raft proposals. Concurrent application was complex and
-    cause of multiple bugs. [#2428](https://github.com/dgraph-io/dgraph/issues/2428).
+    cause of multiple bugs. [#2428](https://github.com/hypermodeinc/dgraph/issues/2428).
 * Improve Zero connections.
-* Fix bugs in snapshot move, refactor code and improve performance significantly. [#2440](https://github.com/dgraph-io/dgraph/issues/2440), [#2442](https://github.com/dgraph-io/dgraph/issues/2442)
-* Add error handling to GetNoStore. Fixes [#2373](https://github.com/dgraph-io/dgraph/issues/2373).
-* Fix bugs in Bulk loader. [#2449](https://github.com/dgraph-io/dgraph/issues/2449)
-* Posting List and Raft bug fixes. [#2457](https://github.com/dgraph-io/dgraph/issues/2457)
+* Fix bugs in snapshot move, refactor code and improve performance significantly. [#2440](https://github.com/hypermodeinc/dgraph/issues/2440), [#2442](https://github.com/hypermodeinc/dgraph/issues/2442)
+* Add error handling to GetNoStore. Fixes [#2373](https://github.com/hypermodeinc/dgraph/issues/2373).
+* Fix bugs in Bulk loader. [#2449](https://github.com/hypermodeinc/dgraph/issues/2449)
+* Posting List and Raft bug fixes. [#2457](https://github.com/hypermodeinc/dgraph/issues/2457)
 
 ### Changed
 
 * Pull in Badger v1.5.2.
 * Raft storage is now done entirely via Badger. This reduces RAM
-    consumption by previously used MemoryStorage. [#2433](https://github.com/dgraph-io/dgraph/issues/2433)
+    consumption by previously used MemoryStorage. [#2433](https://github.com/hypermodeinc/dgraph/issues/2433)
 * Trace how node.Run loop performs.
 * Allow tweaking Badger options.
 
@@ -4072,7 +4072,7 @@ If `_reverse_` is passed as an argument to `expand()`, only the reverse predicat
 are now exposed via flags named with `--badger.` prefix.
 
 ## [1.0.5] - 2018-04-20
-[1.0.5]: https://github.com/dgraph-io/dgraph/compare/v1.0.4...v1.0.5
+[1.0.5]: https://github.com/hypermodeinc/dgraph/compare/v1.0.4...v1.0.5
 
 ### Added
 
@@ -4083,19 +4083,19 @@ are now exposed via flags named with `--badger.` prefix.
 ### Fixed
 
 * Fix bug where predicate with string type sometimes appeared as `_:uidffffffffffffffff` in exports.
-* Validate facet value should be according to the facet type supplied when mutating using N-Quads ([#2074](https://github.com/dgraph-io/dgraph/issues/2074)).
-* Use `time.Equal` function for comparing predicates with `datetime`([#2219](https://github.com/dgraph-io/dgraph/issues/2219)).
+* Validate facet value should be according to the facet type supplied when mutating using N-Quads ([#2074](https://github.com/hypermodeinc/dgraph/issues/2074)).
+* Use `time.Equal` function for comparing predicates with `datetime`([#2219](https://github.com/hypermodeinc/dgraph/issues/2219)).
 * Skip `BitEmptyPosting` for `has` queries.
-* Return error from query if we don't serve the group for the attribute instead of crashing ([#2227](https://github.com/dgraph-io/dgraph/issues/2227)).
-* Send `maxpending` in connection state to server ([#2236](https://github.com/dgraph-io/dgraph/issues/2236)).
-* Fix bug in SP* transactions ([#2148](https://github.com/dgraph-io/dgraph/issues/2148)).
+* Return error from query if we don't serve the group for the attribute instead of crashing ([#2227](https://github.com/hypermodeinc/dgraph/issues/2227)).
+* Send `maxpending` in connection state to server ([#2236](https://github.com/hypermodeinc/dgraph/issues/2236)).
+* Fix bug in SP* transactions ([#2148](https://github.com/hypermodeinc/dgraph/issues/2148)).
 * Batch and send during snapshot to make snapshots faster.
 * Don't skip schema keys while calculating tablets served.
-* Fix the issue which could lead to snapshot getting blocked for a cluster with replicas ([#2266](https://github.com/dgraph-io/dgraph/issues/2266)).
+* Fix the issue which could lead to snapshot getting blocked for a cluster with replicas ([#2266](https://github.com/hypermodeinc/dgraph/issues/2266)).
 * Dgraph server retries indefinitely to connect to Zero.
 * Allow filtering and regex queries for list types with lossy tokenizers.
-* Dgraph server segfault in worker package ([#2322](https://github.com/dgraph-io/dgraph/issues/2322)).
-* Node crashes can lead to the loss of inserted triples ([#2290](https://github.com/dgraph-io/dgraph/issues/2290)).
+* Dgraph server segfault in worker package ([#2322](https://github.com/hypermodeinc/dgraph/issues/2322)).
+* Node crashes can lead to the loss of inserted triples ([#2290](https://github.com/hypermodeinc/dgraph/issues/2290)).
 
 
 ### Changed
@@ -4108,7 +4108,7 @@ are now exposed via flags named with `--badger.` prefix.
   one-third of the total RAM available on the server.
 
 ## [1.0.4] - 2018-03-09
-[1.0.4]: https://github.com/dgraph-io/dgraph/compare/v1.0.3...v1.0.4
+[1.0.4]: https://github.com/hypermodeinc/dgraph/compare/v1.0.3...v1.0.4
 
 ### Added
 
@@ -4147,7 +4147,7 @@ are now exposed via flags named with `--badger.` prefix.
 
 
 ## [1.0.3] - 2018-02-08
-[1.0.3]: https://github.com/dgraph-io/dgraph/compare/v1.0.2...v1.0.3
+[1.0.3]: https://github.com/hypermodeinc/dgraph/compare/v1.0.2...v1.0.3
 
 ### Added
 
@@ -4175,7 +4175,7 @@ are now exposed via flags named with `--badger.` prefix.
 * Print predicate name as part of the warning about long term for exact index.
 
 ## [1.0.2] - 2018-01-17
-[1.0.2]: https://github.com/dgraph-io/dgraph/compare/v1.0.1...v1.0.2
+[1.0.2]: https://github.com/hypermodeinc/dgraph/compare/v1.0.1...v1.0.2
 
 ### Fixed
 
@@ -4202,7 +4202,7 @@ instead use the address given by user.
 * Only send keys corresponding to data that was mutated.
 
 ## [1.0.1] - 2017-12-20
-[1.0.1]: https://github.com/dgraph-io/dgraph/compare/v1.0.0...v1.0.1
+[1.0.1]: https://github.com/hypermodeinc/dgraph/compare/v1.0.0...v1.0.1
 
 ### Fixed
 
@@ -4216,7 +4216,7 @@ instead use the address given by user.
 * Make sure at least one field is set while doing Alter.
 
 ## [1.0.0] - 2017-12-18
-[1.0.0]: https://github.com/dgraph-io/dgraph/compare/v0.9.3...v1.0.0
+[1.0.0]: https://github.com/hypermodeinc/dgraph/compare/v0.9.3...v1.0.0
 
 ### Added
 
@@ -4252,7 +4252,7 @@ instead use the address given by user.
 *  Check if GraphQL Variable is defined before using.
 
 ## [0.9.3] - 2017-12-01
-[0.9.3]: https://github.com/dgraph-io/dgraph/compare/v0.9.2...v0.9.3
+[0.9.3]: https://github.com/hypermodeinc/dgraph/compare/v0.9.2...v0.9.3
 
 ### Added
 
@@ -4284,7 +4284,7 @@ instead use the address given by user.
 * Proto definitions are split into intern and api.
 
 ## [0.9.2] - 2017-11-20
-[0.9.2]: https://github.com/dgraph-io/dgraph/compare/v0.9.1...v0.9.2
+[0.9.2]: https://github.com/hypermodeinc/dgraph/compare/v0.9.1...v0.9.2
 
 ### Added
 
@@ -4303,7 +4303,7 @@ instead use the address given by user.
 * Fix (--ui) flag not being parsed properly.
 
 ## [0.9.1] - 2017-11-15
-[0.9.1]: https://github.com/dgraph-io/dgraph/compare/v0.9.0...v0.9.1
+[0.9.1]: https://github.com/hypermodeinc/dgraph/compare/v0.9.0...v0.9.1
 
 ### Changed
 
@@ -4311,7 +4311,7 @@ instead use the address given by user.
 For `/commit` API, keys are passed in the body.
 
 ## [0.9.0] - 2017-11-14
-[0.9.0]: https://github.com/dgraph-io/dgraph/compare/v0.8.3...v0.9.0
+[0.9.0]: https://github.com/hypermodeinc/dgraph/compare/v0.8.3...v0.9.0
 
 **The latest release has a lot of breaking changes but also brings powerful features like Transactions, support for CJK and custom tokenization.**
 

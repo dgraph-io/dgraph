@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	dgraphRepoUrl = "https://github.com/dgraph-io/dgraph.git"
+	dgraphRepoUrl = "https://github.com/hypermodeinc/dgraph.git"
 	cloneTimeout  = 10 * time.Minute
 )
 

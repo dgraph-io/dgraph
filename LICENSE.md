@@ -1,6 +1,6 @@
 ## Dgraph Licensing
 
-Copyright 2016-2023 Dgraph Labs, Inc.
+Copyright 2016-2025 Hypermode Inc.
 
 Source code in this repository is variously licensed under the Apache Public
 License 2.0 (APL) and the Dgraph Community License (DCL). A copy of each license
@@ -13,4 +13,4 @@ specific language governing permissions and limitations under the License.
 
 ## Trademark
 
-Dgraph is a registered trademark of Dgraph Labs, Inc.
+Dgraph is a registered trademark of Hypermode Inc.

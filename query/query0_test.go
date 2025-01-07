@@ -1,7 +1,7 @@
 //go:build integration || cloud || upgrade
 
 /*
- * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -595,7 +595,7 @@ func TestCascadeWithSort(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
 }
 
-// Regression test for issue described in https://github.com/dgraph-io/dgraph/pull/8441
+// Regression test for issue described in https://github.com/hypermodeinc/dgraph/pull/8441
 func TestNegativeOffset(t *testing.T) {
 	query := `
 	{

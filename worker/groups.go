@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	var connState *pb.ConnectionState
 	var err error
 
-	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	for { // Keep on retrying. See: https://github.com/hypermodeinc/dgraph/issues/2289
 		pl := gr.connToZeroLeader()
 		if pl == nil {
 			continue
@@ -723,7 +723,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	// No leader found. Let's get the latest membership state from Zero.
 	delay := connBaseDelay
 	maxHalfDelay := time.Second
-	for i := 0; ; i++ { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	for i := 0; ; i++ { // Keep on retrying. See: https://github.com/hypermodeinc/dgraph/issues/2289
 		if g.IsClosed() {
 			return nil
 		}

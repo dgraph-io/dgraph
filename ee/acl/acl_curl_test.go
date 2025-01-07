@@ -2,13 +2,13 @@
 // +build !oss,integration
 
 /*
- * Copyright 2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Dgraph Community License (the "License"); you
  * may not use this file except in compliance with the License. You
  * may obtain a copy of the License at
  *
- *     https://github.com/dgraph-io/dgraph/blob/main/licenses/DCL.txt
+ *     https://github.com/hypermodeinc/dgraph/blob/main/licenses/DCL.txt
  */
 
 package acl

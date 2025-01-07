@@ -1,7 +1,7 @@
 //go:build integration || upgrade
 
 /*
- * Copyright 2017-2023 Dgraph Labs, Inc. and Contributors
+ * Copyright 2017-2025 Hypermode Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2414,7 +2414,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	require.NoError(t, err)
 	ctx := context.Background()
 	// This test checks that we consider reverse count index keys while doing conflict detection
-	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
+	// for transactions. See https://github.com/hypermodeinc/dgraph/issues/3893 for more details.
 	op := &api.Operation{}
 	op.Schema = `friend: [uid] @count @reverse .`
 	require.NoError(t, gcli.Alter(ctx, op))
