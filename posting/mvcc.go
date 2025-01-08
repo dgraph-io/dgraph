@@ -215,10 +215,10 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		case <-closer.HasBeenClosed():
 			return
 		case <-cleanupTick.C:
-			currTs := time.Now().UnixNano()
+			currTs := time.Now().Unix()
 			for hash, ts := range m {
 				// Remove entries from map which have been there for there more than 10 seconds.
-				if currTs-ts >= int64(10*time.Second) {
+				if currTs-ts >= 10 {
 					delete(m, hash)
 				}
 			}
