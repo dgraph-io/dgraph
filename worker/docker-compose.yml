@@ -99,7 +99,7 @@ services:
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=6; group=2;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
   jaeger:
-    image: jaegertracing/all-in-one:1.18
+    image: jaegertracing/all-in-one:1.60
     working_dir: /working/jaeger
     environment:
     - SPAN_STORAGE_TYPE=badger
