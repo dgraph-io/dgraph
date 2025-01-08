@@ -16,7 +16,7 @@ variable "minio_secret_key" { default = "" }
 # Modules
 #####################################################################
 module "dgraph_backups" {
-  source     = "git::https://github.com/terraform-google-modules/terraform-google-cloud-storage.git//modules/simple_bucket?ref=v1.7.0"
+  source     = "git::https://github.com/terraform-google-modules/terraform-google-cloud-storage.git//modules/simple_bucket?ref=v1.7.2"
   name       = var.name
   project_id = var.project_id
   location   = var.region
