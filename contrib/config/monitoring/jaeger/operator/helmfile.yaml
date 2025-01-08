@@ -8,7 +8,7 @@ releases:
   - name: jaeger-operator
     namespace: observability
     chart: jaegertracing/jaeger-operator
-    version: 2.17.0
+    version: 2.57.0
     values:
       - serviceAccount:
           name: jaeger-operator
