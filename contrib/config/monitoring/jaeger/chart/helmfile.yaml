@@ -8,7 +8,7 @@ releases:
   - name: jaeger
     namespace: observability
     chart: jaegertracing/jaeger
-    version: 0.37.0
+    version: 0.74.1
     values:
       - ./jaeger_{{ env "JAEGER_STORAGE_TYPE" | default "cassandra" }}.yaml
       - storage:
