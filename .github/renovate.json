@@ -1,4 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>hypermodeinc/renovate-config"]
+  "extends": ["github>hypermodeinc/renovate-config"],
+  "ignore-paths": "contrib/**"
 }
