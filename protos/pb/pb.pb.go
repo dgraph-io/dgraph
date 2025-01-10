@@ -2576,15 +2576,15 @@ type RestoreRequest struct {
 	RestoreTs uint64 `protobuf:"varint,2,opt,name=restore_ts,json=restoreTs,proto3" json:"restore_ts,omitempty"`
 	Location  string `protobuf:"bytes,3,opt,name=location,proto3" json:"location,omitempty"`
 	BackupId  string `protobuf:"bytes,4,opt,name=backup_id,json=backupId,proto3" json:"backup_id,omitempty"`
-	AccessKey string `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	// Credentials when using a minio or S3 bucket as the backup location.
-	SecretKey         Sensitive `protobuf:"bytes,6,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
-	SessionToken      Sensitive `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	Anonymous         bool      `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
-	EncryptionKeyFile string    `protobuf:"bytes,9,opt,name=encryption_key_file,json=encryptionKeyFile,proto3" json:"encryption_key_file,omitempty"`
+	AccessKey    string    `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	SecretKey    Sensitive `protobuf:"bytes,6,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
+	SessionToken Sensitive `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	Anonymous    bool      `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
 	// Info needed to process encrypted backups.
-	VaultAddr string `protobuf:"bytes,10,opt,name=vault_addr,json=vaultAddr,proto3" json:"vault_addr,omitempty"`
+	EncryptionKeyFile string `protobuf:"bytes,9,opt,name=encryption_key_file,json=encryptionKeyFile,proto3" json:"encryption_key_file,omitempty"`
 	// Vault options
+	VaultAddr               string `protobuf:"bytes,10,opt,name=vault_addr,json=vaultAddr,proto3" json:"vault_addr,omitempty"`
 	VaultRoleidFile         string `protobuf:"bytes,11,opt,name=vault_roleid_file,json=vaultRoleidFile,proto3" json:"vault_roleid_file,omitempty"`
 	VaultSecretidFile       string `protobuf:"bytes,12,opt,name=vault_secretid_file,json=vaultSecretidFile,proto3" json:"vault_secretid_file,omitempty"`
 	VaultPath               string `protobuf:"bytes,13,opt,name=vault_path,json=vaultPath,proto3" json:"vault_path,omitempty"`
