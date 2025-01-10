@@ -153,7 +153,21 @@ Copyright 2015-2025 Hypermode Inc.
 
 ### Testing
 
-#### Dgraph
+Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage. 
+Due to the comprehensive nature of these tests, a complete test run can take several hours, depending
+on your hardware. To manage this complex testing process efficiently, we've developed a custom test 
+runner implemented in Go, which resides in the ./t directory. This specialized runner provides enhanced 
+control and flexibility beyond what's available through standard Go testing commands.
+
+For dependencies, runner flags and instructions for running tests on non-linux machines, see 
+the [README](t/README.md) in the [*t*](t) folder.
+
+
+1. Change directory to t directory. 
+2. If all packages need to be tested, run
+      make test
+   If only a specific package needs to be tested, run
+      make test args="--pkg=desired_package_name"
 
 1. Change directory to t directory.
 2. If all packages need to be tested, run make test If only a specific package needs to be tested,
