@@ -1,12 +1,17 @@
 name: ci-dgraph-code-coverage
+
 on:
   push:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     branches:
       - main
-      - 'release/**'
+      - release/**
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-code-coverage:
     runs-on: warp-ubuntu-latest-x64-4x
@@ -48,4 +53,5 @@ jobs:
       - name: Install Goveralls
         run: go install github.com/mattn/goveralls@latest
       - name: Send Coverage Results
-        run: cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out
+        run:
+          cd t && goveralls -repotoken ${{ secrets.COVERALLSIO_TOKEN }} -coverprofile=coverage.out

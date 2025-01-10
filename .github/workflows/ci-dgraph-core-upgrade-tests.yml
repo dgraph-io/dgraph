@@ -1,9 +1,10 @@
 name: ci-dgraph-core-upgrade-tests
+
 on:
   pull_request:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     types:
       - opened
       - reopened
@@ -11,7 +12,11 @@ on:
       - ready_for_review
     branches:
       - main
-      - 'release/**'
+      - release/**
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-upgrade-tests:
     if: github.event.pull_request.draft == false

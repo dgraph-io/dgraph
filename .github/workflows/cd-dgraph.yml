@@ -1,4 +1,5 @@
 name: cd-dgraph
+
 on:
   workflow_dispatch:
     inputs:
@@ -13,14 +14,18 @@ on:
       custom-build:
         type: boolean
         default: false
-        description: if checked, images will be pushed to dgraph-custom repo in Dockerhub 
+        description: if checked, images will be pushed to dgraph-custom repo in Dockerhub
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-build-amd64:
     runs-on: warp-ubuntu-latest-x64-16x
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: '${{ github.event.inputs.releasetag }}'
+          ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -119,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: '${{ github.event.inputs.releasetag }}'
+          ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -195,8 +200,9 @@ jobs:
         with:
           name: dgraph-docker-arm64
           path: dgraph-docker-arm64.tar
-      - name: Make Dgraph Standalone Docker Image with Version
-         #No need to build and push Standalone Image when its a custom build
+      - name:
+          Make Dgraph Standalone Docker Image with Version
+          #No need to build and push Standalone Image when its a custom build
         if: inputs.custom-build == false
         run: |
           set -e
@@ -217,7 +223,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: '${{ github.event.inputs.releasetag }}'
+          ref: "${{ github.event.inputs.releasetag }}"
       - name: Set Dgraph Release Version
         run: |
           #!/bin/bash
@@ -237,7 +243,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD_TOKEN }}
-        
+
           # Download AMD64 Tar File
       - name: Download Dgraph AMD64 Tar
         uses: actions/download-artifact@v4
@@ -259,7 +265,7 @@ jobs:
       - name: Load ARM64 Docker Image
         run: |
           docker load -i dgraph-docker-arm64.tar
-      
+
       # Download Standalone AMD64 Tar File
       - name: Download Standalone AMD64 Tar
         if: inputs.custom-build == false
@@ -272,7 +278,7 @@ jobs:
         if: inputs.custom-build == false
         run: |
           docker load -i dgraph-standalone-amd64.tar
-      
+
       # Download Standalone ARM64 Tar File
       - name: Download Standalone ARM64 Tar
         if: inputs.custom-build == false
@@ -285,36 +291,33 @@ jobs:
         if: inputs.custom-build == false
         run: |
           docker load -i dgraph-standalone-arm64.tar
-      
-      
+
       - name: Docker Manifest
         run: |
-            if [ "${{ github.event.inputs.custom-build }}" == "true" ]; then
-               #Push AMD and ARM images to dgraph-custom repo
-              docker push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
-              docker push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-              docker manifest create dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-              docker manifest push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}
-            else
-              # Push standalone Images and manifest
-              docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
-              docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-              docker manifest create dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64      
-              docker manifest push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
-              
-             # Push Dgraph  Images  and Manifest
-              docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
-              docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-              docker manifest create dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-              docker manifest push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
+          if [ "${{ github.event.inputs.custom-build }}" == "true" ]; then
+             #Push AMD and ARM images to dgraph-custom repo
+            docker push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+            docker push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest create dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest push dgraph/dgraph-custom:${{ env.DGRAPH_RELEASE_VERSION }}
+          else
+            # Push standalone Images and manifest
+            docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+            docker push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest create dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest push dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}
 
-        
-              if [ "${{ github.event.inputs.latest }}" == "true" ]; then
-                 docker manifest create dgraph/standalone:latest --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-                 docker manifest create dgraph/dgraph:latest --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
-                 docker manifest push dgraph/standalone:latest
-                 docker manifest push dgraph/dgraph:latest
-              fi
+           # Push Dgraph  Images  and Manifest
+            docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64
+            docker push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest create dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }} --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+            docker manifest push dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}
+
+
+            if [ "${{ github.event.inputs.latest }}" == "true" ]; then
+               docker manifest create dgraph/standalone:latest --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/standalone:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+               docker manifest create dgraph/dgraph:latest --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-amd64 --amend dgraph/dgraph:${{ env.DGRAPH_RELEASE_VERSION }}-arm64
+               docker manifest push dgraph/standalone:latest
+               docker manifest push dgraph/dgraph:latest
             fi
-
-
+          fi

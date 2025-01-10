@@ -1,33 +1,33 @@
 {
-   "Manifests":[
-      {
-         "type":"full",
-         "since":0,
-         "read_ts":21,
-         "groups":{
-            "1":[
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.password",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.p_query",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.acl.rule",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.drop.op",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.xid",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.xid",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.rule.predicate",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.schema",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.rule.permission",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000Person.name",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.user.group",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000Person.age",
-               "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.type"
-            ]
-         },
-         "backup_id":"vibrant_euclid5",
-         "backup_num":1,
-         "version":2103,
-         "path":"dgraph.20210730.124449.146",
-         "encrypted":false,
-         "drop_operations":null,
-         "compression":"snappy"
-      }
-   ]
+  "Manifests": [
+    {
+      "type": "full",
+      "since": 0,
+      "read_ts": 21,
+      "groups": {
+        "1": [
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.password",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.p_query",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.acl.rule",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.drop.op",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.xid",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.xid",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.rule.predicate",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.graphql.schema",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.rule.permission",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000Person.name",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.user.group",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000Person.age",
+          "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000dgraph.type"
+        ]
+      },
+      "backup_id": "vibrant_euclid5",
+      "backup_num": 1,
+      "version": 2103,
+      "path": "dgraph.20210730.124449.146",
+      "encrypted": false,
+      "drop_operations": null,
+      "compression": "snappy"
+    }
+  ]
 }

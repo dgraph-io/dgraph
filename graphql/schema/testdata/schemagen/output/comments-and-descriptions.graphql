@@ -2,35 +2,53 @@
 # Input Schema
 #######################
 
-"""Desc"""
+"""
+Desc
+"""
 interface I {
-	"""Desc"""
-	s: String!
+  """
+  Desc
+  """
+  s: String!
 }
 
-"""Desc"""
+"""
+Desc
+"""
 type T implements I {
-	s: String!
-	id: ID!
-	"""Desc"""
-	i: Int
+  s: String!
+  id: ID!
+  """
+  Desc
+  """
+  i: Int
 }
 
-"""Desc"""
+"""
+Desc
+"""
 enum AnEnum {
-	AVal
-	"""Desc"""
-	AnotherVal
+  AVal
+  """
+  Desc
+  """
+  AnotherVal
 }
 
-"""Desc"""
+"""
+Desc
+"""
 union A_Union = T
 
-"""Desc"""
+"""
+Desc
+"""
 input AnInput {
-	id: ID!
-	"""Desc"""
-	i: Int
+  id: ID!
+  """
+  Desc
+  """
+  i: Int
 }
 
 #######################
@@ -49,162 +67,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange{
-	min: Int!
-	max: Int!
+input IntRange {
+  min: Int!
+  max: Int!
 }
 
-input FloatRange{
-	min: Float!
-	max: Float!
+input FloatRange {
+  min: Float!
+  max: Float!
 }
 
-input Int64Range{
-	min: Int64!
-	max: Int64!
+input Int64Range {
+  min: Int64!
+  max: Int64!
 }
 
-input DateTimeRange{
-	min: DateTime!
-	max: DateTime!
+input DateTimeRange {
+  min: DateTime!
+  max: DateTime!
 }
 
-input StringRange{
-	min: String!
-	max: String!
+input StringRange {
+  min: String!
+  max: String!
 }
 
 enum DgraphIndex {
-	int
-	int64
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-	geo
-	hnsw
+  int
+  int64
+  float
+  bool
+  hash
+  exact
+  term
+  fulltext
+  trigram
+  regexp
+  year
+  month
+  day
+  hour
+  geo
+  hnsw
 }
 
 input AuthRule {
-	and: [AuthRule]
-	or: [AuthRule]
-	not: AuthRule
-	rule: String
+  and: [AuthRule]
+  or: [AuthRule]
+  not: AuthRule
+  rule: String
 }
 
 enum HTTPMethod {
-	GET
-	POST
-	PUT
-	PATCH
-	DELETE
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
 enum Mode {
-	BATCH
-	SINGLE
+  BATCH
+  SINGLE
 }
 
 input CustomHTTP {
-	url: String!
-	method: HTTPMethod!
-	body: String
-	graphql: String
-	mode: Mode
-	forwardHeaders: [String!]
-	secretHeaders: [String!]
-	introspectionHeaders: [String!]
-	skipIntrospection: Boolean
+  url: String!
+  method: HTTPMethod!
+  body: String
+  graphql: String
+  mode: Mode
+  forwardHeaders: [String!]
+  secretHeaders: [String!]
+  introspectionHeaders: [String!]
+  skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-	value: String
+  value: String
 }
 
 type Point {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input PointRef {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input NearFilter {
-	distance: Float!
-	coordinate: PointRef!
+  distance: Float!
+  coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
+  near: NearFilter
+  within: WithinFilter
 }
 
 type PointList {
-	points: [Point!]!
+  points: [Point!]!
 }
 
 input PointListRef {
-	points: [PointRef!]!
+  points: [PointRef!]!
 }
 
 type Polygon {
-	coordinates: [PointList!]!
+  coordinates: [PointList!]!
 }
 
 input PolygonRef {
-	coordinates: [PointListRef!]!
+  coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-	polygons: [Polygon!]!
+  polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	polygons: [PolygonRef!]!
+  polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-	polygon: PolygonRef!
+  polygon: PolygonRef!
 }
 
 input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
+  point: PointRef
+  polygon: PolygonRef
 }
 
 input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
+  polygon: PolygonRef
+  multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+  near: NearFilter
+  within: WithinFilter
+  contains: ContainsFilter
+  intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-	get: Boolean
-	query: Boolean
-	password: Boolean
-	aggregate: Boolean
+  get: Boolean
+  query: Boolean
+  password: Boolean
+  aggregate: Boolean
 }
 
 input GenerateMutationParams {
-	add: Boolean
-	update: Boolean
-	delete: Boolean
+  add: Boolean
+  update: Boolean
+  delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -216,11 +234,12 @@ directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITIO
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-	password: AuthRule
-	query: AuthRule,
-	add: AuthRule,
-	update: AuthRule,
-	delete: AuthRule) on OBJECT | INTERFACE
+  password: AuthRule
+  query: AuthRule
+  add: AuthRule
+  update: AuthRule
+  delete: AuthRule
+) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
@@ -229,77 +248,78 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
-	query: GenerateQueryParams,
-	mutation: GenerateMutationParams,
-	subscription: Boolean) on OBJECT | INTERFACE
+  query: GenerateQueryParams
+  mutation: GenerateMutationParams
+  subscription: Boolean
+) on OBJECT | INTERFACE
 
 input IntFilter {
-	eq: Int
-	in: [Int]
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-	between: IntRange
+  eq: Int
+  in: [Int]
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: IntRange
 }
 
 input Int64Filter {
-	eq: Int64
-	in: [Int64]
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
-	between: Int64Range
+  eq: Int64
+  in: [Int64]
+  le: Int64
+  lt: Int64
+  ge: Int64
+  gt: Int64
+  between: Int64Range
 }
 
 input FloatFilter {
-	eq: Float
-	in: [Float]
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-	between: FloatRange
+  eq: Float
+  in: [Float]
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: FloatRange
 }
 
 input DateTimeFilter {
-	eq: DateTime
-	in: [DateTime]
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-	between: DateTimeRange
+  eq: DateTime
+  in: [DateTime]
+  le: DateTime
+  lt: DateTime
+  ge: DateTime
+  gt: DateTime
+  between: DateTimeRange
 }
 
 input StringTermFilter {
-	allofterms: String
-	anyofterms: String
+  allofterms: String
+  anyofterms: String
 }
 
 input StringRegExpFilter {
-	regexp: String
+  regexp: String
 }
 
 input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
+  alloftext: String
+  anyoftext: String
 }
 
 input StringExactFilter {
-	eq: String
-	in: [String]
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	between: StringRange
+  eq: String
+  in: [String]
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  between: StringRange
 }
 
 input StringHashFilter {
-	eq: String
-	in: [String]
+  eq: String
+  in: [String]
 }
 
 #######################
@@ -307,46 +327,46 @@ input StringHashFilter {
 #######################
 
 type AddTPayload {
-	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
-	numUids: Int
+  t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+  numUids: Int
 }
 
 type DeleteIPayload {
-	i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
-	msg: String
-	numUids: Int
+  i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+  msg: String
+  numUids: Int
 }
 
 type DeleteTPayload {
-	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
-	msg: String
-	numUids: Int
+  t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+  msg: String
+  numUids: Int
 }
 
 type IAggregateResult {
-	count: Int
-	sMin: String
-	sMax: String
+  count: Int
+  sMin: String
+  sMax: String
 }
 
 type TAggregateResult {
-	count: Int
-	sMin: String
-	sMax: String
-	iMin: Int
-	iMax: Int
-	iSum: Int
-	iAvg: Float
+  count: Int
+  sMin: String
+  sMax: String
+  iMin: Int
+  iMax: Int
+  iSum: Int
+  iAvg: Float
 }
 
 type UpdateIPayload {
-	i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
-	numUids: Int
+  i(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+  numUids: Int
 }
 
 type UpdateTPayload {
-	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
-	numUids: Int
+  t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+  numUids: Int
 }
 
 #######################
@@ -354,25 +374,25 @@ type UpdateTPayload {
 #######################
 
 enum A_UnionType {
-	T
+  T
 }
 
 enum IHasFilter {
-	s
+  s
 }
 
 enum IOrderable {
-	s
+  s
 }
 
 enum THasFilter {
-	s
-	i
+  s
+  i
 }
 
 enum TOrderable {
-	s
-	i
+  s
+  i
 }
 
 #######################
@@ -380,75 +400,83 @@ enum TOrderable {
 #######################
 
 input A_UnionFilter {
-	memberTypes: [A_UnionType!]
-	tFilter: TFilter
+  memberTypes: [A_UnionType!]
+  tFilter: TFilter
 }
 
 input A_UnionRef {
-	tRef: TRef
+  tRef: TRef
 }
 
 input AddTInput {
-	s: String!
-	"""Desc"""
-	i: Int
+  s: String!
+  """
+  Desc
+  """
+  i: Int
 }
 
 input IFilter {
-	has: [IHasFilter]
-	and: [IFilter]
-	or: [IFilter]
-	not: IFilter
+  has: [IHasFilter]
+  and: [IFilter]
+  or: [IFilter]
+  not: IFilter
 }
 
 input IOrder {
-	asc: IOrderable
-	desc: IOrderable
-	then: IOrder
+  asc: IOrderable
+  desc: IOrderable
+  then: IOrder
 }
 
 input IPatch {
-	"""Desc"""
-	s: String
+  """
+  Desc
+  """
+  s: String
 }
 
 input TFilter {
-	id: [ID!]
-	has: [THasFilter]
-	and: [TFilter]
-	or: [TFilter]
-	not: TFilter
+  id: [ID!]
+  has: [THasFilter]
+  and: [TFilter]
+  or: [TFilter]
+  not: TFilter
 }
 
 input TOrder {
-	asc: TOrderable
-	desc: TOrderable
-	then: TOrder
+  asc: TOrderable
+  desc: TOrderable
+  then: TOrder
 }
 
 input TPatch {
-	s: String
-	"""Desc"""
-	i: Int
+  s: String
+  """
+  Desc
+  """
+  i: Int
 }
 
 input TRef {
-	id: ID
-	s: String
-	"""Desc"""
-	i: Int
+  id: ID
+  s: String
+  """
+  Desc
+  """
+  i: Int
 }
 
 input UpdateIInput {
-	filter: IFilter!
-	set: IPatch
-	remove: IPatch
+  filter: IFilter!
+  set: IPatch
+  remove: IPatch
 }
 
 input UpdateTInput {
-	filter: TFilter!
-	set: TPatch
-	remove: TPatch
+  filter: TFilter!
+  set: TPatch
+  remove: TPatch
 }
 
 #######################
@@ -456,11 +484,11 @@ input UpdateTInput {
 #######################
 
 type Query {
-	queryI(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
-	aggregateI(filter: IFilter): IAggregateResult
-	getT(id: ID!): T
-	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
-	aggregateT(filter: TFilter): TAggregateResult
+  queryI(filter: IFilter, order: IOrder, first: Int, offset: Int): [I]
+  aggregateI(filter: IFilter): IAggregateResult
+  getT(id: ID!): T
+  queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+  aggregateT(filter: TFilter): TAggregateResult
 }
 
 #######################
@@ -468,10 +496,9 @@ type Query {
 #######################
 
 type Mutation {
-	updateI(input: UpdateIInput!): UpdateIPayload
-	deleteI(filter: IFilter!): DeleteIPayload
-	addT(input: [AddTInput!]!): AddTPayload
-	updateT(input: UpdateTInput!): UpdateTPayload
-	deleteT(filter: TFilter!): DeleteTPayload
+  updateI(input: UpdateIInput!): UpdateIPayload
+  deleteI(filter: IFilter!): DeleteIPayload
+  addT(input: [AddTInput!]!): AddTPayload
+  updateT(input: UpdateTInput!): UpdateTPayload
+  deleteT(filter: TFilter!): DeleteTPayload
 }
-

@@ -1,5 +1,4 @@
--
-  name: "Only id filter"
+- name: Only id filter
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
@@ -10,7 +9,7 @@
     { "filter":
       { "id": ["0x1", "0x2"] }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -28,8 +27,7 @@
       }
     }
 
--
-  name: "Delete with deep query in result"
+- name: Delete with deep query in result
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
@@ -53,7 +51,7 @@
     { "filter":
       { "id": ["0x1", "0x2"] }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -89,8 +87,7 @@
       }
     }
 
--
-  name: "Multiple filters including id"
+- name: Multiple filters including id
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
@@ -104,7 +101,7 @@
         "name": { "eq": "A.N. Author" }
       }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -122,8 +119,7 @@
       }
     }
 
--
-  name: "Multiple non-id filters"
+- name: Multiple non-id filters
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
@@ -137,7 +133,7 @@
         "dob": { "eq": "2000-01-01" }
       }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -155,8 +151,7 @@
       }
     }
 
--
-  name: "With list inverse"
+- name: With list inverse
   gqlmutation: |
     mutation deleteState($filter: StateFilter!) {
       deleteState(filter: $filter) {
@@ -167,7 +162,7 @@
     { "filter":
       { "code": { "eq": "abc" } }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -185,8 +180,7 @@
       }
     }
 
--
-  name: "With multiple inverses"
+- name: With multiple inverses
   gqlmutation: |
     mutation deletePost($filter: PostFilter!) {
       deletePost(filter: $filter) {
@@ -197,7 +191,7 @@
     { "filter":
       { "postID": ["0x1", "0x2"] }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -220,8 +214,7 @@
       }
     }
 
--
-  name: "Delete mutation on a type with a field with reverse predicate"
+- name: Delete mutation on a type with a field with reverse predicate
   gqlmutation: |
     mutation deleteMovie($filter: MovieFilter!) {
       deleteMovie(filter: $filter) {
@@ -232,7 +225,7 @@
     { "filter":
       { "id": ["0x1", "0x2"] }
     }
-  explanation: "The correct mutation and query should be built using variable and filters."
+  explanation: The correct mutation and query should be built using variable and filters.
   dgmutations:
     - deletejson: |
         [
@@ -249,8 +242,7 @@
         MovieDirector_2 as ~directed.movies
       }
     }
--
-  name: "Deleting an interface with just a field with @id directive"
+- name: Deleting an interface with just a field with @id directive
   gqlmutation: |
     mutation{
       deleteA(filter:{name:{eq: "xyz"}}){
@@ -278,8 +270,7 @@
     - deletejson: |
         [{ "uid": "uid(x)"}]
 
--
-  name: "delete with multiple id's"
+- name: delete with multiple id's
   gqlmutation: |
     mutation deleteBook($filter: BookFilter!) {
     	deleteBook(filter: $filter) {

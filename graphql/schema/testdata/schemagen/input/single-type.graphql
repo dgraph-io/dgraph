@@ -1,7 +1,7 @@
 type Message {
-    id: ID!
-    content: String!
-    author: String
-    uniqueId: Int64
-    datePosted: DateTime
+  id: ID!
+  content: String!
+  author: String
+  uniqueId: Int64
+  datePosted: DateTime
 }

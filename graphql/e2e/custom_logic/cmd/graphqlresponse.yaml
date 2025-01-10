@@ -1,5 +1,5 @@
-- name: "validinputfield"
-  description: "Test case for validating remote input type with valid local input type."
+- name: validinputfield
+  description: Test case for validating remote input type with valid local input type
   schema: |
     type Country {
       code: String
@@ -15,70 +15,71 @@
       countries(filter: CountryInput!): [Country!]!
     }
 
-- name: "invalidfield"
-  description: "Test case for validating remote input type with invalid local input type."
+- name: invalidfield
+  description: Test case for validating remote input type with invalid local input type
   schema: |
-      type Country {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: Int!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: Int!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: String!
-      }
+    input StateInput {
+      code: String!
+      name: String!
+    }
 
-      type Query{
-        countries(filter: CountryInput!): [Country!]!
-      }
+    type Query{
+      countries(filter: CountryInput!): [Country!]!
+    }
 
-- name: "nestedinvalid"
-  description: "Test case to type check nested types."
+- name: nestedinvalid
+  description: Test case to type check nested types
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: Int!
-      }
+    input StateInput {
+      code: String!
+      name: Int!
+    }
 
-      type Query{
-        countries(filter: CountryInput!): [Country!]!
-      }
+    type Query{
+      countries(filter: CountryInput!): [Country!]!
+    }
 
-- name: "validcountry"
-  description: "Test case to check return type is valid and results are properly rewritten by the dgraph"
+- name: validcountry
+  description:
+    Test case to check return type is valid and results are properly rewritten by the dgraph
   schema: |
     type Country {
       code: String
@@ -89,8 +90,8 @@
       country(code: ID!): Country!
     }
 
-- name: "argsonfields"
-  description: "Test case to check args on fields can be passed by Dgraph"
+- name: argsonfields
+  description: Test case to check args on fields can be passed by Dgraph
   schema: |
     type Country {
       code(size: Int!): String
@@ -117,36 +118,36 @@
       }
     }
 
-- name: "validcountrywitherror"
-  description: "Test case to validate dgraph can handle both valid data and error"
+- name: validcountrywitherror
+  description: Test case to validate dgraph can handle both valid data and error
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: String!
-      }
+    input StateInput {
+      code: String!
+      name: String!
+    }
 
-      type Query{
-        country(code: ID!): Country!
-      }
+    type Query{
+      country(code: ID!): Country!
+    }
   request: |
     query($id: ID!) { country(code: $id) {
     code
@@ -169,8 +170,8 @@
   variables: |
     {"id":"BI"}
 
-- name: "validcountries"
-  description: "Test case to validate return multiple entities as part of graphql response"
+- name: validcountries
+  description: Test case to validate return multiple entities as part of graphql response
   schema: |
     type Country {
       code: String
@@ -181,36 +182,36 @@
       validCountries(code: ID!): [Country]
     }
 
-- name: "graphqlerr"
-  description: "Test case to validate whether dgraph can handle graphql error"
+- name: graphqlerr
+  description: Test case to validate whether dgraph can handle graphql error
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: String!
-      }
+    input StateInput {
+      code: String!
+      name: String!
+    }
 
-      type Query{
-        country(code: ID!): [Country]
-      }
+    type Query{
+      country(code: ID!): [Country]
+    }
   request: |
     query($id: ID!) { country(code: $id) {
     code
@@ -227,8 +228,8 @@
   variables: |
     {"id":"BI"}
 
-- name: "setcountry"
-  description: "Test case to validate graphql mutation"
+- name: setcountry
+  description: Test case to validate graphql mutation
   schema: |
     type Country {
       code: String
@@ -292,40 +293,40 @@
   variables: |
     {"input":{"code":"IN","name":"India","states":[{"code":"RJ","name":"Rajasthan"},{"code":"KA","name":"Karnataka"}]}}
 
-- name: "updatecountries"
-  description: "Test case to validate custom logic mutation update"
+- name: updatecountries
+  description: Test case to validate custom logic mutation update
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: String!
-      }
+    input StateInput {
+      code: String!
+      name: String!
+    }
 
-      type Mutation{
-        updateCountries(name: String, std: Int): [Country!]!
-      }
+    type Mutation{
+      updateCountries(name: String, std: Int): [Country!]!
+    }
 
-      type Query{
-        country(code: ID!): [Country]
-      }
+    type Query{
+      country(code: ID!): [Country]
+    }
   request: |
     mutation($name: String, $std: Int) { updateCountries(name: $name, std: $std) {
     name
@@ -355,7 +356,7 @@
       %s(%s:ID!): String
     }
 
-- name: "introspectionresults"
+- name: introspectionresults
   schema: |
     input UserInput{
       id: ID!
@@ -437,7 +438,7 @@
       getPosts(input: [PostFilterInput]): [Post!]
     }
 
-- name: "carsschema"
+- name: carsschema
   schema: |
     type Car {
       id: ID!
@@ -470,41 +471,41 @@
 
 - name: invalidargument
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      type Query{
-        country(no_code: ID!): Country!
-        }
+    type Query{
+      country(no_code: ID!): Country!
+      }
 
 - name: invalidtype
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      type Query{
-        country(code: Int!): Country!
-      }
+    type Query{
+      country(code: Int!): Country!
+    }
 
 - name: invalidinputbatchedfield
   schema: |

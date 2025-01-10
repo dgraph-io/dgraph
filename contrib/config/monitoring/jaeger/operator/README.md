@@ -1,20 +1,25 @@
 # Jaeger Operator
 
-The [Jaeger operator](https://github.com/jaegertracing/jaeger-operator) is an implementation of a [Kubernetes operator](https://coreos.com/operators/) that aims to ease the operational complexity of deploying and managing Jaeger.
+The [Jaeger operator](https://github.com/jaegertracing/jaeger-operator) is an implementation of a
+[Kubernetes operator](https://coreos.com/operators/) that aims to ease the operational complexity of
+deploying and managing Jaeger.
 
 ## Tool Requirements
 
 ### Required
 
-* [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required to interact with kubernetes
-* [helm](https://helm.sh/docs/intro/install/) - required to install jaeger-operator using helm chart
+- [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required to interact with
+  kubernetes
+- [helm](https://helm.sh/docs/intro/install/) - required to install jaeger-operator using helm chart
 
 ### Optional
 
-These tools are optional if you would like to use a single command to install all the jaeger components and dgraph configured to use jaeger.
+These tools are optional if you would like to use a single command to install all the jaeger
+components and dgraph configured to use jaeger.
 
-* [helmfile](https://github.com/roboll/helmfile#installation) 
-* [helm-diff](https://github.com/databus23/helm-diff) helm plugin: `helm plugin install https://github.com/databus23/helm-diff`
+- [helmfile](https://github.com/roboll/helmfile#installation)
+- [helm-diff](https://github.com/databus23/helm-diff) helm plugin:
+  `helm plugin install https://github.com/databus23/helm-diff`
 
 ## Deploy
 
@@ -92,4 +97,4 @@ kubectl port-forward --namespace observability $POD_NAME 16686:16686
 
 Afterward, visit:
 
-* http://localhost:16686
+- http://localhost:16686

@@ -1,9 +1,15 @@
 name: ci-dgraph-jepsen-tests
+
 on:
   schedule:
-    - cron: "0 4 * * 3,6" # run twice weekly
+    - cron: 0 4 * * 3,6 # run twice weekly
+
 env:
-    GOPATH: /home/ubuntu/go
+  GOPATH: /home/ubuntu/go
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-jepsen-tests:
     runs-on: warp-ubuntu-latest-x64-4x

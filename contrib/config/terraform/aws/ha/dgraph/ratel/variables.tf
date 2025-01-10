@@ -59,11 +59,6 @@ variable "key_pair_name" {
   description = "Key Pair name to associate with the instances."
 }
 
-variable "alpha_completed" {
-  type        = bool
-  description = "Temporary variable to define dependency between ratel and alpha."
-}
-
 variable "dgraph_version" {
   type        = string
   description = "Dgraph version for installation."

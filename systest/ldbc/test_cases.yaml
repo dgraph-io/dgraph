@@ -1,58 +1,60 @@
 q1:
   query: 
     '{q(func: eq(fqid, "person_4398046514948")) {
-				firstName
-				lastName
-				birthday
-				locationIP
-				browserUsed
-				gender
-				creationDate
-				isLocatedIn{
-					id
-					name
-				}
-			}}'
-  tag: "IS01"
-  resp: '{
-			"q":[
-			   {
-				  "firstName":"Abhishek",
-				  "lastName":"Roy",
-				  "birthday":"1985-09-06T00:00:00Z",
-				  "locationIP":"27.54.166.12",
-				  "browserUsed":"Internet Explorer",
-				  "gender":"male",
-				  "creationDate":"2010-06-06T23:43:29.643Z",
-				  "isLocatedIn":[
-					{
-						"id":231,
-						"name":"Thanjavur"
-					}
-					]
-			   }
-			]
-		}'
-q2:
-  query: '{
-      q(func: eq(fqid, "person_933")) {
-				~hasCreator( orderdesc: creationDate, orderdesc: id, first:10){
-					id
-					content
-					creationDate
-					dgraph.type
-					replyOf{
-						id
-						hasCreator{
-							id
-							firstName
-							lastName
-						}
-					}
-				}
-		  }
+            firstName
+            lastName
+            birthday
+            locationIP
+            browserUsed
+            gender
+            creationDate
+            isLocatedIn{
+                id
+                name
+            }
+        }}'
+  tag: IS01
+  resp:
+    '{
+        "q":[
+            {
+                "firstName":"Abhishek",
+                "lastName":"Roy",
+                "birthday":"1985-09-06T00:00:00Z",
+                "locationIP":"27.54.166.12",
+                "browserUsed":"Internet Explorer",
+                "gender":"male",
+                "creationDate":"2010-06-06T23:43:29.643Z",
+                "isLocatedIn":[
+                {
+                    "id":231,
+                    "name":"Thanjavur"
+                }
+                ]
+            }
+        ]
     }'
-  tag: 'IS02'
+q2:
+  query:
+    '{
+        q(func: eq(fqid, "person_933")) {
+                    ~hasCreator( orderdesc: creationDate, orderdesc: id, first:10){
+                        id
+                        content
+                        creationDate
+                        dgraph.type
+                        replyOf{
+                            id
+                            hasCreator{
+                                id
+                                firstName
+                                lastName
+                            }
+                        }
+                    }
+            }
+        }'
+  tag: IS02
   resp: '{
       "q": [
         {
@@ -162,7 +164,7 @@ q2:
       ]
     }'
 q3:
-  tag: "IS03"
+  tag: IS03
   query: '{
 			q(func: eq(fqid, "person_933")) {
 				knows @facets( orderdesc: creationDate, orderdesc: id){
@@ -200,7 +202,7 @@ q3:
       ]
   }'
 q4:
-  tag: 'IS04'
+  tag: IS04
   query: '{
 		q(func: eq(fqid, "post_3")) {
 			creationDate
@@ -218,7 +220,7 @@ q4:
     ]
   }'
 q5:
-  tag: 'IS05'
+  tag: IS05
   query: '{
     q(func: eq(fqid, "post_3")) {
 			hasCreator{
@@ -243,7 +245,7 @@ q5:
     ]
   }'
 q6:
-  tag: 'IS06'
+  tag: IS06
   query: '{
     q(func: eq(fqid, "post_3")) {
 			~containerOf{
@@ -278,7 +280,7 @@ q6:
    ]
   }'
 q7:
-  tag: 'IS07'
+  tag: IS07
   query: '{
     mid as var(func: eq(fqid, "post_549755864897")){
 				c as hasCreator
@@ -437,7 +439,7 @@ q7:
    ]
   }'
 q8: 
-  tag: "IC01"
+  tag: IC01
   query: '{
     pid as var(func: type(person)) @filter(eq(id, "4398046514948" ))
 		nid as var(func: eq(firstName, "Deepak"))
@@ -1342,7 +1344,7 @@ q8:
         ]
         }'
 q9:
-  tag: "IC02"
+  tag: IC02
   query: '{
     var(func: type(person))@filter(eq(id, "4398046514948")){
 				knows{
@@ -1609,7 +1611,7 @@ q9:
   ]
   }'
 q10:
-  tag: "IC04"
+  tag: IC04
   query: '{
 		var(func: type(person))@filter(eq(id, "933")) {
 			knows {
@@ -1655,8 +1657,8 @@ q10:
         }
     ]
   }'
-q10:
-  tag: "IC05"
+q11:
+  tag: IC05
   query: '{
     pid as var(func: type(person))@filter(eq(id, "102"))
 		
@@ -1711,8 +1713,8 @@ q10:
         }
     ]
   }'
-q11:
-  tag: "IC06"
+q12:
+  tag: IC06
   query: '{
     pid as var(func: type(person))@filter(eq(id, "102"))
 		var(func: uid(pid)){
@@ -1787,8 +1789,8 @@ q11:
       }
     ]
   }'
-q12:
-  tag: "IC07"
+q13:
+  tag: IC07
   query: '{
     pid as var(func: type(person))@filter(eq(id, "102"))
 		var(func: uid(pid))@cascade {
@@ -2069,8 +2071,8 @@ q12:
         }
     ]
   }'
-q13:
-  tag: "IC08"
+q14:
+  tag: IC08
   query: '{
     var(func: type(person))@filter(eq(id, "4398046514948"))@cascade{
 			~hasCreator{
@@ -2333,8 +2335,8 @@ q13:
       }
    ]
   }'
-q14:
-  tag: "IC09"
+q15:
+  tag: IC09
   query: '{
     pid as var(func: type(person))@filter(eq(id, "4398046514948"))
 		var(func: uid(pid)){
@@ -2607,8 +2609,8 @@ q14:
       }
    ]
   }'
-q15:
-  tag: "IC10"
+q16:
+  tag: IC10
   query: '{
     pid as var(func: type(person))@filter(eq(id, "933"))
 		var(func: uid(pid)){
@@ -2792,8 +2794,8 @@ q15:
       }
    ]
   }'
-q16:
-  tag: "IC11"
+q17:
+  tag: IC11
   query: '{
     pid as var(func: type(person))@filter(eq(id, "4398046514948"))
 		var(func: uid(pid)){
@@ -2919,8 +2921,8 @@ q16:
       }
    ]
   }'
-q17:
-  tag: "IC12"
+q18:
+  tag: IC12
   query: '{
     mainTagClass as var(func: eq(name, "Artist")) @recurse{
 			subClasses as ~isSubclassOf
@@ -3074,8 +3076,8 @@ q17:
       }
    ]
   }'
-q18:
-  tag: "IC13"
+q19:
+  tag: IC13
   query: '{
     A as var(func: eq(fqid, "398046514948"))
 		M as var(func: eq(fqid, "28587302326035"))

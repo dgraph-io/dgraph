@@ -1,12 +1,13 @@
 # Binary Backups to Google Cloud Storage
 
-Binary backups can use [Google Cloud Storage](https://cloud.google.com/storage) for object storage using [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html).
+Binary backups can use [Google Cloud Storage](https://cloud.google.com/storage) for object storage
+using [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html).
 
 ## Provisioning GCS
 
 Some example scripts have been provided to illustrate how to create a bucket in GCS.
 
-* [terraform](terraform/README.md) - terraform scripts to provision GCS bucket
+- [terraform](terraform/README.md) - terraform scripts to provision GCS bucket
 
 ## Setting up the Environment
 
@@ -14,30 +15,37 @@ Some example scripts have been provided to illustrate how to create a bucket in 
 
 You will need these tools:
 
-* Docker Environment
-  * [Docker](https://docs.docker.com/get-docker/) - container engine platform
-  * [Docker Compose](https://docs.docker.com/compose/install/) - orchestrates running dokcer containers
-* Kubernetes Environment
-  * [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required for interacting with Kubenetes platform
-  * [helm](https://helm.sh/docs/intro/install/) - deploys Kuberetes packages called helm charts
-    * [helm-diff](https://github.com/databus23/helm-diff) [optional] - displays differences that will be applied to Kubernetes cluster
-  * [helmfile](https://github.com/roboll/helmfile#installation) [optional] - orchestrates helm chart deployments
+- Docker Environment
+  - [Docker](https://docs.docker.com/get-docker/) - container engine platform
+  - [Docker Compose](https://docs.docker.com/compose/install/) - orchestrates running dokcer
+    containers
+- Kubernetes Environment
+  - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required for interacting
+    with Kubenetes platform
+  - [helm](https://helm.sh/docs/intro/install/) - deploys Kuberetes packages called helm charts
+    - [helm-diff](https://github.com/databus23/helm-diff) [optional] - displays differences that
+      will be applied to Kubernetes cluster
+  - [helmfile](https://github.com/roboll/helmfile#installation) [optional] - orchestrates helm chart
+    deployments
 
 ### Using Docker Compose
 
-A `docker-compose.yml` configuration is provided that will run the MinIO GCS gateway and Dgraph cluster.
+A `docker-compose.yml` configuration is provided that will run the MinIO GCS gateway and Dgraph
+cluster.
 
 #### Configuring Docker Compose
 
 The Docker Compose configuration `docker-compose.yml` will require the following files:
 
- * `credentials.json` - credentials that grant access to the GCS bucket
- * `minio.env` - that holds `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` values.
- * `env.sh` - tha stores `PROJECT_ID` and `BACKUP_BUCKET_NAME`.
+- `credentials.json` - credentials that grant access to the GCS bucket
+- `minio.env` - that holds `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` values.
+- `env.sh` - tha stores `PROJECT_ID` and `BACKUP_BUCKET_NAME`.
 
 For convenience, [terraform](terraform/README.md) scripts and generate a random password.
 
-The `minio.env` will be used by both Dgraph alpha node(s) and the [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) server. You will need to create a file like this:
+The `minio.env` will be used by both Dgraph alpha node(s) and the
+[MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) server. You will need to
+create a file like this:
 
 ```bash
 # minio.env
@@ -53,7 +61,7 @@ export PROJECT_ID=<project-id>
 export BACKUP_BUCKET_NAME=<gcs-bucket-name>
 ```
 
-#### Using Docker Compose
+#### Running with Docker Compose
 
 ```bash
 ## source script for envvars: PROJECT_ID and BACKUP_BUCKET_NAME
@@ -64,8 +72,8 @@ docker-compose up --detach
 
 #### Access Minio and Ratel UI
 
-* MinIO UI: http://localhost:9000
-* Ratel UI: http://localhost:8000
+- MinIO UI: http://localhost:9000
+- Ratel UI: http://localhost:8000
 
 #### Clean Up Docker Environment
 
@@ -76,11 +84,15 @@ docker-compose rm
 
 ### Using Kubernetes with Helm Charts
 
-For Kubernetes, you can deploy [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html), Dgraph cluster, and a Kubernetes Cronjob that triggers backups using [helm](https://helm.sh/docs/intro/install/).
+For Kubernetes, you can deploy
+[MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html), Dgraph cluster, and a
+Kubernetes Cronjob that triggers backups using [helm](https://helm.sh/docs/intro/install/).
 
 #### Configuring Secrets Values
 
-These values are generated if you used either [terraform](terraform/README.md) scripts.  If you already have an existing GCS bucket that you would like to use, you will need to create `charts/dgraph_secrets.yaml` and `charts/minio_secrets.yaml` files.
+These values are generated if you used either [terraform](terraform/README.md) scripts. If you
+already have an existing GCS bucket that you would like to use, you will need to create
+`charts/dgraph_secrets.yaml` and `charts/minio_secrets.yaml` files.
 
 For the `charts/dgraph_secrets.yaml`, you would create a file like this:
 
@@ -104,7 +116,9 @@ gcsgateway:
 
 #### Configuring Environments
 
-Create an `env.sh` file to store `BACKUP_BUCKET_NAME` and `PROJECT_ID`.  If [terraform](terraform/README.md) scripts were used to create the GCS bucket, then these scripts will have already generated this file.
+Create an `env.sh` file to store `BACKUP_BUCKET_NAME` and `PROJECT_ID`. If
+[terraform](terraform/README.md) scripts were used to create the GCS bucket, then these scripts will
+have already generated this file.
 
 This is the same file used for the Docker Compose environment and will look like this:
 
@@ -116,7 +130,10 @@ export BACKUP_BUCKET_NAME=<gcs-bucket-name>
 
 #### Deploy Using Helmfile
 
-If you have [helmfile](https://github.com/roboll/helmfile#installation) and [helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy [MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) and Dgraph cluster with the following:
+If you have [helmfile](https://github.com/roboll/helmfile#installation) and
+[helm-diff](https://github.com/databus23/helm-diff) installed, you can deploy
+[MinIO GCS Gateway](https://docs.min.io/docs/minio-gateway-for-gcs.html) and Dgraph cluster with the
+following:
 
 ```bash
 ## source script for envvars: PROJECT_ID and BACKUP_BUCKET_NAME
@@ -152,7 +169,7 @@ helm install "my-release" \
 
 #### Access Resources
 
-For MinIO UI, you can use this to access it at  http://localhost:9000:
+For MinIO UI, you can use this to access it at http://localhost:9000:
 
 ```bash
 export MINIO_POD_NAME=$(
@@ -211,8 +228,11 @@ helm delete gcsgw --namespace minio
 
 ## Triggering a Backup
 
-This is run from the host with the alpha node accessible on localhost at port `8080`.  Can be done by running the docker-compose environment, or running `kubectl port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
-In the docker-compose environment, the host for `MINIO_HOST` is `gateway`.  In the Kubernetes environment, using the scripts above, the `MINIO_HOST` is `gcsgw-minio.minio.svc`.
+This is run from the host with the alpha node accessible on localhost at port `8080`. Can be done by
+running the docker-compose environment, or running
+`kubectl port-forward pod/dgraph-dgraph-alpha-0 8080:8080`. In the docker-compose environment, the
+host for `MINIO_HOST` is `gateway`. In the Kubernetes environment, using the scripts above, the
+`MINIO_HOST` is `gcsgw-minio.minio.svc`.
 
 ### Using GraphQL
 

@@ -1,6 +1,6 @@
 type Data {
-	id: ID!
-	intList: [Int]
-	stringList: [String]
-	metaData: Data
+  id: ID!
+  intList: [Int]
+  stringList: [String]
+  metaData: Data
 }

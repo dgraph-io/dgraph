@@ -3,26 +3,26 @@
 #######################
 
 type Mission {
-	id: ID!
-	crew: [Astronaut]
-	designation: String!
-	startDate: String
-	endDate: String
+  id: ID!
+  crew: [Astronaut]
+  designation: String!
+  startDate: String
+  endDate: String
 }
 
 type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	missions: [Mission]
+  id: ID! @external
+  missions: [Mission]
 }
 
 type User @remote {
-	id: ID!
-	name: String!
+  id: ID!
+  name: String!
 }
 
 type Car {
-	id: ID!
-	name: String!
+  id: ID!
+  name: String!
 }
 
 #######################
@@ -41,162 +41,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange{
-	min: Int!
-	max: Int!
+input IntRange {
+  min: Int!
+  max: Int!
 }
 
-input FloatRange{
-	min: Float!
-	max: Float!
+input FloatRange {
+  min: Float!
+  max: Float!
 }
 
-input Int64Range{
-	min: Int64!
-	max: Int64!
+input Int64Range {
+  min: Int64!
+  max: Int64!
 }
 
-input DateTimeRange{
-	min: DateTime!
-	max: DateTime!
+input DateTimeRange {
+  min: DateTime!
+  max: DateTime!
 }
 
-input StringRange{
-	min: String!
-	max: String!
+input StringRange {
+  min: String!
+  max: String!
 }
 
 enum DgraphIndex {
-	int
-	int64
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-	geo
-	hnsw
+  int
+  int64
+  float
+  bool
+  hash
+  exact
+  term
+  fulltext
+  trigram
+  regexp
+  year
+  month
+  day
+  hour
+  geo
+  hnsw
 }
 
 input AuthRule {
-	and: [AuthRule]
-	or: [AuthRule]
-	not: AuthRule
-	rule: String
+  and: [AuthRule]
+  or: [AuthRule]
+  not: AuthRule
+  rule: String
 }
 
 enum HTTPMethod {
-	GET
-	POST
-	PUT
-	PATCH
-	DELETE
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
 enum Mode {
-	BATCH
-	SINGLE
+  BATCH
+  SINGLE
 }
 
 input CustomHTTP {
-	url: String!
-	method: HTTPMethod!
-	body: String
-	graphql: String
-	mode: Mode
-	forwardHeaders: [String!]
-	secretHeaders: [String!]
-	introspectionHeaders: [String!]
-	skipIntrospection: Boolean
+  url: String!
+  method: HTTPMethod!
+  body: String
+  graphql: String
+  mode: Mode
+  forwardHeaders: [String!]
+  secretHeaders: [String!]
+  introspectionHeaders: [String!]
+  skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-	value: String
+  value: String
 }
 
 type Point {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input PointRef {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input NearFilter {
-	distance: Float!
-	coordinate: PointRef!
+  distance: Float!
+  coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
+  near: NearFilter
+  within: WithinFilter
 }
 
 type PointList {
-	points: [Point!]!
+  points: [Point!]!
 }
 
 input PointListRef {
-	points: [PointRef!]!
+  points: [PointRef!]!
 }
 
 type Polygon {
-	coordinates: [PointList!]!
+  coordinates: [PointList!]!
 }
 
 input PolygonRef {
-	coordinates: [PointListRef!]!
+  coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-	polygons: [Polygon!]!
+  polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	polygons: [PolygonRef!]!
+  polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-	polygon: PolygonRef!
+  polygon: PolygonRef!
 }
 
 input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
+  point: PointRef
+  polygon: PolygonRef
 }
 
 input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
+  polygon: PolygonRef
+  multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+  near: NearFilter
+  within: WithinFilter
+  contains: ContainsFilter
+  intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-	get: Boolean
-	query: Boolean
-	password: Boolean
-	aggregate: Boolean
+  get: Boolean
+  query: Boolean
+  password: Boolean
+  aggregate: Boolean
 }
 
 input GenerateMutationParams {
-	add: Boolean
-	update: Boolean
-	delete: Boolean
+  add: Boolean
+  update: Boolean
+  delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -214,68 +214,68 @@ directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJ
 directive @cacheControl(maxAge: Int!) on QUERY
 
 input IntFilter {
-	eq: Int
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-	between: IntRange
+  eq: Int
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: IntRange
 }
 
 input Int64Filter {
-	eq: Int64
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
-	between: Int64Range
+  eq: Int64
+  le: Int64
+  lt: Int64
+  ge: Int64
+  gt: Int64
+  between: Int64Range
 }
 
 input FloatFilter {
-	eq: Float
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-	between: FloatRange
+  eq: Float
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: FloatRange
 }
 
 input DateTimeFilter {
-	eq: DateTime
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-	between: DateTimeRange
+  eq: DateTime
+  le: DateTime
+  lt: DateTime
+  ge: DateTime
+  gt: DateTime
+  between: DateTimeRange
 }
 
 input StringTermFilter {
-	allofterms: String
-	anyofterms: String
+  allofterms: String
+  anyofterms: String
 }
 
 input StringRegExpFilter {
-	regexp: String
+  regexp: String
 }
 
 input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
+  alloftext: String
+  anyoftext: String
 }
 
 input StringExactFilter {
-	eq: String
-	in: [String]
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	between: StringRange
+  eq: String
+  in: [String]
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  between: StringRange
 }
 
 input StringHashFilter {
-	eq: String
-	in: [String]
+  eq: String
+  in: [String]
 }
 
 #######################
@@ -283,19 +283,19 @@ input StringHashFilter {
 #######################
 
 type CarAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
+  count: Int
+  nameMin: String
+  nameMax: String
 }
 
 type MissionAggregateResult {
-	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
+  count: Int
+  designationMin: String
+  designationMax: String
+  startDateMin: String
+  startDateMax: String
+  endDateMin: String
+  endDateMax: String
 }
 
 #######################
@@ -303,24 +303,24 @@ type MissionAggregateResult {
 #######################
 
 enum CarHasFilter {
-	name
+  name
 }
 
 enum CarOrderable {
-	name
+  name
 }
 
 enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
+  crew
+  designation
+  startDate
+  endDate
 }
 
 enum MissionOrderable {
-	designation
-	startDate
-	endDate
+  designation
+  startDate
+  endDate
 }
 
 #######################
@@ -328,31 +328,31 @@ enum MissionOrderable {
 #######################
 
 input CarFilter {
-	id: [ID!]
-	has: CarHasFilter
-	and: [CarFilter]
-	or: [CarFilter]
-	not: CarFilter
+  id: [ID!]
+  has: CarHasFilter
+  and: [CarFilter]
+  or: [CarFilter]
+  not: CarFilter
 }
 
 input CarOrder {
-	asc: CarOrderable
-	desc: CarOrderable
-	then: CarOrder
+  asc: CarOrderable
+  desc: CarOrderable
+  then: CarOrder
 }
 
 input MissionFilter {
-	id: [ID!]
-	has: MissionHasFilter
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
+  id: [ID!]
+  has: MissionHasFilter
+  and: [MissionFilter]
+  or: [MissionFilter]
+  not: MissionFilter
 }
 
 input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
+  asc: MissionOrderable
+  desc: MissionOrderable
+  then: MissionOrder
 }
 
 #######################
@@ -360,12 +360,11 @@ input MissionOrder {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User]
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
-	getCar(id: ID!): Car
-	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	aggregateCar(filter: CarFilter): CarAggregateResult
+  getMyFavoriteUsers(id: ID!): [User]
+  getMission(id: ID!): Mission
+  queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  aggregateMission(filter: MissionFilter): MissionAggregateResult
+  getCar(id: ID!): Car
+  queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+  aggregateCar(filter: CarFilter): CarAggregateResult
 }
-

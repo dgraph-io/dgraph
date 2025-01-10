@@ -1,6 +1,5 @@
--
-  name: "custom query"
-  type: "query"
+- name: custom query
+  type: query
   gqlschema: |
     type Country @remote {
         code: String
@@ -45,9 +44,8 @@
   remotevariables: |-
     { "id": "0x1" }
 
--
-  name: "custom query with arguments on fields"
-  type: "query"
+- name: custom query with arguments on fields
+  type: query
   gqlschema: |
     input ExactFilter {
       eq: String
@@ -110,9 +108,8 @@
   remotevariables: |-
     { "id": "0x1" }
 
--
-  name: "custom mutation with arguments on field"
-  type: "mutation"
+- name: custom mutation with arguments on field
+  type: mutation
   gqlschema: |
     input ExactFilter {
       eq: String
@@ -252,9 +249,8 @@
       }
     }
 
--
-  name: "custom field single mode"
-  type: "field"
+- name: custom field single mode
+  type: field
   gqlschema: |
     type User {
       id: ID!
@@ -289,9 +285,8 @@
   inputvariables: |-
     { "id": "0x2", "age": 10 }
 
--
-  name: "custom field batch mode"
-  type: "field"
+- name: custom field batch mode
+  type: field
   gqlschema: |
     type User {
       id: ID!

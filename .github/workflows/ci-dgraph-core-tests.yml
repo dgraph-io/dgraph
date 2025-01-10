@@ -1,9 +1,10 @@
 name: ci-dgraph-core-tests
+
 on:
   pull_request:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     types:
       - opened
       - reopened
@@ -11,9 +12,13 @@ on:
       - ready_for_review
     branches:
       - main
-      - 'release/**'
+      - release/**
   schedule:
-    - cron: "0 0 * * *" # 1 run per day
+    - cron: 0 0 * * * # 1 run per day
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-core-tests:
     if: github.event.pull_request.draft == false
@@ -66,6 +71,6 @@ jobs:
         continue-on-error: true # don't fail this job if the upload fails
         uses: trunk-io/analytics-uploader@main
         with:
-          junit-paths: "./test-results.xml"        
+          junit-paths: ./test-results.xml
           org-slug: hypermode
           token: ${{ secrets.TRUNK_TOKEN }}
