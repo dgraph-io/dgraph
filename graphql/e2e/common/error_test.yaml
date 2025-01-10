@@ -9,8 +9,8 @@
     [
       {
         "message":
-          Cannot query field "getAuthorszzz" on type "Query". Did you mean "getAuthor" or
-          "getauthor1"/?,
+          'Cannot query field "getAuthorszzz" on type "Query". Did you mean "getAuthor" or
+          "getauthor1"?',
         "locations": [{ "line": 2, "column": 3 }],
       },
     ]
