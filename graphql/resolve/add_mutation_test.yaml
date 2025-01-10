@@ -629,7 +629,7 @@
         dgraph.type
       }
     }
-  error2: { "message": failed to rewrite mutation payload because ID \"0x123\" isn't a Country }
+  error2: { "message": failed to rewrite mutation payload because ID "0x123" isn't a Country }
 
 - name: Add mutation with invalid reference
   gqlmutation: |
