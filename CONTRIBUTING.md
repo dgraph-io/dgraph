@@ -175,18 +175,6 @@ also contains a `docker-compose.yml` to set up the cluster as needed.
 **IMPORTANT:** All containers should be labeled with `cluster: test` so they may be correctly
 restarted and cleaned up by the test script.
 
-#### Badger
-
-Run `go test` in the root folder.
-
-```bash
-$ go test ./...
-ok      github.com/dgraph-io/badger     24.853s
-ok      github.com/dgraph-io/badger/skl 0.027s
-ok      github.com/dgraph-io/badger/table       0.478s
-ok      github.com/dgraph-io/badger/y   0.004s
-```
-
 ## Contributing
 
 ### Guidelines
