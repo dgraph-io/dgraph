@@ -1,11 +1,11 @@
 interface I {
-  id: ID!
+    id: ID!
 }
 
 type T implements I {
-  text: String
+    text: String
 }
 
 type B {
-  name: String
+    name: String
 }

@@ -3,23 +3,22 @@
 #######################
 
 type Tweets {
-  id: ID!
-  text: String! @search(by: [fulltext])
-  author(filter: UserFilter): User @hasInverse(field: tweets)
-  timestamp: DateTime! @search
+	id: ID!
+	text: String! @search(by: [fulltext])
+	author(filter: UserFilter): User @hasInverse(field: tweets)
+	timestamp: DateTime! @search
 }
 
 type User {
-  screenName: String! @id
-  followers: Int @search
-  tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
-    @hasInverse(field: author)
-  tweetsAggregate(filter: TweetsFilter): TweetsAggregateResult
+	screenName: String! @id
+	followers: Int @search
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets] @hasInverse(field: author)
+	tweetsAggregate(filter: TweetsFilter): TweetsAggregateResult
 }
 
 type UserTweetCount @remote {
-  screenName: String
-  tweetCount: Int
+	screenName: String
+	tweetCount: Int
 }
 
 #######################
@@ -38,162 +37,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange {
-  min: Int!
-  max: Int!
+input IntRange{
+	min: Int!
+	max: Int!
 }
 
-input FloatRange {
-  min: Float!
-  max: Float!
+input FloatRange{
+	min: Float!
+	max: Float!
 }
 
-input Int64Range {
-  min: Int64!
-  max: Int64!
+input Int64Range{
+	min: Int64!
+	max: Int64!
 }
 
-input DateTimeRange {
-  min: DateTime!
-  max: DateTime!
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
 }
 
-input StringRange {
-  min: String!
-  max: String!
+input StringRange{
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
-  int
-  int64
-  float
-  bool
-  hash
-  exact
-  term
-  fulltext
-  trigram
-  regexp
-  year
-  month
-  day
-  hour
-  geo
-  hnsw
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+	hnsw
 }
 
 input AuthRule {
-  and: [AuthRule]
-  or: [AuthRule]
-  not: AuthRule
-  rule: String
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
 }
 
 enum HTTPMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 enum Mode {
-  BATCH
-  SINGLE
+	BATCH
+	SINGLE
 }
 
 input CustomHTTP {
-  url: String!
-  method: HTTPMethod!
-  body: String
-  graphql: String
-  mode: Mode
-  forwardHeaders: [String!]
-  secretHeaders: [String!]
-  introspectionHeaders: [String!]
-  skipIntrospection: Boolean
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-  value: String
+	value: String
 }
 
 type Point {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input PointRef {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
-  distance: Float!
-  coordinate: PointRef!
+	distance: Float!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {
-  near: NearFilter
-  within: WithinFilter
+	near: NearFilter
+	within: WithinFilter
 }
 
 type PointList {
-  points: [Point!]!
+	points: [Point!]!
 }
 
 input PointListRef {
-  points: [PointRef!]!
+	points: [PointRef!]!
 }
 
 type Polygon {
-  coordinates: [PointList!]!
+	coordinates: [PointList!]!
 }
 
 input PolygonRef {
-  coordinates: [PointListRef!]!
+	coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-  polygons: [Polygon!]!
+	polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-  polygons: [PolygonRef!]!
+	polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-  polygon: PolygonRef!
+	polygon: PolygonRef!
 }
 
 input ContainsFilter {
-  point: PointRef
-  polygon: PolygonRef
+	point: PointRef
+	polygon: PolygonRef
 }
 
 input IntersectsFilter {
-  polygon: PolygonRef
-  multiPolygon: MultiPolygonRef
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-  near: NearFilter
-  within: WithinFilter
-  contains: ContainsFilter
-  intersects: IntersectsFilter
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-  get: Boolean
-  query: Boolean
-  password: Boolean
-  aggregate: Boolean
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
-  add: Boolean
-  update: Boolean
-  delete: Boolean
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -205,12 +204,11 @@ directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITIO
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-  password: AuthRule
-  query: AuthRule
-  add: AuthRule
-  update: AuthRule
-  delete: AuthRule
-) on OBJECT | INTERFACE
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
@@ -219,78 +217,77 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
-  query: GenerateQueryParams
-  mutation: GenerateMutationParams
-  subscription: Boolean
-) on OBJECT | INTERFACE
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-  eq: Int
-  in: [Int]
-  le: Int
-  lt: Int
-  ge: Int
-  gt: Int
-  between: IntRange
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
-  eq: Int64
-  in: [Int64]
-  le: Int64
-  lt: Int64
-  ge: Int64
-  gt: Int64
-  between: Int64Range
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
-  eq: Float
-  in: [Float]
-  le: Float
-  lt: Float
-  ge: Float
-  gt: Float
-  between: FloatRange
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
-  eq: DateTime
-  in: [DateTime]
-  le: DateTime
-  lt: DateTime
-  ge: DateTime
-  gt: DateTime
-  between: DateTimeRange
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
-  allofterms: String
-  anyofterms: String
+	allofterms: String
+	anyofterms: String
 }
 
 input StringRegExpFilter {
-  regexp: String
+	regexp: String
 }
 
 input StringFullTextFilter {
-  alloftext: String
-  anyoftext: String
+	alloftext: String
+	anyoftext: String
 }
 
 input StringExactFilter {
-  eq: String
-  in: [String]
-  le: String
-  lt: String
-  ge: String
-  gt: String
-  between: StringRange
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
-  eq: String
-  in: [String]
+	eq: String
+	in: [String]
 }
 
 #######################
@@ -298,53 +295,53 @@ input StringHashFilter {
 #######################
 
 type AddTweetsPayload {
-  tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
-  numUids: Int
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
+	numUids: Int
 }
 
 type AddUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type DeleteTweetsPayload {
-  tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
-  msg: String
-  numUids: Int
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
+	msg: String
+	numUids: Int
 }
 
 type DeleteUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  msg: String
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
 }
 
 type TweetsAggregateResult {
-  count: Int
-  textMin: String
-  textMax: String
-  timestampMin: DateTime
-  timestampMax: DateTime
+	count: Int
+	textMin: String
+	textMax: String
+	timestampMin: DateTime
+	timestampMax: DateTime
 }
 
 type UpdateTweetsPayload {
-  tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
-  numUids: Int
+	tweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
+	numUids: Int
 }
 
 type UpdateUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type UserAggregateResult {
-  count: Int
-  screenNameMin: String
-  screenNameMax: String
-  followersMin: Int
-  followersMax: Int
-  followersSum: Int
-  followersAvg: Float
+	count: Int
+	screenNameMin: String
+	screenNameMax: String
+	followersMin: Int
+	followersMax: Int
+	followersSum: Int
+	followersAvg: Float
 }
 
 #######################
@@ -352,25 +349,25 @@ type UserAggregateResult {
 #######################
 
 enum TweetsHasFilter {
-  text
-  author
-  timestamp
+	text
+	author
+	timestamp
 }
 
 enum TweetsOrderable {
-  text
-  timestamp
+	text
+	timestamp
 }
 
 enum UserHasFilter {
-  screenName
-  followers
-  tweets
+	screenName
+	followers
+	tweets
 }
 
 enum UserOrderable {
-  screenName
-  followers
+	screenName
+	followers
 }
 
 #######################
@@ -378,83 +375,83 @@ enum UserOrderable {
 #######################
 
 input AddTweetsInput {
-  text: String!
-  author: UserRef
-  timestamp: DateTime!
+	text: String!
+	author: UserRef
+	timestamp: DateTime!
 }
 
 input AddUserInput {
-  screenName: String!
-  followers: Int
-  tweets: [TweetsRef]
+	screenName: String!
+	followers: Int
+	tweets: [TweetsRef]
 }
 
 input TweetsFilter {
-  id: [ID!]
-  text: StringFullTextFilter
-  timestamp: DateTimeFilter
-  has: [TweetsHasFilter]
-  and: [TweetsFilter]
-  or: [TweetsFilter]
-  not: TweetsFilter
+	id: [ID!]
+	text: StringFullTextFilter
+	timestamp: DateTimeFilter
+	has: [TweetsHasFilter]
+	and: [TweetsFilter]
+	or: [TweetsFilter]
+	not: TweetsFilter
 }
 
 input TweetsOrder {
-  asc: TweetsOrderable
-  desc: TweetsOrderable
-  then: TweetsOrder
+	asc: TweetsOrderable
+	desc: TweetsOrderable
+	then: TweetsOrder
 }
 
 input TweetsPatch {
-  text: String
-  author: UserRef
-  timestamp: DateTime
+	text: String
+	author: UserRef
+	timestamp: DateTime
 }
 
 input TweetsRef {
-  id: ID
-  text: String
-  author: UserRef
-  timestamp: DateTime
+	id: ID
+	text: String
+	author: UserRef
+	timestamp: DateTime
 }
 
 input UpdateTweetsInput {
-  filter: TweetsFilter!
-  set: TweetsPatch
-  remove: TweetsPatch
+	filter: TweetsFilter!
+	set: TweetsPatch
+	remove: TweetsPatch
 }
 
 input UpdateUserInput {
-  filter: UserFilter!
-  set: UserPatch
-  remove: UserPatch
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
 input UserFilter {
-  screenName: StringHashFilter
-  followers: IntFilter
-  has: [UserHasFilter]
-  and: [UserFilter]
-  or: [UserFilter]
-  not: UserFilter
+	screenName: StringHashFilter
+	followers: IntFilter
+	has: [UserHasFilter]
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
 }
 
 input UserOrder {
-  asc: UserOrderable
-  desc: UserOrderable
-  then: UserOrder
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
 input UserPatch {
-  screenName: String
-  followers: Int
-  tweets: [TweetsRef]
+	screenName: String
+	followers: Int
+	tweets: [TweetsRef]
 }
 
 input UserRef {
-  screenName: String
-  followers: Int
-  tweets: [TweetsRef]
+	screenName: String
+	followers: Int
+	tweets: [TweetsRef]
 }
 
 #######################
@@ -462,17 +459,13 @@ input UserRef {
 #######################
 
 type Query {
-  queryUserTweetCounts: [UserTweetCount]
-    @withSubscription
-    @custom(
-      dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}"
-    )
-  getTweets(id: ID!): Tweets
-  queryTweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
-  aggregateTweets(filter: TweetsFilter): TweetsAggregateResult
-  getUser(screenName: String!): User
-  queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  aggregateUser(filter: UserFilter): UserAggregateResult
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}")
+	getTweets(id: ID!): Tweets
+	queryTweets(filter: TweetsFilter, order: TweetsOrder, first: Int, offset: Int): [Tweets]
+	aggregateTweets(filter: TweetsFilter): TweetsAggregateResult
+	getUser(screenName: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -480,12 +473,12 @@ type Query {
 #######################
 
 type Mutation {
-  addTweets(input: [AddTweetsInput!]!): AddTweetsPayload
-  updateTweets(input: UpdateTweetsInput!): UpdateTweetsPayload
-  deleteTweets(filter: TweetsFilter!): DeleteTweetsPayload
-  addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
-  updateUser(input: UpdateUserInput!): UpdateUserPayload
-  deleteUser(filter: UserFilter!): DeleteUserPayload
+	addTweets(input: [AddTweetsInput!]!): AddTweetsPayload
+	updateTweets(input: UpdateTweetsInput!): UpdateTweetsPayload
+	deleteTweets(filter: TweetsFilter!): DeleteTweetsPayload
+	addUser(input: [AddUserInput!]!, upsert: Boolean): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
 #######################
@@ -493,9 +486,5 @@ type Mutation {
 #######################
 
 type Subscription {
-  queryUserTweetCounts: [UserTweetCount]
-    @withSubscription
-    @custom(
-      dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}"
-    )
+	queryUserTweetCounts: [UserTweetCount] @withSubscription @custom(dql: "query {\n    queryUserTweetCounts(func: type(User)) {\n        screenName: User.screenName\n        tweetCount: count(User.tweets)\n    }\n}")
 }

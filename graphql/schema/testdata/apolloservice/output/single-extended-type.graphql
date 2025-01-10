@@ -3,8 +3,8 @@
 #######################
 
 type Product @key(fields: "id") @extends {
-  id: String! @id @external
-  name: String!
+	id: String! @id @external
+	name: String!
 }
 
 #######################
@@ -23,162 +23,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange {
-  min: Int!
-  max: Int!
+input IntRange{
+	min: Int!
+	max: Int!
 }
 
-input FloatRange {
-  min: Float!
-  max: Float!
+input FloatRange{
+	min: Float!
+	max: Float!
 }
 
-input Int64Range {
-  min: Int64!
-  max: Int64!
+input Int64Range{
+	min: Int64!
+	max: Int64!
 }
 
-input DateTimeRange {
-  min: DateTime!
-  max: DateTime!
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
 }
 
-input StringRange {
-  min: String!
-  max: String!
+input StringRange{
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
-  int
-  int64
-  float
-  bool
-  hash
-  exact
-  term
-  fulltext
-  trigram
-  regexp
-  year
-  month
-  day
-  hour
-  geo
-  hnsw
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+	hnsw
 }
 
 input AuthRule {
-  and: [AuthRule]
-  or: [AuthRule]
-  not: AuthRule
-  rule: String
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
 }
 
 enum HTTPMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 enum Mode {
-  BATCH
-  SINGLE
+	BATCH
+	SINGLE
 }
 
 input CustomHTTP {
-  url: String!
-  method: HTTPMethod!
-  body: String
-  graphql: String
-  mode: Mode
-  forwardHeaders: [String!]
-  secretHeaders: [String!]
-  introspectionHeaders: [String!]
-  skipIntrospection: Boolean
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-  value: String
+	value: String
 }
 
 type Point {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input PointRef {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
-  distance: Float!
-  coordinate: PointRef!
+	distance: Float!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {
-  near: NearFilter
-  within: WithinFilter
+	near: NearFilter
+	within: WithinFilter
 }
 
 type PointList {
-  points: [Point!]!
+	points: [Point!]!
 }
 
 input PointListRef {
-  points: [PointRef!]!
+	points: [PointRef!]!
 }
 
 type Polygon {
-  coordinates: [PointList!]!
+	coordinates: [PointList!]!
 }
 
 input PolygonRef {
-  coordinates: [PointListRef!]!
+	coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-  polygons: [Polygon!]!
+	polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-  polygons: [PolygonRef!]!
+	polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-  polygon: PolygonRef!
+	polygon: PolygonRef!
 }
 
 input ContainsFilter {
-  point: PointRef
-  polygon: PolygonRef
+	point: PointRef
+	polygon: PolygonRef
 }
 
 input IntersectsFilter {
-  polygon: PolygonRef
-  multiPolygon: MultiPolygonRef
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-  near: NearFilter
-  within: WithinFilter
-  contains: ContainsFilter
-  intersects: IntersectsFilter
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-  get: Boolean
-  query: Boolean
-  password: Boolean
-  aggregate: Boolean
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
-  add: Boolean
-  update: Boolean
-  delete: Boolean
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -195,72 +195,72 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-  eq: Int
-  in: [Int]
-  le: Int
-  lt: Int
-  ge: Int
-  gt: Int
-  between: IntRange
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
-  eq: Int64
-  in: [Int64]
-  le: Int64
-  lt: Int64
-  ge: Int64
-  gt: Int64
-  between: Int64Range
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
-  eq: Float
-  in: [Float]
-  le: Float
-  lt: Float
-  ge: Float
-  gt: Float
-  between: FloatRange
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
-  eq: DateTime
-  in: [DateTime]
-  le: DateTime
-  lt: DateTime
-  ge: DateTime
-  gt: DateTime
-  between: DateTimeRange
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
-  allofterms: String
-  anyofterms: String
+	allofterms: String
+	anyofterms: String
 }
 
 input StringRegExpFilter {
-  regexp: String
+	regexp: String
 }
 
 input StringFullTextFilter {
-  alloftext: String
-  anyoftext: String
+	alloftext: String
+	anyoftext: String
 }
 
 input StringExactFilter {
-  eq: String
-  in: [String]
-  le: String
-  lt: String
-  ge: String
-  gt: String
-  between: StringRange
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
-  eq: String
-  in: [String]
+	eq: String
+	in: [String]
 }
 
 #######################
@@ -268,27 +268,27 @@ input StringHashFilter {
 #######################
 
 type AddProductPayload {
-  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-  numUids: Int
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	numUids: Int
 }
 
 type DeleteProductPayload {
-  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-  msg: String
-  numUids: Int
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	msg: String
+	numUids: Int
 }
 
 type ProductAggregateResult {
-  count: Int
-  idMin: String
-  idMax: String
-  nameMin: String
-  nameMax: String
+	count: Int
+	idMin: String
+	idMax: String
+	nameMin: String
+	nameMax: String
 }
 
 type UpdateProductPayload {
-  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-  numUids: Int
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	numUids: Int
 }
 
 #######################
@@ -296,13 +296,13 @@ type UpdateProductPayload {
 #######################
 
 enum ProductHasFilter {
-  id
-  name
+	id
+	name
 }
 
 enum ProductOrderable {
-  id
-  name
+	id
+	name
 }
 
 #######################
@@ -310,38 +310,38 @@ enum ProductOrderable {
 #######################
 
 input AddProductInput {
-  id: String!
-  name: String!
+	id: String!
+	name: String!
 }
 
 input ProductFilter {
-  id: StringHashFilter
-  has: [ProductHasFilter]
-  and: [ProductFilter]
-  or: [ProductFilter]
-  not: ProductFilter
+	id: StringHashFilter
+	has: [ProductHasFilter]
+	and: [ProductFilter]
+	or: [ProductFilter]
+	not: ProductFilter
 }
 
 input ProductOrder {
-  asc: ProductOrderable
-  desc: ProductOrderable
-  then: ProductOrder
+	asc: ProductOrderable
+	desc: ProductOrderable
+	then: ProductOrder
 }
 
 input ProductPatch {
-  id: String
-  name: String
+	id: String
+	name: String
 }
 
 input ProductRef {
-  id: String
-  name: String
+	id: String
+	name: String
 }
 
 input UpdateProductInput {
-  filter: ProductFilter!
-  set: ProductPatch
-  remove: ProductPatch
+	filter: ProductFilter!
+	set: ProductPatch
+	remove: ProductPatch
 }
 
 #######################
@@ -349,7 +349,8 @@ input UpdateProductInput {
 #######################
 
 type Mutation {
-  addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
-  updateProduct(input: UpdateProductInput!): UpdateProductPayload
-  deleteProduct(filter: ProductFilter!): DeleteProductPayload
+	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
+	updateProduct(input: UpdateProductInput!): UpdateProductPayload
+	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }
+

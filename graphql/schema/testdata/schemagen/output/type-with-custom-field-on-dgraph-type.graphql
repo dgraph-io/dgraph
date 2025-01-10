@@ -3,16 +3,15 @@
 #######################
 
 type Car {
-  id: ID!
-  name: String!
+	id: ID!
+	name: String!
 }
 
 type User {
-  id: ID!
-  name: String
-    @custom(http: { url: "http://mock:8888/userNames", method: "GET", body: "{uid: $id}" })
-  age: Int! @search
-  cars: [Car] @custom(http: { url: "http://mock:8888/cars", method: "GET", body: "{uid: $id}" })
+	id: ID!
+	name: String @custom(http: {url:"http://mock:8888/userNames",method:"GET",body:"{uid: $id}"})
+	age: Int! @search
+	cars: [Car] @custom(http: {url:"http://mock:8888/cars",method:"GET",body:"{uid: $id}"})
 }
 
 #######################
@@ -31,162 +30,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange {
-  min: Int!
-  max: Int!
+input IntRange{
+	min: Int!
+	max: Int!
 }
 
-input FloatRange {
-  min: Float!
-  max: Float!
+input FloatRange{
+	min: Float!
+	max: Float!
 }
 
-input Int64Range {
-  min: Int64!
-  max: Int64!
+input Int64Range{
+	min: Int64!
+	max: Int64!
 }
 
-input DateTimeRange {
-  min: DateTime!
-  max: DateTime!
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
 }
 
-input StringRange {
-  min: String!
-  max: String!
+input StringRange{
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
-  int
-  int64
-  float
-  bool
-  hash
-  exact
-  term
-  fulltext
-  trigram
-  regexp
-  year
-  month
-  day
-  hour
-  geo
-  hnsw
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+	hnsw
 }
 
 input AuthRule {
-  and: [AuthRule]
-  or: [AuthRule]
-  not: AuthRule
-  rule: String
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
 }
 
 enum HTTPMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 enum Mode {
-  BATCH
-  SINGLE
+	BATCH
+	SINGLE
 }
 
 input CustomHTTP {
-  url: String!
-  method: HTTPMethod!
-  body: String
-  graphql: String
-  mode: Mode
-  forwardHeaders: [String!]
-  secretHeaders: [String!]
-  introspectionHeaders: [String!]
-  skipIntrospection: Boolean
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-  value: String
+	value: String
 }
 
 type Point {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input PointRef {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
-  distance: Float!
-  coordinate: PointRef!
+	distance: Float!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {
-  near: NearFilter
-  within: WithinFilter
+	near: NearFilter
+	within: WithinFilter
 }
 
 type PointList {
-  points: [Point!]!
+	points: [Point!]!
 }
 
 input PointListRef {
-  points: [PointRef!]!
+	points: [PointRef!]!
 }
 
 type Polygon {
-  coordinates: [PointList!]!
+	coordinates: [PointList!]!
 }
 
 input PolygonRef {
-  coordinates: [PointListRef!]!
+	coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-  polygons: [Polygon!]!
+	polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-  polygons: [PolygonRef!]!
+	polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-  polygon: PolygonRef!
+	polygon: PolygonRef!
 }
 
 input ContainsFilter {
-  point: PointRef
-  polygon: PolygonRef
+	point: PointRef
+	polygon: PolygonRef
 }
 
 input IntersectsFilter {
-  polygon: PolygonRef
-  multiPolygon: MultiPolygonRef
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-  near: NearFilter
-  within: WithinFilter
-  contains: ContainsFilter
-  intersects: IntersectsFilter
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-  get: Boolean
-  query: Boolean
-  password: Boolean
-  aggregate: Boolean
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
-  add: Boolean
-  update: Boolean
-  delete: Boolean
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -198,12 +197,11 @@ directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITIO
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-  password: AuthRule
-  query: AuthRule
-  add: AuthRule
-  update: AuthRule
-  delete: AuthRule
-) on OBJECT | INTERFACE
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
@@ -212,78 +210,77 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
-  query: GenerateQueryParams
-  mutation: GenerateMutationParams
-  subscription: Boolean
-) on OBJECT | INTERFACE
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-  eq: Int
-  in: [Int]
-  le: Int
-  lt: Int
-  ge: Int
-  gt: Int
-  between: IntRange
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
-  eq: Int64
-  in: [Int64]
-  le: Int64
-  lt: Int64
-  ge: Int64
-  gt: Int64
-  between: Int64Range
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
-  eq: Float
-  in: [Float]
-  le: Float
-  lt: Float
-  ge: Float
-  gt: Float
-  between: FloatRange
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
-  eq: DateTime
-  in: [DateTime]
-  le: DateTime
-  lt: DateTime
-  ge: DateTime
-  gt: DateTime
-  between: DateTimeRange
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
-  allofterms: String
-  anyofterms: String
+	allofterms: String
+	anyofterms: String
 }
 
 input StringRegExpFilter {
-  regexp: String
+	regexp: String
 }
 
 input StringFullTextFilter {
-  alloftext: String
-  anyoftext: String
+	alloftext: String
+	anyoftext: String
 }
 
 input StringExactFilter {
-  eq: String
-  in: [String]
-  le: String
-  lt: String
-  ge: String
-  gt: String
-  between: StringRange
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
-  eq: String
-  in: [String]
+	eq: String
+	in: [String]
 }
 
 #######################
@@ -291,49 +288,49 @@ input StringHashFilter {
 #######################
 
 type AddCarPayload {
-  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-  numUids: Int
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
 }
 
 type AddUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type CarAggregateResult {
-  count: Int
-  nameMin: String
-  nameMax: String
+	count: Int
+	nameMin: String
+	nameMax: String
 }
 
 type DeleteCarPayload {
-  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-  msg: String
-  numUids: Int
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	msg: String
+	numUids: Int
 }
 
 type DeleteUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  msg: String
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	msg: String
+	numUids: Int
 }
 
 type UpdateCarPayload {
-  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-  numUids: Int
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
 }
 
 type UpdateUserPayload {
-  user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  numUids: Int
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
 }
 
 type UserAggregateResult {
-  count: Int
-  ageMin: Int
-  ageMax: Int
-  ageSum: Int
-  ageAvg: Float
+	count: Int
+	ageMin: Int
+	ageMax: Int
+	ageSum: Int
+	ageAvg: Float
 }
 
 #######################
@@ -341,19 +338,19 @@ type UserAggregateResult {
 #######################
 
 enum CarHasFilter {
-  name
+	name
 }
 
 enum CarOrderable {
-  name
+	name
 }
 
 enum UserHasFilter {
-  age
+	age
 }
 
 enum UserOrderable {
-  age
+	age
 }
 
 #######################
@@ -361,70 +358,70 @@ enum UserOrderable {
 #######################
 
 input AddCarInput {
-  name: String!
+	name: String!
 }
 
 input AddUserInput {
-  age: Int!
+	age: Int!
 }
 
 input CarFilter {
-  id: [ID!]
-  has: [CarHasFilter]
-  and: [CarFilter]
-  or: [CarFilter]
-  not: CarFilter
+	id: [ID!]
+	has: [CarHasFilter]
+	and: [CarFilter]
+	or: [CarFilter]
+	not: CarFilter
 }
 
 input CarOrder {
-  asc: CarOrderable
-  desc: CarOrderable
-  then: CarOrder
+	asc: CarOrderable
+	desc: CarOrderable
+	then: CarOrder
 }
 
 input CarPatch {
-  name: String
+	name: String
 }
 
 input CarRef {
-  id: ID
-  name: String
+	id: ID
+	name: String
 }
 
 input UpdateCarInput {
-  filter: CarFilter!
-  set: CarPatch
-  remove: CarPatch
+	filter: CarFilter!
+	set: CarPatch
+	remove: CarPatch
 }
 
 input UpdateUserInput {
-  filter: UserFilter!
-  set: UserPatch
-  remove: UserPatch
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
 input UserFilter {
-  id: [ID!]
-  age: IntFilter
-  has: [UserHasFilter]
-  and: [UserFilter]
-  or: [UserFilter]
-  not: UserFilter
+	id: [ID!]
+	age: IntFilter
+	has: [UserHasFilter]
+	and: [UserFilter]
+	or: [UserFilter]
+	not: UserFilter
 }
 
 input UserOrder {
-  asc: UserOrderable
-  desc: UserOrderable
-  then: UserOrder
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
 input UserPatch {
-  age: Int
+	age: Int
 }
 
 input UserRef {
-  id: ID
-  age: Int
+	id: ID
+	age: Int
 }
 
 #######################
@@ -432,12 +429,12 @@ input UserRef {
 #######################
 
 type Query {
-  getCar(id: ID!): Car
-  queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-  aggregateCar(filter: CarFilter): CarAggregateResult
-  getUser(id: ID!): User
-  queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-  aggregateUser(filter: UserFilter): UserAggregateResult
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	aggregateCar(filter: CarFilter): CarAggregateResult
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	aggregateUser(filter: UserFilter): UserAggregateResult
 }
 
 #######################
@@ -445,10 +442,11 @@ type Query {
 #######################
 
 type Mutation {
-  addCar(input: [AddCarInput!]!): AddCarPayload
-  updateCar(input: UpdateCarInput!): UpdateCarPayload
-  deleteCar(filter: CarFilter!): DeleteCarPayload
-  addUser(input: [AddUserInput!]!): AddUserPayload
-  updateUser(input: UpdateUserInput!): UpdateUserPayload
-  deleteUser(filter: UserFilter!): DeleteUserPayload
+	addCar(input: [AddCarInput!]!): AddCarPayload
+	updateCar(input: UpdateCarInput!): UpdateCarPayload
+	deleteCar(filter: CarFilter!): DeleteCarPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
+

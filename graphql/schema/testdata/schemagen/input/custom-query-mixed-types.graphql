@@ -1,13 +1,16 @@
 type User @remote {
-  id: ID!
-  name: String!
+	id: ID!
+	name: String!
 }
 
 type Car {
-  id: ID!
-  name: String!
+	id: ID!
+	name: String!
 }
 
 type Query {
-  getMyFavoriteUsers(id: ID!): [User] @custom(http: { url: "http://my-api.com", method: "GET" })
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "GET"
+	})
 }

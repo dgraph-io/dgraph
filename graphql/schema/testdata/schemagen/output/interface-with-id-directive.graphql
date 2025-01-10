@@ -3,20 +3,20 @@
 #######################
 
 interface LibraryItem {
-  refID: String! @id(interface: false)
-  itemID: String! @id(interface: true)
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
 }
 
 type Book implements LibraryItem {
-  refID: String! @id(interface: false)
-  itemID: String! @id(interface: true)
-  title: String
-  author: String
+	refID: String! @id(interface: false)
+	itemID: String! @id(interface: true)
+	title: String
+	author: String
 }
 
 type Library {
-  items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
-  itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
+	items(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	itemsAggregate(filter: LibraryItemFilter): LibraryItemAggregateResult
 }
 
 #######################
@@ -35,162 +35,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange {
-  min: Int!
-  max: Int!
+input IntRange{
+	min: Int!
+	max: Int!
 }
 
-input FloatRange {
-  min: Float!
-  max: Float!
+input FloatRange{
+	min: Float!
+	max: Float!
 }
 
-input Int64Range {
-  min: Int64!
-  max: Int64!
+input Int64Range{
+	min: Int64!
+	max: Int64!
 }
 
-input DateTimeRange {
-  min: DateTime!
-  max: DateTime!
+input DateTimeRange{
+	min: DateTime!
+	max: DateTime!
 }
 
-input StringRange {
-  min: String!
-  max: String!
+input StringRange{
+	min: String!
+	max: String!
 }
 
 enum DgraphIndex {
-  int
-  int64
-  float
-  bool
-  hash
-  exact
-  term
-  fulltext
-  trigram
-  regexp
-  year
-  month
-  day
-  hour
-  geo
-  hnsw
+	int
+	int64
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+	geo
+	hnsw
 }
 
 input AuthRule {
-  and: [AuthRule]
-  or: [AuthRule]
-  not: AuthRule
-  rule: String
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
 }
 
 enum HTTPMethod {
-  GET
-  POST
-  PUT
-  PATCH
-  DELETE
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 enum Mode {
-  BATCH
-  SINGLE
+	BATCH
+	SINGLE
 }
 
 input CustomHTTP {
-  url: String!
-  method: HTTPMethod!
-  body: String
-  graphql: String
-  mode: Mode
-  forwardHeaders: [String!]
-  secretHeaders: [String!]
-  introspectionHeaders: [String!]
-  skipIntrospection: Boolean
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-  value: String
+	value: String
 }
 
 type Point {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input PointRef {
-  longitude: Float!
-  latitude: Float!
+	longitude: Float!
+	latitude: Float!
 }
 
 input NearFilter {
-  distance: Float!
-  coordinate: PointRef!
+	distance: Float!
+	coordinate: PointRef!
 }
 
 input PointGeoFilter {
-  near: NearFilter
-  within: WithinFilter
+	near: NearFilter
+	within: WithinFilter
 }
 
 type PointList {
-  points: [Point!]!
+	points: [Point!]!
 }
 
 input PointListRef {
-  points: [PointRef!]!
+	points: [PointRef!]!
 }
 
 type Polygon {
-  coordinates: [PointList!]!
+	coordinates: [PointList!]!
 }
 
 input PolygonRef {
-  coordinates: [PointListRef!]!
+	coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-  polygons: [Polygon!]!
+	polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-  polygons: [PolygonRef!]!
+	polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-  polygon: PolygonRef!
+	polygon: PolygonRef!
 }
 
 input ContainsFilter {
-  point: PointRef
-  polygon: PolygonRef
+	point: PointRef
+	polygon: PolygonRef
 }
 
 input IntersectsFilter {
-  polygon: PolygonRef
-  multiPolygon: MultiPolygonRef
+	polygon: PolygonRef
+	multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-  near: NearFilter
-  within: WithinFilter
-  contains: ContainsFilter
-  intersects: IntersectsFilter
+	near: NearFilter
+	within: WithinFilter
+	contains: ContainsFilter
+	intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-  get: Boolean
-  query: Boolean
-  password: Boolean
-  aggregate: Boolean
+	get: Boolean
+	query: Boolean
+	password: Boolean
+	aggregate: Boolean
 }
 
 input GenerateMutationParams {
-  add: Boolean
-  update: Boolean
-  delete: Boolean
+	add: Boolean
+	update: Boolean
+	delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -202,12 +202,11 @@ directive @default(add: DgraphDefault, update: DgraphDefault) on FIELD_DEFINITIO
 directive @withSubscription on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-  password: AuthRule
-  query: AuthRule
-  add: AuthRule
-  update: AuthRule
-  delete: AuthRule
-) on OBJECT | INTERFACE
+	password: AuthRule
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete: AuthRule) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP, dql: String) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE | UNION | INPUT_OBJECT | ENUM
 directive @remoteResponse(name: String) on FIELD_DEFINITION
@@ -216,78 +215,77 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 directive @cacheControl(maxAge: Int!) on QUERY
 directive @generate(
-  query: GenerateQueryParams
-  mutation: GenerateMutationParams
-  subscription: Boolean
-) on OBJECT | INTERFACE
+	query: GenerateQueryParams,
+	mutation: GenerateMutationParams,
+	subscription: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-  eq: Int
-  in: [Int]
-  le: Int
-  lt: Int
-  ge: Int
-  gt: Int
-  between: IntRange
+	eq: Int
+	in: [Int]
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+	between: IntRange
 }
 
 input Int64Filter {
-  eq: Int64
-  in: [Int64]
-  le: Int64
-  lt: Int64
-  ge: Int64
-  gt: Int64
-  between: Int64Range
+	eq: Int64
+	in: [Int64]
+	le: Int64
+	lt: Int64
+	ge: Int64
+	gt: Int64
+	between: Int64Range
 }
 
 input FloatFilter {
-  eq: Float
-  in: [Float]
-  le: Float
-  lt: Float
-  ge: Float
-  gt: Float
-  between: FloatRange
+	eq: Float
+	in: [Float]
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+	between: FloatRange
 }
 
 input DateTimeFilter {
-  eq: DateTime
-  in: [DateTime]
-  le: DateTime
-  lt: DateTime
-  ge: DateTime
-  gt: DateTime
-  between: DateTimeRange
+	eq: DateTime
+	in: [DateTime]
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+	between: DateTimeRange
 }
 
 input StringTermFilter {
-  allofterms: String
-  anyofterms: String
+	allofterms: String
+	anyofterms: String
 }
 
 input StringRegExpFilter {
-  regexp: String
+	regexp: String
 }
 
 input StringFullTextFilter {
-  alloftext: String
-  anyoftext: String
+	alloftext: String
+	anyoftext: String
 }
 
 input StringExactFilter {
-  eq: String
-  in: [String]
-  le: String
-  lt: String
-  ge: String
-  gt: String
-  between: StringRange
+	eq: String
+	in: [String]
+	le: String
+	lt: String
+	ge: String
+	gt: String
+	between: StringRange
 }
 
 input StringHashFilter {
-  eq: String
-  in: [String]
+	eq: String
+	in: [String]
 }
 
 #######################
@@ -295,80 +293,70 @@ input StringHashFilter {
 #######################
 
 type AddBookPayload {
-  book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-  numUids: Int
+	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 type AddLibraryPayload {
-  library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-  numUids: Int
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	numUids: Int
 }
 
 type BookAggregateResult {
-  count: Int
-  refIDMin: String
-  refIDMax: String
-  itemIDMin: String
-  itemIDMax: String
-  titleMin: String
-  titleMax: String
-  authorMin: String
-  authorMax: String
+	count: Int
+	refIDMin: String
+	refIDMax: String
+	itemIDMin: String
+	itemIDMax: String
+	titleMin: String
+	titleMax: String
+	authorMin: String
+	authorMax: String
 }
 
 type DeleteBookPayload {
-  book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-  msg: String
-  numUids: Int
+	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	msg: String
+	numUids: Int
 }
 
 type DeleteLibraryItemPayload {
-  libraryItem(
-    filter: LibraryItemFilter
-    order: LibraryItemOrder
-    first: Int
-    offset: Int
-  ): [LibraryItem]
-  msg: String
-  numUids: Int
+	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	msg: String
+	numUids: Int
 }
 
 type DeleteLibraryPayload {
-  library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-  msg: String
-  numUids: Int
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	msg: String
+	numUids: Int
 }
 
 type LibraryAggregateResult {
-  count: Int
+	count: Int
 }
 
 type LibraryItemAggregateResult {
-  count: Int
-  refIDMin: String
-  refIDMax: String
-  itemIDMin: String
-  itemIDMax: String
+	count: Int
+	refIDMin: String
+	refIDMax: String
+	itemIDMin: String
+	itemIDMax: String
 }
 
 type UpdateBookPayload {
-  book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-  numUids: Int
+	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 type UpdateLibraryItemPayload {
-  libraryItem(
-    filter: LibraryItemFilter
-    order: LibraryItemOrder
-    first: Int
-    offset: Int
-  ): [LibraryItem]
-  numUids: Int
+	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	numUids: Int
 }
 
 type UpdateLibraryPayload {
-  library(filter: LibraryFilter, first: Int, offset: Int): [Library]
-  numUids: Int
+	library(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	numUids: Int
 }
 
 #######################
@@ -376,31 +364,31 @@ type UpdateLibraryPayload {
 #######################
 
 enum BookHasFilter {
-  refID
-  itemID
-  title
-  author
+	refID
+	itemID
+	title
+	author
 }
 
 enum BookOrderable {
-  refID
-  itemID
-  title
-  author
+	refID
+	itemID
+	title
+	author
 }
 
 enum LibraryHasFilter {
-  items
+	items
 }
 
 enum LibraryItemHasFilter {
-  refID
-  itemID
+	refID
+	itemID
 }
 
 enum LibraryItemOrderable {
-  refID
-  itemID
+	refID
+	itemID
 }
 
 #######################
@@ -408,100 +396,100 @@ enum LibraryItemOrderable {
 #######################
 
 input AddBookInput {
-  refID: String!
-  itemID: String!
-  title: String
-  author: String
+	refID: String!
+	itemID: String!
+	title: String
+	author: String
 }
 
 input AddLibraryInput {
-  items: [LibraryItemRef]
+	items: [LibraryItemRef]
 }
 
 input BookFilter {
-  refID: StringHashFilter
-  itemID: StringHashFilter
-  has: [BookHasFilter]
-  and: [BookFilter]
-  or: [BookFilter]
-  not: BookFilter
+	refID: StringHashFilter
+	itemID: StringHashFilter
+	has: [BookHasFilter]
+	and: [BookFilter]
+	or: [BookFilter]
+	not: BookFilter
 }
 
 input BookOrder {
-  asc: BookOrderable
-  desc: BookOrderable
-  then: BookOrder
+	asc: BookOrderable
+	desc: BookOrderable
+	then: BookOrder
 }
 
 input BookPatch {
-  refID: String
-  itemID: String
-  title: String
-  author: String
+	refID: String
+	itemID: String
+	title: String
+	author: String
 }
 
 input BookRef {
-  refID: String
-  itemID: String
-  title: String
-  author: String
+	refID: String
+	itemID: String
+	title: String
+	author: String
 }
 
 input LibraryFilter {
-  has: [LibraryHasFilter]
-  and: [LibraryFilter]
-  or: [LibraryFilter]
-  not: LibraryFilter
+	has: [LibraryHasFilter]
+	and: [LibraryFilter]
+	or: [LibraryFilter]
+	not: LibraryFilter
 }
 
 input LibraryItemFilter {
-  refID: StringHashFilter
-  itemID: StringHashFilter
-  has: [LibraryItemHasFilter]
-  and: [LibraryItemFilter]
-  or: [LibraryItemFilter]
-  not: LibraryItemFilter
+	refID: StringHashFilter
+	itemID: StringHashFilter
+	has: [LibraryItemHasFilter]
+	and: [LibraryItemFilter]
+	or: [LibraryItemFilter]
+	not: LibraryItemFilter
 }
 
 input LibraryItemOrder {
-  asc: LibraryItemOrderable
-  desc: LibraryItemOrderable
-  then: LibraryItemOrder
+	asc: LibraryItemOrderable
+	desc: LibraryItemOrderable
+	then: LibraryItemOrder
 }
 
 input LibraryItemPatch {
-  refID: String
-  itemID: String
+	refID: String
+	itemID: String
 }
 
 input LibraryItemRef {
-  refID: String!
+	refID: String!
 }
 
 input LibraryPatch {
-  items: [LibraryItemRef]
+	items: [LibraryItemRef]
 }
 
 input LibraryRef {
-  items: [LibraryItemRef]
+	items: [LibraryItemRef]
 }
 
 input UpdateBookInput {
-  filter: BookFilter!
-  set: BookPatch
-  remove: BookPatch
+	filter: BookFilter!
+	set: BookPatch
+	remove: BookPatch
 }
 
 input UpdateLibraryInput {
-  filter: LibraryFilter!
-  set: LibraryPatch
-  remove: LibraryPatch
+	filter: LibraryFilter!
+	set: LibraryPatch
+	remove: LibraryPatch
 }
 
 input UpdateLibraryItemInput {
-  filter: LibraryItemFilter!
-  set: LibraryItemPatch
-  remove: LibraryItemPatch
+	filter: LibraryItemFilter!
+	set: LibraryItemPatch
+	remove: LibraryItemPatch
 }
 
 #######################
@@ -509,22 +497,14 @@ input UpdateLibraryItemInput {
 #######################
 
 type Query {
-  getLibraryItem(refID: String, itemID: String): LibraryItem
-    @deprecated(
-      reason: "@id argument for get query on interface is being deprecated. Only those @id fields which have interface argument set to true will be available in getQuery argument on interface post v21.11.0, please update your schema accordingly."
-    )
-  queryLibraryItem(
-    filter: LibraryItemFilter
-    order: LibraryItemOrder
-    first: Int
-    offset: Int
-  ): [LibraryItem]
-  aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
-  getBook(refID: String, itemID: String): Book
-  queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
-  aggregateBook(filter: BookFilter): BookAggregateResult
-  queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
-  aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
+	getLibraryItem(refID: String, itemID: String): LibraryItem @deprecated(reason: "@id argument for get query on interface is being deprecated. Only those @id fields which have interface argument set to true will be available in getQuery argument on interface post v21.11.0, please update your schema accordingly.")
+	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	aggregateLibraryItem(filter: LibraryItemFilter): LibraryItemAggregateResult
+	getBook(refID: String, itemID: String): Book
+	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	aggregateBook(filter: BookFilter): BookAggregateResult
+	queryLibrary(filter: LibraryFilter, first: Int, offset: Int): [Library]
+	aggregateLibrary(filter: LibraryFilter): LibraryAggregateResult
 }
 
 #######################
@@ -532,12 +512,13 @@ type Query {
 #######################
 
 type Mutation {
-  updateLibraryItem(input: UpdateLibraryItemInput!): UpdateLibraryItemPayload
-  deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-  addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
-  updateBook(input: UpdateBookInput!): UpdateBookPayload
-  deleteBook(filter: BookFilter!): DeleteBookPayload
-  addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
-  updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
-  deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
+	updateLibraryItem(input: UpdateLibraryItemInput!): UpdateLibraryItemPayload
+	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
+	addBook(input: [AddBookInput!]!, upsert: Boolean): AddBookPayload
+	updateBook(input: UpdateBookInput!): UpdateBookPayload
+	deleteBook(filter: BookFilter!): DeleteBookPayload
+	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
+	updateLibrary(input: UpdateLibraryInput!): UpdateLibraryPayload
+	deleteLibrary(filter: LibraryFilter!): DeleteLibraryPayload
 }
+

@@ -4,22 +4,23 @@
 Desc
 """
 interface I {
-  """
-  Desc
-  """
-  s: String!
+    """
+    Desc
+    """
+    s: String!
 }
 
 """
 Desc
 """
 type T implements I {
-  # # comment
-  id: ID! # comment
-  """
-  Desc
-  """
-  i: Int
+    # # comment
+    id: ID! # comment
+
+    """
+    Desc
+    """
+    i: Int
 }
 
 # comment
@@ -28,12 +29,12 @@ type T implements I {
 Desc
 """
 enum AnEnum {
-  AVal
+    AVal
 
-  """
-  Desc
-  """
-  AnotherVal
+    """
+    Desc
+    """
+    AnotherVal
 }
 
 """
@@ -45,10 +46,11 @@ union A_Union = T
 Desc
 """
 input AnInput {
-  # # comment
-  id: ID! # comment
-  """
-  Desc
-  """
-  i: Int
+    # # comment
+    id: ID! # comment
+
+    """
+    Desc
+    """
+    i: Int
 }
