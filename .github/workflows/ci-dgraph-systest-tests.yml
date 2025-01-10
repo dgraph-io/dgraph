@@ -36,7 +36,7 @@ jobs:
           cd ./protos
           go mod tidy
           make regenerate
-          git diff --exit-code -- .
+          git diff -b --exit-code -- .
       - name: Make Linux Build and Docker Image
         run: make docker-image
       - name: Install gotestsum

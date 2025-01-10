@@ -2572,26 +2572,29 @@ type RestoreRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	GroupId                 uint32    `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	RestoreTs               uint64    `protobuf:"varint,2,opt,name=restore_ts,json=restoreTs,proto3" json:"restore_ts,omitempty"`
-	Location                string    `protobuf:"bytes,3,opt,name=location,proto3" json:"location,omitempty"`
-	BackupId                string    `protobuf:"bytes,4,opt,name=backup_id,json=backupId,proto3" json:"backup_id,omitempty"`
-	AccessKey               string    `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"` // Credentials when using a minio or S3 bucket as the backup location.
-	SecretKey               Sensitive `protobuf:"bytes,6,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
-	SessionToken            Sensitive `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	Anonymous               bool      `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
-	EncryptionKeyFile       string    `protobuf:"bytes,9,opt,name=encryption_key_file,json=encryptionKeyFile,proto3" json:"encryption_key_file,omitempty"` // Info needed to process encrypted backups.
-	VaultAddr               string    `protobuf:"bytes,10,opt,name=vault_addr,json=vaultAddr,proto3" json:"vault_addr,omitempty"`                          // Vault options
-	VaultRoleidFile         string    `protobuf:"bytes,11,opt,name=vault_roleid_file,json=vaultRoleidFile,proto3" json:"vault_roleid_file,omitempty"`
-	VaultSecretidFile       string    `protobuf:"bytes,12,opt,name=vault_secretid_file,json=vaultSecretidFile,proto3" json:"vault_secretid_file,omitempty"`
-	VaultPath               string    `protobuf:"bytes,13,opt,name=vault_path,json=vaultPath,proto3" json:"vault_path,omitempty"`
-	VaultField              string    `protobuf:"bytes,14,opt,name=vault_field,json=vaultField,proto3" json:"vault_field,omitempty"`
-	VaultFormat             string    `protobuf:"bytes,15,opt,name=vault_format,json=vaultFormat,proto3" json:"vault_format,omitempty"`
-	BackupNum               uint64    `protobuf:"varint,16,opt,name=backup_num,json=backupNum,proto3" json:"backup_num,omitempty"`
-	IncrementalFrom         uint64    `protobuf:"varint,17,opt,name=incremental_from,json=incrementalFrom,proto3" json:"incremental_from,omitempty"`
-	IsPartial               bool      `protobuf:"varint,18,opt,name=is_partial,json=isPartial,proto3" json:"is_partial,omitempty"`
-	FromNamespace           uint64    `protobuf:"varint,19,opt,name=fromNamespace,proto3" json:"fromNamespace,omitempty"`
-	IsNamespaceAwareRestore bool      `protobuf:"varint,20,opt,name=isNamespaceAwareRestore,proto3" json:"isNamespaceAwareRestore,omitempty"`
+	GroupId   uint32 `protobuf:"varint,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	RestoreTs uint64 `protobuf:"varint,2,opt,name=restore_ts,json=restoreTs,proto3" json:"restore_ts,omitempty"`
+	Location  string `protobuf:"bytes,3,opt,name=location,proto3" json:"location,omitempty"`
+	BackupId  string `protobuf:"bytes,4,opt,name=backup_id,json=backupId,proto3" json:"backup_id,omitempty"`
+	AccessKey string `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	// Credentials when using a minio or S3 bucket as the backup location.
+	SecretKey         Sensitive `protobuf:"bytes,6,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
+	SessionToken      Sensitive `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	Anonymous         bool      `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
+	EncryptionKeyFile string    `protobuf:"bytes,9,opt,name=encryption_key_file,json=encryptionKeyFile,proto3" json:"encryption_key_file,omitempty"`
+	// Info needed to process encrypted backups.
+	VaultAddr string `protobuf:"bytes,10,opt,name=vault_addr,json=vaultAddr,proto3" json:"vault_addr,omitempty"`
+	// Vault options
+	VaultRoleidFile         string `protobuf:"bytes,11,opt,name=vault_roleid_file,json=vaultRoleidFile,proto3" json:"vault_roleid_file,omitempty"`
+	VaultSecretidFile       string `protobuf:"bytes,12,opt,name=vault_secretid_file,json=vaultSecretidFile,proto3" json:"vault_secretid_file,omitempty"`
+	VaultPath               string `protobuf:"bytes,13,opt,name=vault_path,json=vaultPath,proto3" json:"vault_path,omitempty"`
+	VaultField              string `protobuf:"bytes,14,opt,name=vault_field,json=vaultField,proto3" json:"vault_field,omitempty"`
+	VaultFormat             string `protobuf:"bytes,15,opt,name=vault_format,json=vaultFormat,proto3" json:"vault_format,omitempty"`
+	BackupNum               uint64 `protobuf:"varint,16,opt,name=backup_num,json=backupNum,proto3" json:"backup_num,omitempty"`
+	IncrementalFrom         uint64 `protobuf:"varint,17,opt,name=incremental_from,json=incrementalFrom,proto3" json:"incremental_from,omitempty"`
+	IsPartial               bool   `protobuf:"varint,18,opt,name=is_partial,json=isPartial,proto3" json:"is_partial,omitempty"`
+	FromNamespace           uint64 `protobuf:"varint,19,opt,name=fromNamespace,proto3" json:"fromNamespace,omitempty"`
+	IsNamespaceAwareRestore bool   `protobuf:"varint,20,opt,name=isNamespaceAwareRestore,proto3" json:"isNamespaceAwareRestore,omitempty"`
 }
 
 func (x *RestoreRequest) Reset() {
