@@ -1706,7 +1706,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		preAllowcateLength = x.MinInt(preAllowcateLength, len(opt.Intersect.Uids))
 	}
 	// Pre-assign length to make it faster.
-	res := make([]uint64, 0, x.MinInt(opt.First, len(opt.Intersect.Uids), l.mutationMap.len()+codec.ApproxLen(l.plist.Pack)))
+	res := make([]uint64, 0, preAllowcateLength)
 
 	checkLimit := func() bool {
 		// We need the last N.
