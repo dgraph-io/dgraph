@@ -1701,6 +1701,10 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
+	preAllowcateLength := x.MinInt(opt.First, l.mutationMap.len()+codec.ApproxLen(l.plist.Pack))
+	if opt.Intersect != nil {
+		preAllowcateLength = x.MinInt(preAllowcateLength, len(opt.Intersect.Uids))
+	}
 	// Pre-assign length to make it faster.
 	res := make([]uint64, 0, x.MinInt(opt.First, len(opt.Intersect.Uids), l.mutationMap.len()+codec.ApproxLen(l.plist.Pack)))
 
