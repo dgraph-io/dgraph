@@ -1672,10 +1672,8 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
-	// Pre-assign length to make it faster.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, l.mutationMap.len()+codec.ApproxLen(l.plist.Pack))
+
 	out := &pb.List{}
 	if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
@@ -1687,29 +1685,45 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	var uidMin, uidMax uint64 = 0, 0
-	if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
-		uidMin = opt.Intersect.Uids[0]
-		uidMax = opt.Intersect.Uids[len(opt.Intersect.Uids)-1]
+	// Pre-assign length to make it faster.
+	res := make([]uint64, 0, x.MinInt(opt.First, len(opt.Intersect.Uids), l.mutationMap.len()+codec.ApproxLen(l.plist.Pack)))
+
+	checkLimit := func() bool {
+		// We need the last N.
+		// TODO: This could be optimized by only considering some of the last UidBlocks.
+		if opt.First < 0 {
+			if len(res) > -opt.First {
+				res = res[1:]
+			}
+		} else if len(res) > opt.First {
+			return true
+		}
+		return false
+	}
+
+	if opt.Intersect != nil && len(opt.Intersect.Uids) < l.mutationMap.len()+codec.ApproxLen(l.plist.Pack) {
+		for _, uid := range opt.Intersect.Uids {
+			found, _, err := l.findPosting(opt.ReadTs, uid)
+			if err != nil {
+				l.RUnlock()
+				return out, errors.Wrapf(err, "While find posting for UIDs")
+			}
+			if found {
+				res = append(res, uid)
+				if checkLimit() {
+					break
+				}
+			}
+		}
+		out.Uids = res
+		l.RUnlock()
+		return out, nil
 	}
 
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
-			if p.Uid < uidMin {
-				return nil
-			}
-			if p.Uid > uidMax && uidMax > 0 {
-				return ErrStopIteration
-			}
 			res = append(res, p.Uid)
-
-			if opt.First < 0 {
-				// We need the last N.
-				// TODO: This could be optimized by only considering some of the last UidBlocks.
-				if len(res) > -opt.First {
-					res = res[1:]
-				}
-			} else if len(res) > opt.First {
+			if checkLimit() {
 				return ErrStopIteration
 			}
 		}
