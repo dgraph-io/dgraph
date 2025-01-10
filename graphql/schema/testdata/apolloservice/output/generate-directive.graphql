@@ -3,23 +3,23 @@
 #######################
 
 interface Character @secret(field: "password") {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
+  id: ID!
+  name: String! @search(by: [exact])
+  friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+  friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Human @secret(field: "password") {
-	id: ID!
-	name: String! @search(by: [exact])
-	friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	totalCredits: Int
-	friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
+  id: ID!
+  name: String! @search(by: [exact])
+  friends(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+  totalCredits: Int
+  friendsAggregate(filter: CharacterFilter): CharacterAggregateResult
 }
 
 type Person @withSubscription {
-	id: ID!
-	name: String!
+  id: ID!
+  name: String!
 }
 
 #######################
@@ -38,162 +38,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange{
-	min: Int!
-	max: Int!
+input IntRange {
+  min: Int!
+  max: Int!
 }
 
-input FloatRange{
-	min: Float!
-	max: Float!
+input FloatRange {
+  min: Float!
+  max: Float!
 }
 
-input Int64Range{
-	min: Int64!
-	max: Int64!
+input Int64Range {
+  min: Int64!
+  max: Int64!
 }
 
-input DateTimeRange{
-	min: DateTime!
-	max: DateTime!
+input DateTimeRange {
+  min: DateTime!
+  max: DateTime!
 }
 
-input StringRange{
-	min: String!
-	max: String!
+input StringRange {
+  min: String!
+  max: String!
 }
 
 enum DgraphIndex {
-	int
-	int64
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-	geo
-	hnsw
+  int
+  int64
+  float
+  bool
+  hash
+  exact
+  term
+  fulltext
+  trigram
+  regexp
+  year
+  month
+  day
+  hour
+  geo
+  hnsw
 }
 
 input AuthRule {
-	and: [AuthRule]
-	or: [AuthRule]
-	not: AuthRule
-	rule: String
+  and: [AuthRule]
+  or: [AuthRule]
+  not: AuthRule
+  rule: String
 }
 
 enum HTTPMethod {
-	GET
-	POST
-	PUT
-	PATCH
-	DELETE
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
 enum Mode {
-	BATCH
-	SINGLE
+  BATCH
+  SINGLE
 }
 
 input CustomHTTP {
-	url: String!
-	method: HTTPMethod!
-	body: String
-	graphql: String
-	mode: Mode
-	forwardHeaders: [String!]
-	secretHeaders: [String!]
-	introspectionHeaders: [String!]
-	skipIntrospection: Boolean
+  url: String!
+  method: HTTPMethod!
+  body: String
+  graphql: String
+  mode: Mode
+  forwardHeaders: [String!]
+  secretHeaders: [String!]
+  introspectionHeaders: [String!]
+  skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-	value: String
+  value: String
 }
 
 type Point {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input PointRef {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input NearFilter {
-	distance: Float!
-	coordinate: PointRef!
+  distance: Float!
+  coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
+  near: NearFilter
+  within: WithinFilter
 }
 
 type PointList {
-	points: [Point!]!
+  points: [Point!]!
 }
 
 input PointListRef {
-	points: [PointRef!]!
+  points: [PointRef!]!
 }
 
 type Polygon {
-	coordinates: [PointList!]!
+  coordinates: [PointList!]!
 }
 
 input PolygonRef {
-	coordinates: [PointListRef!]!
+  coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-	polygons: [Polygon!]!
+  polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	polygons: [PolygonRef!]!
+  polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-	polygon: PolygonRef!
+  polygon: PolygonRef!
 }
 
 input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
+  point: PointRef
+  polygon: PolygonRef
 }
 
 input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
+  polygon: PolygonRef
+  multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+  near: NearFilter
+  within: WithinFilter
+  contains: ContainsFilter
+  intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-	get: Boolean
-	query: Boolean
-	password: Boolean
-	aggregate: Boolean
+  get: Boolean
+  query: Boolean
+  password: Boolean
+  aggregate: Boolean
 }
 
 input GenerateMutationParams {
-	add: Boolean
-	update: Boolean
-	delete: Boolean
+  add: Boolean
+  update: Boolean
+  delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -210,72 +210,72 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-	eq: Int
-	in: [Int]
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-	between: IntRange
+  eq: Int
+  in: [Int]
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: IntRange
 }
 
 input Int64Filter {
-	eq: Int64
-	in: [Int64]
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
-	between: Int64Range
+  eq: Int64
+  in: [Int64]
+  le: Int64
+  lt: Int64
+  ge: Int64
+  gt: Int64
+  between: Int64Range
 }
 
 input FloatFilter {
-	eq: Float
-	in: [Float]
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-	between: FloatRange
+  eq: Float
+  in: [Float]
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: FloatRange
 }
 
 input DateTimeFilter {
-	eq: DateTime
-	in: [DateTime]
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-	between: DateTimeRange
+  eq: DateTime
+  in: [DateTime]
+  le: DateTime
+  lt: DateTime
+  ge: DateTime
+  gt: DateTime
+  between: DateTimeRange
 }
 
 input StringTermFilter {
-	allofterms: String
-	anyofterms: String
+  allofterms: String
+  anyofterms: String
 }
 
 input StringRegExpFilter {
-	regexp: String
+  regexp: String
 }
 
 input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
+  alloftext: String
+  anyoftext: String
 }
 
 input StringExactFilter {
-	eq: String
-	in: [String]
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	between: StringRange
+  eq: String
+  in: [String]
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  between: StringRange
 }
 
 input StringHashFilter {
-	eq: String
-	in: [String]
+  eq: String
+  in: [String]
 }
 
 #######################
@@ -283,57 +283,57 @@ input StringHashFilter {
 #######################
 
 type AddHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	numUids: Int
+  human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+  numUids: Int
 }
 
 type CharacterAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
+  count: Int
+  nameMin: String
+  nameMax: String
 }
 
 type DeleteCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	msg: String
-	numUids: Int
+  character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+  msg: String
+  numUids: Int
 }
 
 type DeleteHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	msg: String
-	numUids: Int
+  human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+  msg: String
+  numUids: Int
 }
 
 type HumanAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
-	totalCreditsMin: Int
-	totalCreditsMax: Int
-	totalCreditsSum: Int
-	totalCreditsAvg: Float
+  count: Int
+  nameMin: String
+  nameMax: String
+  totalCreditsMin: Int
+  totalCreditsMax: Int
+  totalCreditsSum: Int
+  totalCreditsAvg: Float
 }
 
 type PersonAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
+  count: Int
+  nameMin: String
+  nameMax: String
 }
 
 type UpdateCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	numUids: Int
+  character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+  numUids: Int
 }
 
 type UpdateHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	numUids: Int
+  human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+  numUids: Int
 }
 
 type UpdatePersonPayload {
-	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
-	numUids: Int
+  person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+  numUids: Int
 }
 
 #######################
@@ -341,31 +341,31 @@ type UpdatePersonPayload {
 #######################
 
 enum CharacterHasFilter {
-	name
-	friends
+  name
+  friends
 }
 
 enum CharacterOrderable {
-	name
+  name
 }
 
 enum HumanHasFilter {
-	name
-	friends
-	totalCredits
+  name
+  friends
+  totalCredits
 }
 
 enum HumanOrderable {
-	name
-	totalCredits
+  name
+  totalCredits
 }
 
 enum PersonHasFilter {
-	name
+  name
 }
 
 enum PersonOrderable {
-	name
+  name
 }
 
 #######################
@@ -373,106 +373,106 @@ enum PersonOrderable {
 #######################
 
 input AddHumanInput {
-	name: String!
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String!
+  name: String!
+  friends: [CharacterRef]
+  totalCredits: Int
+  password: String!
 }
 
 input CharacterFilter {
-	id: [ID!]
-	name: StringExactFilter
-	has: [CharacterHasFilter]
-	and: [CharacterFilter]
-	or: [CharacterFilter]
-	not: CharacterFilter
+  id: [ID!]
+  name: StringExactFilter
+  has: [CharacterHasFilter]
+  and: [CharacterFilter]
+  or: [CharacterFilter]
+  not: CharacterFilter
 }
 
 input CharacterOrder {
-	asc: CharacterOrderable
-	desc: CharacterOrderable
-	then: CharacterOrder
+  asc: CharacterOrderable
+  desc: CharacterOrderable
+  then: CharacterOrder
 }
 
 input CharacterPatch {
-	name: String
-	friends: [CharacterRef]
-	password: String
+  name: String
+  friends: [CharacterRef]
+  password: String
 }
 
 input CharacterRef {
-	id: ID!
+  id: ID!
 }
 
 input HumanFilter {
-	id: [ID!]
-	name: StringExactFilter
-	has: [HumanHasFilter]
-	and: [HumanFilter]
-	or: [HumanFilter]
-	not: HumanFilter
+  id: [ID!]
+  name: StringExactFilter
+  has: [HumanHasFilter]
+  and: [HumanFilter]
+  or: [HumanFilter]
+  not: HumanFilter
 }
 
 input HumanOrder {
-	asc: HumanOrderable
-	desc: HumanOrderable
-	then: HumanOrder
+  asc: HumanOrderable
+  desc: HumanOrderable
+  then: HumanOrder
 }
 
 input HumanPatch {
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
+  name: String
+  friends: [CharacterRef]
+  totalCredits: Int
+  password: String
 }
 
 input HumanRef {
-	id: ID
-	name: String
-	friends: [CharacterRef]
-	totalCredits: Int
-	password: String
+  id: ID
+  name: String
+  friends: [CharacterRef]
+  totalCredits: Int
+  password: String
 }
 
 input PersonFilter {
-	id: [ID!]
-	has: [PersonHasFilter]
-	and: [PersonFilter]
-	or: [PersonFilter]
-	not: PersonFilter
+  id: [ID!]
+  has: [PersonHasFilter]
+  and: [PersonFilter]
+  or: [PersonFilter]
+  not: PersonFilter
 }
 
 input PersonOrder {
-	asc: PersonOrderable
-	desc: PersonOrderable
-	then: PersonOrder
+  asc: PersonOrderable
+  desc: PersonOrderable
+  then: PersonOrder
 }
 
 input PersonPatch {
-	name: String
+  name: String
 }
 
 input PersonRef {
-	id: ID
-	name: String
+  id: ID
+  name: String
 }
 
 input UpdateCharacterInput {
-	filter: CharacterFilter!
-	set: CharacterPatch
-	remove: CharacterPatch
+  filter: CharacterFilter!
+  set: CharacterPatch
+  remove: CharacterPatch
 }
 
 input UpdateHumanInput {
-	filter: HumanFilter!
-	set: HumanPatch
-	remove: HumanPatch
+  filter: HumanFilter!
+  set: HumanPatch
+  remove: HumanPatch
 }
 
 input UpdatePersonInput {
-	filter: PersonFilter!
-	set: PersonPatch
-	remove: PersonPatch
+  filter: PersonFilter!
+  set: PersonPatch
+  remove: PersonPatch
 }
 
 #######################
@@ -480,13 +480,18 @@ input UpdatePersonInput {
 #######################
 
 type Query {
-	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
-	aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
-	getHuman(id: ID!): Human
-	checkHumanPassword(id: ID!, password: String!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+  queryCharacter(
+    filter: CharacterFilter
+    order: CharacterOrder
+    first: Int
+    offset: Int
+  ): [Character]
+  aggregateCharacter(filter: CharacterFilter): CharacterAggregateResult
+  getHuman(id: ID!): Human
+  checkHumanPassword(id: ID!, password: String!): Human
+  queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+  aggregateHuman(filter: HumanFilter): HumanAggregateResult
+  queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }
 
 #######################
@@ -494,12 +499,12 @@ type Query {
 #######################
 
 type Mutation {
-	updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
-	deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
-	addHuman(input: [AddHumanInput!]!): AddHumanPayload
-	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
-	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
-	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
+  updateCharacter(input: UpdateCharacterInput!): UpdateCharacterPayload
+  deleteCharacter(filter: CharacterFilter!): DeleteCharacterPayload
+  addHuman(input: [AddHumanInput!]!): AddHumanPayload
+  updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
+  deleteHuman(filter: HumanFilter!): DeleteHumanPayload
+  updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
 }
 
 #######################
@@ -507,8 +512,8 @@ type Mutation {
 #######################
 
 type Subscription {
-	getHuman(id: ID!): Human
-	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
-	aggregateHuman(filter: HumanFilter): HumanAggregateResult
-	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+  getHuman(id: ID!): Human
+  queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+  aggregateHuman(filter: HumanFilter): HumanAggregateResult
+  queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
 }

@@ -8,14 +8,14 @@ type Product {
   product_vector: [Float!] @embedding @search(by: ["hnsw(metric: euclidean, exponent: 4)"])
 }
 
-type Purchase @lambdaOnMutate(add: true){
+type Purchase @lambdaOnMutate(add: true) {
   user: User @hasInverse(field: "purchase_history")
   product: Product
   date: DateTime @search(by: [day])
 }
 
-type User  {
-  email: String!  @id
-  purchase_history: [Purchase] 
+type User {
+  email: String! @id
+  purchase_history: [Purchase]
   user_vector: [Float!] @embedding @search(by: ["hnsw"])
 }

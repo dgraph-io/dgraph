@@ -3,13 +3,13 @@
 #######################
 
 type User @remote {
-	id: ID!
-	name: String!
+  id: ID!
+  name: String!
 }
 
 type Car @key(fields: "id") {
-	id: ID!
-	name: String!
+  id: ID!
+  name: String!
 }
 
 #######################
@@ -28,162 +28,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange{
-	min: Int!
-	max: Int!
+input IntRange {
+  min: Int!
+  max: Int!
 }
 
-input FloatRange{
-	min: Float!
-	max: Float!
+input FloatRange {
+  min: Float!
+  max: Float!
 }
 
-input Int64Range{
-	min: Int64!
-	max: Int64!
+input Int64Range {
+  min: Int64!
+  max: Int64!
 }
 
-input DateTimeRange{
-	min: DateTime!
-	max: DateTime!
+input DateTimeRange {
+  min: DateTime!
+  max: DateTime!
 }
 
-input StringRange{
-	min: String!
-	max: String!
+input StringRange {
+  min: String!
+  max: String!
 }
 
 enum DgraphIndex {
-	int
-	int64
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-	geo
-	hnsw
+  int
+  int64
+  float
+  bool
+  hash
+  exact
+  term
+  fulltext
+  trigram
+  regexp
+  year
+  month
+  day
+  hour
+  geo
+  hnsw
 }
 
 input AuthRule {
-	and: [AuthRule]
-	or: [AuthRule]
-	not: AuthRule
-	rule: String
+  and: [AuthRule]
+  or: [AuthRule]
+  not: AuthRule
+  rule: String
 }
 
 enum HTTPMethod {
-	GET
-	POST
-	PUT
-	PATCH
-	DELETE
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
 enum Mode {
-	BATCH
-	SINGLE
+  BATCH
+  SINGLE
 }
 
 input CustomHTTP {
-	url: String!
-	method: HTTPMethod!
-	body: String
-	graphql: String
-	mode: Mode
-	forwardHeaders: [String!]
-	secretHeaders: [String!]
-	introspectionHeaders: [String!]
-	skipIntrospection: Boolean
+  url: String!
+  method: HTTPMethod!
+  body: String
+  graphql: String
+  mode: Mode
+  forwardHeaders: [String!]
+  secretHeaders: [String!]
+  introspectionHeaders: [String!]
+  skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-	value: String
+  value: String
 }
 
 type Point {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input PointRef {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input NearFilter {
-	distance: Float!
-	coordinate: PointRef!
+  distance: Float!
+  coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
+  near: NearFilter
+  within: WithinFilter
 }
 
 type PointList {
-	points: [Point!]!
+  points: [Point!]!
 }
 
 input PointListRef {
-	points: [PointRef!]!
+  points: [PointRef!]!
 }
 
 type Polygon {
-	coordinates: [PointList!]!
+  coordinates: [PointList!]!
 }
 
 input PolygonRef {
-	coordinates: [PointListRef!]!
+  coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-	polygons: [Polygon!]!
+  polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	polygons: [PolygonRef!]!
+  polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-	polygon: PolygonRef!
+  polygon: PolygonRef!
 }
 
 input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
+  point: PointRef
+  polygon: PolygonRef
 }
 
 input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
+  polygon: PolygonRef
+  multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+  near: NearFilter
+  within: WithinFilter
+  contains: ContainsFilter
+  intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-	get: Boolean
-	query: Boolean
-	password: Boolean
-	aggregate: Boolean
+  get: Boolean
+  query: Boolean
+  password: Boolean
+  aggregate: Boolean
 }
 
 input GenerateMutationParams {
-	add: Boolean
-	update: Boolean
-	delete: Boolean
+  add: Boolean
+  update: Boolean
+  delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -200,72 +200,72 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-	eq: Int
-	in: [Int]
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-	between: IntRange
+  eq: Int
+  in: [Int]
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: IntRange
 }
 
 input Int64Filter {
-	eq: Int64
-	in: [Int64]
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
-	between: Int64Range
+  eq: Int64
+  in: [Int64]
+  le: Int64
+  lt: Int64
+  ge: Int64
+  gt: Int64
+  between: Int64Range
 }
 
 input FloatFilter {
-	eq: Float
-	in: [Float]
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-	between: FloatRange
+  eq: Float
+  in: [Float]
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: FloatRange
 }
 
 input DateTimeFilter {
-	eq: DateTime
-	in: [DateTime]
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-	between: DateTimeRange
+  eq: DateTime
+  in: [DateTime]
+  le: DateTime
+  lt: DateTime
+  ge: DateTime
+  gt: DateTime
+  between: DateTimeRange
 }
 
 input StringTermFilter {
-	allofterms: String
-	anyofterms: String
+  allofterms: String
+  anyofterms: String
 }
 
 input StringRegExpFilter {
-	regexp: String
+  regexp: String
 }
 
 input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
+  alloftext: String
+  anyoftext: String
 }
 
 input StringExactFilter {
-	eq: String
-	in: [String]
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	between: StringRange
+  eq: String
+  in: [String]
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  between: StringRange
 }
 
 input StringHashFilter {
-	eq: String
-	in: [String]
+  eq: String
+  in: [String]
 }
 
 #######################
@@ -273,25 +273,25 @@ input StringHashFilter {
 #######################
 
 type AddCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	numUids: Int
+  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+  numUids: Int
 }
 
 type CarAggregateResult {
-	count: Int
-	nameMin: String
-	nameMax: String
+  count: Int
+  nameMin: String
+  nameMax: String
 }
 
 type DeleteCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	msg: String
-	numUids: Int
+  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+  msg: String
+  numUids: Int
 }
 
 type UpdateCarPayload {
-	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	numUids: Int
+  car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+  numUids: Int
 }
 
 #######################
@@ -299,11 +299,11 @@ type UpdateCarPayload {
 #######################
 
 enum CarHasFilter {
-	name
+  name
 }
 
 enum CarOrderable {
-	name
+  name
 }
 
 #######################
@@ -311,36 +311,36 @@ enum CarOrderable {
 #######################
 
 input AddCarInput {
-	name: String!
+  name: String!
 }
 
 input CarFilter {
-	id: [ID!]
-	has: [CarHasFilter]
-	and: [CarFilter]
-	or: [CarFilter]
-	not: CarFilter
+  id: [ID!]
+  has: [CarHasFilter]
+  and: [CarFilter]
+  or: [CarFilter]
+  not: CarFilter
 }
 
 input CarOrder {
-	asc: CarOrderable
-	desc: CarOrderable
-	then: CarOrder
+  asc: CarOrderable
+  desc: CarOrderable
+  then: CarOrder
 }
 
 input CarPatch {
-	name: String
+  name: String
 }
 
 input CarRef {
-	id: ID
-	name: String
+  id: ID
+  name: String
 }
 
 input UpdateCarInput {
-	filter: CarFilter!
-	set: CarPatch
-	remove: CarPatch
+  filter: CarFilter!
+  set: CarPatch
+  remove: CarPatch
 }
 
 #######################
@@ -348,10 +348,10 @@ input UpdateCarInput {
 #######################
 
 type Query {
-	getMyFavoriteUsers(id: ID!): [User]
-	getCar(id: ID!): Car
-	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
-	aggregateCar(filter: CarFilter): CarAggregateResult
+  getMyFavoriteUsers(id: ID!): [User]
+  getCar(id: ID!): Car
+  queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+  aggregateCar(filter: CarFilter): CarAggregateResult
 }
 
 #######################
@@ -359,8 +359,7 @@ type Query {
 #######################
 
 type Mutation {
-	addCar(input: [AddCarInput!]!): AddCarPayload
-	updateCar(input: UpdateCarInput!): UpdateCarPayload
-	deleteCar(filter: CarFilter!): DeleteCarPayload
+  addCar(input: [AddCarInput!]!): AddCarPayload
+  updateCar(input: UpdateCarInput!): UpdateCarPayload
+  deleteCar(filter: CarFilter!): DeleteCarPayload
 }
-

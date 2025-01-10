@@ -1,17 +1,17 @@
 type Post {
-    postID: ID
-    content: String!
-    author: Author!
-    genre: Genre
+  postID: ID
+  content: String!
+  author: Author!
+  genre: Genre
 }
 
 type Author {
-    id: ID
-    name: String! @id @search(by: [regexp])
-	pen_name: String! @id
-    posts: [Post]
+  id: ID
+  name: String! @id @search(by: [regexp])
+  pen_name: String! @id
+  posts: [Post]
 }
 
 type Genre {
-    name: String! @id
+  name: String! @id
 }

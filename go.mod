@@ -1,6 +1,7 @@
 module github.com/hypermodeinc/dgraph/v24
 
 go 1.22.7
+
 toolchain go1.23.4
 
 require (

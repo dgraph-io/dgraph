@@ -1,6 +1,4 @@
 type Atype {
-    iamDeprecated: String @deprecated
-    soAmI: String! @deprecated(reason: "because")
+  iamDeprecated: String @deprecated
+  soAmI: String! @deprecated(reason: "because")
 }
-
-

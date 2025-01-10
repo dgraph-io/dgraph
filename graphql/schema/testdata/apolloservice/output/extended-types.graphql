@@ -3,27 +3,27 @@
 #######################
 
 type Mission @key(fields: "id") {
-	id: ID!
-	crew: [Astronaut] @provides(fields: "name age")
-	designation: String!
-	startDate: String
-	endDate: String
+  id: ID!
+  crew: [Astronaut] @provides(fields: "name age")
+  designation: String!
+  startDate: String
+  endDate: String
 }
 
 type Astronaut @key(fields: "id") @extends {
-	id: ID! @external
-	name: String @external
-	age: Int @external
-	missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	missionsAggregate(filter: MissionFilter): MissionAggregateResult
+  id: ID! @external
+  name: String @external
+  age: Int @external
+  missions(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  missionsAggregate(filter: MissionFilter): MissionAggregateResult
 }
 
 type Product @key(fields: "upc") @extends {
-	upc: String! @id @external
-	price: Int @external
-	weight: Int @external
-	inStock: Boolean
-	shippingEstimate: Float @requires(fields: "price weight")
+  upc: String! @id @external
+  price: Int @external
+  weight: Int @external
+  inStock: Boolean
+  shippingEstimate: Float @requires(fields: "price weight")
 }
 
 #######################
@@ -42,162 +42,162 @@ For example: "1985-04-12T23:20:50.52Z" represents 20 mins 50.52 secs after the 2
 """
 scalar DateTime
 
-input IntRange{
-	min: Int!
-	max: Int!
+input IntRange {
+  min: Int!
+  max: Int!
 }
 
-input FloatRange{
-	min: Float!
-	max: Float!
+input FloatRange {
+  min: Float!
+  max: Float!
 }
 
-input Int64Range{
-	min: Int64!
-	max: Int64!
+input Int64Range {
+  min: Int64!
+  max: Int64!
 }
 
-input DateTimeRange{
-	min: DateTime!
-	max: DateTime!
+input DateTimeRange {
+  min: DateTime!
+  max: DateTime!
 }
 
-input StringRange{
-	min: String!
-	max: String!
+input StringRange {
+  min: String!
+  max: String!
 }
 
 enum DgraphIndex {
-	int
-	int64
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-	geo
-	hnsw
+  int
+  int64
+  float
+  bool
+  hash
+  exact
+  term
+  fulltext
+  trigram
+  regexp
+  year
+  month
+  day
+  hour
+  geo
+  hnsw
 }
 
 input AuthRule {
-	and: [AuthRule]
-	or: [AuthRule]
-	not: AuthRule
-	rule: String
+  and: [AuthRule]
+  or: [AuthRule]
+  not: AuthRule
+  rule: String
 }
 
 enum HTTPMethod {
-	GET
-	POST
-	PUT
-	PATCH
-	DELETE
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
 }
 
 enum Mode {
-	BATCH
-	SINGLE
+  BATCH
+  SINGLE
 }
 
 input CustomHTTP {
-	url: String!
-	method: HTTPMethod!
-	body: String
-	graphql: String
-	mode: Mode
-	forwardHeaders: [String!]
-	secretHeaders: [String!]
-	introspectionHeaders: [String!]
-	skipIntrospection: Boolean
+  url: String!
+  method: HTTPMethod!
+  body: String
+  graphql: String
+  mode: Mode
+  forwardHeaders: [String!]
+  secretHeaders: [String!]
+  introspectionHeaders: [String!]
+  skipIntrospection: Boolean
 }
 
 input DgraphDefault {
-	value: String
+  value: String
 }
 
 type Point {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input PointRef {
-	longitude: Float!
-	latitude: Float!
+  longitude: Float!
+  latitude: Float!
 }
 
 input NearFilter {
-	distance: Float!
-	coordinate: PointRef!
+  distance: Float!
+  coordinate: PointRef!
 }
 
 input PointGeoFilter {
-	near: NearFilter
-	within: WithinFilter
+  near: NearFilter
+  within: WithinFilter
 }
 
 type PointList {
-	points: [Point!]!
+  points: [Point!]!
 }
 
 input PointListRef {
-	points: [PointRef!]!
+  points: [PointRef!]!
 }
 
 type Polygon {
-	coordinates: [PointList!]!
+  coordinates: [PointList!]!
 }
 
 input PolygonRef {
-	coordinates: [PointListRef!]!
+  coordinates: [PointListRef!]!
 }
 
 type MultiPolygon {
-	polygons: [Polygon!]!
+  polygons: [Polygon!]!
 }
 
 input MultiPolygonRef {
-	polygons: [PolygonRef!]!
+  polygons: [PolygonRef!]!
 }
 
 input WithinFilter {
-	polygon: PolygonRef!
+  polygon: PolygonRef!
 }
 
 input ContainsFilter {
-	point: PointRef
-	polygon: PolygonRef
+  point: PointRef
+  polygon: PolygonRef
 }
 
 input IntersectsFilter {
-	polygon: PolygonRef
-	multiPolygon: MultiPolygonRef
+  polygon: PolygonRef
+  multiPolygon: MultiPolygonRef
 }
 
 input PolygonGeoFilter {
-	near: NearFilter
-	within: WithinFilter
-	contains: ContainsFilter
-	intersects: IntersectsFilter
+  near: NearFilter
+  within: WithinFilter
+  contains: ContainsFilter
+  intersects: IntersectsFilter
 }
 
 input GenerateQueryParams {
-	get: Boolean
-	query: Boolean
-	password: Boolean
-	aggregate: Boolean
+  get: Boolean
+  query: Boolean
+  password: Boolean
+  aggregate: Boolean
 }
 
 input GenerateMutationParams {
-	add: Boolean
-	update: Boolean
-	delete: Boolean
+  add: Boolean
+  update: Boolean
+  delete: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -214,72 +214,72 @@ directive @lambda on FIELD_DEFINITION
 directive @lambdaOnMutate(add: Boolean, update: Boolean, delete: Boolean) on OBJECT | INTERFACE
 
 input IntFilter {
-	eq: Int
-	in: [Int]
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-	between: IntRange
+  eq: Int
+  in: [Int]
+  le: Int
+  lt: Int
+  ge: Int
+  gt: Int
+  between: IntRange
 }
 
 input Int64Filter {
-	eq: Int64
-	in: [Int64]
-	le: Int64
-	lt: Int64
-	ge: Int64
-	gt: Int64
-	between: Int64Range
+  eq: Int64
+  in: [Int64]
+  le: Int64
+  lt: Int64
+  ge: Int64
+  gt: Int64
+  between: Int64Range
 }
 
 input FloatFilter {
-	eq: Float
-	in: [Float]
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-	between: FloatRange
+  eq: Float
+  in: [Float]
+  le: Float
+  lt: Float
+  ge: Float
+  gt: Float
+  between: FloatRange
 }
 
 input DateTimeFilter {
-	eq: DateTime
-	in: [DateTime]
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-	between: DateTimeRange
+  eq: DateTime
+  in: [DateTime]
+  le: DateTime
+  lt: DateTime
+  ge: DateTime
+  gt: DateTime
+  between: DateTimeRange
 }
 
 input StringTermFilter {
-	allofterms: String
-	anyofterms: String
+  allofterms: String
+  anyofterms: String
 }
 
 input StringRegExpFilter {
-	regexp: String
+  regexp: String
 }
 
 input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
+  alloftext: String
+  anyoftext: String
 }
 
 input StringExactFilter {
-	eq: String
-	in: [String]
-	le: String
-	lt: String
-	ge: String
-	gt: String
-	between: StringRange
+  eq: String
+  in: [String]
+  le: String
+  lt: String
+  ge: String
+  gt: String
+  between: StringRange
 }
 
 input StringHashFilter {
-	eq: String
-	in: [String]
+  eq: String
+  in: [String]
 }
 
 #######################
@@ -287,83 +287,83 @@ input StringHashFilter {
 #######################
 
 type AddAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
+  astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+  numUids: Int
 }
 
 type AddMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
+  mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  numUids: Int
 }
 
 type AddProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-	numUids: Int
+  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+  numUids: Int
 }
 
 type AstronautAggregateResult {
-	count: Int
-	idMin: ID
-	idMax: ID
-	nameMin: String
-	nameMax: String
-	ageMin: Int
-	ageMax: Int
-	ageSum: Int
-	ageAvg: Float
+  count: Int
+  idMin: ID
+  idMax: ID
+  nameMin: String
+  nameMax: String
+  ageMin: Int
+  ageMax: Int
+  ageSum: Int
+  ageAvg: Float
 }
 
 type DeleteAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	msg: String
-	numUids: Int
+  astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+  msg: String
+  numUids: Int
 }
 
 type DeleteMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	msg: String
-	numUids: Int
+  mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  msg: String
+  numUids: Int
 }
 
 type DeleteProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-	msg: String
-	numUids: Int
+  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+  msg: String
+  numUids: Int
 }
 
 type MissionAggregateResult {
-	count: Int
-	designationMin: String
-	designationMax: String
-	startDateMin: String
-	startDateMax: String
-	endDateMin: String
-	endDateMax: String
+  count: Int
+  designationMin: String
+  designationMax: String
+  startDateMin: String
+  startDateMax: String
+  endDateMin: String
+  endDateMax: String
 }
 
 type ProductAggregateResult {
-	count: Int
-	upcMin: String
-	upcMax: String
-	shippingEstimateMin: Float
-	shippingEstimateMax: Float
-	shippingEstimateSum: Float
-	shippingEstimateAvg: Float
+  count: Int
+  upcMin: String
+  upcMax: String
+  shippingEstimateMin: Float
+  shippingEstimateMax: Float
+  shippingEstimateSum: Float
+  shippingEstimateAvg: Float
 }
 
 type UpdateAstronautPayload {
-	astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
-	numUids: Int
+  astronaut(filter: AstronautFilter, order: AstronautOrder, first: Int, offset: Int): [Astronaut]
+  numUids: Int
 }
 
 type UpdateMissionPayload {
-	mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	numUids: Int
+  mission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  numUids: Int
 }
 
 type UpdateProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
-	numUids: Int
+  product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+  numUids: Int
 }
 
 #######################
@@ -371,39 +371,39 @@ type UpdateProductPayload {
 #######################
 
 enum AstronautHasFilter {
-	name
-	age
-	missions
+  name
+  age
+  missions
 }
 
 enum AstronautOrderable {
-	id
-	name
-	age
+  id
+  name
+  age
 }
 
 enum MissionHasFilter {
-	crew
-	designation
-	startDate
-	endDate
+  crew
+  designation
+  startDate
+  endDate
 }
 
 enum MissionOrderable {
-	designation
-	startDate
-	endDate
+  designation
+  startDate
+  endDate
 }
 
 enum ProductHasFilter {
-	upc
-	inStock
-	shippingEstimate
+  upc
+  inStock
+  shippingEstimate
 }
 
 enum ProductOrderable {
-	upc
-	shippingEstimate
+  upc
+  shippingEstimate
 }
 
 #######################
@@ -411,123 +411,123 @@ enum ProductOrderable {
 #######################
 
 input AddAstronautInput {
-	id: ID!
-	name: String
-	age: Int
-	missions: [MissionRef]
+  id: ID!
+  name: String
+  age: Int
+  missions: [MissionRef]
 }
 
 input AddMissionInput {
-	crew: [AstronautRef]
-	designation: String!
-	startDate: String
-	endDate: String
+  crew: [AstronautRef]
+  designation: String!
+  startDate: String
+  endDate: String
 }
 
 input AddProductInput {
-	upc: String!
-	inStock: Boolean
-	shippingEstimate: Float
+  upc: String!
+  inStock: Boolean
+  shippingEstimate: Float
 }
 
 input AstronautFilter {
-	id: [ID!]
-	has: [AstronautHasFilter]
-	and: [AstronautFilter]
-	or: [AstronautFilter]
-	not: AstronautFilter
+  id: [ID!]
+  has: [AstronautHasFilter]
+  and: [AstronautFilter]
+  or: [AstronautFilter]
+  not: AstronautFilter
 }
 
 input AstronautOrder {
-	asc: AstronautOrderable
-	desc: AstronautOrderable
-	then: AstronautOrder
+  asc: AstronautOrderable
+  desc: AstronautOrderable
+  then: AstronautOrder
 }
 
 input AstronautPatch {
-	name: String
-	age: Int
-	missions: [MissionRef]
+  name: String
+  age: Int
+  missions: [MissionRef]
 }
 
 input AstronautRef {
-	id: ID
-	name: String
-	age: Int
-	missions: [MissionRef]
+  id: ID
+  name: String
+  age: Int
+  missions: [MissionRef]
 }
 
 input MissionFilter {
-	id: [ID!]
-	has: [MissionHasFilter]
-	and: [MissionFilter]
-	or: [MissionFilter]
-	not: MissionFilter
+  id: [ID!]
+  has: [MissionHasFilter]
+  and: [MissionFilter]
+  or: [MissionFilter]
+  not: MissionFilter
 }
 
 input MissionOrder {
-	asc: MissionOrderable
-	desc: MissionOrderable
-	then: MissionOrder
+  asc: MissionOrderable
+  desc: MissionOrderable
+  then: MissionOrder
 }
 
 input MissionPatch {
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
+  crew: [AstronautRef]
+  designation: String
+  startDate: String
+  endDate: String
 }
 
 input MissionRef {
-	id: ID
-	crew: [AstronautRef]
-	designation: String
-	startDate: String
-	endDate: String
+  id: ID
+  crew: [AstronautRef]
+  designation: String
+  startDate: String
+  endDate: String
 }
 
 input ProductFilter {
-	upc: StringHashFilter
-	has: [ProductHasFilter]
-	and: [ProductFilter]
-	or: [ProductFilter]
-	not: ProductFilter
+  upc: StringHashFilter
+  has: [ProductHasFilter]
+  and: [ProductFilter]
+  or: [ProductFilter]
+  not: ProductFilter
 }
 
 input ProductOrder {
-	asc: ProductOrderable
-	desc: ProductOrderable
-	then: ProductOrder
+  asc: ProductOrderable
+  desc: ProductOrderable
+  then: ProductOrder
 }
 
 input ProductPatch {
-	upc: String
-	inStock: Boolean
-	shippingEstimate: Float
+  upc: String
+  inStock: Boolean
+  shippingEstimate: Float
 }
 
 input ProductRef {
-	upc: String
-	inStock: Boolean
-	shippingEstimate: Float
+  upc: String
+  inStock: Boolean
+  shippingEstimate: Float
 }
 
 input UpdateAstronautInput {
-	filter: AstronautFilter!
-	set: AstronautPatch
-	remove: AstronautPatch
+  filter: AstronautFilter!
+  set: AstronautPatch
+  remove: AstronautPatch
 }
 
 input UpdateMissionInput {
-	filter: MissionFilter!
-	set: MissionPatch
-	remove: MissionPatch
+  filter: MissionFilter!
+  set: MissionPatch
+  remove: MissionPatch
 }
 
 input UpdateProductInput {
-	filter: ProductFilter!
-	set: ProductPatch
-	remove: ProductPatch
+  filter: ProductFilter!
+  set: ProductPatch
+  remove: ProductPatch
 }
 
 #######################
@@ -535,9 +535,9 @@ input UpdateProductInput {
 #######################
 
 type Query {
-	getMission(id: ID!): Mission
-	queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
-	aggregateMission(filter: MissionFilter): MissionAggregateResult
+  getMission(id: ID!): Mission
+  queryMission(filter: MissionFilter, order: MissionOrder, first: Int, offset: Int): [Mission]
+  aggregateMission(filter: MissionFilter): MissionAggregateResult
 }
 
 #######################
@@ -545,14 +545,13 @@ type Query {
 #######################
 
 type Mutation {
-	addMission(input: [AddMissionInput!]!): AddMissionPayload
-	updateMission(input: UpdateMissionInput!): UpdateMissionPayload
-	deleteMission(filter: MissionFilter!): DeleteMissionPayload
-	addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
-	updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
-	deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
-	addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
-	updateProduct(input: UpdateProductInput!): UpdateProductPayload
-	deleteProduct(filter: ProductFilter!): DeleteProductPayload
+  addMission(input: [AddMissionInput!]!): AddMissionPayload
+  updateMission(input: UpdateMissionInput!): UpdateMissionPayload
+  deleteMission(filter: MissionFilter!): DeleteMissionPayload
+  addAstronaut(input: [AddAstronautInput!]!): AddAstronautPayload
+  updateAstronaut(input: UpdateAstronautInput!): UpdateAstronautPayload
+  deleteAstronaut(filter: AstronautFilter!): DeleteAstronautPayload
+  addProduct(input: [AddProductInput!]!, upsert: Boolean): AddProductPayload
+  updateProduct(input: UpdateProductInput!): UpdateProductPayload
+  deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }
-

@@ -44,16 +44,16 @@ function Usage {
 
 options:
 
-    -h --help         output this help message
-    -u --unit         run unit tests only
-    -c --cluster      run unit tests and custom cluster test
-    -C --cluster-only run custom cluster tests only
-    -f --full         run all tests (unit, custom cluster, and systest tests)
-    -F --systest-only run systest tests only
-       --oss          run tests with 'oss' tagging
-    -v --verbose      run tests in verbose mode
-    -n --no-cache     re-run test even if previous result is in cache
-       --short        run tests with -short=true
+    -h --help			output this help message
+    -u --unit			run unit tests only
+    -c --cluster		run unit tests and custom cluster test
+    -C --cluster-only	run custom cluster tests only
+    -f --full			run all tests (unit, custom cluster, and systest tests)
+    -F --systest-only	run systest tests only
+	   --oss			run tests with 'oss' tagging
+    -v --verbose		run tests in verbose mode
+    -n --no-cache		re-run test even if previous result is in cache
+	   --short			run tests with -short=true
 
 notes:
 

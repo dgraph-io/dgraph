@@ -5,9 +5,9 @@ services:
   minio:
     image: minio/minio:RELEASE.2020-11-13T20-10-18Z
     ports:
-    - "9001"
+      - "9001"
     env_file:
-    - ../../backup.env
+      - ../../backup.env
     command: minio server /data/minio --address :9001
   zero1:
     image: dgraph/dgraph:local
@@ -15,15 +15,16 @@ services:
     labels:
       cluster: test
     ports:
-    - "5080"
-    - "6080"
+      - "5080"
+      - "6080"
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    command: /gobin/dgraph zero --telemetry "reports=false; sentry=false;" --raft='idx=1' --my=zero1:5080 --logtostderr -v=2
-      --bindall
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command:
+      /gobin/dgraph zero --telemetry "reports=false; sentry=false;" --raft='idx=1' --my=zero1:5080
+      --logtostderr -v=2 --bindall
     deploy:
       resources:
         limits:

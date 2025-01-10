@@ -1,26 +1,30 @@
 type Tweets {
-    id: ID!
-    text: String! @search(by: [fulltext])
-    author: User
-    timestamp: DateTime! @search
+  id: ID!
+  text: String! @search(by: [fulltext])
+  author: User
+  timestamp: DateTime! @search
 }
 type User {
-    screenName: String! @id
-    followers: Int @search
-    tweets: [Tweets] @hasInverse(field: author)
+  screenName: String! @id
+  followers: Int @search
+  tweets: [Tweets] @hasInverse(field: author)
 }
 type UserTweetCount @remote {
-    screenName: String
-    tweetCount: Int
+  screenName: String
+  tweetCount: Int
 }
 
 type Query {
-    queryUserTweetCounts : [UserTweetCount] @withSubscription @custom(dql: """
-        query {
-            queryUserTweetCounts(func: type(User)) {
-                screenName: User.screenName
-                tweetCount: count(User.tweets)
-            }
-        }
-    """)
+  queryUserTweetCounts: [UserTweetCount]
+    @withSubscription
+    @custom(
+      dql: """
+      query {
+          queryUserTweetCounts(func: type(User)) {
+              screenName: User.screenName
+              tweetCount: count(User.tweets)
+          }
+      }
+      """
+    )
 }
