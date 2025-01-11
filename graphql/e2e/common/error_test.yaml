@@ -65,7 +65,7 @@
   errors:
     [
       {
-        message":
+        "message":
           Variable type provided AuthorFiltarzzz! is incompatible with expected type AuthorFilter,
         "locations": [{ "line": 2, "column": 23 }],
       },
