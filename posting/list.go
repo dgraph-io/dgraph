@@ -1723,6 +1723,10 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 	if opt.Intersect != nil && len(opt.Intersect.Uids) < l.mutationMap.len()+codec.ApproxLen(l.plist.Pack) {
 		for _, uid := range opt.Intersect.Uids {
+			if uid <= opt.AfterUid {
+				continue
+			}
+
 			found, _, err := l.findPosting(opt.ReadTs, uid)
 			if err != nil {
 				l.RUnlock()
