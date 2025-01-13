@@ -1706,10 +1706,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	if opt.Intersect != nil && len(opt.Intersect.Uids) < l.mutationMap.len()+codec.ApproxLen(l.plist.Pack) {
-		for _, uid := range opt.Intersect.Uids {
-			if uid <= opt.AfterUid {
-				continue
-			}
+		start := 0
+		if opt.AfterUid > 0 {
+			start = sort.Search(len(opt.Intersect.Uids), func(i int) bool {
+				return opt.Intersect.Uids[i] > opt.AfterUid
+			})
+		}
+
+		for i := start; i < len(opt.Intersect.Uids); i++ {
+			uid := opt.Intersect.Uids[i]
 
 			found, _, err := l.findPosting(opt.ReadTs, uid)
 			if err != nil {
