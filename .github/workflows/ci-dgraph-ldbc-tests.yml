@@ -21,6 +21,7 @@ jobs:
   dgraph-ldbc-tests:
     if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-x64-4x
+    timeout-minutes: 10
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v4

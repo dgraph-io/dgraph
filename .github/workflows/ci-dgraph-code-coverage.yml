@@ -15,6 +15,7 @@ permissions:
 jobs:
   dgraph-code-coverage:
     runs-on: warp-ubuntu-latest-x64-4x
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4 # defaults to SHA of event that triggered workflow
       - name: Set up Go

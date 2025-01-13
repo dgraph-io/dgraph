@@ -10,7 +10,7 @@ permissions:
 jobs:
   dgraph-upgrade-fixed-versions-tests:
     runs-on: warp-ubuntu-latest-x64-4x
-    timeout-minutes: 720
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:

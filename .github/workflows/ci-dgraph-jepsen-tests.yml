@@ -13,6 +13,7 @@ permissions:
 jobs:
   dgraph-jepsen-tests:
     runs-on: warp-ubuntu-latest-x64-4x
+    timeout-minutes: 60
     steps:
       - name: Checkout dgraph repo
         uses: actions/checkout@v4

@@ -37,14 +37,14 @@
 It's best to put the Dgraph repo somewhere in `$GOPATH`.
 
 ```bash
-mkdir -p "$(go env GOPATH)/src/github.com/dgraph-io"
-cd "$(go env GOPATH)/src/github.com/dgraph-io"
+mkdir -p "$(go env GOPATH)/src/github.com/hypermodeinc"
+cd "$(go env GOPATH)/src/github.com/hypermodeinc"
 git clone https://github.com/hypermodeinc/dgraph.git
 cd ./dgraph
 make install
 ```
 
-This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
+This will put the source code in a Git repo under `$GOPATH/src/github.com/hypermodeinc/dgraph` and
 compile the binaries to `$GOPATH/bin`.
 
 ### Setup Badger from source repo
@@ -198,8 +198,6 @@ yesterday.
 
 - **Pull requests are welcome**, as long as you're willing to put in the effort to meet the
   guidelines. After you fork dgraph, create your pull request against our `main` branch
-- Contributors are required to execute our
-  [Individual Contributor License Agreement](https://cla-assistant.io/dgraph-io/dgraph)
 - Aim for clear, well written, maintainable code
 - Simple and minimal approach to features, like Go
 - New features must include passing unit tests, and integration tests when appropriate
