@@ -63,10 +63,8 @@ type incrRollupi struct {
 }
 
 type CachePL struct {
-	count      int
 	list       *List
 	lastUpdate uint64
-	lastRead   time.Time
 }
 
 var (
@@ -401,8 +399,8 @@ func (c *Cache) clear() {
 }
 
 type MemoryLayer struct {
-	keepUpdates bool
-	cache       *Cache
+	deleteOnUpdates bool
+	cache           *Cache
 
 	numDisksRead int
 }
@@ -414,9 +412,9 @@ func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
 }
 
-func initMemoryLayer(cacheSize int64, keepUpdates bool) *MemoryLayer {
+func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 	ml := &MemoryLayer{}
-	ml.keepUpdates = keepUpdates
+	ml.deleteOnUpdates = deleteOnUpdates
 	if cacheSize > 0 {
 		cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 			// Use 5% of cache memory for storing counters.
@@ -449,9 +447,7 @@ func initMemoryLayer(cacheSize int64, keepUpdates bool) *MemoryLayer {
 
 func NewCachePL() *CachePL {
 	return &CachePL{
-		count:      0,
-		list:       nil,
-		lastUpdate: 0,
+		list: nil,
 	}
 }
 
@@ -472,7 +468,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 		return
 	}
 
-	if !ml.keepUpdates {
+	if ml.deleteOnUpdates {
 		// TODO We should mark the key as deleted instead of directly deleting from the cache.
 		ml.del([]byte(key))
 		return
@@ -484,9 +480,8 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 	}
 
 	val.lastUpdate = commitTs
-	val.count -= 1
 
-	if val.list != nil && ml.keepUpdates {
+	if val.list != nil {
 		p := new(pb.PostingList)
 		x.Check(proto.Unmarshal(delta, p))
 
@@ -640,16 +635,12 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	cacheItem, ok := ml.cache.get(key)
 
-	if ok {
-		cacheItem.count += 1
-		cacheItem.lastRead = time.Now()
-		if cacheItem.list != nil && cacheItem.list.minTs <= readTs {
-			cacheItem.list.RLock()
-			lCopy := copyList(cacheItem.list)
-			cacheItem.list.RUnlock()
-			checkForRollup(key, lCopy)
-			return lCopy
-		}
+	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs {
+		cacheItem.list.RLock()
+		lCopy := copyList(cacheItem.list)
+		cacheItem.list.RUnlock()
+		checkForRollup(key, lCopy)
+		return lCopy
 	}
 	return nil
 }
@@ -679,7 +670,6 @@ func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
 	l.RLock()
 	defer l.RUnlock()
 	cacheItem := NewCachePL()
-	cacheItem.count = 1
 	cacheItem.list = copyList(l)
 	cacheItem.lastUpdate = l.maxTs
 	ml.cache.set(key, cacheItem)
