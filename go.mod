@@ -15,7 +15,7 @@ require (
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15
-	github.com/dgraph-io/ristretto/v2 v2.0.1
+	github.com/dgraph-io/ristretto/v2 v2.1.0
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da
 	github.com/dgryski/go-groupvarint v0.0.0-20230630160417-2bfb7969fb3c
@@ -58,7 +58,7 @@ require (
 	golang.org/x/mod v0.22.0
 	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
-	golang.org/x/sys v0.28.0
+	golang.org/x/sys v0.29.0
 	golang.org/x/term v0.27.0
 	golang.org/x/text v0.21.0
 	golang.org/x/tools v0.28.0
