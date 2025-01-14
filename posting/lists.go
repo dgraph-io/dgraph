@@ -47,7 +47,6 @@ func Init(ps *badger.DB, cacheSize int64, deleteOnUpdates bool) {
 	go x.MonitorMemoryMetrics(closer)
 
 	memoryLayer = initMemoryLayer(cacheSize, deleteOnUpdates)
-	GlobalStatsHolder = NewStatsHolder()
 }
 
 func UpdateMaxCost(maxCost int64) {

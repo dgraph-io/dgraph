@@ -34,7 +34,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/graph-gophers/graphql-go v1.5.0
-	github.com/harshil-goel/BoomFilters v0.0.0-20241110225754-c092867bb322
 	github.com/hashicorp/vault/api v1.15.0
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/mitchellh/panicwrap v1.0.0
@@ -84,7 +83,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chewxy/math32 v1.11.0 // indirect
-	github.com/d4l3k/messagediff v1.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect

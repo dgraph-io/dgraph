@@ -838,7 +838,8 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			if srcFn.fnType == compareAttrFn {
-				posting.GlobalStatsHolder.InsertRecord(q.Attr, []byte(srcFn.tokens[i]), uint64(pl.ApproxLen()))
+				posting.GetStatsHolder().InsertRecord(
+					q.Attr, []byte(srcFn.tokens[i]), uint64(pl.ApproxLen()))
 			}
 
 			switch {
@@ -1812,7 +1813,15 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 		return true
 	}
 
-	if uint64(len(uidlist)) < Config.TypeFilterUidLimit && checkUidEmpty(uidlist) {
+	if checkUidEmpty(uidlist) {
+		// We have a uid which has 0 in it. Mostly it would happen when there is only 0. But any one item
+		// being 0 could cause the query planner to fail. In case of 0 being present, we neeed to query the
+		// index itself.
+		fc.n = len(fc.tokens)
+		return
+	}
+
+	if uint64(len(uidlist)) < Config.TypeFilterUidLimit {
 		fc.tokens = fc.tokens[:0]
 		fc.n = len(uidlist)
 		return
@@ -1821,7 +1830,7 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 	estimatedCount := uint64(0)
 	gotEstimate := false
 	for _, eqToken := range fc.tokens {
-		count := posting.GlobalStatsHolder.ProcessEqPredicate(pred, []byte(eqToken))
+		count := posting.GetStatsHolder().ProcessEqPredicate(pred, []byte(eqToken))
 		if count != math.MaxUint64 {
 			estimatedCount += count
 			gotEstimate = true
@@ -1835,7 +1844,7 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 	}
 
 	// TODO make a different config
-	if gotEstimate && uint64(len(uidlist)) < estimatedCount/Config.TypeFilterUidLimit && checkUidEmpty(uidlist) {
+	if gotEstimate && uint64(len(uidlist)) < estimatedCount/Config.TypeFilterUidLimit {
 		fc.tokens = fc.tokens[:0]
 		fc.n = len(uidlist)
 		return
