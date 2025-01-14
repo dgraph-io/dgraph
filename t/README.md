@@ -71,22 +71,32 @@ to test the GraphQL system:
 ./t --pkg=graphql/e2e/normal
 ```
 
+Multiple packages can be specified by separated them with a comma.
+
 ### Testing suites
 
-You can test a "suite" of functionality using the `--suite` flag. For instance:
+You can test one or more "suites" of functionality using the `--suite` flag. For instance:
 
 ```sh
-./t --suite=core
+./t --suite=core,vector
 ```
 
 The `--help` flag lists the available suites.
+
+### Testing single test functions
+
+```sh
+./t --test=TestParseCountValError
+```
+
+This flag uses `ack` to find all tests matching the specified name(s).
 
 ### Other useful flags
 
 The `--dry` (dry-run) flag can be used to list the packages that will be included for testing without
 actually invoking the tests.
 
-The `--skip-slow` flag will skips tests known to be slow to complete.
+The `--skip-slow` flag will skip tests known to be slow to complete.
 
 ## Docker Compose Conventions
 
@@ -133,7 +143,12 @@ Example:
 ```sh
 export GOPATH=`go env GOPATH`
 export DGRAPH_BINARY=$GOPATH/bin/dgraph_osx
-export DOCKER_HOST=~/.docker/run/docker.sock
+export DOCKER_HOST=unix://${HOME}/.docker/run/docker.sock
 ```
 
 At this point, the `t` executable can be run as described above.
+
+### Common Pitfalls
+
+If you see `exec format error` output from test runs, it is most likely because some tests attempt to run the Dgraph
+image copied from the filesystem in the Docker environment. This is a known issue with some integration tests.
