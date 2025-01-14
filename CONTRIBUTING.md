@@ -128,9 +128,12 @@ enhanced control and flexibility beyond what's available through standard Go tes
 For dependencies, runner flags and instructions for running tests on non-Linux machines, see 
 the [README](t/README.md) in the [*t*](t) folder.
 
- **NOTE**: Non-integration unit tests exist for many core packages that can be exercised without invoking
- the testing framework. For instance, to unit test the core DQL parsing package: `go test github.com/hypermodeinc/dgraph/v24/dql`
+Other integration tests do not use the testing framework located in the `t` folder. Consult the [github
+actions definitions](.github) folder to discover the tests we run as part of our continuous delivery process.
 
+Non-integration unit tests exist for many core packages that can be exercised without invoking the testing 
+framework. For instance, to unit test the core DQL parsing package: `go test github.com/hypermodeinc/dgraph/v24/dql`.
+  
 ## Contributing
 
 ### Guidelines
