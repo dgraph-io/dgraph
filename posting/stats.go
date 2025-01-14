@@ -20,23 +20,14 @@ import (
 	"math"
 	"sync"
 
-	boom "github.com/harshil-goel/BoomFilters"
-)
-
-var (
-	GlobalStatsHolder *StatsHolder
+	"github.com/hypermodeinc/dgraph/v24/algo"
 )
 
 type StatsHolder struct {
 	sync.RWMutex
 
 	predStats map[string]StatContainer
-	//computeRequests chan *ComputeStatRequest
 }
-
-//type ComputeStatRequest struct {
-//	pred string
-//}
 
 func NewStatsHolder() *StatsHolder {
 	return &StatsHolder{
@@ -53,11 +44,11 @@ type StatContainer interface {
 type EqContainer struct {
 	sync.RWMutex
 
-	cmf *boom.CountMinSketch
+	cmf *algo.CountMinSketch
 }
 
 func NewEqContainer() *EqContainer {
-	return &EqContainer{cmf: boom.NewCountMinSketch(0.001, 0.99)}
+	return &EqContainer{cmf: algo.NewCountMinSketch(0.001, 0.99)}
 }
 
 func (eq *EqContainer) Estimate(key []byte) uint64 {
@@ -70,7 +61,7 @@ func (eq *EqContainer) Estimate(key []byte) uint64 {
 func (eq *EqContainer) InsertRecord(key []byte, count uint64) {
 	eq.Lock()
 	defer eq.Unlock()
-	eq.cmf.Set(key, count)
+	eq.cmf.AddInt(key, count)
 }
 
 func (sh *StatsHolder) InsertRecord(pred string, key []byte, count uint64) {
