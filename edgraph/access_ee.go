@@ -150,6 +150,14 @@ func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginReques
 		return user, nil
 	}
 
+	if request.NamespaceName != "" {
+		ns, err := getNamespaceID(ctx, request.NamespaceName)
+		if err != nil {
+			return nil, err
+		}
+		request.Namespace = ns
+	}
+
 	// In case of login, we can't extract namespace from JWT because we have not yet given JWT
 	// to the user, so the login request should contain the namespace, which is then set to ctx.
 	ctx = x.AttachNamespace(ctx, request.Namespace)

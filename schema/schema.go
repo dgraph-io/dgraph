@@ -783,7 +783,20 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			ValueType: pb.Posting_STRING,
 			Directive: pb.SchemaUpdate_INDEX,
 			Tokenizer: []string{"sha256"},
-		})
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.namespace.name",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+			Unique:    true,
+		}, &pb.SchemaUpdate{
+			Predicate: "dgraph.namespace.id",
+			ValueType: pb.Posting_INT,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"int"},
+			Unique:    true,
+		},
+	)
 
 	if all || x.WorkerConfig.AclEnabled {
 		// propose the schema update for acl predicates

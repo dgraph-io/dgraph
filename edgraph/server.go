@@ -1895,6 +1895,138 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
+func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceRequest) (
+	*api.CreateNamespaceResponse, error) {
+
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		s := status.Convert(err)
+		return nil, status.Error(s.Code(),
+			"Non guardian of galaxy user cannot create namespace. "+s.Message())
+	}
+
+	if _, err := getNamespaceID(ctx, in.Name); err == nil {
+		return nil, errors.Errorf("namespace %q already exists", in.Name)
+	} else if !strings.Contains(err.Error(), "not found") {
+		return nil, err
+	}
+
+	password := "password"
+	if len(in.Password) != 0 {
+		password = in.Password
+	}
+
+	ns, err := (&Server{}).CreateNamespaceInternal(ctx, password)
+	if err != nil {
+		return nil, err
+	}
+
+	// If we crash at this point, it is possible that namespaces is created
+	// but no entry has been added to dgraph.namespace predicate. This is alright
+	// because we have not let the user know that namespace has been created.
+	// The user would have to try again and another namespace then would be
+	// assigned to the provided name here.
+
+	ictx := x.AttachNamespace(ctx, 0)
+	_, err = (&Server{}).QueryNoGrpc(ictx, &api.Request{
+		Mutations: []*api.Mutation{{
+			Set: []*api.NQuad{
+				{
+					Subject:     "_:ns",
+					Predicate:   "dgraph.namespace.name",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: in.Name}},
+				},
+				{
+					Subject:     "_:ns",
+					Predicate:   "dgraph.namespace.id",
+					ObjectValue: &api.Value{Val: &api.Value_IntVal{IntVal: int64(ns)}},
+				},
+			},
+		}},
+		CommitNow: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.CreateNamespaceResponse{Namespace: ns}, nil
+}
+
+func (s *Server) DropNamespace(ctx context.Context, in *api.DropNamespaceRequest) (
+	*api.DropNamespaceResponse, error) {
+
+	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		s := status.Convert(err)
+		return nil, status.Error(s.Code(),
+			"Non guardian of galaxy user cannot drop namespace. "+s.Message())
+	}
+
+	ns, err := deleteNamespaceID(ctx, in.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != 0 {
+		if err := (&Server{}).DeleteNamespace(ctx, ns); err != nil {
+			return nil, err
+		}
+	}
+
+	return &api.DropNamespaceResponse{}, nil
+}
+
+func getNamespaceID(ctx context.Context, namespaceName string) (uint64, error) {
+	const q = `{q(func: eq(dgraph.namespace.name, "%v")) { dgraph.namespace.id }}`
+
+	ctx = x.AttachNamespace(ctx, 0)
+	req := &api.Request{Query: fmt.Sprintf(q, namespaceName)}
+	resp, err := (&Server{}).doQuery(ctx, &Request{req: req, doAuth: NoAuthorize})
+	if err != nil {
+		return 0, err
+	}
+
+	var data struct {
+		Data []struct {
+			ID int64 `json:"dgraph.namespace.id"`
+		} `json:"q"`
+	}
+	if err := json.Unmarshal(resp.GetJson(), &data); err != nil {
+		return 0, err
+	}
+	if len(data.Data) == 0 {
+		return 0, errors.Errorf("namespace %q not found", namespaceName)
+	}
+
+	return uint64(data.Data[0].ID), nil
+}
+
+func deleteNamespaceID(ctx context.Context, namespaceName string) (uint64, error) {
+	const q = `{q(func: eq(dgraph.namespace.name, "%v")) { dgraph.namespace.id }}`
+
+	ctx = x.AttachNamespace(ctx, 0)
+	req := &api.Request{
+		Query:     fmt.Sprintf(q, namespaceName),
+		Mutations: []*api.Mutation{{DelNquads: []byte(`uid(q) * *`)}},
+	}
+	resp, err := (&Server{}).doQuery(ctx, &Request{req: req, doAuth: NoAuthorize})
+	if err != nil {
+		return 0, err
+	}
+
+	var data struct {
+		Data []struct {
+			ID int64 `json:"dgraph.namespace.id"`
+		} `json:"q"`
+	}
+	if err := json.Unmarshal(resp.GetJson(), &data); err != nil {
+		return 0, err
+	}
+	if len(data.Data) == 0 {
+		return 0, nil
+	}
+
+	return uint64(data.Data[0].ID), nil
+}
+
 // -------------------------------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // -------------------------------------------------------------------------------------------------

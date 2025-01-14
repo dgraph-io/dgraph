@@ -740,6 +740,18 @@ func (gc *GrpcClient) DropPredicate(pred string) error {
 	return gc.Alter(ctx, &api.Operation{DropAttr: pred})
 }
 
+func (gc *GrpcClient) CreateNamespace(namespace string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	return gc.Dgraph.CreateNamespace(ctx, namespace)
+}
+
+func (gc *GrpcClient) DropNamespace(namespace string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	return gc.Dgraph.DropNamespace(ctx, namespace)
+}
+
 // Mutate performs a given mutation in a txn
 func (gc *GrpcClient) Mutate(mu *api.Mutation) (*api.Response, error) {
 	txn := gc.NewTxn()
