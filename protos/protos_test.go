@@ -31,6 +31,6 @@ func TestProtosRegenerate(t *testing.T) {
 	require.NoError(t, err, "Got error while regenerating protos: %v\n", err)
 
 	generatedProtos := filepath.Join("pb", "pb.pb.go")
-	err = testutil.Exec("git", "diff", "--quiet", "--", generatedProtos)
+	err = testutil.Exec("git", "diff", "-b", "--quiet", "--", generatedProtos)
 	require.NoError(t, err, "pb.pb.go changed after regenerating")
 }

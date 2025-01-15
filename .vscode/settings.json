@@ -1,0 +1,6 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "trunk.io",
+  "editor.trimAutoWhitespace": true,
+  "trunk.autoInit": false
+}

@@ -1,4 +1,4 @@
-- name: "Update one node that creates nothing"
+- name: Update one node that creates nothing
   gqlquery: |
     mutation updateUserSecret($upd: UpdateUserSecretInput!) {
       updateUserSecret(input: $upd) {
@@ -8,7 +8,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       { "filter": { "id": [ "0x123" ] },
@@ -27,7 +27,7 @@
   uids: |
     { }
 
-- name: "Update a node that does a deep add"
+- name: Update a node that does a deep add
   gqlquery: |
     mutation updateColumn($upd: UpdateColumnInput!) {
       updateColumn(input: $upd) {
@@ -37,7 +37,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -88,8 +88,7 @@
       "Ticket": [ { "uid": "0x789" } ]
     }
 
-
-- name: "Update a node that does a deep add and fails auth"
+- name: Update a node that does a deep add and fails auth
   gqlquery: |
     mutation updateColumn($upd: UpdateColumnInput!) {
       updateColumn(input: $upd) {
@@ -99,7 +98,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -147,14 +146,13 @@
     }
   authjson: |
     { }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
 # See comments about additional deletes in update_mutation_test.yaml.
 # Because of those additional deletes, for example, when we update a column and
 # link it to an existing ticket, we might remove that ticket from the column it was
 # attached to ... so we need authorization to update that column as well.
-- name: "update with auth on additional delete (updt list edge)"
+- name: update with auth on additional delete (updt list edge)
   gqlquery: |
     mutation updateColumn($upd: UpdateColumnInput!) {
       updateColumn(input: $upd) {
@@ -164,7 +162,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -225,7 +223,7 @@
       "Column_5.auth": [ { "uid": "0x456" } ]
     }
 
-- name: "update with auth on additional delete that fails (updt list edge)"
+- name: update with auth on additional delete that fails (updt list edge)
   gqlquery: |
     mutation updateColumn($upd: UpdateColumnInput!) {
       updateColumn(input: $upd) {
@@ -235,7 +233,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -300,9 +298,9 @@
   authjson: |
     { }
   error:
-    { "message": "couldn't rewrite query for mutation updateColumn because authorization failed" }
+    { "message": couldn't rewrite query for mutation updateColumn because authorization failed }
 
-- name: "update with auth on additional delete (updt single edge)"
+- name: update with auth on additional delete (updt single edge)
   gqlquery: |
     mutation updateTicket($upd: UpdateTicketInput!) {
       updateTicket(input: $upd) {
@@ -312,7 +310,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -374,7 +372,7 @@
       "Column_5.auth": [ { "uid": "0x499" } ]
     }
 
-- name: "update with auth on additional delete that fails (updt single edge)"
+- name: update with auth on additional delete that fails (updt single edge)
   gqlquery: |
     mutation updateTicket($upd: UpdateTicketInput!) {
       updateTicket(input: $upd) {
@@ -384,7 +382,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "upd":
       {
@@ -445,9 +443,9 @@
       "Column_5":  [ { "uid": "0x499" } ]
     }
   error:
-    { "message": "couldn't rewrite query for mutation updateTicket because authorization failed" }
+    { "message": couldn't rewrite query for mutation updateTicket because authorization failed }
 
-- name: "Update with top level RBAC false."
+- name: Update with top level RBAC false
   gqlquery: |
     mutation updateLog($log: UpdateLogInput!) {
       updateLog(input: $log) {
@@ -457,8 +455,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "log":
       {
@@ -474,7 +472,7 @@
       x as updateLog()
     }
 
-- name: "Update with top level RBAC true."
+- name: Update with top level RBAC true
   gqlquery: |
     mutation updateLog($log: UpdateLogInput!) {
       updateLog(input: $log) {
@@ -484,8 +482,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "log":
       {
@@ -505,7 +503,7 @@
       Log_1 as var(func: uid(0x123)) @filter(type(Log))
     }
 
-- name: "Update with top level OR RBAC false."
+- name: Update with top level OR RBAC false
   gqlquery: |
     mutation updateProject($proj: UpdateProjectInput!) {
       updateProject(input: $proj) {
@@ -515,8 +513,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "proj":
       {
@@ -540,7 +538,7 @@
       }
     }
 
-- name: "Update with top level OR RBAC true."
+- name: Update with top level OR RBAC true
   gqlquery: |
     mutation updateProject($proj: UpdateProjectInput!) {
       updateProject(input: $proj) {
@@ -550,8 +548,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "proj":
       {
@@ -570,7 +568,7 @@
       Project_1 as var(func: uid(0x123)) @filter(type(Project))
     }
 
-- name: "Update with top level And RBAC true."
+- name: Update with top level And RBAC true
   gqlquery: |
     mutation updateIssue($issue: UpdateIssueInput!) {
       updateIssue(input: $issue) {
@@ -580,8 +578,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "issue":
       {
@@ -603,7 +601,7 @@
       }
     }
 
-- name: "Update with top level And RBAC false."
+- name: Update with top level And RBAC false
   gqlquery: |
     mutation updateIssue($issue: UpdateIssueInput!) {
       updateIssue(input: $issue) {
@@ -613,8 +611,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "issue":
       {
@@ -629,7 +627,7 @@
       x as updateIssue()
     }
 
-- name: "Update with top level not RBAC true."
+- name: Update with top level not RBAC true
   gqlquery: |
     mutation updateComplexLog($log: UpdateComplexLogInput!) {
       updateComplexLog(input: $log) {
@@ -639,8 +637,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "log":
       {
@@ -659,7 +657,7 @@
       ComplexLog_1 as var(func: uid(0x123)) @filter(type(ComplexLog))
     }
 
-- name: "Update with top level not RBAC false."
+- name: Update with top level not RBAC false
   gqlquery: |
     mutation updateComplexLog($log: UpdateComplexLogInput!) {
       updateComplexLog(input: $log) {
@@ -669,8 +667,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "log":
       {
@@ -685,7 +683,7 @@
       x as updateComplexLog()
     }
 
-- name: "Update Type inheriting Graph Traversal Auth Rules from Interface."
+- name: Update Type inheriting Graph Traversal Auth Rules from Interface.
   gqlquery: |
     mutation updateQuestion($question: UpdateQuestionInput!) {
       updateQuestion(input: $question) {
@@ -695,7 +693,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
     ANS: "true"
   variables: |
     {
@@ -725,7 +723,7 @@
       }
     }
 
-- name: "Update Type inheriting Graph Traversal Auth Rules on Interface failed."
+- name: Update Type inheriting Graph Traversal Auth Rules on Interface failed
   gqlquery: |
     mutation updateQuestion($question: UpdateQuestionInput!) {
       updateQuestion(input: $question) {
@@ -749,7 +747,7 @@
       x as updateQuestion()
     }
 
-- name: "Update Type inheriting RBAC Auth Rules from Interface."
+- name: Update Type inheriting RBAC Auth Rules from Interface
   gqlquery: |
     mutation updateFbPost($post: UpdateFbPostInput!) {
       updateFbPost(input: $post) {
@@ -759,8 +757,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     {
       "post":
@@ -786,7 +784,7 @@
       }
     }
 
-- name: "Update Type inheriting RBAC Auth Rules from Interface failed"
+- name: Update Type inheriting RBAC Auth Rules from Interface failed
   gqlquery: |
     mutation updateFbPost($post: UpdateFbPostInput!) {
       updateFbPost(input: $post) {
@@ -796,8 +794,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     {
       "post":
@@ -813,7 +811,9 @@
       x as updateFbPost()
     }
 
-- name: "Updating interface having its own auth rules and implementing types also have auth rules and all are satisfied"
+- name:
+    Updating interface having its own auth rules and implementing types also have auth rules and all
+    are satisfied
   gqlquery: |
     mutation updatePost($post: UpdatePostInput!) {
       updatePost(input: $post) {
@@ -823,8 +823,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
     ANS: "true"
   variables: |
     {
@@ -869,7 +869,9 @@
       }
     }
 
-- name: "Updating interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+- name:
+    Updating interface having its own auth rules and implementing types also have auth rules and
+    some of the rules of implementing types are not satisfied
   gqlquery: |
     mutation updatePost($post: UpdatePostInput!) {
       updatePost(input: $post) {
@@ -879,8 +881,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     {
         "post":
@@ -914,7 +916,9 @@
       }
     }
 
-- name: "Updating interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+- name:
+    Updating interface having its own auth rules and implementing types also have auth rules and the
+    rules of interface are not satisfied
   gqlquery: |
     mutation updatePost($post: UpdatePostInput!) {
       updatePost(input: $post) {
@@ -924,7 +928,7 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
+    ROLE: ADMIN
     ANS: "true"
   variables: |
     {
@@ -941,7 +945,9 @@
       x as updatePost()
     }
 
-- name: "Updating interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+- name:
+    Updating interface having no own auth rules but some implementing types have auth rules and they
+    are not satisfied
   gqlquery: |
     mutation updateA($inp: UpdateAInput!) {
       updateA(input: $inp) {
@@ -951,7 +957,7 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
+    ROLE: ADMIN
     ANS: "true"
   variables: |
     {

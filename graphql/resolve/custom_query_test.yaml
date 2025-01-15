@@ -1,5 +1,4 @@
--
-  name: "custom GET query returning users"
+- name: custom GET query returning users
   gqlquery: |
     query {
       myFavoriteMovies(id: "0x1", name: "Michael", num: null) {
@@ -30,7 +29,7 @@
     ]
   url: http://myapi.com/favMovies/0x1?name=Michael&num=
   method: GET
-  headers: { "Content-type": ["application/json"] }
+  headers: { "Content-type": [application/json] }
   resolvedresponse: |
     {
       "myFavoriteMovies": [
@@ -52,8 +51,7 @@
       ]
     }
 
--
-  name: "custom POST query gets body filled from variables"
+- name: custom POST query gets body filled from variables
   gqlquery: |
     query movies($id: ID!) {
       myFavoriteMoviesPart2(id: $id, name: "Michael", num: 10) {
@@ -86,7 +84,7 @@
   url: http://myapi.com/favMovies/0x9?name=Michael&num=10
   method: POST
   body: '{ "id": "0x9", "name": "Michael", "director": { "number": 10 }}'
-  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"], "Content-type": ["application/json"] }
+  headers: { "X-App-Token": [val], "Auth0-Token": [tok], "Content-type": [application/json] }
   resolvedresponse: |
     {
       "myFavoriteMoviesPart2": [

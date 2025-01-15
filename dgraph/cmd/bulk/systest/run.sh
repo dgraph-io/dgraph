@@ -11,15 +11,15 @@ go install github.com/hypermodeinc/dgraph/cmd/dgraphzero
 echo "Done."
 
 fail=false
-for suite in $script_dir/suite*; do
-	echo Running test suite: $(basename $suite)
+for suite in ${script_dir}/suite*; do
+	echo Running test suite: $(basename "${suite}")
 
 	rm -rf tmp
 	mkdir tmp
 	pushd tmp >/dev/null
 	mkdir dg
 	pushd dg >/dev/null
-	$(go env GOPATH)/bin/dgraph-bulk-loader -r $suite/rdfs.rdf -s $suite/schema.txt >/dev/null 2>&1
+	$(go env GOPATH)/bin/dgraph-bulk-loader -r "${suite}"/rdfs.rdf -s "${suite}"/schema.txt >/dev/null 2>&1
 	mv out/0 p
 	popd >/dev/null
 
@@ -37,20 +37,19 @@ for suite in $script_dir/suite*; do
 	sleep 2
 
 	popd >/dev/null # out of tmp
-	result=$(curl --silent -H "Content-Type: application/dql" localhost:8080/query -XPOST -d @$suite/query.json)
-	if ! $(jq --argfile a <(echo $result) --argfile b $suite/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b')
-	then
+	result=$(curl --silent -H "Content-Type: application/dql" localhost:8080/query -XPOST -d @"${suite}"/query.json)
+	if ! $(jq --argfile a <(echo "${result}") --argfile b "${suite}"/result.json -n 'def post_recurse(f): def r: (f | select(. != null) | r), .; r; def post_recurse: post_recurse(.[]?); ($a | (post_recurse | arrays) |= sort) as $a | ($b | (post_recurse | arrays) |= sort) as $b | $a == $b'); then
 		echo "Actual result doesn't match expected result:"
-		echo "Actual: $result"
-		echo "Expected: $(cat $suite/result.json)"
+		echo "Actual: ${result}"
+		echo "Expected: $(cat "${suite}"/result.json)"
 		fail=true
 	fi
 
-	kill $dgPid
-	kill $dgzPid
+	kill "${dgPid}"
+	kill "${dgzPid}"
 	sleep 2
 done
 
-if $fail; then
+if ${fail}; then
 	exit 1
 fi

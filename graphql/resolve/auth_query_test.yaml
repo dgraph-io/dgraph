@@ -1,4 +1,4 @@
-- name: "Deep RBAC rule - All level true"
+- name: Deep RBAC rule - All level true
   gqlquery: |
     query {
       queryContact {
@@ -46,7 +46,7 @@
       TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
-- name: "Deep RBAC rule - Level 0 false"
+- name: Deep RBAC rule - Level 0 false
   gqlquery: |
     query {
       queryContact {
@@ -71,7 +71,7 @@
       queryContact()
     }
 
-- name: "Deep RBAC rule - Level 1 false"
+- name: Deep RBAC rule - Level 1 false
   gqlquery: |
     query {
       queryContact {
@@ -101,7 +101,7 @@
       Contact_6 as var(func: type(Contact))
     }
 
-- name: "Deep RBAC rule with cascade - Level 1 false"
+- name: Deep RBAC rule with cascade - Level 1 false
   gqlquery: |
     query {
       queryContact @cascade {
@@ -150,7 +150,7 @@
       AdminTask_6 as var(func: uid())
     }
 
-- name: "Deep RBAC rule - Level 2 false"
+- name: Deep RBAC rule - Level 2 false
   gqlquery: |
     query {
       queryContact {
@@ -188,7 +188,7 @@
       AdminTask_1 as var(func: uid(AdminTask_2))
     }
 
-- name: "Deep RBAC rule - Level 1 type without auth."
+- name: Deep RBAC rule - Level 1 type without auth
   gqlquery: |
     query {
       queryContact {
@@ -236,7 +236,7 @@
       TaskOccurrence_Auth5 as var(func: uid(TaskOccurrence_4)) @filter(eq(TaskOccurrence.role, "ADMINISTRATOR")) @cascade
     }
 
-- name: "Auth query with @dgraph pred."
+- name: Auth query with @dgraph pred
   gqlquery: |
     query {
       queryStudent {
@@ -244,8 +244,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryStudent(func: uid(StudentRoot)) {
@@ -257,7 +257,7 @@
       Student_Auth2 as var(func: uid(Student_1)) @filter(eq(IOw80vnV, "user1")) @cascade
     }
 
-- name: "Auth query with @dgraph pred (Test RBAC)."
+- name: Auth query with @dgraph pred (Test RBAC)
   gqlquery: |
     query {
       queryStudent {
@@ -265,14 +265,14 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryStudent()
     }
 
-- name: "Auth with deep get query."
+- name: Auth with deep get query
   gqlquery: |
     query {
       getProject(projID: "0x123") {
@@ -284,7 +284,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       getProject(func: uid(ProjectRoot)) @filter(type(Project)) {
@@ -323,7 +323,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -335,7 +335,7 @@
       UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Auth with Aggregate Root Query"
+- name: Auth with Aggregate Root Query
   gqlquery: |
     query {
       aggregateUserSecret {
@@ -345,7 +345,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       aggregateUserSecret() {
@@ -371,7 +371,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       getUserSecret(func: uid(UserSecretRoot)) @filter(type(UserSecret)) {
@@ -392,7 +392,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot)) {
@@ -404,7 +404,7 @@
       UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Deep RBAC rules true"
+- name: Deep RBAC rules true
   gqlquery: |
     query {
       queryUser {
@@ -414,8 +414,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -435,7 +435,7 @@
       }
     }
 
-- name: "Deep RBAC rules false"
+- name: Deep RBAC rules false
   gqlquery: |
     query {
       queryUser {
@@ -446,8 +446,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -458,7 +458,7 @@
       User_3 as var(func: type(User))
     }
 
-- name: "Auth with top level AND rbac true"
+- name: Auth with top level AND rbac true
   gqlquery: |
     query {
       queryIssue {
@@ -466,8 +466,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryIssue(func: uid(IssueRoot)) {
@@ -481,7 +481,7 @@
       }
     }
 
-- name: "Auth with complex rbac rules, true"
+- name: Auth with complex rbac rules, true
   gqlquery: |
     query {
       queryComplexLog {
@@ -489,8 +489,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryComplexLog(func: uid(ComplexLogRoot)) {
@@ -501,7 +501,7 @@
       ComplexLog_1 as var(func: type(ComplexLog))
     }
 
-- name: "Auth with complex rbac rules, false"
+- name: Auth with complex rbac rules, false
   gqlquery: |
     query {
       queryComplexLog {
@@ -509,14 +509,14 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryComplexLog()
     }
 
-- name: "Auth with top level rbac true"
+- name: Auth with top level rbac true
   gqlquery: |
     query {
       queryLog {
@@ -524,8 +524,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryLog(func: uid(LogRoot)) {
@@ -536,7 +536,7 @@
       Log_1 as var(func: type(Log))
     }
 
-- name: "Auth with top level rbac false"
+- name: Auth with top level rbac false
   gqlquery: |
     query {
       queryLog {
@@ -544,14 +544,14 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryLog()
     }
 
-- name: "Auth with top level AND rbac false"
+- name: Auth with top level AND rbac false
   gqlquery: |
     query {
       queryIssue {
@@ -559,14 +559,14 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryIssue()
     }
 
-- name: "Aggregate Query on Auth with top level AND rbac false"
+- name: Aggregate Query on Auth with top level AND rbac false
   gqlquery: |
     query {
       aggregateIssue {
@@ -575,14 +575,14 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       aggregateIssue()
     }
 
-- name: "Auth with top level OR rbac true"
+- name: Auth with top level OR rbac true
   gqlquery: |
     query {
       queryProject {
@@ -590,8 +590,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
@@ -602,7 +602,7 @@
       Project_1 as var(func: type(Project))
     }
 
-- name: "Aggregate on Auth with top level OR rbac true"
+- name: Aggregate on Auth with top level OR rbac true
   gqlquery: |
     query {
       aggregateProject {
@@ -612,8 +612,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       aggregateProject() {
@@ -630,7 +630,7 @@
       Project_1 as var(func: type(Project))
     }
 
-- name: "Query with missing jwt variables"
+- name: Query with missing jwt variables
   gqlquery: |
     query {
       queryGroup {
@@ -638,7 +638,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryGroup(func: uid(GroupRoot)) {
@@ -651,7 +651,7 @@
       }
     }
 
-- name: "Auth with top level OR rbac false"
+- name: Auth with top level OR rbac false
   gqlquery: |
     query {
       queryProject {
@@ -659,8 +659,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
@@ -685,7 +685,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUserSecret(func: uid(UserSecretRoot), orderasc: UserSecret.aSecret) {
@@ -706,7 +706,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryTicket(func: uid(TicketRoot)) {
@@ -738,7 +738,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -778,7 +778,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -806,7 +806,7 @@
       }
     }
 
-- name: "Auth deep query - 0 level"
+- name: Auth deep query - 0 level
   gqlquery: |
     query {
       queryMovie(filter: { content: { eq: "A. N. Author" } },  order: { asc: content }, first: 10, offset: 10)  {
@@ -814,7 +814,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -834,7 +834,7 @@
       }
     }
 
-- name: "Auth deep query - 1 level"
+- name: Auth deep query - 1 level
   gqlquery: |
     query {
       queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10) @cascade  {
@@ -846,7 +846,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
@@ -875,7 +875,7 @@
       Region_1 as var(func: uid(Region_2))
     }
 
-- name: "Auth deep query - 3 level"
+- name: Auth deep query - 3 level
   gqlquery: |
     query {
       queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10)  {
@@ -896,7 +896,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
@@ -945,7 +945,7 @@
       UserSecret_Auth7 as var(func: uid(UserSecret_6)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Auth deep query with @cascade at all the levels - 3 level"
+- name: Auth deep query with @cascade at all the levels - 3 level
   gqlquery: |
     query {
       queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10) @cascade {
@@ -966,7 +966,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content, first: 10, offset: 10) @cascade {
@@ -1015,7 +1015,7 @@
       UserSecret_Auth7 as var(func: uid(UserSecret_6)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Auth with complex filter"
+- name: Auth with complex filter
   gqlquery: |
     query {
       queryMovie {
@@ -1023,7 +1023,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryMovie(func: uid(MovieRoot)) {
@@ -1043,7 +1043,7 @@
       }
     }
 
-- name: "Aggregate Query with complex auth filter"
+- name: Aggregate Query with complex auth filter
   gqlquery: |
     query {
       aggregateMovie {
@@ -1052,7 +1052,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       aggregateMovie() {
@@ -1076,7 +1076,7 @@
       }
     }
 
-- name: "Query with missing variable - top level"
+- name: Query with missing variable - top level
   gqlquery: |
     query {
       queryUserSecret {
@@ -1088,7 +1088,7 @@
       queryUserSecret()
     }
 
-- name: "Query with null variable - top level"
+- name: Query with null variable - top level
   gqlquery: |
     query {
       queryUserSecret {
@@ -1102,7 +1102,7 @@
       queryUserSecret()
     }
 
-- name:  "Get with top level RBAC false"
+- name: Get with top level RBAC false
   gqlquery: |
     query {
       getLog(id: "0x123") {
@@ -1110,13 +1110,13 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       getLog()
     }
 
-- name: "Query with missing variable - deep query"
+- name: Query with missing variable - deep query
   gqlquery: |
     query {
       queryUser {
@@ -1137,7 +1137,7 @@
       User_3 as var(func: type(User))
     }
 
-- name: "Query with null variable - deep query"
+- name: Query with null variable - deep query
   gqlquery: |
     query {
       queryUser {
@@ -1160,7 +1160,7 @@
       User_3 as var(func: type(User))
     }
 
-- name: "Query with missing variable - partial jwt token"
+- name: Query with missing variable - partial jwt token
   gqlquery: |
     query {
       queryProject {
@@ -1168,7 +1168,7 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
+    ROLE: ADMIN
   dgquery: |-
     query {
       queryProject(func: uid(ProjectRoot)) {
@@ -1179,7 +1179,7 @@
       Project_1 as var(func: type(Project))
     }
 
-- name: "Query with missing jwt token - type without auth directive"
+- name: Query with missing jwt token - type without auth directive
   gqlquery: |
     query {
       queryRole {
@@ -1194,7 +1194,7 @@
       }
     }
 
-- name: "Query with missing jwt token - type with auth directive"
+- name: Query with missing jwt token - type with auth directive
   gqlquery: |
     query {
       queryMovie {
@@ -1215,7 +1215,7 @@
       }
     }
 
-- name: "Query with missing jwt token - type with empty auth directive"
+- name: Query with missing jwt token - type with empty auth directive
   gqlquery: |
     query {
       queryReview {
@@ -1230,7 +1230,7 @@
       }
     }
 
-- name: "Aggregate Fields at child with Auth deep filter and field filter"
+- name: Aggregate Fields at child with Auth deep filter and field filter
   gqlquery: |
     query {
       queryUser {
@@ -1242,7 +1242,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -1272,7 +1272,7 @@
       }
     }
 
-- name: "Multiple Aggregate queries at child level and other queries with Auth deep filter"
+- name: Multiple Aggregate queries at child level and other queries with Auth deep filter
   gqlquery: |
     query {
       queryUser {
@@ -1289,8 +1289,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -1348,7 +1348,7 @@
       }
     }
 
-- name: "Aggregate at child with RBAC rules true"
+- name: Aggregate at child with RBAC rules true
   gqlquery: |
     query {
       queryUser {
@@ -1359,8 +1359,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -1383,7 +1383,7 @@
       }
     }
 
-- name: "Aggregate Fields with Deep RBAC rules false"
+- name: Aggregate Fields with Deep RBAC rules false
   gqlquery: |
     query {
       queryUser {
@@ -1395,8 +1395,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgquery: |-
     query {
       queryUser(func: uid(UserRoot)) {
@@ -1407,7 +1407,7 @@
       User_1 as var(func: type(User))
     }
 
-- name: "Type should apply Interface's query rules and along with its own auth rules"
+- name: Type should apply Interface's query rules and along with its own auth rules
   gqlquery: |
     query {
       queryQuestion {
@@ -1417,7 +1417,7 @@
     }
   jwtvar:
     ANS: "true"
-    USER: "Random"
+    USER: Random
   dgquery: |-
     query {
       queryQuestion(func: uid(QuestionRoot)) {
@@ -1437,7 +1437,7 @@
       }
     }
 
-- name: "Type should apply only Interface's query auth rules"
+- name: Type should apply only Interface's query auth rules
   gqlquery: |
     query {
       queryAnswer {
@@ -1446,7 +1446,7 @@
       }
     }
   jwtvar:
-    USER: "Random"
+    USER: Random
   dgquery: |-
     query {
       queryAnswer(func: uid(AnswerRoot)) {
@@ -1463,7 +1463,7 @@
       }
     }
 
-- name: "Type should apply query auth rules from all the interfaces that it implements."
+- name: Type should apply query auth rules from all the interfaces that it implements
   gqlquery: |
     query {
       queryFbPost {
@@ -1472,8 +1472,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "Random"
+    ROLE: ADMIN
+    USER: Random
   dgquery: |-
     query {
       queryFbPost(func: uid(FbPostRoot)) {
@@ -1490,7 +1490,7 @@
       }
     }
 
-- name: "Type which inherits auth rules from interfaces returns no results when auth rules fail"
+- name: Type which inherits auth rules from interfaces returns no results when auth rules fail
   gqlquery: |
     query {
       queryFbPost {
@@ -1499,14 +1499,14 @@
       }
     }
   jwtvar:
-    ROLE: "REGULAR"
-    USER: "Random"
+    ROLE: REGULAR
+    USER: Random
   dgquery: |-
     query {
       queryFbPost()
     }
 
-- name: "Auth rules of All the implementing types should Apply to the interface also"
+- name: Auth rules of All the implementing types should Apply to the interface also
   gqlquery: |
     query {
       queryPost {
@@ -1514,9 +1514,9 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    ANS:  "true"
-    USER: "Random"
+    ROLE: ADMIN
+    ANS: "true"
+    USER: Random
   dgquery: |-
     query {
       queryPost(func: uid(PostRoot)) {
@@ -1552,7 +1552,7 @@
       }
     }
 
-- name: "Filters on query Interface should work correctly"
+- name: Filters on query Interface should work correctly
   gqlquery: |
     query {
       queryPost(filter: {text: {eq: "A Post"}}, order: { desc: text}, first: 10, offset: 5 ) {
@@ -1560,9 +1560,9 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    ANS:  "true"
-    USER: "Random"
+    ROLE: ADMIN
+    ANS: "true"
+    USER: Random
   dgquery: |-
     query {
       queryPost(func: uid(PostRoot), orderdesc: Post.text) {
@@ -1598,7 +1598,7 @@
       }
     }
 
-- name: "Query interface should return empty if the auth rule of interface is not satisfied"
+- name: Query interface should return empty if the auth rule of interface is not satisfied
   gqlquery: |
     query {
       queryPost {
@@ -1606,14 +1606,14 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
+    ROLE: ADMIN
     ANS: "true"
   dgquery: |-
     query {
       queryPost()
     }
 
-- name: "Query interface should return partial types if the auth rule of interface is not satisfied"
+- name: Query interface should return partial types if the auth rule of interface is not satisfied
   gqlquery: |
     query {
       queryPost {
@@ -1621,7 +1621,7 @@
       }
     }
   jwtvar:
-    USER: "Random"
+    USER: Random
     ANS: "true"
   dgquery: |-
     query {
@@ -1651,7 +1651,7 @@
       }
     }
 
-- name: "Get Query interface having Auth Rules apply Auth filters of types also"
+- name: Get Query interface having Auth Rules apply Auth filters of types also
   gqlquery: |
     query {
       getPost(id: "0x1") {
@@ -1659,7 +1659,7 @@
       }
     }
   jwtvar:
-    USER: "Random"
+    USER: Random
     ANS: "true"
   dgquery: |-
     query {
@@ -1689,7 +1689,8 @@
       }
     }
 
-- name: "Get Query interface having Auth Rules should return empty if the Auth rules are not satisfied"
+- name:
+    Get Query interface having Auth Rules should return empty if the Auth rules are not satisfied
   gqlquery: |
     query {
       getPost(id: "0x1") {
@@ -1702,7 +1703,9 @@
       getPost()
     }
 
-- name: "Query interface having no Auth Rules should apply auth rules on implementing types that are satisfied"
+- name:
+    Query interface having no Auth Rules should apply auth rules on implementing types that are
+    satisfied
   gqlquery: |
     query {
       queryA {
@@ -1727,7 +1730,9 @@
       }
     }
 
-- name: "Query interface having no Auth Rules but some type have Auth rules and those are not satified are excluded (for eg: type C )"
+- name:
+    "Query interface having no Auth Rules but some type have Auth rules and those are not satified
+    are excluded (for eg: type C )"
   gqlquery: |
     query {
       queryA {
@@ -1747,8 +1752,7 @@
       B_2 as var(func: type(B))
     }
 
--
-  name: "Password Query with no rule applied for password"
+- name: Password Query with no rule applied for password
   gqlquery: |
     query {
       checkUserPassword(username: "user", password: "Password") {
@@ -1766,8 +1770,7 @@
       }
     }
 
--
-  name: "Password Query with RBAC rule true"
+- name: Password Query with RBAC rule true
   gqlquery: |
     query {
       checkLogPassword(id: "0x123", pwd: "something") {
@@ -1777,7 +1780,7 @@
       }
     }
   jwtvar:
-    ROLE: "Admin"
+    ROLE: Admin
   dgquery: |-
     query {
       checkLogPassword(func: uid(LogRoot)) @filter((eq(val(pwd), 1) AND type(Log))) {
@@ -1792,8 +1795,7 @@
       }
     }
 
--
-  name: "Password Query with RBAC rule false"
+- name: Password Query with RBAC rule false
   gqlquery: |
     query {
       checkLogPassword(id: "0x123", pwd: "something") {
@@ -1802,14 +1804,13 @@
       }
     }
   jwtvar:
-    ROLE: "User"
+    ROLE: User
   dgquery: |-
     query {
       checkLogPassword()
     }
 
--
-  name: "Password Query with auth rules"
+- name: Password Query with auth rules
   gqlquery: |
     query {
       checkProjectPassword(projID: "0x123", pwd: "something") {
@@ -1822,7 +1823,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgquery: |-
     query {
       checkProjectPassword(func: uid(ProjectRoot)) @filter((eq(val(pwd), 1) AND type(Project))) {
@@ -1856,7 +1857,9 @@
       }
     }
 
-- name: "Type with password query should apply Interface's password rules and along with its own auth rules"
+- name:
+    Type with password query should apply Interface's password rules and along with its own auth
+    rules
   gqlquery: |
     query {
       checkQuestionPassword(id: "0x123", pwd: "something") {
@@ -1865,9 +1868,9 @@
       }
     }
   jwtvar:
-    ROLE: "Admin"
+    ROLE: Admin
     ANS: "true"
-    USER: "ADMIN"
+    USER: ADMIN
   dgquery: |-
     query {
       checkQuestionPassword(func: uid(QuestionRoot)) @filter((eq(val(pwd), 1) AND type(Question))) {
@@ -1885,7 +1888,8 @@
       }
     }
 
-- name: "Type which inherits password auth rules from interfaces returns no results when auth rules fail"
+- name:
+    Type which inherits password auth rules from interfaces returns no results when auth rules fail
   gqlquery: |
     query {
       checkQuestionPassword(id: "0x123", pwd: "something") {
@@ -1894,15 +1898,15 @@
       }
     }
   jwtvar:
-    ROLE: "NotAdmin"
+    ROLE: NotAdmin
     ANS: "true"
-    USER: "ADMIN"
+    USER: ADMIN
   dgquery: |-
     query {
       checkQuestionPassword()
     }
 
-- name: "Password Auth rules of All the implementing types should Apply to the interface also"
+- name: Password Auth rules of All the implementing types should Apply to the interface also
   gqlquery: |
     query {
       checkPostPassword(id: "0x123", pwd: "something") {
@@ -1910,9 +1914,9 @@
       }
     }
   jwtvar:
-    ROLE: "Admin"
+    ROLE: Admin
     ANS: "true"
-    USER: "ADMIN"
+    USER: ADMIN
   dgquery: |-
     query {
       checkPostPassword(func: uid(PostRoot)) @filter((eq(val(pwd), 1) AND type(Post))) {
@@ -1939,7 +1943,7 @@
       }
     }
 
-- name: "Entities query with query auth rules"
+- name: Entities query with query auth rules
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Mission", id: "0x1"}{__typename: "Mission", id: "0x2"}, {__typename: "Mission", id: "0x3"}]) {
@@ -1951,7 +1955,7 @@
       }
     }
   jwtvar:
-    USER: "user"
+    USER: user
   dgquery: |-
     query {
       _entities(func: uid(_EntityRoot), orderasc: Mission.id) {
@@ -1967,7 +1971,7 @@
         Mission.id : Mission.id
       }
     }
-- name: "Entities query with top level RBAC rule true and level 1 query auth rule"
+- name: Entities query with top level RBAC rule true and level 1 query auth rule
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
@@ -1979,8 +1983,8 @@
       }
     }
   jwtvar:
-    ROLE: "admin"
-    USER: "user"
+    ROLE: admin
+    USER: user
   dgquery: |-
     query {
       _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
@@ -2002,7 +2006,7 @@
       }
     }
 
-- name: "Entities query with RBAC rule false"
+- name: Entities query with RBAC rule false
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
@@ -2014,13 +2018,13 @@
       }
     }
   jwtvar:
-    ROLE: "user"
+    ROLE: user
   dgquery: |-
     query {
       _entities()
     }
 
-- name: "Entities query with top RBAC rules true and missing JWT variable for level 1 query auth rule"
+- name: Entities query with top RBAC rules true and missing JWT variable for level 1 query auth rule
   gqlquery: |
     query {
       _entities(representations: [{__typename: "Astronaut", id: "0x1"},{__typename: "Astronaut", id: "0x2"},{__typename: "Astronaut", id: "0x3"}]) {
@@ -2032,7 +2036,7 @@
       }
     }
   jwtvar:
-    ROLE: "admin"
+    ROLE: admin
   dgquery: |-
     query {
       _entities(func: uid(_EntityRoot), orderasc: Astronaut.id) {
@@ -2043,8 +2047,7 @@
       Astronaut_3 as var(func: eq(Astronaut.id, "0x1", "0x2", "0x3")) @filter(type(Astronaut))
     }
 
--
-  name: "Query interface should return all the nodes of a type if rbac rules of type are true"
+- name: Query interface should return all the nodes of a type if rbac rules of type are true
   gqlquery: |
     query {
       queryVehicle{
@@ -2052,8 +2055,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user"
+    ROLE: ADMIN
+    USER: user
   dgquery: |-
     query {
       queryVehicle(func: uid(VehicleRoot)) {
@@ -2066,8 +2069,7 @@
       Car_2 as var(func: type(Car))
     }
 
--
-  name: "Fragments in auth queries with user defined cascade"
+- name: Fragments in auth queries with user defined cascade
   gqlquery: |
     query {
       queryHome {
@@ -2101,8 +2103,7 @@
       }
     }
 
--
-  name: "Query auth rules with filter on field with ID type"
+- name: Query auth rules with filter on field with ID type
   gqlquery: |
     query{
       queryPerson{
@@ -2125,8 +2126,7 @@
       }
     }
 
--
-  name: "Query auth rules with filter on field with ID type, single JWT ID param"
+- name: Query auth rules with filter on field with ID type, single JWT ID param
   gqlquery: |
     query{
       queryPerson{

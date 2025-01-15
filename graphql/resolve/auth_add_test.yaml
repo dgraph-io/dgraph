@@ -1,4 +1,4 @@
-- name: "Add one node"
+- name: Add one node
   gqlquery: |
     mutation addUserSecret($secret: AddUserSecretInput!) {
       addUserSecret(input: [$secret]) {
@@ -8,7 +8,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "secret":
       { "aSecret": "it is",
@@ -30,7 +30,7 @@
       "UserSecret": [ { "uid": "0x123" }]
     }
 
-- name: "Add multiple nodes"
+- name: Add multiple nodes
   gqlquery: |
     mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
       addUserSecret(input: $secrets) {
@@ -40,7 +40,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "secrets": 
       [
@@ -66,7 +66,7 @@
       "UserSecret": [ { "uid": "0x123" }, { "uid": "0x456" } ]
     }
 
-- name: "Add one node that fails auth"
+- name: Add one node that fails auth
   gqlquery: |
     mutation addUserSecret($secret: AddUserSecretInput!) {
       addUserSecret(input: [$secret]) {
@@ -76,7 +76,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     {
       "secret":
@@ -101,10 +101,9 @@
     {
       "UserSecret": [ ]
     }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add multiple nodes that fails auth"
+- name: Add multiple nodes that fails auth
   gqlquery: |
     mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
       addUserSecret(input: $secrets) {
@@ -114,7 +113,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "secrets": 
       [
@@ -139,10 +138,9 @@
     {
       "UserSecret": [ { "uid": "0x123" }]
     }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add multiple nodes of different types"
+- name: Add multiple nodes of different types
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
       addColumn(input: [$col]) {
@@ -152,7 +150,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -209,7 +207,7 @@
       "Ticket": [ { "uid": "0x789" } ]
     }
 
-- name: "Add multiple nodes of different types that fails auth"
+- name: Add multiple nodes of different types that fails auth
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
       addColumn(input: [$col]) {
@@ -219,7 +217,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col":
       {
@@ -275,10 +273,9 @@
     {
       "Ticket": [ { "uid": "0x789" } ]
     }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add multiples of multiple nodes of different types"
+- name: Add multiples of multiple nodes of different types
   gqlquery: |
     mutation addColumn($col1: AddColumnInput!, $col2: AddColumnInput!) {
       addColumn(input: [$col1, $col2]) {
@@ -288,7 +285,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -352,7 +349,7 @@
       "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
     }
 
-- name: "Add multiples of multiple nodes of different types that fails auth"
+- name: Add multiples of multiple nodes of different types that fails auth
   gqlquery: |
     mutation addColumn($col1: AddColumnInput!, $col2: AddColumnInput!) {
       addColumn(input: [$col1, $col2]) {
@@ -362,7 +359,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col1":
       { "inProject": { "projID": "0x123" },
@@ -425,15 +422,14 @@
       "Column": [ { "uid": "0x456" } ],
       "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
     }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
 # See comments about additional deletes in add_mutation_test.yaml.
 # Because of those additional deletes, for example, when we add a column and
 # link it to an existing ticket, we remove that ticket from the column it was
 # attached to ... so we need authorization to update that column as well
 # as to add the new column.
-- name: "Add with auth on additional delete"
+- name: Add with auth on additional delete
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
       addColumn(input: [$col]) {
@@ -443,7 +439,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -514,7 +510,7 @@
       "Column": [ { "uid": "0x456" } ]
     }
 
-- name: "Add with auth on additional delete that fails"
+- name: Add with auth on additional delete that fails
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
       addColumn(input: [$col]) {
@@ -524,7 +520,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "col":
       { "inProject": { "projID": "0x123" },
@@ -593,10 +589,9 @@
     {
       "Column": [ { "uid": "0x456" } ]
     }
-  error:
-    { "message": "couldn't rewrite query for mutation addColumn because authorization failed" }
+  error: { "message": couldn't rewrite query for mutation addColumn because authorization failed }
 
-- name: "Add with deep auth on additional delete"
+- name: Add with deep auth on additional delete
   gqlquery: |
     mutation addProject($proj: AddProjectInput!) {
       addProject(input: [$proj]) {
@@ -606,7 +601,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     {
       "proj": {
@@ -687,7 +682,7 @@
       "Project": [ { "uid": "0x123" } ]
     }
 
-- name: "Add with deep auth on additional delete that fails"
+- name: Add with deep auth on additional delete that fails
   gqlquery: |
     mutation addProject($proj: AddProjectInput!) {
       addProject(input: [$proj]) {
@@ -697,7 +692,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     {
       "proj": {
@@ -776,10 +771,9 @@
       "Column": [ { "uid": "0x456" } ],
       "Project": [ { "uid": "0x123" } ]
     }
-  error:
-    { "message": "couldn't rewrite query for mutation addProject because authorization failed" }
+  error: { "message": couldn't rewrite query for mutation addProject because authorization failed }
 
-- name: "Add with top level RBAC false."
+- name: Add with top level RBAC false
   gqlquery: |
     mutation addLog($log: AddLogInput!) {
       addLog(input: [$log]) {
@@ -789,7 +783,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "log":
       {
@@ -800,11 +794,9 @@
     }
   uids: |
     { "Log_1": "0x123" }
-  error:
-    { "message": "mutation failed because authorization failed"}
+  error: { "message": mutation failed because authorization failed }
 
-
-- name: "Add with top level RBAC true."
+- name: Add with top level RBAC true
   gqlquery: |
     mutation addLog($log: AddLogInput!) {
       addLog(input: [$log]) {
@@ -814,8 +806,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "log":
       {
@@ -830,7 +822,7 @@
     }
   skipauth: true
 
-- name: "Add with top level OR RBAC true."
+- name: Add with top level OR RBAC true
   gqlquery: |
     mutation addProject($proj: AddProjectInput!) {
       addProject(input: [$proj]) {
@@ -840,8 +832,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     {
       "proj": {
@@ -855,7 +847,7 @@
     }
   skipauth: true
 
-- name: "Add with top level OR RBAC false."
+- name: Add with top level OR RBAC false
   gqlquery: |
     mutation addProject($proj: AddProjectInput!) {
       addProject(input: [$proj]) {
@@ -865,8 +857,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     {
       "proj": {
@@ -895,7 +887,7 @@
       "Project": [ { "uid": "0x123" } ]
     }
 
-- name: "Add with top level And RBAC true."
+- name: Add with top level And RBAC true
   gqlquery: |
     mutation addIssue($issue: AddIssueInput!) {
       addIssue(input: [$issue]) {
@@ -905,8 +897,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "issue":
       { "msg": "log123",
@@ -946,7 +938,7 @@
       "Issue": [ { "uid": "0x789" }]
     }
 
-- name: "Add with top level And RBAC false."
+- name: Add with top level And RBAC false
   gqlquery: |
     mutation addIssue($issue: AddIssueInput!) {
       addIssue(input: [$issue]) {
@@ -956,8 +948,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "issue":
       { "msg": "log123",
@@ -992,10 +984,9 @@
         Issue.owner : Issue.owner @filter(eq(User.username, "user1"))
       }
     }
-  error:
-    { "message": "mutation failed because authorization failed" }
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add with top level not RBAC false."
+- name: Add with top level not RBAC false
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
@@ -1005,8 +996,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "log":
       { "logs": "log123",
@@ -1017,10 +1008,9 @@
     {
       "ComplexLog_1": "0x123"
     }
-  error:
-    { "message": "mutation failed because authorization failed"}
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add with top level not RBAC true."
+- name: Add with top level not RBAC true
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
@@ -1030,8 +1020,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   variables: |
     { "log":
       { "logs": "log123",
@@ -1044,7 +1034,7 @@
     }
   skipauth: true
 
-- name: "Adding nodes for a Type that inherits Auth rules from an interfaces successfully."
+- name: Adding nodes for a Type that inherits Auth rules from an interfaces successfully
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
       addQuestion(input: $question) {
@@ -1058,7 +1048,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
     ANS: "true"
   variables: |
     { "question":
@@ -1097,7 +1087,7 @@
       "Question": [ {"uid": "0x123"}]
     }
 
-- name: "Adding node for a Type that inherits auth rules from an interface fails."
+- name: Adding node for a Type that inherits auth rules from an interface fails
   gqlquery: |
     mutation addQuestion($question: [AddQuestionInput!]!) {
       addQuestion(input: $question) {
@@ -1111,7 +1101,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
     ANS: "true"
   variables: |
     { "question":
@@ -1149,10 +1139,9 @@
     {
       "Question": [ ], "Author": [ { "uid" : "0x456"} ]
     }
-  error:
-    { "message": "mutation failed because authorization failed"}
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Add type with having RBAC rule on interface successfully"
+- name: Add type with having RBAC rule on interface successfully
   gqlquery: |
     mutation addFbPost($post: [AddFbPostInput!]!){
       addFbPost(input: $post){
@@ -1165,8 +1154,8 @@
       }
     }
   jwtvar:
-    USER: "user1"
-    ROLE: "ADMIN"
+    USER: user1
+    ROLE: ADMIN
   variables: |
     { "post":
       [{
@@ -1200,7 +1189,7 @@
       "FbPost": [ {"uid": "0x123"}]
     }
 
-- name: "Add type with Having RBAC rule on interface failed"
+- name: Add type with Having RBAC rule on interface failed
   gqlquery: |
     mutation addFbPost($post: [AddFbPostInput!]!){
       addFbPost(input: $post){
@@ -1213,8 +1202,8 @@
       }
     }
   jwtvar:
-    USER: "user1"
-    ROLE: "USER"
+    USER: user1
+    ROLE: USER
   variables: |
     { "post": 
       [{
@@ -1230,10 +1219,9 @@
       "FbPost_1": "0x123",
       "Author_1": "0x456"
     }
-  error:
-    {"message" : "mutation failed because authorization failed"}
+  error: { "message": mutation failed because authorization failed }
 
-- name: "Upsert Add Mutation with RBAC true"
+- name: Upsert Add Mutation with RBAC true
   gqlquery: |
     mutation addTweets($tweet: AddTweetsInput!) {
       addTweets(input: [$tweet], upsert: true) {
@@ -1243,7 +1231,7 @@
       }
     }
   jwtvar:
-    USER: "foo"
+    USER: foo
   variables: |
     { "tweet":
       { "id": "existing ID",
@@ -1271,7 +1259,7 @@
       Tweets_2 as var(func: uid(0x123)) @filter(type(Tweets))
     }
 
-- name: "Upsert Add Mutation with RBAC false"
+- name: Upsert Add Mutation with RBAC false
   gqlquery: |
     mutation addTweets($tweet: AddTweetsInput!) {
       addTweets(input: [$tweet], upsert: true) {
@@ -1281,7 +1269,7 @@
       }
     }
   jwtvar:
-    USER: "not foo"
+    USER: not foo
   variables: |
     { "tweet":
       { "id": "existing ID",
@@ -1305,9 +1293,10 @@
       Tweets_1 as addTweets()
     }
 
-- name: "Upsert with Deep Auth"
-  explanation: "As state already exists, update auth rules of State are applied.
-    As Country does not exist, add auth rules of Country are applied."
+- name: Upsert with Deep Auth
+  explanation:
+    As state already exists, update auth rules of State are applied. As Country does not exist, add
+    auth rules of Country are applied
   gqlquery: |
     mutation addState($state: AddStateInput!) {
       addState(input: [$state], upsert: true) {
@@ -1317,7 +1306,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "state":
       {

@@ -2,10 +2,16 @@
 TEST_FAIL=0
 # get the p directory
 GCS_URL=https://storage.googleapis.com/dgraph-datasets/21million_test_p/p.tar.gz
-wget --quiet $GCS_URL || { echo "ERROR: Download from '$GCS_URL' failed." >&2; exit 2; }
+wget --quiet "${GCS_URL}" || {
+	echo "ERROR: Download from '${GCS_URL}' failed." >&2
+	exit 2
+}
 
 #untar it
-[[ -f p.tar.gz ]] || { echo "ERROR: File 'p.tar.gz' does not exist. Exiting" >&2; exit 2; }
+[[ -f p.tar.gz ]] || {
+	echo "ERROR: File 'p.tar.gz' does not exist. Exiting" >&2
+	exit 2
+}
 tar -xf p.tar.gz
 
 # get the profiling and size
@@ -23,8 +29,8 @@ rm -rf p
 rm -f p.tar.gz
 
 # report to calling script that test passed or failed
-if [[ $TEST_FAIL -ne 0 ]]; then
-  exit 1
+if [[ ${TEST_FAIL} -ne 0 ]]; then
+	exit 1
 else
-  exit 0
+	exit 0
 fi

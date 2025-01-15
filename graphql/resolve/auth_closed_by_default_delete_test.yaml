@@ -1,4 +1,4 @@
-- name: "Delete with top level not RBAC true - type with auth"
+- name: Delete with top level not RBAC true - type with auth
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
@@ -17,15 +17,14 @@
            "uid": "uid(x)"
          }]
   dgquery: |-
-   query {
-      x as deleteRole(func: type(Role)) {
-        uid
-      }
-    }
-  error:
-    { "message": "a valid JWT is required but was not provided" }
+    query {
+       x as deleteRole(func: type(Role)) {
+         uid
+       }
+     }
+  error: { "message": a valid JWT is required but was not provided }
 
-- name: "Delete with top level not RBAC true. - type with auth"
+- name: Delete with top level not RBAC true. - type with auth
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteTodo(filter: {id: $ids}) {
@@ -44,10 +43,9 @@
            "uid": "uid(x)"
          }]
   dgquery: |-
-   query {
-      x as deletetodo(func: type(Todo)) {
-        uid
-      }
-    }
-  error:
-    { "message": "a valid JWT is required but was not provided" }
+    query {
+       x as deletetodo(func: type(Todo)) {
+         uid
+       }
+     }
+  error: { "message": a valid JWT is required but was not provided }

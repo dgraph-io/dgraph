@@ -1,52 +1,59 @@
 # HashiCorp Vault Integration: Docker
 
-This shows how to set up a local staging server for HashiCorp Vault and Dgraph. Through these steps below, you can create secrets for [Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and [Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).  You can change the example secrets in [vault/payload_alpha_secrets.json](vault/payload_alpha_secrets.json) file.
+This shows how to set up a local staging server for HashiCorp Vault and Dgraph. Through these steps
+below, you can create secrets for
+[Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and
+[Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/). You can
+change the example secrets in [vault/payload_alpha_secrets.json](vault/payload_alpha_secrets.json)
+file.
 
 This guide will demonstrate using best practices with two personas:
 
-* `admin` persona with privileged permissions to configure an auth method
-* `app` persona (`dgraph`) - a consumer of secrets stored in Vault
+- `admin` persona with privileged permissions to configure an auth method
+- `app` persona (`dgraph`) - a consumer of secrets stored in Vault
 
 Steps using `bind_secret_id`:
 
-1.  [Configure Dgraph and Vault Versions](#Step-1-configure-dgraph-and-vault-versions)
-2.  [Launch unsealed Vault server](#Step-2-launch-unsealed-Vault-server)
-3.  [Enable AppRole Auth and KV Secrets](#Step-3-enable-AppRole-Auth-and-KV-Secrets)
-4.  [Create an `admin` policy](#Step-4-create-an-admin-policy)
-5.  [Create an `admin` role with the attached policy](#Step-5-create-an-admin-role-with-the-attached-policy)
-6.  [Retrieve the admin token](#Step-6-retrieve-the-admin-token)
-7.  [Create a `dgraph` policy to access the secrets](#Step-7-create-a-dgraph-policy-to-access-the-secrets)
-8.  [Create a `dgraph` role with the attached policy](#Step-8-create-a-dgraph-role-with-the-attached-policy)
-9.  [Save secrets using admin persona](#Step-9-save-secrets-using-admin-persona)
-10. [Retrieve the `dgraph` token and save credentials](#Step-10-retrieve-the-dgraph-token-and-save-credentials)
-11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
-12. [Launch Dgraph](#Step-12-launch-Dgraph)
+1. [Configure Dgraph and Vault Versions](#step-1-configure-dgraph-and-vault-versions)
+2. [Launch unsealed Vault server](#step-2-launch-unsealed-vault-server)
+3. [Enable AppRole Auth and KV Secrets](#step-3-enable-approle-auth-and-kv-secrets)
+4. [Create an `admin` policy](#step-4-create-an-admin-policy)
+5. [Create an `admin` role with the attached policy](#step-5-create-an-admin-role-with-the-attached-policy)
+6. [Retrieve the admin token](#step-6-retrieve-the-admin-token)
+7. [Create a `dgraph` policy to access the secrets](#step-7-create-a-dgraph-policy-to-access-the-secrets)
+8. [Create a `dgraph` role with the attached policy](#step-8-create-a-dgraph-role-with-the-attached-policy)
+9. [Save secrets using admin persona](#step-9-save-secrets-using-admin-persona)
+10. [Retrieve the `dgraph` token and save credentials](#step-10-retrieve-the-dgraph-token-and-save-credentials)
+11. [Verify secrets access using app persona](#step-11-verify-secrets-access-using-app-persona)
+12. [Launch Dgraph](#step-12-launch-dgraph)
 
-Alternative Steps using `bound_cidr_list` (see [Using HashiCorp Vault CIDR List for Authentication](#Using-hashicorp-vault-cidr-list-for-authentication)):
+Alternative Steps using `bound_cidr_list` (see
+[Using HashiCorp Vault CIDR List for Authentication](#using-hashicorp-vault-cidr-list-for-authentication)):
 
-1.  [Configure Dgraph and Vault Versions](#Step-1-configure-dgraph-and-vault-versions)
-2.  [Launch unsealed Vault server](#Step-2-launch-unsealed-Vault-server)
-3.  [Enable AppRole Auth and KV Secrets](#Step-3-enable-AppRole-Auth-and-KV-Secrets)
-4.  [Create an `admin` policy](#Step-4-create-an-admin-policy)
-5.  [Create an `admin` role with the attached policy](#Step-5-create-an-admin-role-with-the-attached-policy)
-6.  [Retrieve the admin token](#Step-6-retrieve-the-admin-token)
-7.  [Create a `dgraph` policy to access the secrets](#Step-7-create-a-dgraph-policy-to-access-the-secrets)
-8.  [Create a `dgraph` role using `bound_cidr_list`](#Step-8-create-a-dgraph-role-using-bound_cidr_list)
-9.  [Save secrets using admin persona](#Step-9-save-secrets-using-admin-persona)
-10. [Retrieve the dgraph token using only the `role-id`](#Step-10-retrieve-the-dgraph-token-using-only-the-role-id)
-11. [Verify secrets access using app persona](#Step-11-verify-secrets-access-using-app-persona)
-12. [Launch Dgraph](#Step-12-launch-Dgraph)
+1. [Configure Dgraph and Vault Versions](#step-1-configure-dgraph-and-vault-versions)
+2. [Launch unsealed Vault server](#step-2-launch-unsealed-vault-server)
+3. [Enable AppRole Auth and KV Secrets](#step-3-enable-approle-auth-and-kv-secrets)
+4. [Create an `admin` policy](#step-4-create-an-admin-policy)
+5. [Create an `admin` role with the attached policy](#step-5-create-an-admin-role-with-the-attached-policy)
+6. [Retrieve the admin token](#step-6-retrieve-the-admin-token)
+7. [Create a `dgraph` policy to access the secrets](#step-7-create-a-dgraph-policy-to-access-the-secrets)
+8. [Create a `dgraph` role using `bound_cidr_list`](#step-8-create-a-dgraph-role-using-bound_cidr_list)
+9. [Save secrets using admin persona](#step-9-save-secrets-using-admin-persona)
+10. [Retrieve the dgraph token using only the `role-id`](#step-10-retrieve-the-dgraph-token-using-only-the-role-id)
+11. [Verify secrets access using app persona](#step-11-verify-secrets-access-using-app-persona)
+12. [Launch Dgraph](#step-12-launch-dgraph)
 
 ## Prerequisites
 
-* [Docker](https://docs.docker.com/engine/install/)
-* [Docker Compose](https://docs.docker.com/compose/install/)
-* [jq](https://stedolan.github.io/jq/)
-* [curl](https://curl.se/)
+- [Docker](https://docs.docker.com/engine/install/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+- [jq](https://stedolan.github.io/jq/)
+- [curl](https://curl.se/)
 
 ## Steps
 
-This configures an app role that requires log in with `role-id` and `secret-id` to login.  This is the default role setting where `bind_secret_id` is enabled.
+This configures an app role that requires log in with `role-id` and `secret-id` to login. This is
+the default role setting where `bind_secret_id` is enabled.
 
 ### Step 1: Configure Dgraph and Vault Versions
 
@@ -188,7 +195,6 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/sys/policies/acl/dgraph | jq
 ```
 
-
 ### Step 8: Create a `dgraph` role with the attached policy
 
 ```bash
@@ -211,7 +217,9 @@ curl --silent \
 
 ### Step 9: Save secrets using admin persona
 
-This will save secrets for both [Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and [Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).
+This will save secrets for both
+[Encryption at Rest](https://dgraph.io/docs/enterprise-features/encryption-at-rest/) and
+[Access Control Lists](https://dgraph.io/docs/enterprise-features/access-control-lists/).
 
 ```bash
 curl --silent \
@@ -221,7 +229,10 @@ curl --silent \
   http://$VAULT_ADDRESS/v1/secret/data/dgraph/alpha | jq
 ```
 
-**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to increase the version.  For example, if updating the `enc_key` value to 32-bits, you would update `./vault/payload_alpha_secrets.json` to look like the following:
+**NOTE**: When updating K/V Version 2 secrets, be sure to increment the `options.cas` value to
+increase the version. For example, if updating the `enc_key` value to 32-bits, you would update
+`./vault/payload_alpha_secrets.json` to look like the following:
+
 ```json
 {
   "options": {
@@ -289,7 +300,9 @@ curl localhost:8080/health | jq -r '.[].ee_features | .[]' | sed 's/^/* /'
 
 ## Using HashiCorp Vault CIDR List for Authentication
 
-As an alternative, you can restrict access to a limited range of IP addresses and disable the requirement for a `secret-id`.  In this scenario, we will set `bind_seccret_id` to `false`, and supply a list of IP address ranges for the `bound_cidr_list` key.
+As an alternative, you can restrict access to a limited range of IP addresses and disable the
+requirement for a `secret-id`. In this scenario, we will set `bind_seccret_id` to `false`, and
+supply a list of IP address ranges for the `bound_cidr_list` key.
 
 Only two steps will need to be changed, but otherwise the other steps are the same:
 

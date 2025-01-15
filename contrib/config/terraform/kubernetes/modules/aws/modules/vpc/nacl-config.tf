@@ -1,6 +1,6 @@
 resource "aws_network_acl" "lb_nacl" {
   vpc_id     = aws_vpc.vpc.id
-  subnet_ids = aws_subnet.lb_subnets.*.id
+  subnet_ids = aws_subnet.lb_subnets[*].id
 
 
   ingress {
@@ -89,7 +89,7 @@ resource "aws_network_acl" "nat_nacl" {
 
 resource "aws_network_acl" "db_nacl" {
   vpc_id     = aws_vpc.vpc.id
-  subnet_ids = aws_subnet.db_subnets.*.id
+  subnet_ids = aws_subnet.db_subnets[*].id
 
   ingress {
     from_port  = 0

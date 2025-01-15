@@ -1,5 +1,4 @@
--
-  name: "Add mutation geo field - Point type"
+- name: Add mutation geo field - Point type
   gqlmutation: |
     mutation addHotel($hotel: AddHotelInput!) {
       addHotel(input: [$hotel]) {
@@ -19,7 +18,8 @@
       }
     }
   qnametouid: |
-  explanation: "Add mutation should convert the Point type mutation to corresponding Dgraph JSON mutation"
+  explanation:
+    Add mutation should convert the Point type mutation to corresponding Dgraph JSON mutation
   dgmutations:
     - setjson: |
         { "uid":"_:Hotel_1",
@@ -31,8 +31,7 @@
           }
         }
 
--
-  name: "Add mutation geo field - Polygon type"
+- name: Add mutation geo field - Polygon type
   gqlmutation: |
     mutation addHotel($hotel: AddHotelInput!) {
       addHotel(input: [$hotel]) {
@@ -79,7 +78,8 @@
         }
       }
     }
-  explanation: "Add mutation should convert the Polygon type mutation to corresponding Dgraph JSON mutation"
+  explanation:
+    Add mutation should convert the Polygon type mutation to corresponding Dgraph JSON mutation
   dgmutations:
     - setjson: |
         {
@@ -92,8 +92,7 @@
           }
         }
 
--
-  name: "Add mutation geo field - MultiPolygon type"
+- name: Add mutation geo field - MultiPolygon type
   gqlmutation: |
     mutation addHotel($hotel: AddHotelInput!) {
       addHotel(input: [$hotel]) {
@@ -168,7 +167,8 @@
         }
       }
     }
-  explanation: "Add mutation should convert the MultiPolygon type mutation to corresponding Dgraph JSON mutation"
+  explanation:
+    Add mutation should convert the MultiPolygon type mutation to corresponding Dgraph JSON mutation
   dgmutations:
     - setjson: |
         {
@@ -181,8 +181,7 @@
           }
         }
 
--
-  name: "Add mutation with variables"
+- name: Add mutation with variables
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -198,8 +197,8 @@
         "posts": []
       }
     }
-  explanation: "A uid and type should get injected and all data transformed to
-    underlying Dgraph edge names"
+  explanation:
+    A uid and type should get injected and all data transformed to underlying Dgraph edge names
   dgmutations:
     - setjson: |
         { "uid":"_:Author_1",
@@ -209,8 +208,7 @@
           "Author.posts":[]
         }
 
--
-  name: "Add deep mutation with variables"
+- name: Add deep mutation with variables
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -249,8 +247,9 @@
         }]
       }
     }
-  explanation: "A uid and type should get injected and all data transformed to
-    underlying Dgraph edge names. Some PostSecrets are present and are not created."
+  explanation:
+    A uid and type should get injected and all data transformed to underlying Dgraph edge names.
+    Some PostSecrets are present and are not created
   dgquery: |-
     query {
       PostSecret_1(func: eq(PostSecret.title, "ps1")) {
@@ -416,8 +415,7 @@
           "uid":"_:Author_9"
         }
 
--
-  name: "Add mutation for predicates with special characters having @dgraph directive."
+- name: Add mutation for predicates with special characters having @dgraph directive
   gqlmutation: |
     mutation {
       addMessage(input : [{content : "content1", author: "author1"}]) {
@@ -436,8 +434,7 @@
           "post":"content1"
         }
 
--
-  name: "Add multiple mutation with variables"
+- name: Add multiple mutation with variables
   gqlmutation: |
     mutation addAuthor($auth: [AddAuthorInput!]!) {
       addAuthor(input: $auth) {
@@ -456,8 +453,8 @@
         }
       ]
     }
-  explanation: "A uid and type should get injected and all data transformed to
-    underlying Dgraph edge names"
+  explanation:
+    A uid and type should get injected and all data transformed to underlying Dgraph edge names
   dgmutations:
     - setjson: |
         { "uid":"_:Author_1",
@@ -470,8 +467,7 @@
           "Author.name":"Different Author"
         }
 
--
-  name: "Add Mutation with object at root instead of an array"
+- name: Add Mutation with object at root instead of an array"
   gqlmutation: |
     mutation addAuthor {
       addAuthor(input: { name: "A.N. Author"}) {
@@ -480,8 +476,8 @@
         }
       }
     }
-  explanation: "The input being an object should also work because of the input coercion rules
-  for input objects."
+  explanation:
+    The input being an object should also work because of the input coercion rules for input objects
   dgmutations:
     - setjson: |
         { "uid":"_:Author_1",
@@ -489,9 +485,7 @@
           "Author.name":"A.N. Author"
         }
 
-
--
-  name: "Add Mutation with embedded value"
+- name: Add Mutation with embedded value
   gqlmutation: |
     mutation addAuthor {
       addAuthor(input: [{ name: "A.N. Author", posts: []}]) {
@@ -500,8 +494,9 @@
         }
       }
     }
-  explanation: "The input should be used for the mutation, with a uid and type getting
-    injected and all data transformed to underlying Dgraph edge names"
+  explanation:
+    The input should be used for the mutation, with a uid and type getting injected and all data
+    transformed to underlying Dgraph edge names
   dgmutations:
     - setjson: |
         { "uid":"_:Author_1",
@@ -510,8 +505,7 @@
           "Author.posts":[]
         }
 
--
-  name: "Add Mutation with Password field"
+- name: Add Mutation with Password field
   gqlmutation: |
     mutation addUser($name: String!, $pwd: String!) {
       addUser(input: [{ name: $name, pwd: $pwd}]) {
@@ -522,8 +516,9 @@
     }
   gqlvariables: |
     { "name":  "A.N. Author", "pwd": "Password" }
-  explanation: "The input and variables should be used for the mutation, with a uid and type
-    getting injected and all data transformed to underlying Dgraph edge names"
+  explanation:
+    The input and variables should be used for the mutation, with a uid and type getting injected
+    and all data transformed to underlying Dgraph edge names
   dgquery: |-
     query {
       User_1(func: eq(User.name, "A.N. Author")) {
@@ -540,8 +535,7 @@
           "User.pwd":"Password"
         }
 
--
-  name: "Add Multiple Mutations with embedded value"
+- name: Add Multiple Mutations with embedded value
   gqlmutation: |
     mutation addAuthor {
       addAuthor(input: [{ name: "A.N. Author", posts: []},
@@ -551,8 +545,9 @@
         }
       }
     }
-  explanation: "The input should be used for the mutation, with a uid and type getting
-    injected and all data transformed to underlying Dgraph edge names"
+  explanation:
+    The input should be used for the mutation, with a uid and type getting injected and all data
+    transformed to underlying Dgraph edge names
   dgmutations:
     - setjson: |
         {
@@ -569,8 +564,7 @@
           "Author.posts":[]
         }
 
--
-  name: "Add mutation with reference"
+- name: Add mutation with reference
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -586,8 +580,7 @@
         "posts": []
       }
     }
-  explanation: "The reference to country should get transformed to 'uid' for the
-    Dgraph JSON mutation"
+  explanation: The reference to country should get transformed to 'uid' for the Dgraph JSON mutation
   dgquery: |-
     query {
       Country_1(func: uid(0x123)) {
@@ -612,8 +605,7 @@
           "Author.posts":[]
         }
 
--
-  name: "Add mutation with missing reference"
+- name: Add mutation with missing reference
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -629,7 +621,7 @@
         "posts": []
       }
     }
-  explanation: "This should throw an error as 0x123 is not a valid Country node"
+  explanation: This should throw an error as 0x123 is not a valid Country node
   dgquery: |-
     query {
       Country_1(func: uid(0x123)) {
@@ -637,13 +629,9 @@
         dgraph.type
       }
     }
-  error2:
-    {
-      "message": "failed to rewrite mutation payload because ID \"0x123\" isn't a Country"
-    }
+  error2: { "message": failed to rewrite mutation payload because ID "0x123" isn't a Country }
 
--
-  name: "Add mutation with invalid reference"
+- name: Add mutation with invalid reference
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -659,13 +647,14 @@
         "posts": []
       }
     }
-  explanation: "A reference must be a valid UID"
+  explanation: A reference must be a valid UID
   error:
-    { "message":
-        "failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed" }
+    {
+      "message":
+        failed to rewrite mutation payload because ID argument (HI!) was not able to be parsed,
+    }
 
--
-  name: "Add mutation with inverse reference"
+- name: Add mutation with inverse reference
   gqlmutation: |
     mutation addPost($post: AddPostInput!) {
       addPost(input: [$post]) {
@@ -681,8 +670,7 @@
         "author": { "id": "0x2" }
       }
     }
-  explanation: "The reference to the author node should be transformed to include
-    a new 'posts' edge."
+  explanation: The reference to the author node should be transformed to include a new 'posts' edge
   dgquery: |-
     query {
       Author_1(func: uid(0x2)) {
@@ -706,8 +694,7 @@
           }
         }
 
--
-  name: "Add mutation for a type that implements an interface"
+- name: Add mutation for a type that implements an interface
   gqlmutation: |
     mutation addHuman($human: AddHumanInput!) {
       addHuman(input: [$human]) {
@@ -726,7 +713,7 @@
         "ename": "employee no. 1"
       }
     }
-  explanation: "The mutation should get rewritten with correct edges from the interface."
+  explanation: The mutation should get rewritten with correct edges from the interface
   dgmutations:
     - setjson: |
         { "uid" : "_:Human_1",
@@ -737,8 +724,7 @@
           "dgraph.type": ["Human", "Character", "Employee"]
         }
 
--
-  name: "Add mutation using xid code 1"
+- name: Add mutation using xid code 1
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
       addState(input: [$input]) {
@@ -755,7 +741,7 @@
         "country": { "id": "0x12" }
       }
     }
-  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  explanation: The add mutation should get rewritten into a Dgraph upsert mutation
   dgquery: |-
     query {
       State_1(func: eq(State.code, "nsw")) {
@@ -783,9 +769,8 @@
           }
         }
 
--
-  name: "Add mutation using xid code 2"
-  explanation: "Error thrown as node with code nsw exists."
+- name: Add mutation using xid code 2
+  explanation: Error thrown as node with code nsw exists
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
       addState(input: [$input], upsert: false) {
@@ -820,12 +805,13 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id nsw already exists for field code inside type State"
+      "message":
+        failed to rewrite mutation payload because id nsw already exists for field code inside type
+        State,
     }
 
--
-  name: "Multiple Upsert Mutation 1"
-  explanation: "As both states exist, the countries of the states are updated"
+- name: Multiple Upsert Mutation 1
+  explanation: As both states exist, the countries of the states are updated
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input, upsert: true) {
@@ -936,8 +922,7 @@
         ]
       cond: "@if(gt(len(State_3), 0))"
 
--
-  name: "Upsert Mutation with multiple xids where both existence queries result exist"
+- name: Upsert Mutation with multiple xids where both existence queries result exist
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -988,10 +973,10 @@
         }
       cond: "@if(gt(len(Book_2), 0))"
 
--
-  name: "Upsert Mutation with multiple xids where only one of existence queries result exist"
-  explanation: "Book1 does not exist but Book2 exists. As Book2 exists, this is an upsert.
-    Even though, Book1 does not exist, the mutation should not update ISBN as it is also an XID."
+- name: Upsert Mutation with multiple xids where only one of existence queries result exist
+  explanation:
+    Book1 does not exist but Book2 exists. As Book2 exists, this is an upsert. Even though, Book1
+    does not exist, the mutation should not update ISBN as it is also an XID.
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -1042,10 +1027,9 @@
         }
       cond: "@if(gt(len(Book_2), 0))"
 
--
-  name: "Multiple Upsert Mutation 2"
-  explanation: "The first state exists and is updated. Second is created. Country
-    is also created in second"
+- name: Multiple Upsert Mutation 2
+  explanation:
+    The first state exists and is updated. Second is created. Country is also created in second
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input, upsert: true) {
@@ -1134,10 +1118,11 @@
           }
         }
 
--
-  name: "Add mutation on implementation type which have inherited @id field with interface argument -1"
-  explanation: "This mutation will generate three existence queries two for xid - refID (one for interface and one
-  for implementing type) and one for xid - name"
+- name:
+    Add mutation on implementation type which have inherited @id field with interface argument -1
+  explanation:
+    This mutation will generate three existence queries two for xid - refID (one for interface and
+    one for implementing type) and one for xid - name
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
       addLibraryMember(input: [$input], upsert: false) {
@@ -1190,10 +1175,11 @@
             "uid": "_:LibraryMember_2"
         }
 
--
-  name: "Add mutation on implementation type which have inherited @id field with interface argument -2"
-  explanation: "Node with refID:101 already exist in other implementing type of interface, mutation not allowed
-   in this case and we will return error"
+- name:
+    Add mutation on implementation type which have inherited @id field with interface argument -2
+  explanation:
+    Node with refID:101 already exist in other implementing type of interface, mutation not allowed
+    in this case and we will return error
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
       addLibraryMember(input: [$input], upsert: false) {
@@ -1235,12 +1221,13 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
-       in some other implementing type of interface Member"
+      "message":
+        failed to rewrite mutation payload because id 101 already exists for field refID in some
+        other implementing type of interface Member,
     }
 
--
-  name: "Add mutation on implementation type which have inherited @id field with interface argument -3"
+- name:
+    Add mutation on implementation type which have inherited @id field with interface argument -3
   explanation: "Node with refID:101 already exist in same mutated type, returns error "
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
@@ -1283,13 +1270,16 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id 101 already exists for field
-       refID inside type LibraryMember"
+      "message":
+        failed to rewrite mutation payload because id 101 already exists for field refID inside type
+        LibraryMember,
     }
 
--
-  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -1"
-  explanation: "node with @id field doesn't exist in any of the implementing type, we will add the node"
+- name:
+    Add upsert mutation on implementation type which have inherited @id field with interface
+    argument -1
+  explanation:
+    node with @id field doesn't exist in any of the implementing type, we will add the node
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
       addLibraryMember(input: [$input], upsert: true) {
@@ -1348,9 +1338,10 @@
             "uid": "uid(LibraryMember_1)"
         }
       cond: "@if(gt(len(LibraryMember_1), 0))"
--
-  name: "Add upsert mutation on implementation type which have inherited @id field with interface argument -2"
-  explanation: "node with @id field already exist in one of the implementing type, returns error"
+- name:
+    Add upsert mutation on implementation type which have inherited @id field with interface
+    argument -2
+  explanation: node with @id field already exist in one of the implementing type, returns error
   gqlmutation: |
     mutation addLibraryMember($input: AddLibraryMemberInput!) {
       addLibraryMember(input: [$input], upsert: true) {
@@ -1392,14 +1383,15 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id 101 already exists for
-       field refID in some other implementing type of interface Member"
+      "message":
+        failed to rewrite mutation payload because id 101 already exists for field refID in some
+        other implementing type of interface Member,
     }
 
--
-  name: "Add mutation with nested object which have inherited @id field with interface argument -1"
-  explanation: "There is no node with refID 101 of interface type or it's implementation type,hence will wii add
-    nested object and link that to parent object"
+- name: Add mutation with nested object which have inherited @id field with interface argument -1
+  explanation:
+    There is no node with refID 101 of interface type or it's implementation type,hence will wii add
+    nested object and link that to parent object
   gqlmutation: |
     mutation addLibraryManager($input: AddLibraryManagerInput!) {
       addLibraryManager(input: [$input], upsert: false) {
@@ -1470,9 +1462,10 @@
             "uid": "_:LibraryManager_1"
         }
 
--
-  name: "Add mutation with nested object which have inherited @id field with interface argument -2"
-  explanation: "node with refID 101 already exist in one of the implementing type other than mutated type,returns error"
+- name: Add mutation with nested object which have inherited @id field with interface argument -2
+  explanation:
+    node with refID 101 already exist in one of the implementing type other than mutated
+    type,returns error
   gqlmutation: |
     mutation addLibraryManager($input: AddLibraryManagerInput!) {
       addLibraryManager(input: [$input], upsert: false) {
@@ -1523,13 +1516,13 @@
     }
   error2:
     {
-        "message": "failed to rewrite mutation payload because id 101 already exists for field
-         refID in some other implementing type of interface Member"
+      "message":
+        failed to rewrite mutation payload because id 101 already exists for field refID in some
+        other implementing type of interface Member,
     }
 
--
-  name: "Add mutation with nested object which have inherited @id field with interface argument -3"
-  explanation: "node with refID 101 already exist for mutated type,link child node to parent"
+- name: Add mutation with nested object which have inherited @id field with interface argument -3
+  explanation: node with refID 101 already exist for mutated type,link child node to parent
   gqlmutation: |
     mutation addLibraryManager($input: AddLibraryManagerInput!) {
       addLibraryManager(input: [$input], upsert: false) {
@@ -1594,10 +1587,13 @@
             "uid": "_:LibraryManager_1"
         }
 
--
-  name: "Add mutation on implementation type which have inherited @id fields with interface argument from multiple interfaces"
-  explanation: "This mutation will generate six existence queries, 2 existence queries for each of the inherited @id fields
-  with interface arg and one for each @id field,none of the existence query return uid,so we successfully add the object in this case"
+- name:
+    Add mutation on implementation type which have inherited @id fields with interface argument from
+    multiple interfaces
+  explanation:
+    This mutation will generate six existence queries, 2 existence queries for each of the inherited
+    @id fields with interface arg and one for each @id field,none of the existence query return
+    uid,so we successfully add the object in this case
   gqlmutation: |
     mutation addSportsMember($input: AddSportsMemberInput!) {
       addSportsMember(input: [$input], upsert: false) {
@@ -1667,8 +1663,7 @@
             "uid": "_:SportsMember_6"
         }
 
--
-  name: "Add mutation using code on type which also has an ID field"
+- name: Add mutation using code on type which also has an ID field
   gqlmutation: |
     mutation addEditor($input: AddEditorInput!) {
       addEditor(input: [$input]) {
@@ -1684,7 +1679,7 @@
         "name": "A.N. Editor"
       }
     }
-  explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
+  explanation: The add mutation should get rewritten into a Dgraph upsert mutation
   dgquery: |-
     query {
       Editor_1(func: eq(Editor.code, "editor")) {
@@ -1701,8 +1696,7 @@
           "Editor.code": "editor"
         }
 
--
-  name: "Deep add mutation"
+- name: Deep add mutation
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
@@ -1742,8 +1736,7 @@
           ]
         }
 
--
-  name: "Deep add multiple mutation"
+- name: Deep add multiple mutation
   gqlmutation: |
     mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
@@ -1809,8 +1802,7 @@
           ]
         }
 
--
-  name: "Deep add with existing"
+- name: Deep add with existing
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
@@ -1886,8 +1878,7 @@
           }
         ]
 
--
-  name: "Deep add multiple with existing"
+- name: Deep add multiple with existing
   gqlmutation: |
     mutation addAuthor($author: [AddAuthorInput!]!) {
       addAuthor(input: $author) {
@@ -2023,8 +2014,7 @@
           }
         ]
 
--
-  name: "Deep add with two existing"
+- name: Deep add with two existing
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
@@ -2107,8 +2097,7 @@
           }
         ]
 
--
-  name: "Deep add with null"
+- name: Deep add with null
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
@@ -2149,8 +2138,7 @@
           ]
         }
 
--
-  name: "Add three deep"
+- name: Add three deep
   gqlmutation: |
     mutation addAuthor($author: AddAuthorInput!) {
       addAuthor(input: [$author]) {
@@ -2201,8 +2189,7 @@
           ]
         }
 
--
-  name: "Add mutation with deep xid choices 1"
+- name: Add mutation with deep xid choices 1
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
@@ -2221,7 +2208,7 @@
         } ]
       }
     }
-  explanation: "No nodes exist. Both nodes are created."
+  explanation: No nodes exist. Both nodes are created.
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -2250,8 +2237,7 @@
           "uid":"_:Country_2"
         }
 
--
-  name: "Add mutation with deep xid choices 2"
+- name: Add mutation with deep xid choices 2
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
@@ -2270,7 +2256,8 @@
         } ]
       }
     }
-  explanation: "The state exists. It is linked to the new Country. Its link to old country is deleted."
+  explanation:
+    The state exists. It is linked to the new Country. Its link to old country is deleted.
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -2318,8 +2305,7 @@
           }
         ]
 
--
-  name: "Add mutation with deep xid that must be reference 1"
+- name: Add mutation with deep xid that must be reference 1
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
@@ -2337,8 +2323,9 @@
         } ]
       }
     }
-  explanation: "The add mutation has only one option because the state isn't a valid create
-    because it's missing required field name"
+  explanation:
+    The add mutation has only one option because the state isn't a valid create because it's missing
+    required field name
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -2381,8 +2368,7 @@
           }
         ]
 
--
-  name: "Add mutation with deep xid that must be reference 2"
+- name: Add mutation with deep xid that must be reference 2
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
@@ -2400,7 +2386,7 @@
         } ]
       }
     }
-  explanation: "Error is thrown as State with code dg does not exist"
+  explanation: Error is thrown as State with code dg does not exist
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -2410,12 +2396,12 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because type State requires a value for field name, but no value present"
+      "message":
+        "failed to rewrite mutation payload because type State requires a value for field name, but
+        no value present",
     }
 
-
--
-  name: "deprecated fields can be mutated"
+- name: deprecated fields can be mutated
   gqlmutation: |
     mutation addCategory($cat: AddCategoryInput!) {
       addCategory(input: [$cat]) {
@@ -2439,8 +2425,7 @@
           "Category.iAmDeprecated": "but I can be written to"
         }
 
--
-  name: "Add mutation with reverse predicate"
+- name: Add mutation with reverse predicate
   gqlmutation: |
     mutation addMovieDirector($dir: AddMovieDirectorInput!) {
       addMovieDirector(input: [$dir]) {
@@ -2455,7 +2440,7 @@
         "directed": [{ "id": "0x2" }]
       }
     }
-  explanation: "Movie node exists and is not created"
+  explanation: Movie node exists and is not created
   dgquery: |-
     query {
       Movie_1(func: uid(0x2)) {
@@ -2477,7 +2462,7 @@
           }]
         }
 
-- name: "Top Level Duplicate XIDs with same object Test"
+- name: Top Level Duplicate XIDs with same object Test
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input) {
@@ -2494,12 +2479,13 @@
         {"name": "State1", "code": "S1"}
       ]
     }
-  explanation: "When duplicate XIDs are given as input at top level, but the object structure is
-  same, it should return error."
+  explanation:
+    When duplicate XIDs are given as input at top level, but the object structure is same, it should
+    return error.
   error:
     message: "failed to rewrite mutation payload because duplicate XID found: S1"
 
-- name: "Top Level Duplicate XIDs with different object Test"
+- name: Top Level Duplicate XIDs with different object Test
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input) {
@@ -2516,12 +2502,13 @@
         {"name": "State2", "code": "S1"}
       ]
     }
-  explanation: "When duplicate XIDs are given as input at top level, but the object structure is
-  different, it should still return error."
+  explanation:
+    When duplicate XIDs are given as input at top level, but the object structure is different, it
+    should still return error.
   error:
     message: "failed to rewrite mutation payload because duplicate XID found: S1"
 
-- name: "Deep Mutation Duplicate XIDs with same object Test"
+- name: Deep Mutation Duplicate XIDs with same object Test
   gqlmutation: |
     mutation addCity($input: [AddCityInput!]!) {
       addCity(input: $input) {
@@ -2551,8 +2538,9 @@
         }
       ]
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is same or contains just xid, it should not return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation but the object structure is same or
+    contains just xid, it should not return error.
   dgquery: |-
     query {
       District_1(func: eq(District.code, "D1")) {
@@ -2613,7 +2601,7 @@
           "uid":"_:City_4"
         }
 
-- name: "Deep Mutation Duplicate XIDs with same object with @hasInverse Test"
+- name: Deep Mutation Duplicate XIDs with same object with @hasInverse Test
   gqlmutation: |
     mutation addCountry($input: [AddCountryInput!]!) {
       addCountry(input: $input) {
@@ -2652,15 +2640,16 @@
         }
       ]
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation and the object structure
-  is same and the containing object has @hasInverse on its xid object field, but the xid object
-  does not have the @hasInverse field of List type, it should return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation and the object structure is same and the
+    containing object has @hasInverse on its xid object field, but the xid object does not have the
+    @hasInverse field of List type, it should return error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
       failed to rewrite mutation payload because duplicate XID found: S2
 
-- name: "Deep Mutation Duplicate XIDs with different object Test"
+- name: Deep Mutation Duplicate XIDs with different object Test
   gqlmutation: |
     mutation addStudent($input: [AddStudentInput!]!) {
       addStudent(input: $input) {
@@ -2701,14 +2690,15 @@
         }
       ]
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is different, it should return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation but the object structure is different,
+    it should return error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
       failed to rewrite mutation payload because duplicate XID found: T1
 
-- name: "Circular Duplicate XIDs in single mutation"
+- name: Circular Duplicate XIDs in single mutation
   gqlmutation: |
     mutation addStudent($input: [AddStudentInput!]!) {
       addStudent(input: $input) {
@@ -2735,13 +2725,13 @@
         }
       ]
     }
-  explanation: "When duplicate XIDs are given as input circularly in a single mutation, it
-  should return error."
+  explanation:
+    When duplicate XIDs are given as input circularly in a single mutation, it should return error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
 
-- name: "Duplicate XIDs in single mutation for Interface"
+- name: Duplicate XIDs in single mutation for Interface
   gqlmutation: |
     mutation addStudent($input: [AddStudentInput!]!) {
       addStudent(input: $input) {
@@ -2772,8 +2762,9 @@
         }
       ]
     }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
-  should return error."
+  explanation:
+    When duplicate XIDs are given as input for an Interface in a single mutation, it should return
+    error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
@@ -2804,7 +2795,7 @@
 #
 # There's three cases to consider: add by ID, add by XID, deep add
 
-- name: "Additional Deletes - Add connects to existing node by ID"
+- name: Additional Deletes - Add connects to existing node by ID
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -2864,8 +2855,8 @@
           }
         ]
 
-- name: "Additional Deletes - Add connects to existing node by XID"
-  explanation: "One of the states exists. Country attached to that state is deleted."
+- name: Additional Deletes - Add connects to existing node by XID
+  explanation: One of the states exists. Country attached to that state is deleted
   gqlmutation: |
     mutation addCountry($inp: AddCountryInput!) {
       addCountry(input: [$inp]) {
@@ -2943,8 +2934,8 @@
           }
         ]
 
-- name: "Deep XID 4 level deep 1"
-  explanation: "No nodes exist. All nodes are created."
+- name: Deep XID 4 level deep 1
+  explanation: No nodes exist. All nodes are created.
   gqlmutation: |
     mutation addStudent($student: AddStudentInput!) {
       addStudent(input: [$student]) {
@@ -3039,8 +3030,8 @@
           "uid":"_:Student_1"
         }
 
-- name: "Deep XID 4 level deep 2"
-  explanation: "Teacher T1 also teaches the newly added student at top level, S0."
+- name: Deep XID 4 level deep 2
+  explanation: Teacher T1 also teaches the newly added student at top level, S0.
   gqlmutation: |
     mutation addStudent($student: AddStudentInput!) {
       addStudent(input: [$student]) {
@@ -3147,8 +3138,8 @@
           "uid":"_:Student_1"
         }
 
-- name: "Deep XID Add top level hasInverse 1"
-  explanation: "No nodes exists. All are created."
+- name: Deep XID Add top level hasInverse 1
+  explanation: No nodes exists. All are created.
   gqlmutation: |
     mutation addStudent($student: AddStudentInput!) {
       addStudent(input: [$student]) {
@@ -3224,8 +3215,8 @@
           "uid":"_:Student_1"
         }
 
-- name: "Deep XID Add top level hasInverse 2"
-  explanation: "Teacher T0 exists and is linked to Student S0"
+- name: Deep XID Add top level hasInverse 2
+  explanation: Teacher T0 exists and is linked to Student S0
   gqlmutation: |
     mutation addStudent($student: AddStudentInput!) {
       addStudent(input: [$student]) {
@@ -3289,8 +3280,8 @@
           "uid":"_:Student_1"
         }
 
-- name: "Deep XID Add top level hasInverse 3"
-  explanation: "Student S1 exists and is linked to Teacher T0."
+- name: Deep XID Add top level hasInverse 3
+  explanation: Student S1 exists and is linked to Teacher T0.
   gqlmutation: |
     mutation addStudent($student: AddStudentInput!) {
       addStudent(input: [$student]) {
@@ -3366,9 +3357,8 @@
           "uid":"_:Student_1"
         }
 
-
-- name: "Deep XID Add lower level hasInvsere 1"
-  explanation: "None of the nodes exists. All of them are created."
+- name: Deep XID Add lower level hasInvsere 1
+  explanation: None of the nodes exists. All of them are created.
   gqlmutation: |
     mutation addLab($lab: AddLabInput!) {
       addLab(input: [$lab]) {
@@ -3432,8 +3422,8 @@
           "uid":"_:Lab_1"
         }
 
-- name: "Deep XID Add lower level hasInvsere 2"
-  explanation: "computer exists. Computer node is linked to Lab."
+- name: Deep XID Add lower level hasInvsere 2
+  explanation: computer exists. Computer node is linked to Lab.
   gqlmutation: |
     mutation addLab($lab: AddLabInput!) {
       addLab(input: [$lab]) {
@@ -3487,8 +3477,8 @@
           "uid":"_:Lab_1"
         }
 
-- name: "Deep XID Add lower level hasInvsere 3"
-  explanation: "Computer Owner exists and is linked to computer."
+- name: Deep XID Add lower level hasInvsere 3
+  explanation: Computer Owner exists and is linked to computer.
   gqlmutation: |
     mutation addLab($lab: AddLabInput!) {
       addLab(input: [$lab]) {
@@ -3569,7 +3559,7 @@
             "uid": "uid(Computer_4)"
         }]
 
-- name: "Deep mutation alternate id xid"
+- name: Deep mutation alternate id xid
   gqlmutation: |
     mutation addAuthor($city: AddCityInput!) {
       addCity(input: [$city]) {
@@ -3637,7 +3627,7 @@
           "uid":"_:City_2"
         }
 
-- name: "Deep mutation alternate id xid with existing XID"
+- name: Deep mutation alternate id xid with existing XID
   gqlmutation: |
     mutation addAuthor($city: AddCityInput!) {
       addCity(input: [$city]) {
@@ -3697,8 +3687,7 @@
           "uid":"_:City_2"
         }
 
-
-- name: "Additional Deletes - deep mutation"
+- name: Additional Deletes - deep mutation
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {
       addAuthor(input: [$auth]) {
@@ -3852,8 +3841,8 @@
           "uid":"_:Post1_4"
         }
 
-- name: "Deep mutation three level xid with existing XIDs 1"
-  explanation: "reply1 and comment1 exists and is not created"
+- name: Deep mutation three level xid with existing XIDs 1
+  explanation: reply1 and comment1 exists and is not created
   gqlmutation: |
     mutation($auth: [AddPost1Input!]!) {
       addPost1(input: $auth) {
@@ -3952,8 +3941,9 @@
           "uid":"_:Post1_4"
         }
 
-- name: "Deep mutation three level xid with existing XIDs 2"
-  explanation: "comment2 and comment1 exists. reply1 does not exist. reply1 is not created as its parent exists."
+- name: Deep mutation three level xid with existing XIDs 2
+  explanation:
+    comment2 and comment1 exists. reply1 does not exist. reply1 is not created as its parent exists.
   gqlmutation: |
     mutation($auth: [AddPost1Input!]!) {
       addPost1(input: $auth) {
@@ -4044,8 +4034,7 @@
           "uid":"_:Post1_4"
         }
 
--
-  name: "Add mutation error on @id field for empty value"
+- name: Add mutation error on @id field for empty value
   gqlmutation: |
     mutation addState($input: AddStateInput!) {
       addState(input: [$input]) {
@@ -4062,12 +4051,15 @@
         "country": { "id": "0x12" }
       }
     }
-  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  explanation: The add mutation should not be allowed since value of @id field is empty.
   error:
-    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+    {
+      "message":
+        failed to rewrite mutation payload because encountered an empty value for @id field
+        `State.code`,
+    }
 
--
-  name: "Add mutation error on @id field for empty value (Nested)"
+- name: Add mutation error on @id field for empty value (Nested)
   gqlmutation: |
     mutation addCountry($input: AddCountryInput!) {
       addCountry(input: [$input]) {
@@ -4086,12 +4078,15 @@
         } ]
       }
     }
-  explanation: "The add mutation should not be allowed since value of @id field is empty."
+  explanation: The add mutation should not be allowed since value of @id field is empty.
   error:
-    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+    {
+      "message":
+        failed to rewrite mutation payload because encountered an empty value for @id field
+        `State.code`,
+    }
 
--
-  name: "Add mutation for person with @hasInverse"
+- name: Add mutation for person with @hasInverse
   gqlmutation: |
     mutation($input: [AddPersonInput!]!) {
       addPerson(input: $input) {
@@ -4147,8 +4142,7 @@
           "uid": "_:Person_1"
         }
 
--
-  name: "Add mutation with union"
+- name: Add mutation with union
   gqlmutation: |
     mutation($input: [AddHomeInput!]!) {
       addHome(input: $input) {
@@ -4214,8 +4208,7 @@
           "uid": "_:Home_2"
         }
 
--
-  name: "Add mutation with union - invalid input"
+- name: Add mutation with union - invalid input
   gqlmutation: |
     mutation($input: [AddHomeInput!]!) {
       addHome(input: $input) {
@@ -4243,14 +4236,13 @@
         }
       ]
     }
-  explanation: "The add mutation should not be allowed since the union input is invalid"
+  explanation: The add mutation should not be allowed since the union input is invalid
   error:
     message: |-
       failed to rewrite mutation payload because value for field `favouriteMember` in type `Home` must have exactly one child, found 0 children
       failed to rewrite mutation payload because value for field `members` in type `Home` index `0` must have exactly one child, found 2 children
 
--
-  name: "Add type with multiple Xid fields"
+- name: Add type with multiple Xid fields
   gqlmutation: |
     mutation($input: [AddBookInput!]!) {
     	addBook(input: $input) {
@@ -4310,8 +4302,9 @@
             "uid": "_:Book_2"
         }
 
--
-  name: "Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two different xid fields in a type"
+- name:
+    Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two
+    different xid fields in a type
   gqlmutation: |
     mutation($input: [AddABCInput!]!) {
     	addABC(input: $input) {
@@ -4342,8 +4335,9 @@
         dgraph.type
       }
     }
-  explanation: "We should generate different variables as ABC_1 and ABC_2 if xidName+xidValue is same as in above case
-  i.e. ab+cd and abc+d both equals to abcd"
+  explanation:
+    We should generate different variables as ABC_1 and ABC_2 if xidName+xidValue is same as in
+    above case i.e. ab+cd and abc+d both equals to abcd
   dgmutations:
     - setjson: |
         {
@@ -4355,8 +4349,9 @@
             "uid":"_:ABC_2"
         }
 
--
-  name: "Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two different xid fields in different objects"
+- name:
+    Add mutation with multiple Xid fields shouldn't give error if xidName+xidVal is equal for two
+    different xid fields in different objects
   gqlmutation: |
     mutation($input: [AddABCInput!]!) {
     	addABC(input: $input) {
@@ -4399,8 +4394,9 @@
         dgraph.type
       }
     }
-  explanation: "We should generate different variables as ABC_1 and ABC_4 if xidName+xidValue is same in two different objects as in above case
-  i.e. ab+cd and abc+d both equals to abcd"
+  explanation:
+    We should generate different variables as ABC_1 and ABC_4 if xidName+xidValue is same in two
+    different objects as in above case i.e. ab+cd and abc+d both equals to abcd
   dgmutations:
     - setjson: |
         {
@@ -4421,8 +4417,9 @@
             "uid":"_:ABC_4"
         }
 
--
-  name: "Add mutation with multiple Xid fields shouldn't give error if typeName+xidName+xidVal is equal for two different xid fields in different types"
+- name:
+    Add mutation with multiple Xid fields shouldn't give error if typeName+xidName+xidVal is equal
+    for two different xid fields in different types
   gqlmutation: |
     mutation($input: [AddABCInput!]!) {
     	addABC(input: $input) {
@@ -4469,8 +4466,10 @@
         dgraph.type
       }
     }
-  explanation: "We should generate different variables as ABC_1 and AB_3, or ABC_2 and AB_4 if typename+xidName+xidValue is same in two different types as in above case
-  i.e. ABC+ab+cd and AB+Cabc+d both equals to ABCabcd"
+  explanation:
+    We should generate different variables as ABC_1 and AB_3, or ABC_2 and AB_4 if
+    typename+xidName+xidValue is same in two different types as in above case i.e. ABC+ab+cd and
+    AB+Cabc+d both equals to ABCabcd
   dgmutations:
     - setjson: |
         {
@@ -4486,9 +4485,7 @@
           "uid": "_:ABC_2"
         }
 
-
--
-  name: "Add type with multiple Xid fields at deep level"
+- name: Add type with multiple Xid fields at deep level
   gqlmutation: |
     mutation($input: [AddauthorInput!]!) {
     	addauthor(input: $input) {
@@ -4548,10 +4545,12 @@
             ]
         }
 
--
-  name: "Add mutation for type Person1 with multiple xids referencing same node as closeFriends and friends, closeFriends refer friends with xid id"
-  explanation: "The mutation adds same node as friends and closeFriends. It should
-    work irrespective of the order in which the node is referenced."
+- name:
+    Add mutation for type Person1 with multiple xids referencing same node as closeFriends and
+    friends, closeFriends refer friends with xid id
+  explanation:
+    The mutation adds same node as friends and closeFriends. It should work irrespective of the
+    order in which the node is referenced.
   gqlmutation: |
     mutation($input: [AddPerson1Input!]!) {
       addPerson1(input: $input) {
@@ -4640,8 +4639,9 @@
           "uid": "_:Person1_2"
         }
 
--
-  name: "Add type with multiple Xids fields at deep level when deep node already exist for all existence queries"
+- name:
+    Add type with multiple Xids fields at deep level when deep node already exist for all existence
+    queries
   gqlmutation: |
     mutation($input: [AddauthorInput!]!) {
     	addauthor(input: $input) {
@@ -4685,11 +4685,13 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes found for given xid values,
-       updation not possible"
+      "message":
+        "failed to rewrite mutation payload because multiple nodes found for given xid values,
+        updation not possible",
     }
--
-  name: "Add type with multiple Xids fields at deep level when deep node already exist for one existence query"
+- name:
+    Add type with multiple Xids fields at deep level when deep node already exist for one existence
+    query
   gqlmutation: |
     mutation($input: [AddauthorInput!]!) {
     	addauthor(input: $input) {
@@ -4765,10 +4767,12 @@
             }
         ]
 
--
-  name: "Add mutation for type Person1 with multiple xids referencing same node as closeFriends and friends, friends refer closeFriends with xid name "
-  explanation: "The mutation adds same node as friends and closeFriends. It should
-    work irrespective of the order in which the node is referenced."
+- name:
+    "Add mutation for type Person1 with multiple xids referencing same node as closeFriends and
+    friends, friends refer closeFriends with xid name "
+  explanation:
+    The mutation adds same node as friends and closeFriends. It should work irrespective of the
+    order in which the node is referenced.
   gqlmutation: |
     mutation($input: [AddPerson1Input!]!) {
       addPerson1(input: $input) {
@@ -4857,7 +4861,7 @@
             "uid": "_:Person1_2"
         }
 
-- name: "Reference to inverse field should be ignored and not throw an error"
+- name: Reference to inverse field should be ignored and not throw an error
   gqlmutation: |
     mutation addDistrict($input: [AddDistrictInput!]!) {
       addDistrict(input: $input) {
@@ -4885,9 +4889,10 @@
         }
       ]
     }
-  explanation: "As district is inverse of city. There is no need to supply district to
-    the city. In case it is supplied, it is simply ignored. The city is linked to D1 and
-    district with code non-existing is ignored. Not even its existence query is generated."
+  explanation:
+    As district is inverse of city. There is no need to supply district to the city. In case it is
+    supplied, it is simply ignored. The city is linked to D1 and district with code non-existing is
+    ignored. Not even its existence query is generated.
   dgquery: |-
     query {
       District_1(func: eq(District.code, "D1")) {
@@ -4937,7 +4942,7 @@
             "uid":"_:District_2"
         }
 
-- name: "Reference to inverse field should be ignored and not throw an error 2"
+- name: Reference to inverse field should be ignored and not throw an error 2
   gqlmutation: |
     mutation addFoo($input: [AddFooInput!]!) {
       addFoo(input: $input) {
@@ -4962,8 +4967,9 @@
         }
       ]
     }
-  explanation: "As foo is inverse of bar. There is no need to supply bar to
-    foo. In case it is supplied, it is simply ignored."
+  explanation:
+    As foo is inverse of bar. There is no need to supply bar to foo. In case it is supplied, it is
+    simply ignored.
   dgquery: |-
     query {
       Foo_1(func: eq(Foo.id, "123")) {
@@ -5015,8 +5021,8 @@
             "uid":"_:Foo_3"
         }
 
--
-  name: "Add mutation for Friend, Friend1 should not generated same variable name for existence queries"
+- name:
+    Add mutation for Friend, Friend1 should not generated same variable name for existence queries
   gqlmutation: |
     mutation($input: [AddFriend1Input!]!) {
       addFriend1(input: $input) {
@@ -5099,72 +5105,71 @@
     }
   dgmutations:
     - setjson: |
-       {
-          "Friend1.friends":
-            [
-              {
-                "Friend.id":"Friend1",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_2"
-              },
-              {
-                "Friend.id":"Friend2",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_3"
-              },
-              {
-                "Friend.id":"Friend3",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_4"
-              },
-              {
-                "Friend.id":"Friend4",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_5"
-              },
-              {
-                "Friend.id":"Friend5",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_6"
-              },
-              {
-                "Friend.id":"Friend6",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_7"
-              },
-              {
-                "Friend.id":"Friend7",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_8"
-              },
-              {
-                "Friend.id":"Friend8",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_9"
-              },
-              {
-                "Friend.id":"Friend9",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_10"
-              },
-              {
-                "Friend.id":"Friend10",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_11"
-              },
-              {
-                "Friend.id":"Friend11",
-                "dgraph.type":["Friend"],
-                "uid":"_:Friend_12"
-              }
-            ],
-          "Friend1.id":"Main Friend",
-          "dgraph.type":["Friend1"],
-          "uid":"_:Friend1_1"
-       }
+        {
+           "Friend1.friends":
+             [
+               {
+                 "Friend.id":"Friend1",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_2"
+               },
+               {
+                 "Friend.id":"Friend2",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_3"
+               },
+               {
+                 "Friend.id":"Friend3",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_4"
+               },
+               {
+                 "Friend.id":"Friend4",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_5"
+               },
+               {
+                 "Friend.id":"Friend5",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_6"
+               },
+               {
+                 "Friend.id":"Friend6",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_7"
+               },
+               {
+                 "Friend.id":"Friend7",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_8"
+               },
+               {
+                 "Friend.id":"Friend8",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_9"
+               },
+               {
+                 "Friend.id":"Friend9",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_10"
+               },
+               {
+                 "Friend.id":"Friend10",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_11"
+               },
+               {
+                 "Friend.id":"Friend11",
+                 "dgraph.type":["Friend"],
+                 "uid":"_:Friend_12"
+               }
+             ],
+           "Friend1.id":"Main Friend",
+           "dgraph.type":["Friend1"],
+           "uid":"_:Friend1_1"
+        }
 
--
-  name: "Add mutation with language tag fields"
+- name: Add mutation with language tag fields
   gqlmutation: |
     mutation {
          addPerson(input: { name: "Alice", nameHi: "ऐलिस",nameZh: "爱丽丝"}) {
@@ -5184,11 +5189,10 @@
           "uid": "_:Person_1"
         }
 
--
-  name: "2-level add mutation with nullable @id fields "
-  explaination: "bookId in Book and PenName in author are @id and nullable field,
-   we can skip them while doing add mutation. Nested object author doesn't exist, so we
-   add it and link it to book"
+- name: "2-level add mutation with nullable @id fields "
+  explaination:
+    bookId in Book and PenName in author are @id and nullable field, we can skip them while doing
+    add mutation. Nested object author doesn't exist, so we add it and link it to book
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: false) {
@@ -5251,12 +5255,12 @@
             "uid": "_:Book_2"
         }
 
--
-  name: "2- level add mutation with upsert and nullable @id fields "
-  explaination: "bookId in @id,penName in author are nullable @id fields and we can skip them.
-  title,ISBN in Book are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
-  Both book and author already exist so we just link new author to book and delete old reference from book to author,
-  if there is any"
+- name: "2- level add mutation with upsert and nullable @id fields "
+  explaination:
+    bookId in @id,penName in author are nullable @id fields and we can skip them. title,ISBN in Book
+    are @id fields,so also added in set Json, because @id fields will also be updated by upserts.
+    Both book and author already exist so we just link new author to book and delete old reference
+    from book to author, if there is any
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5335,9 +5339,9 @@
         }]
       cond: "@if(gt(len(Book_2), 0))"
 
--
-  name: "add mutation with upsert gives error when multiple nodes are found for existence queries"
-  explaination: "Two different books exist for title and Sapiens @id fields, We can't do upsert mutation "
+- name: add mutation with upsert gives error when multiple nodes are found for existence queries
+  explaination:
+    "Two different books exist for title and Sapiens @id fields, We can't do upsert mutation "
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5374,15 +5378,17 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes found
-       for given xid values, updation not possible"
+      "message":
+        "failed to rewrite mutation payload because multiple nodes found for given xid values,
+        updation not possible",
     }
 
--
-  name: "add mutation with upsert at nested level gives error when multiple nodes are found
-   for existence queries"
-  explaination: "Two different author exist for penName and authorId @id fields inside author,
-   We can't link author to both books "
+- name:
+    add mutation with upsert at nested level gives error when multiple nodes are found for existence
+    queries
+  explaination:
+    "Two different author exist for penName and authorId @id fields inside author, We can't link
+    author to both books "
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5431,14 +5437,15 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because multiple nodes
-       found for given xid values, updation not possible"
+      "message":
+        "failed to rewrite mutation payload because multiple nodes found for given xid values,
+        updation not possible",
     }
 
--
-  name: "No xid present for add mutation with upsert"
-  explaination: "If none of the xid field is given in upsert mutation then there will be no existence queries,
-   and it will behave as simple add mutation,i.e. create new node with all the given fields"
+- name: No xid present for add mutation with upsert
+  explaination:
+    If none of the xid field is given in upsert mutation then there will be no existence queries,
+    and it will behave as simple add mutation,i.e. create new node with all the given fields
   gqlmutation: |
     mutation addBook($input: [AddBookInput!]!) {
       addBook(input: $input, upsert: true) {
@@ -5465,10 +5472,10 @@
              "uid":"_:Book_1"
         }
 
--
-  name: "Non-nullable xid should be present in add Mutation for nested field"
-  explaination: "non-nullable @id field id in comment1 type not provided. As no reference is
-   provided for comment, we treat it as new node, and return error for missing xid."
+- name: Non-nullable xid should be present in add Mutation for nested field
+  explaination:
+    non-nullable @id field id in comment1 type not provided. As no reference is provided for
+    comment, we treat it as new node, and return error for missing xid.
   gqlmutation: |
     mutation addPost1($input: [AddPost1Input!]!) {
       addPost1(input: $input, upsert: false) {
@@ -5496,13 +5503,9 @@
         dgraph.type
       }
     }
-  error2:
-    {
-      "message": "failed to rewrite mutation payload because field id cannot be empty"
-    }
-    
--
-  name: "Add mutation with @default directive"
+  error2: { "message": failed to rewrite mutation payload because field id cannot be empty }
+
+- name: Add mutation with @default directive
   gqlmutation: |
     mutation($input: [AddBookingInput!]!) {
       addBooking(input: $input) {
@@ -5521,7 +5524,8 @@
         }
       ]
     }
-  explanation: "As booking has @default fields and is being added, these should be set to the default add value"
+  explanation:
+    As booking has @default fields and is being added, these should be set to the default add value
   dgmutations:
     - setjson: |
         {
@@ -5539,8 +5543,7 @@
             "uid":"_:Booking_1"
         }
 
--
-  name: "Add mutation with @default directive uses provided values"
+- name: Add mutation with @default directive uses provided values
   gqlmutation: |
     mutation($input: [AddBookingInput!]!) {
       addBooking(input: $input) {
@@ -5565,7 +5568,9 @@
         }
       ]
     }
-  explanation: "Fields with @default(add) should use input values if provided (note that count is still using default)"
+  explanation:
+    Fields with @default(add) should use input values if provided (note that count is still using
+    default)
   dgmutations:
     - setjson: |
         {
@@ -5583,9 +5588,10 @@
             "uid":"_:Booking_1"
         }
 
--
-  name: "Upsert mutation with @default directives where only one of the nodes exists"
-  explanation: "Booking1 should only have updated timestamp as it exists, Booking2 should have created and updated timestamps"
+- name: Upsert mutation with @default directives where only one of the nodes exists
+  explanation:
+    Booking1 should only have updated timestamp as it exists, Booking2 should have created and
+    updated timestamps
   gqlmutation: |
     mutation addBookingXID($input: [AddBookingXIDInput!]!) {
       addBookingXID(input: $input, upsert: true) {
@@ -5658,4 +5664,3 @@
             "BookingXID"
           ]
         }
-

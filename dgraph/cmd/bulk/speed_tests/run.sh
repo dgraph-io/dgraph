@@ -6,15 +6,15 @@ scriptDir=$(dirname "$(readlink -f "$0")")
 
 while [[ $# -gt 1 ]]; do
 	key="$1"
-	case $key in
-		--tmp)
-			tmp="$2"
-			shift
-			;;
-		*)
-			echo "unknown option $1"
-			exit 1
-			;;
+	case ${key} in
+	--tmp)
+		tmp="$2"
+		shift
+		;;
+	*)
+		echo "unknown option $1"
+		exit 1
+		;;
 	esac
 	shift
 done
@@ -24,17 +24,20 @@ tmp=${tmp:-tmp}
 go install -race github.com/hypermodeinc/dgraph/cmd/dgraph-bulk-loader
 
 function run_test {
-	[[ $# == 2 ]] || { echo "bad args"; exit 1; }
+	[[ $# == 2 ]] || {
+		echo "bad args"
+		exit 1
+	}
 	schema=$1
 	rdfs=$2
 
-	rm -rf $tmp
-	mkdir $tmp
+	rm -rf "${tmp}"
+	mkdir "${tmp}"
 
-	echo "$schema" > $tmp/sch.schema
+	echo "${schema}" >"${tmp}"/sch.schema
 
 	# Run bulk loader.
-	$(go env GOPATH)/bin/dgraph-bulk-loader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "$tmp/tmp" -out "$tmp/out" -l "$tmp/LEASE" -s "$tmp/sch.schema" -r "$rdfs"
+	$(go env GOPATH)/bin/dgraph-bulk-loader -map_shards=5 -reduce_shards=2 -shufflers=2 -mapoutput_mb=15 -tmp "${tmp}/tmp" -out "${tmp}/out" -l "${tmp}/LEASE" -s "${tmp}/sch.schema" -r "${rdfs}"
 }
 
 echo "========================="

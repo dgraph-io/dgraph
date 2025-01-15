@@ -17,6 +17,7 @@ services:
         source: ./out/0/p
         target: /posting
         read_only: false
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha1:7080 --zero=zero1:5080 -p=/posting --logtostderr
-      -v=2
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha1:7080 --zero=zero1:5080 -p=/posting --logtostderr -v=2 --security
+      "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"

@@ -1,6 +1,5 @@
 ADD_UPDATE_MUTATION:
-  -
-    name: "single level"
+  - name: single level
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -18,8 +17,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "alias is ignored in query rewriting"
+  - name: alias is ignored in query rewriting
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -44,8 +42,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "selection set in result"
+  - name: selection set in result
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -63,8 +60,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "deep"
+  - name: deep
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -89,8 +85,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "can do deep filter"
+  - name: can do deep filter
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -122,8 +117,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "can work with skip and filter"
+  - name: can work with skip and filter
     gqlquery: |
       mutation ($skip: Boolean!, $include: Boolean!) {
         ADD_UPDATE_MUTATION {
@@ -152,8 +146,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "cascade directive on mutation payload"
+  - name: cascade directive on mutation payload
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION @cascade {
@@ -181,8 +174,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "cascade directive on mutation query field"
+  - name: cascade directive on mutation query field
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -210,8 +202,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "cascade directive inside mutation query"
+  - name: cascade directive inside mutation query
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -239,8 +230,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "parameterized cascade directive on mutation payload"
+  - name: parameterized cascade directive on mutation payload
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION @cascade(fields:["post","numUids"]) {
@@ -268,8 +258,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "parametrized cascade directive on mutation query field"
+  - name: parametrized cascade directive on mutation query field
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION  {
@@ -297,8 +286,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "parameterized cascade directive inside mutation query"
+  - name: parameterized cascade directive inside mutation query
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION {
@@ -326,8 +314,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "parameterized cascade directive at multiple levels "
+  - name: parameterized cascade directive at multiple levels
     gqlquery: |
       mutation {
         ADD_UPDATE_MUTATION @cascade(fields:["post"]) {
@@ -355,8 +342,7 @@ ADD_UPDATE_MUTATION:
         }
       }
 UPDATE_MUTATION:
-  -
-    name: "filter update result"
+  - name: filter update result
     gqlquery: |
       mutation {
         UPDATE_MUTATION {
@@ -373,8 +359,7 @@ UPDATE_MUTATION:
           Post.title : Post.title
         }
       }
-  -
-    name: "order update result"
+  - name: order update result
     gqlquery: |
       mutation {
         UPDATE_MUTATION {
@@ -392,8 +377,7 @@ UPDATE_MUTATION:
         }
       }
 
-  -
-    name: "order and pagination update result"
+  - name: order and pagination update result
     gqlquery: |
       mutation {
         UPDATE_MUTATION {

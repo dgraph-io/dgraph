@@ -1,7 +1,7 @@
 # Group Delete Test
 
-This test runs a scenario where nodes are removed from groups to make zero delete those
-groups. At every stage we check the zero state to make sure the nodes and groups are deleted.
+This test runs a scenario where nodes are removed from groups to make zero delete those groups. At
+every stage we check the zero state to make sure the nodes and groups are deleted.
 
 Process:
 

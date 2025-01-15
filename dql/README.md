@@ -1,8 +1,8 @@
-Comparing the old and new methods, we find that using slice makes the parsing 20% faster on 
-average than using channels. Also, using slices allows the parser to backtrack and peek the 
-tokens which couldn't be done using channels as each token can only be consumed once.
+Comparing the old and new methods, we find that using slice makes the parsing 20% faster on average
+than using channels. Also, using slices allows the parser to backtrack and peek the tokens which
+couldn't be done using channels as each token can only be consumed once.
 
-```
+```bash
 Name                              unit    Old     New     Improvement
 ----------------------------------------------------------------------
 Benchmark_Filters-4               ns/op   14007   9634    31 %

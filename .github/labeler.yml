@@ -1,82 +1,82 @@
 area/graphql:
-- changed-files:
-  - any-glob-to-any-file: graphql/**
+  - changed-files:
+      - any-glob-to-any-file: graphql/**
 
 area/documentation:
-- changed-files:
-  - any-glob-to-any-file:
-    - '**/*.md'
-    - '**/*.pdf'
-    - '**/*.tex'
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "**/*.pdf"
+          - "**/*.tex"
 
 area/bulk-loader:
-- changed-files:
-  - any-glob-to-any-file: dgraph/cmd/bulk/**
+  - changed-files:
+      - any-glob-to-any-file: dgraph/cmd/bulk/**
 
 area/live-loader:
-- changed-files:
-  - any-glob-to-any-file: dgraph/cmd/live/**
+  - changed-files:
+      - any-glob-to-any-file: dgraph/cmd/live/**
 
 area/querylang:
-- changed-files:
-  - any-glob-to-any-file: dql/**
+  - changed-files:
+      - any-glob-to-any-file: dql/**
 
 area/integrations:
-- changed-files:
-  - any-glob-to-any-file:
-    - contrib/**
-    - .github/**
-    - .travis/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - contrib/**
+          - .github/**
+          - .travis/**
 
 area/testing/jepsen:
-- changed-files:
-  - any-glob-to-any-file: contrib/jepsen/**
+  - changed-files:
+      - any-glob-to-any-file: contrib/jepsen/**
 
 area/enterprise:
-- changed-files:
-  - any-glob-to-any-file: ee/**
+  - changed-files:
+      - any-glob-to-any-file: ee/**
 
 area/enterprise/backup:
-- changed-files:
-  - any-glob-to-any-file: ee/backup/**
+  - changed-files:
+      - any-glob-to-any-file: ee/backup/**
 
 area/enterprise/acl:
-- changed-files:
-  - any-glob-to-any-file: ee/acl/**
-  
+  - changed-files:
+      - any-glob-to-any-file: ee/acl/**
+
 area/schema:
-- changed-files:
-  - any-glob-to-any-file: schema/**
+  - changed-files:
+      - any-glob-to-any-file: schema/**
 
 area/testing:
-- changed-files:
-  - any-glob-to-any-file:
-    - systest/**
-    - '**/*test.go'
-    - graphql/e2e/**
-    - '**/*test.yaml'
-    - t/**
-    - testutil/**
-    - tlstest/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - systest/**
+          - "**/*test.go"
+          - graphql/e2e/**
+          - "**/*test.yaml"
+          - t/**
+          - testutil/**
+          - tlstest/**
 
 area/core:
-- changed-files:
-  - any-glob-to-any-file:
-    - protos/**
-    - posting/**
-    - raftwal/**
-    - query/**
-    - schema/**
-    - protos/**
-    - x/**
-    - xidmap/**
-    - worker/**
-    - graphql/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - protos/**
+          - posting/**
+          - raftwal/**
+          - query/**
+          - schema/**
+          - protos/**
+          - x/**
+          - xidmap/**
+          - worker/**
+          - graphql/**
 
 go:
-- changed-files:
-  - any-glob-to-any-file: '**/*.go'
+  - changed-files:
+      - any-glob-to-any-file: "**/*.go"
 
 python:
-- changed-files:
-  - any-glob-to-any-file: '**/*.py'
+  - changed-files:
+      - any-glob-to-any-file: "**/*.py"
