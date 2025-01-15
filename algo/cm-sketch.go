@@ -125,11 +125,9 @@ func (c *CountMinSketch) AddInt(data []byte, n uint64) *CountMinSketch {
 		}
 	}
 
-	diff := n - existingValue
-	if diff < 0 {
-		diff = 0
+	if n > existingValue {
+		c.count += n - existingValue
 	}
-	c.count += diff
 	return c
 }
 
