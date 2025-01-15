@@ -1,6 +1,5 @@
 invalid_schemas:
-
-  - name: "GraphQL parsing errors should be reported"
+  - name: GraphQL parsing errors should be reported
     input: |
       type X @auth(
         query: { rule: "query { " }
@@ -8,12 +7,15 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      {"message": "Type X: @auth: failed to parse GraphQL rule
-      [reason : Expected Name, found <EOF>]"}
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: failed to parse GraphQL rule [reason : Expected Name, found <EOF>]",
+        },
+      ]
 
-  - name: "GraphQL validation errors should be reported"
+  - name: GraphQL validation errors should be reported
     input: |
       type X @auth(
         query: {rule: "query { queryX(filter: { userRle: { eq: \"ADMIN\" } }) { __typename } }"}
@@ -21,11 +23,14 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      {"message": "Type X: @auth: failed to validate GraphQL rule
-      [reason : Field \"userRle\" is not defined by type XFilter.
-      Did you mean userRole or username?]"}
-    ]
+    errlist:
+      [
+        {
+          "message":
+            'Type X: @auth: failed to validate GraphQL rule [reason : Field "userRle" is not defined
+            by type XFilter. Did you mean userRole or username?]',
+        },
+      ]
 
   - name: "Invalid RBAC rule: in filter not array variable 1"
     input: |
@@ -35,10 +40,14 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io`.
-      Value should be an array." }
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: `in` operator has invalid value `xyz@dgraph.io`. Value should be an
+            array.",
+        },
+      ]
 
   - name: "Invalid RBAC rule: in filter not array variable 2"
     input: |
@@ -48,10 +57,13 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      { "message": "Type X: @auth: `in` operator has invalid value `true`.
-      Value should be an array."}
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: `in` operator has invalid value `true`. Value should be an array.",
+        },
+      ]
 
   - name: "Invalid RBAC rule: nil as the value"
     input: |
@@ -61,9 +73,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      { "message": "Type X: @auth: `$USER` is not a valid GraphQL variable." }
-    ]
+    errlist: [{ "message": "Type X: @auth: `$USER` is not a valid GraphQL variable." }]
 
   - name: "Invalid RBAC rule: null as the value"
     input: |
@@ -73,9 +83,13 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      { "message": "Type X: @auth: `eq` operator has invalid value. null values aren't supported." }
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: `eq` operator has invalid value. null values aren't supported.",
+        },
+      ]
 
   - name: "Invalid RBAC rule: regexp filter not string variable"
     input: |
@@ -85,12 +99,16 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      { "message": "Type X: @auth: `regexp` operator has invalid value `12345`.
-      Value should be of type String." }
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: `regexp` operator has invalid value `12345`. Value should be of type
+            String.",
+        },
+      ]
 
-  - name: "RBAC rule invalid variable"
+  - name: RBAC rule invalid variable
     input: |
       type X @auth(
         query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}"
@@ -99,9 +117,9 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: `X_MyApp_Role` is not a valid GraphQL variable."}]
+    errlist: [{ "message": "Type X: @auth: `X_MyApp_Role` is not a valid GraphQL variable." }]
 
-  - name: "RBAC rule invalid operator"
+  - name: RBAC rule invalid operator
     input: |
       type X @auth(
         query: {rule: "{ $X_MyApp_Role : { xyz : \"ADMIN\"}}"
@@ -110,9 +128,9 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported."}]
+    errlist: [{ "message": "Type X: @auth: `xyz` operator is not supported." }]
 
-  - name: "Invalid RBAC rule"
+  - name: Invalid RBAC rule
     input: |
       type X @auth(
         query: {rule: "{ \"ADMIN\" }"
@@ -121,9 +139,9 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: `{ \"ADMIN\" }` is not a valid rule."}]
+    errlist: [{ "message": 'Type X: @auth: `{ "ADMIN" }` is not a valid rule.' }]
 
-  - name: "Empty rule"
+  - name: Empty rule
     input: |
       type X @auth(
         query: { rule: ""
@@ -132,12 +150,15 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-      {"message": "Type X: @auth: a rule should be exactly one query,
-      found 0 GraphQL operations"}
-    ]
+    errlist:
+      [
+        {
+          "message":
+            "Type X: @auth: a rule should be exactly one query, found 0 GraphQL operations",
+        },
+      ]
 
-  - name: "Invalid auth syntax"
+  - name: Invalid auth syntax
     input: |
       type X @auth(
         query: { xyz: ""
@@ -146,12 +167,10 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\""}
-    ]
+    errlist:
+      [{ "message": 'Type X: @auth: there should be only one of "and", "or", "not" and "rule"' }]
 
-  - name: "Single or rule"
+  - name: Single or rule
     input: |
       type X @auth(
         query: {
@@ -167,9 +186,9 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth: 'OR' should contain at least two rules"}]
+    errlist: [{ "message": "Type X: @auth: 'OR' should contain at least two rules" }]
 
-  - name: "Multiple logical operation at same level"
+  - name: Multiple logical operation at same level
     input: |
       type X @auth(
         query: {
@@ -204,12 +223,10 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\""}
-    ]
+    errlist:
+      [{ "message": 'Type X: @auth: there should be only one of "and", "or", "not" and "rule"' }]
 
-  - name: "Same logical operation at same level"
+  - name: Same logical operation at same level
     input: |
       type X @auth(
         query: {
@@ -244,12 +261,10 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\""}
-    ]
+    errlist:
+      [{ "message": 'Type X: @auth: there should be only one of "and", "or", "not" and "rule"' }]
 
-  - name:  "Rules with null value"
+  - name: Rules with null value
     input: |
       type X @auth(
         query: { and: [ null, null ] }
@@ -257,16 +272,20 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\""},
-    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\""}
-    ]
+    errlist:
+      [
+        {
+          "message":
+            'Type X: @auth: no arguments - there should be only one of "and", "or", "not" and "rule"',
+        },
+        {
+          "message":
+            'Type X: @auth: no arguments - there should be only one of "and", "or", "not" and "rule"',
+        },
+      ]
 
 valid_schemas:
-
-  - name: "GraphQL Should Parse"
+  - name: GraphQL Should Parse
     input: |
       type X @auth(
         query: {rule: """
@@ -281,7 +300,7 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "GraphQL auth RBAC rule"
+  - name: GraphQL auth RBAC rule
     input: |
       type X @auth(
         query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"
@@ -291,7 +310,7 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "GraphQL With Variable Should Parse"
+  - name: GraphQL With Variable Should Parse
     input: |
       type X @auth(
         query: { rule: """
@@ -306,7 +325,7 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "Complex GraphQL Should Parse"
+  - name: Complex GraphQL Should Parse
     input: |
       type Proj @auth(
         update: { rule: """
@@ -331,7 +350,7 @@ valid_schemas:
         username: String! @id
       }
 
-  - name: "Rule using logical `or` operation"
+  - name: Rule using logical `or` operation
     input: |
       type X @auth(
         query: {
@@ -354,7 +373,7 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "Rule using logical `and` operation"
+  - name: Rule using logical `and` operation
     input: |
       type X @auth(
         query: {
@@ -377,7 +396,7 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "Rule using logical `not` operation"
+  - name: Rule using logical `not` operation
     input: |
       type X @auth(
         query: { not: { rule: """

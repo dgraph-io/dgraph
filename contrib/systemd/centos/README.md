@@ -20,8 +20,8 @@ mkdir -p /var/lib/dgraph/{p,w,zw}
 chown -R dgraph:dgraph /var/{lib,log}/dgraph
 ```
 
-Next, copy the `systemd` unit files, i.e. `dgraph-alpha.service`, `dgraph-zero.service`,
-and `dgraph-ui.service`, in this directory to `/etc/systemd/system/`.
+Next, copy the `systemd` unit files, i.e. `dgraph-alpha.service`, `dgraph-zero.service`, and
+`dgraph-ui.service`, in this directory to `/etc/systemd/system/`.
 
 > **NOTE** These unit files expect that Dgraph is installed as `/usr/local/bin/dgraph`.
 
@@ -39,8 +39,7 @@ systemctl enable dgraph-alpha
 systemctl start dgraph-alpha
 ```
 
-The `dgraph-ui` service is optional and, unlike `dgraph-zero`, will not be started
-automatically.
+The `dgraph-ui` service is optional and, unlike `dgraph-zero`, will not be started automatically.
 
 ```Bash
 systemctl enable dgraph-ui

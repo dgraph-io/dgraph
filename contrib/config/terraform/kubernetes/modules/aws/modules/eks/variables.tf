@@ -42,9 +42,3 @@ variable "db_subnet_ids" {
   type        = list
   description = "The private subnet IDs"
 }
-
-variable "ingress_whitelist_cidrs" {
-  type        = list
-  default     = ["0.0.0.0/0"]
-  description = "The IPs whitelisted on the load balancer"
-}

@@ -3,9 +3,9 @@ output "vpc_id" {
 }
 
 output "db_subnet_ids" {
-  value = aws_subnet.db_subnets.*.id
+  value = aws_subnet.db_subnets[*].id
 }
 
 output "cluster_subnet_ids" {
-  value = concat(aws_subnet.db_subnets.*.id, aws_subnet.lb_subnets.*.id)
+  value = concat(aws_subnet.db_subnets[*].id, aws_subnet.lb_subnets[*].id)
 }

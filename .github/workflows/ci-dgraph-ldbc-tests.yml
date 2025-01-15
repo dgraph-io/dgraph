@@ -1,9 +1,10 @@
 name: ci-dgraph-ldbc-tests
+
 on:
   pull_request:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     types:
       - opened
       - reopened
@@ -11,11 +12,16 @@ on:
       - ready_for_review
     branches:
       - main
-      - 'release/**'
+      - release/**
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-ldbc-tests:
     if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-x64-4x
+    timeout-minutes: 10
     steps:
       - name: Checkout Dgraph
         uses: actions/checkout@v4
@@ -28,7 +34,7 @@ jobs:
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
       - name: Build Test Binary
-        run : |
+        run: |
           #!/bin/bash
           # build the test binary
           cd t; go build .

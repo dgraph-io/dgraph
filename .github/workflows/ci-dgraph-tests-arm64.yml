@@ -1,9 +1,10 @@
 name: ci-dgraph-tests-arm64
+
 on:
   pull_request:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     types:
       - opened
       - reopened
@@ -11,11 +12,16 @@ on:
       - ready_for_review
     branches:
       - main
-      - 'release/**'
+      - release/**
+
+permissions:
+  contents: read
+
 jobs:
   dgraph-tests:
     if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-arm64-4x
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
@@ -59,4 +65,3 @@ jobs:
           ./t -r
           # sleep
           sleep 5
-

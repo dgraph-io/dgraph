@@ -2,26 +2,32 @@
 
 ## About
 
-This script will create the required resources needed to create Azure Blob Storage using (`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
+This script will create the required resources needed to create Azure Blob Storage using
+(`simple-azure-blob`)[https://github.com/darkn3rd/simple-azure-blob] module.
 
 ## Prerequisites
 
 You need the following installed to use this automation:
 
-* [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest) with an active Azure subscription configured.
-* [jq](https://stedolan.github.io/jq/) - command-line JSON process that makes it easy to parse JSON output from Azure CLI.
-* [bash](https://www.gnu.org/software/bash/) - shell environment
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
+  with an active Azure subscription configured.
+- [jq](https://stedolan.github.io/jq/) - command-line JSON process that makes it easy to parse JSON
+  output from Azure CLI.
+- [bash](https://www.gnu.org/software/bash/) - shell environment
 
 ## Configuration
 
 You will need to define these environment variables:
 
-* Required Variables:
-  * `MY_RESOURCE_GROUP` (required) - Azure resource group that contains the resources. If the resource group does not exist, this script will create it.
-  * `MY_STORAGE_ACCT` (required) - Azure storage account (unique global name) to contain storage.  If the storage account does not exist, this script will create it.
-  * `MY_CONTAINER_NAME` (required) - Azure container to host the blob storage.  
-* Optional Variables:
-  * `MY_LOCATION` (default = `eastus2`)- the location where to create the resource group if it doesn't exist
+- Required Variables:
+  - `MY_RESOURCE_GROUP` (required) - Azure resource group that contains the resources. If the
+    resource group does not exist, this script will create it.
+  - `MY_STORAGE_ACCT` (required) - Azure storage account (unique global name) to contain storage. If
+    the storage account does not exist, this script will create it.
+  - `MY_CONTAINER_NAME` (required) - Azure container to host the blob storage.
+- Optional Variables:
+  - `MY_LOCATION` (default = `eastus2`)- the location where to create the resource group if it
+    doesn't exist
 
 ## Steps
 

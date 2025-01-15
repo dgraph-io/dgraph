@@ -147,6 +147,7 @@ export DOCKER_HOST=unix://${HOME}/.docker/run/docker.sock
 
 At this point, the `t` executable can be run as described above.
 
+---
 ### Common Pitfalls
 
 If you see `exec format error` output from test runs, it is most likely because some tests attempt to run the Dgraph

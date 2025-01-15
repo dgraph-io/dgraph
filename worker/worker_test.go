@@ -56,6 +56,7 @@ func commitTransaction(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	startTs := timestamp()
 	txn := posting.Oracle().RegisterStartTs(startTs)
 	l = txn.Store(l)
+	l.SetTs(startTs)
 	require.NoError(t, l.AddMutationWithIndex(context.Background(), edge, txn))
 
 	commit := commitTs(startTs)
@@ -500,7 +501,7 @@ func TestMain(m *testing.M) {
 	x.Check(err)
 	pstore = ps
 	// Not using posting list cache
-	posting.Init(ps, 0)
+	posting.Init(ps, 0, false)
 	Init(ps)
 
 	m.Run()

@@ -6,226 +6,248 @@ services:
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha1
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha1:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=1;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha1
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=1;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
   alpha2:
     image: dgraph/dgraph:local
     working_dir: /data/alpha2
     depends_on:
-    - alpha1
+      - alpha1
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha2
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha2:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=2;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha2
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha2:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=2;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
   alpha3:
     image: dgraph/dgraph:local
     working_dir: /data/alpha3
     depends_on:
-    - alpha2
+      - alpha2
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha3
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha3:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=3;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha3
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=3;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
   alpha4:
     image: dgraph/dgraph:local
     working_dir: /data/alpha4
     depends_on:
-    - alpha3
+      - alpha3
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha4
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha4:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=4;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha4.crt; client-key=/dgraph-tls/client.alpha4.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha4
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha4:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=4;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha4.crt; client-key=/dgraph-tls/client.alpha4.key;"
   alpha5:
     image: dgraph/dgraph:local
     working_dir: /data/alpha5
     depends_on:
-    - alpha4
+      - alpha4
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha5
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha5:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=5;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha5
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha5:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=5;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
   alpha6:
     image: dgraph/dgraph:local
     working_dir: /data/alpha6
     depends_on:
-    - alpha5
+      - alpha5
     labels:
       cluster: test
     ports:
-    - 8080
-    - 9080
+      - 8080
+      - 9080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ./keys
-      target: /data/keys
-      read_only: true
-    - type: bind
-      source: ./backup
-      target: /data/backup2
-      read_only: true
-    - type: volume
-      source: backup
-      target: /data/backup
-      read_only: false
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/alpha6
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;" --my=alpha6:7080 --zero=zero1:5080
-      --logtostderr -v=2 --raft "idx=6;" --encryption "key-file=/data/keys/enc_key;"
-      --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.alpha6.crt; client-key=/dgraph-tls/client.alpha6.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ./keys
+        target: /data/keys
+        read_only: true
+      - type: bind
+        source: ./backup
+        target: /data/backup2
+        read_only: true
+      - type: volume
+        source: backup
+        target: /data/backup
+        read_only: false
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/alpha6
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --telemetry "reports=false; sentry=false;"
+      --my=alpha6:7080 --zero=zero1:5080 --logtostderr -v=2 --raft "idx=6;" --encryption
+      "key-file=/data/keys/enc_key;" --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"
+      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true;
+      client-cert=/dgraph-tls/client.alpha6.crt; client-key=/dgraph-tls/client.alpha6.key;"
   zero1:
     image: dgraph/dgraph:local
     working_dir: /data/zero1
     labels:
       cluster: test
     ports:
-    - 5080
-    - 6080
+      - 5080
+      - 6080
     volumes:
-    - type: bind
-      source: $GOPATH/bin
-      target: /gobin
-      read_only: true
-    - type: bind
-      source: ../../tlstest/mtls_internal/tls/zero1
-      target: /dgraph-tls
-      read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft "idx=1;" --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;"
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+      - type: bind
+        source: ../../tlstest/mtls_internal/tls/zero1
+        target: /dgraph-tls
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" --raft
+      "idx=1;" --my=zero1:5080 --replicas=3 --logtostderr -v=2 --bindall --tls
+      "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      server-key=/dgraph-tls/node.key; internal-port=true; client-cert=/dgraph-tls/client.zero1.crt;
+      client-key=/dgraph-tls/client.zero1.key;"
 volumes:
   backup: {}

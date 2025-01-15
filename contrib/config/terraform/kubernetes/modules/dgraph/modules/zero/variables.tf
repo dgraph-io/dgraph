@@ -142,12 +142,6 @@ variable "readiness_probe_failure_threshold" {
   default = 6
 }
 
-
-variable "termination_grace_period_seconds" {
-  type    = number
-  default = 60
-}
-
 variable "namespace_resource" {
   type    = any
   default = null

@@ -16,7 +16,9 @@ services:
         source: $GOPATH/bin
         target: /gobin
         read_only: true
-    command: /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" -o 100 --my=zero1:5180 --logtostderr --bindall
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;" -o 100
+      --my=zero1:5180 --logtostderr --bindall
 
   dg1:
     image: dgraph/dgraph:local

@@ -1,4 +1,4 @@
-- name: "Query with missing jwt token - Type with Auth"
+- name: Query with missing jwt token - Type with Auth
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
@@ -8,8 +8,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   variables: |
     { "log":
       { "logs": "log123",
@@ -20,9 +20,13 @@
   uids: |
     { "ComplexLog1": "0x123" }
   error:
-    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}
+    {
+      "message":
+        mutation failed because authorization failed because a valid JWT is required but was not
+        provided,
+    }
 
-- name: "Query with missing jwt token - Type without Auth"
+- name: Query with missing jwt token - Type without Auth
   gqlquery: |
     mutation addTodo($todo: AddTodoInput!) {
       addTodo(input: [$todo]) {
@@ -40,4 +44,8 @@
       }
     }
   error:
-    { "message": "mutation failed because authorization failed because a valid JWT is required but was not provided"}
+    {
+      "message":
+        mutation failed because authorization failed because a valid JWT is required but was not
+        provided,
+    }

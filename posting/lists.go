@@ -18,17 +18,13 @@ package posting
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"sync"
-	"time"
 
-	ostats "go.opencensus.io/stats"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok/index"
@@ -42,41 +38,15 @@ const (
 var (
 	pstore *badger.DB
 	closer *z.Closer
-	lCache *ristretto.Cache[[]byte, *List]
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
-func Init(ps *badger.DB, cacheSize int64) {
+func Init(ps *badger.DB, cacheSize int64, deleteOnUpdates bool) {
 	pstore = ps
 	closer = z.NewCloser(1)
 	go x.MonitorMemoryMetrics(closer)
 
-	// Initialize cache.
-	if cacheSize == 0 {
-		return
-	}
-
-	var err error
-	lCache, err = ristretto.NewCache[[]byte, *List](&ristretto.Config[[]byte, *List]{
-		// Use 5% of cache memory for storing counters.
-		NumCounters: int64(float64(cacheSize) * 0.05 * 2),
-		MaxCost:     int64(float64(cacheSize) * 0.95),
-		BufferItems: 64,
-		Metrics:     true,
-		Cost: func(val *List) int64 {
-			return 0
-		},
-	})
-	x.Check(err)
-	go func() {
-		m := lCache.Metrics
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			// Record the posting list cache hit ratio
-			ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-		}
-	}()
+	memoryLayer = initMemoryLayer(cacheSize, deleteOnUpdates)
 }
 
 func UpdateMaxCost(maxCost int64) {
@@ -145,7 +115,7 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr erro
 func (vc *viLocalCache) GetValueFromPostingList(pl *List) (rval index.Value, rerr error) {
 	value := pl.findStaticValue(vc.delegate.startTs)
 
-	if value == nil {
+	if value == nil || len(value.Postings) == 0 {
 		return nil, ErrNoValue
 	}
 
@@ -314,8 +284,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 		}
 	} else {
 		pl = &List{
-			key:   key,
-			plist: new(pb.PostingList),
+			key:         key,
+			plist:       new(pb.PostingList),
+			mutationMap: newMutableLayer(),
 		}
 	}
 
@@ -421,8 +392,6 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	}
 
 	for key, pl := range lc.plists {
-		//pk, _ := x.Parse([]byte(key))
-		//fmt.Printf("{TXN} Closing %v\n", pk)
 		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
 			lc.deltas[key] = data

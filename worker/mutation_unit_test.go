@@ -42,7 +42,7 @@ func TestReverseEdge(t *testing.T) {
 	x.Check(err)
 	pstore = ps
 	// Not using posting list cache
-	posting.Init(ps, 0)
+	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("revc: [uid] @reverse @count ."), 1)
 	require.NoError(t, err)

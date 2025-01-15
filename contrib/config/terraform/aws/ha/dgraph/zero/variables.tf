@@ -23,16 +23,6 @@ variable "disk_iops" {
   description = "IOPS limit for the disk associated with the instance."
 }
 
-variable "vpc_id" {
-  type        = string
-  description = "VPC ID of the dgraph cluster we created."
-}
-
-variable "lb_arn" {
-  type        = string
-  description = "Resource ARN of the dgraph load balancer."
-}
-
 variable "sg_id" {
   type        = string
   description = "Security group ID for the created dgraph VPC."

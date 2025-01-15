@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -52,6 +53,7 @@ func rollup(t *testing.T, key []byte, pstore *badger.DB, readTs uint64) {
 	kvs, err := ol.Rollup(nil, readTs+1)
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
+	posting.ResetCache()
 }
 
 func writePostingListToDisk(kvs []*bpb.KV) error {
@@ -73,7 +75,7 @@ func TestSingleUid(t *testing.T) {
 	ps, err := badger.OpenManaged(opt)
 	x.Check(err)
 	pstore = ps
-	posting.Init(ps, 0)
+	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("singleUidTest: string @index(exact) @unique ."), 1)
 	require.NoError(t, err)
@@ -168,7 +170,7 @@ func TestLangExact(t *testing.T) {
 	x.Check(err)
 	pstore = ps
 	// Not using posting list cache
-	posting.Init(ps, 0)
+	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("testLang: string @index(term) @lang ."), 1)
 	require.NoError(t, err)
@@ -214,6 +216,16 @@ func TestLangExact(t *testing.T) {
 	require.Equal(t, val.Value, []byte("hindi"))
 }
 
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func randStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
 func BenchmarkAddMutationWithIndex(b *testing.B) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
@@ -224,7 +236,7 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	x.Check(err)
 	pstore = ps
 	// Not using posting list cache
-	posting.Init(ps, 0)
+	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("benchmarkadd: string @index(term) ."), 1)
 	fmt.Println(err)
@@ -235,11 +247,17 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	txn := posting.Oracle().RegisterStartTs(5)
 	attr := x.GalaxyAttr("benchmarkadd")
 
+	n := uint64(1000)
+	values := make([]string, 0)
+	for range n {
+		values = append(values, randStringBytes(5))
+	}
+
 	for i := 0; i < b.N; i++ {
 		edge := &pb.DirectedEdge{
-			Value:  []byte("david"),
+			Value:  []byte(values[rand.Intn(int(n))]),
 			Attr:   attr,
-			Entity: 1,
+			Entity: rand.Uint64()%n + 1,
 			Op:     pb.DirectedEdge_SET,
 		}
 

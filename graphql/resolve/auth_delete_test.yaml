@@ -1,4 +1,4 @@
-- name: "Delete with auth"
+- name: Delete with auth
   gqlquery: |
     mutation deleteUserSecret($filter: UserSecretFilter!) {
       deleteUserSecret(filter: $filter) {
@@ -6,7 +6,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "filter": { "aSecret": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -24,7 +24,7 @@
       UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Delete with inverse field and RBAC true"
+- name: Delete with inverse field and RBAC true
   gqlquery: |
     mutation {
       deleteTweets(
@@ -37,8 +37,8 @@
       }
     }
   jwtvar:
-    USER: "foo"
-    ROLE: "admin"
+    USER: foo
+    ROLE: admin
   dgmutations:
     - deletejson: |
         [
@@ -70,7 +70,7 @@
       Tweets_4 as var(func: uid(x))
     }
 
-- name: "Delete with inverse field and RBAC false"
+- name: Delete with inverse field and RBAC false
   gqlquery: |
     mutation {
       deleteTweets(
@@ -83,7 +83,7 @@
       }
     }
   jwtvar:
-    ROLE: "admin"
+    ROLE: admin
   dgmutations:
     - deletejson: |
         [
@@ -104,7 +104,7 @@
       Tweets_2 as var(func: uid(x))
     }
 
-- name: "Delete with deep auth"
+- name: Delete with deep auth
   gqlquery: |
     mutation deleteTicket($filter: TicketFilter!) {
       deleteTicket(filter: $filter) {
@@ -112,7 +112,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -148,8 +148,7 @@
       }
     }
 
-
-- name: "Delete with deep query"
+- name: Delete with deep query
   gqlquery: |
     mutation deleteTicket($filter: TicketFilter!) {
       deleteTicket(filter: $filter) {
@@ -171,7 +170,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "filter": { "title": { "anyofterms": "auth is applied" } } }
   dgmutations:
@@ -279,7 +278,7 @@
       }
     }
 
-- name: "Delete with top level RBAC true."
+- name: Delete with top level RBAC true
   gqlquery: |
     mutation($projs: [ID!]) {
       deleteProject (filter: { projID: $projs}) {
@@ -291,8 +290,8 @@
       "projs" : ["0x01", "0x02"]
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -313,7 +312,7 @@
       }
     }
 
-- name: "Delete with top level RBAC false."
+- name: Delete with top level RBAC false
   gqlquery: |
     mutation deleteLog($filter: LogFilter!) {
       deleteLog(filter: $filter) {
@@ -331,8 +330,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -348,7 +347,7 @@
       DeleteLogPayload.log()
     }
 
-- name: "multiple rule in delete mutation"
+- name: Multiple rule in delete mutation
   gqlquery: |
     mutation deleteUser($filter: UserFilter!) {
       deleteUser(filter: $filter) {
@@ -362,7 +361,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgmutations:
     - deletejson: |
         [
@@ -389,7 +388,7 @@
       User_Auth3 as var(func: uid(User_1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
-- name: "Filtering by ID"
+- name: Filtering by ID
   gqlquery: |
     mutation deleteRegion($filter: RegionFilter!) {
       deleteRegion(filter: $filter) {
@@ -397,7 +396,7 @@
       }
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   variables: |
     { "filter":
       {
@@ -419,7 +418,7 @@
       Region_Auth2 as var(func: uid(Region_1)) @filter(eq(Region.global, true)) @cascade
     }
 
-- name: "Delete with top level RBAC false."
+- name: Delete with top level RBAC false
   gqlquery: |
     mutation deleteLog($filter: LogFilter!) {
       deleteLog(filter: $filter) {
@@ -433,8 +432,8 @@
       }
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -445,7 +444,7 @@
       x as deleteLog()
     }
 
-- name: "Delete with top level RBAC true."
+- name: Delete with top level RBAC true
   gqlquery: |
     mutation deleteLog($filter: LogFilter!) {
       deleteLog(filter: $filter) {
@@ -463,8 +462,8 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -492,7 +491,7 @@
       Log_3 as var(func: uid(x))
     }
 
-- name: "Delete with top level OR RBAC true."
+- name: Delete with top level OR RBAC true
   gqlquery: |
     mutation($ids: [ID!]) {
       deleteComplexLog (filter: { id: $ids}) {
@@ -504,8 +503,8 @@
       "ids" : ["0x01", "0x02"]
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -518,7 +517,7 @@
       ComplexLog_1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
     }
 
-- name: "Delete with top level OR RBAC false."
+- name: Delete with top level OR RBAC false
   gqlquery: |
     mutation($ids: [ID!]) {
       deleteComplexLog (filter: { id: $ids}) {
@@ -530,7 +529,7 @@
       "ids" : ["0x01", "0x02"]
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
   dgmutations:
     - deletejson: |
         [{ "uid": "uid(x)" }]
@@ -544,7 +543,7 @@
       ComplexLog_Auth2 as var(func: uid(ComplexLog_1)) @filter(eq(ComplexLog.visible, true)) @cascade
     }
 
-- name: "Delete with top level AND RBAC true."
+- name: Delete with top level AND RBAC true
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
@@ -556,8 +555,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -575,7 +574,7 @@
       }
     }
 
-- name: "Delete with top level AND RBAC false."
+- name: Delete with top level AND RBAC false
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteIssue(filter: {id: $ids}) {
@@ -587,8 +586,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -599,7 +598,7 @@
       x as deleteIssue()
     }
 
-- name: "Delete with top level not RBAC false."
+- name: Delete with top level not RBAC false
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
@@ -611,8 +610,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -623,7 +622,7 @@
       x as deleteRole()
     }
 
-- name: "Delete with top level not RBAC true."
+- name: Delete with top level not RBAC true
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteRole(filter: {id: $ids}) {
@@ -635,8 +634,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -649,7 +648,9 @@
       }
     }
 
-- name: "Deleting interface having its own auth rules and implementing types also have auth rules and some of the rules of implementing types are not satisfied"
+- name:
+    Deleting interface having its own auth rules and implementing types also have auth rules and
+    some of the rules of implementing types are not satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deletePost(filter: {id: $ids}) {
@@ -661,8 +662,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    USER: "user1"
-    ANS:  "true"
+    USER: user1
+    ANS: "true"
   dgmutations:
     - deletejson: |
         [{
@@ -700,7 +701,9 @@
       }
     }
 
-- name: "Deleting interface having its own auth rules and implementing types also have auth rules and the rules of interface are not satisfied"
+- name:
+    Deleting interface having its own auth rules and implementing types also have auth rules and the
+    rules of interface are not satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deletePost(filter: {id: $ids}) {
@@ -708,7 +711,7 @@
       }
     }
   jwtvar:
-    ROLE: "ADMIN"
+    ROLE: ADMIN
     AND: "true"
   variables: |
     {
@@ -724,7 +727,9 @@
       x as deletePost()
     }
 
-- name: "Deleting interface having no own auth rules but some implementing types have auth rules and they are not satisfied."
+- name:
+    Deleting interface having no own auth rules but some implementing types have auth rules and they
+    are not satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteA(filter: {id: $ids}) {
@@ -750,7 +755,7 @@
       B_2 as var(func: type(B))
     }
 
-- name: "Delete Type Having Graph Traversal Auth Rules on Interface."
+- name: Delete Type Having Graph Traversal Auth Rules on Interface
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteQuestion(filter: {id: $ids}) {
@@ -762,7 +767,7 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    USER: "user1"
+    USER: user1
     ANS: "true"
   dgmutations:
     - deletejson: |
@@ -793,7 +798,7 @@
       }
     }
 
-- name: "Delete Type Having Graph Traversal Auth Rules on Interface and those are not satisfied."
+- name: Delete Type Having Graph Traversal Auth Rules on Interface and those are not satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteQuestion(filter: {id: $ids}) {
@@ -816,7 +821,7 @@
       x as deleteQuestion()
     }
 
-- name: "Delete type having RBAC Auth Rules on interface and those are not satisfied."
+- name: Delete type having RBAC Auth Rules on interface and those are not satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteFbPost(filter: {id: $ids}) {
@@ -828,8 +833,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "USER"
-    USER: "user1"
+    ROLE: USER
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -840,7 +845,7 @@
       x as deleteFbPost()
     }
 
-- name: "Delete type having RBAC Auth Rules on interface and all are satisfied."
+- name: Delete type having RBAC Auth Rules on interface and all are satisfied
   gqlquery: |
     mutation ($ids: [ID!]) {
       deleteFbPost(filter: {id: $ids}) {
@@ -852,8 +857,8 @@
       "ids": ["0x1", "0x2"]
     }
   jwtvar:
-    ROLE: "ADMIN"
-    USER: "user1"
+    ROLE: ADMIN
+    USER: user1
   dgmutations:
     - deletejson: |
         [{
@@ -879,4 +884,3 @@
         }
       }
     }
-

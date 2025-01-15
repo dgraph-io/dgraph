@@ -1,5 +1,4 @@
--
-  name: "Update set mutation on Geo - Point type"
+- name: Update set mutation on Geo - Point type
   gqlmutation: |
     mutation updateHotel($patch: UpdateHotelInput!) {
       updateHotel(input: $patch) {
@@ -22,7 +21,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  explanation: The update patch should get rewritten into the Dgraph set mutation
   dgquerysec: |-
     query {
       x as updateHotel(func: type(Hotel)) @filter(near(Hotel.location, [22.22,11.11], 33.33)) {
@@ -39,8 +38,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove mutation on Geo - Point type"
+- name: Update remove mutation on Geo - Point type
   gqlmutation: |
     mutation updateHotel($patch: UpdateHotelInput!) {
       updateHotel(input: $patch) {
@@ -63,7 +61,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  explanation: The update patch should get rewritten into the Dgraph delete mutation
   dgquerysec: |-
     query {
       x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
@@ -80,9 +78,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-
--
-  name: "Update remove mutation on Geo - Polygon type"
+- name: Update remove mutation on Geo - Polygon type
   gqlmutation: |
     mutation updateHotel($patch: UpdateHotelInput!) {
       updateHotel(input: $patch) {
@@ -133,7 +129,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  explanation: The update patch should get rewritten into the Dgraph delete mutation
   dgquerysec: |-
     query {
       x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
@@ -150,8 +146,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update set mutation on Geo - MultiPolygon type"
+- name: Update set mutation on Geo - MultiPolygon type
   gqlmutation: |
     mutation updateHotel($patch: UpdateHotelInput!) {
       updateHotel(input: $patch) {
@@ -218,7 +213,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  explanation: The update patch should get rewritten into the Dgraph set mutation
   dgquerysec: |-
     query {
       x as updateHotel(func: uid(0x123, 0x124)) @filter(type(Hotel)) {
@@ -235,8 +230,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update set mutation with variables"
+- name: Update set mutation with variables
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -255,7 +249,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph set mutation"
+  explanation: The update patch should get rewritten into the Dgraph set mutation
   dgquerysec: |-
     query {
       x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
@@ -269,8 +263,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove mutation with variables and value"
+- name: Update remove mutation with variables and value
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -289,7 +282,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph delete mutation"
+  explanation: The update patch should get rewritten into the Dgraph delete mutation
   dgquerysec: |-
     query {
       x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
@@ -303,8 +296,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update delete mutation with variables and null"
+- name: Update delete mutation with variables and null
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -323,7 +315,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  explanation: The update patch should get rewritten into the Dgraph mutation
   dgquerysec: |-
     query {
       x as updatePost(func: uid(0x123, 0x124)) @filter(type(Post)) {
@@ -337,8 +329,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update mutation for a type that implements an interface"
+- name: Update mutation for a type that implements an interface
   gqlmutation: |
     mutation updateHuman($patch: UpdateHumanInput!) {
       updateHuman(input: $patch) {
@@ -362,7 +353,7 @@
         }
       }
     }
-  explanation: "The mutation should get rewritten with correct edges from the interface."
+  explanation: The mutation should get rewritten with correct edges from the interface
   dgquerysec: |-
     query {
       x as updateHuman(func: uid(0x123)) @filter(type(Human)) {
@@ -379,8 +370,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update mutation for an interface"
+- name: Update mutation for an interface
   gqlmutation: |-
     mutation {
       updateCharacter(input: {filter: { id: ["0x123"] }, set: {name:"Bob"}}) {
@@ -390,7 +380,7 @@
         }
       }
     }
-  explanation: "The mutation should get rewritten with correct edges from the interface."
+  explanation: The mutation should get rewritten with correct edges from the interface
   dgquerysec: |-
     query {
       x as updateCharacter(func: uid(0x123)) @filter(type(Character)) {
@@ -404,8 +394,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update mutation using filters"
+- name: Update mutation using filters
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -424,7 +413,7 @@
         }
       }
     }
-  explanation: "The update patch should get rewritten into the Dgraph mutation"
+  explanation: The update patch should get rewritten into the Dgraph mutation
   dgquerysec: |-
     query {
       x as updatePost(func: type(Post)) @filter(eq(Post.tags, "foo")) {
@@ -438,8 +427,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update mutation using code"
+- name: Update mutation using code
   gqlmutation: |
     mutation updateState($patch: UpdateStateInput!) {
       updateState(input: $patch) {
@@ -458,7 +446,7 @@
         }
       }
     }
-  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  explanation: The update mutation should get rewritten into a Dgraph upsert mutation
   dgquerysec: |-
     query {
       x as updateState(func: type(State)) @filter(eq(State.code, "nsw")) {
@@ -472,9 +460,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-
--
-  name: "Update mutation using code on type which also has an ID field"
+- name: Update mutation using code on type which also has an ID field
   gqlmutation: |
     mutation updateEditor($patch: UpdateEditorInput!) {
       updateEditor(input: $patch) {
@@ -494,7 +480,7 @@
         }
       }
     }
-  explanation: "The update mutation should get rewritten into a Dgraph upsert mutation"
+  explanation: The update mutation should get rewritten into a Dgraph upsert mutation
   dgquerysec: |-
     query {
       x as updateEditor(func: uid(0x1, 0x2)) @filter((eq(Editor.code, "editor") AND type(Editor))) {
@@ -508,9 +494,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-
--
-  name: "Update add reference"
+- name: Update add reference
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -568,8 +552,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove without XID or ID"
+- name: Update remove without XID or ID
   gqlmutation: |
     mutation updateComputer($patch: UpdateComputerInput!) {
       updateComputer(input: $patch) {
@@ -590,13 +573,10 @@
         }
       }
     }
-  explanation: "Remove requires an XID or ID"
-  error2:
-    { "message":
-      "failed to rewrite mutation payload because field name cannot be empty" }
+  explanation: Remove requires an XID or ID
+  error2: { "message": failed to rewrite mutation payload because field name cannot be empty }
 
--
-  name: "Update remove with XID"
+- name: Update remove with XID
   gqlmutation: |
     mutation updateComputer($patch: UpdateComputerInput!) {
       updateComputer(input: $patch) {
@@ -648,8 +628,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove with ID"
+- name: Update remove with ID
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -698,8 +677,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove reference"
+- name: Update remove reference
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -747,8 +725,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove reference without id or xid"
+- name: Update remove reference without id or xid
   gqlmutation: |
     mutation updateWorkflow($patch: UpdateWorkflowInput!) {
       updateWorkflow(input: $patch) {
@@ -774,8 +751,7 @@
     message: |-
       failed to rewrite mutation payload because id is not provided
 
--
-  name: "Update add and remove together"
+- name: Update add and remove together
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -851,8 +827,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Deep updates don't alter linked objects"
+- name: Deep updates don't alter linked objects
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -875,7 +850,7 @@
         }
       }
     }
-  explanation: "updateAuthor doesn't update posts except where references are removed"
+  explanation: updateAuthor doesn't update posts except where references are removed
   dgquery: |-
     query {
       Post_1(func: uid(0x456)) {
@@ -915,8 +890,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Deep update"
+- name: Deep update
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -937,7 +911,7 @@
         }
       }
     }
-  explanation: "The update creates a new country"
+  explanation: The update creates a new country
   dgquerysec: |-
     query {
       x as updateAuthor(func: uid(0x123)) @filter(type(Author)) {
@@ -955,8 +929,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Deep xid create options 1"
+- name: Deep xid create options 1
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -981,7 +954,7 @@
         }
       }
     }
-  explanation: "The update creates a new state"
+  explanation: The update creates a new state
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -1017,8 +990,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Deep xid create options 2"
+- name: Deep xid create options 2
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1043,7 +1015,7 @@
         }
       }
     }
-  explanation: "The update links to existing state"
+  explanation: The update links to existing state
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -1088,9 +1060,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
-
--
-  name: "Deep xid link only"
+- name: Deep xid link only
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1114,7 +1084,7 @@
         }
       }
     }
-  explanation: "The update must link to the existing state"
+  explanation: The update must link to the existing state
   dgquery: |-
     query {
       State_1(func: eq(State.code, "dg")) {
@@ -1159,8 +1129,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "update two single edges"
+- name: update two single edges
   gqlmutation: |
     mutation updateOwner($patch: UpdateOwnerInput!) {
       updateOwner(input: $patch) {
@@ -1226,8 +1195,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update add reference doesn't add reverse edge"
+- name: Update add reference doesn't add reverse edge
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
@@ -1274,8 +1242,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update remove reference doesn't try to remove reverse edge."
+- name: Update remove reference doesn't try to remove reverse edge
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
@@ -1322,7 +1289,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-- name: "Deep Mutation Duplicate XIDs with same object Test"
+- name: Deep Mutation Duplicate XIDs with same object Test
   gqlmutation: |
     mutation updateStudent($input: UpdateStudentInput!) {
       updateStudent(input: $input) {
@@ -1351,8 +1318,9 @@
         }
       }
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is same, it should not return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation but the object structure is same, it
+    should not return error
   dgquery: |-
     query {
       Teacher_1(func: eq(People.xid, "T1")) {
@@ -1386,7 +1354,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-- name: "Deep Mutation Duplicate XIDs with same object with @hasInverse Test"
+- name: Deep Mutation Duplicate XIDs with same object with @hasInverse Test
   gqlmutation: |
     mutation updateCountry($input: UpdateCountryInput!) {
       updateCountry(input: $input) {
@@ -1415,14 +1383,15 @@
         }
       }
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation and the object structure
-  is same and the containing object has @hasInverse on its xid object field, but the xid object
-  does not have the @hasInverse field of List type, it should return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation and the object structure is same and the
+    containing object has @hasInverse on its xid object field, but the xid object does not have the
+    @hasInverse field of List type, it should return error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
 
-- name: "Deep Mutation Duplicate XIDs with different object Test"
+- name: Deep Mutation Duplicate XIDs with different object Test
   gqlmutation: |
     mutation updateStudent($input: UpdateStudentInput!) {
       updateStudent(input: $input) {
@@ -1451,13 +1420,14 @@
         }
       }
     }
-  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
-  is different, it should return error."
+  explanation:
+    When duplicate XIDs are given as input to deep mutation but the object structure is different,
+    it should return error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
 
-- name: "Duplicate XIDs in single mutation for Interface"
+- name: Duplicate XIDs in single mutation for Interface
   gqlmutation: |
     mutation updateStudent($input: UpdateStudentInput!) {
       updateStudent(input: $input) {
@@ -1492,12 +1462,12 @@
         }
       }
     }
-  explanation: "When duplicate XIDs are given as input for an Interface in a single mutation, it
-  should return error."
+  explanation:
+    When duplicate XIDs are given as input for an Interface in a single mutation, it should return
+    error.
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
-
 
 # Additional Deletes
 #
@@ -1538,7 +1508,7 @@
 #    edge is in the updated node, not the reference node)
 #  * as per case two, but with the singular edge in the updated node.
 
-- name: "Additional Deletes - Update references existing node by ID (update list edge)"
+- name: Additional Deletes - Update references existing node by ID (update list edge)
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1598,7 +1568,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
-- name: "Additional Deletes - Update references existing node by ID (update single edge)"
+- name: Additional Deletes - Update references existing node by ID (update single edge)
   gqlmutation: |
     mutation updatePost($patch: UpdatePostInput!) {
       updatePost(input: $patch) {
@@ -1656,7 +1626,7 @@
         ]
       cond: "@if(gt(len(x), 0))"
 
-- name: "Additional Deletes - Update references existing node by XID (update list edge)"
+- name: Additional Deletes - Update references existing node by XID (update list edge)
   gqlmutation: |
     mutation updateCountry($patch: UpdateCountryInput!) {
       updateCountry(input: $patch) {
@@ -1705,7 +1675,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
-- name: "Update mutation error on @id field for empty value"
+- name: Update mutation error on @id field for empty value
   gqlmutation: |
     mutation updateCountry($patch: UpdateCountryInput!) {
       updateCountry(input: $patch) {
@@ -1725,11 +1695,15 @@
         }
       }
     }
-  explanation: "The update mutation should not be allowed since value of @id field is empty."
+  explanation: The update mutation should not be allowed since value of @id field is empty
   error:
-    { "message": "failed to rewrite mutation payload because encountered an empty value for @id field `State.code`" }
+    {
+      "message":
+        failed to rewrite mutation payload because encountered an empty value for @id field
+        `State.code`,
+    }
 
-- name: "Additional Deletes - Update references existing node by XID (update single edge)"
+- name: Additional Deletes - Update references existing node by XID (update single edge)
   gqlmutation: |
     mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
       updateComputerOwner(input: $patch) {
@@ -1771,8 +1745,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Add mutation with union"
+- name: Add mutation with union
   gqlmutation: |
     mutation($patch: UpdateHomeInput!) {
       updateHome(input: $patch) {
@@ -1865,8 +1838,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update set mutation with multiple Id's"
+- name: Update set mutation with multiple Id's
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
     	updateBook(input: $patch) {
@@ -1912,8 +1884,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "delete json shouldn't be generated for empty remove"
+- name: delete json shouldn't be generated for empty remove
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1946,8 +1917,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "set json shouldn't be generated for empty set"
+- name: set json shouldn't be generated for empty set
   gqlmutation: |
     mutation updateAuthor($patch: UpdateAuthorInput!) {
       updateAuthor(input: $patch) {
@@ -1980,11 +1950,11 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Updating @id field when given values for @id fields doesn't exists"
-  explaination: "We are giving two @id fields title and ISBN in set part of update mutation,
-  and will generate two existence queries for both of them. As none of the @id field is present,we
-  update the values successfully "
+- name: Updating @id field when given values for @id fields doesn't exists
+  explaination:
+    We are giving two @id fields title and ISBN in set part of update mutation, and will generate
+    two existence queries for both of them. As none of the @id field is present,we update the values
+    successfully
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
       updateBook(input: $patch) {
@@ -2044,11 +2014,11 @@
           "Book.title": "History of Humans"
         }
       cond: "@if(gt(len(x), 0))"
--
-  name: "Updating @id field when given value for @id fields exist in some node"
-  explaination: "We are giving two @id fields title and ISBN in set part of update mutation,
-  and will generate two existence queries for both of them.As we already have node with title
-   Sapiens, we will return error in this case "
+- name: Updating @id field when given value for @id fields exist in some node
+  explaination:
+    We are giving two @id fields title and ISBN in set part of update mutation, and will generate
+    two existence queries for both of them.As we already have node with title Sapiens, we will
+    return error in this case
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
       updateBook(input: $patch) {
@@ -2099,16 +2069,18 @@
       "Book_2": "0x123"
     }
   error2:
-    { "message":
-        "failed to rewrite mutation payload because id History of Humans already exists for field title inside type Book"
+    {
+      "message":
+        failed to rewrite mutation payload because id History of Humans already exists for field
+        title inside type Book,
     }
 
--
-  name: "skipping nullable @id values while Updating link to non-existent nested object"
-  explaination: "when we update link to nested field, we check if that node already exists or not,
-   In this case nested object doesn't exists and update mutation create it and link it to root object.
-   while creating nested object it skip @id nullable fields which don't exists in nested object, in this case
-     it skips commentId in nested type Comment1"
+- name: skipping nullable @id values while Updating link to non-existent nested object
+  explaination:
+    when we update link to nested field, we check if that node already exists or not, In this case
+    nested object doesn't exists and update mutation create it and link it to root object. while
+    creating nested object it skip @id nullable fields which don't exists in nested object, in this
+    case it skips commentId in nested type Comment1
   gqlmutation: |
     mutation update($patch: UpdatePost1Input!) {
       updatePost1(input: $patch) {
@@ -2171,12 +2143,12 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Updating link to nested field require all the non-null id's to be present in nested field"
-  explaination: "when we update link to nested field then we check if that already exist or not,
-   In this case since @id field is not present in nested field, so we assume it to be a new node.
-   update mutation tries to create it but failed because non-nullable id field is required to add new
-   node."
+- name: Updating link to nested field require all the non-null id's to be present in nested field
+  explaination:
+    when we update link to nested field then we check if that already exist or not, In this case
+    since @id field is not present in nested field, so we assume it to be a new node. update
+    mutation tries to create it but failed because non-nullable id field is required to add new
+    node.
   gqlmutation: |
     mutation update($patch: UpdatePost1Input!) {
       updatePost1(input: $patch) {
@@ -2209,16 +2181,13 @@
         dgraph.type
       }
     }
-  error2:
-    { "message":
-        "failed to rewrite mutation payload because field id cannot be empty"
-    }
+  error2: { "message": failed to rewrite mutation payload because field id cannot be empty }
 
--
-  name: "Updating inherited @id field with interface arg -1 "
-  explaination: "For this case we will generate one more existence query for inherited @id field refID which have
-  interface arg set. No node with given refID exist in same or other implementing type of interface so we will
-  successfully update node in this case"
+- name: "Updating inherited @id field with interface arg -1 "
+  explaination:
+    For this case we will generate one more existence query for inherited @id field refID which have
+    interface arg set. No node with given refID exist in same or other implementing type of
+    interface so we will successfully update node in this case
   gqlmutation: |
     mutation update($patch: UpdateLibraryMemberInput!) {
       updateLibraryMember(input: $patch) {
@@ -2265,19 +2234,20 @@
       }
     }
   dgmutations:
-  - setjson: |
+    - setjson: |
         {
             "LibraryMember.readHours":"3d2hr",
             "Member.name":"Alice",
             "Member.refID":"102",
             "uid":"uid(x)"
         }
-    cond: "@if(gt(len(x), 0))"
+      cond: "@if(gt(len(x), 0))"
 
--
-  name: "Updating inherited @id field with interface arg -2 "
-  explaination: "For this case we will generate one more existence query for inherited @id field refID.
-  There already exist node with refID in other implementing type of interface so we will generate error for this case"
+- name: "Updating inherited @id field with interface arg -2 "
+  explaination:
+    For this case we will generate one more existence query for inherited @id field refID. There
+    already exist node with refID in other implementing type of interface so we will generate error
+    for this case
   gqlmutation: |
     mutation update($patch: UpdateLibraryMemberInput!) {
       updateLibraryMember(input: $patch) {
@@ -2322,16 +2292,17 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id 102 already exists for field refID
-         in some other implementing type of interface Member"
+      "message":
+        failed to rewrite mutation payload because id 102 already exists for field refID in some
+        other implementing type of interface Member,
     }
 
--
-  name: "Updating link to nested object inheriting @id field with interface argument-1"
-  explaination: "If nested object have inherited @id field which have interface argument set, and that
-   field already exist in some other implementing type than we returns error.In below mutation manages
-  is of type LibraryMember but node with given refID already exist in some other
-   type than than LibraryMember"
+- name: Updating link to nested object inheriting @id field with interface argument-1
+  explaination:
+    If nested object have inherited @id field which have interface argument set, and that field
+    already exist in some other implementing type than we returns error.In below mutation manages is
+    of type LibraryMember but node with given refID already exist in some other type than than
+    LibraryMember
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
       updateLibraryManager(input: $patch) {
@@ -2377,14 +2348,15 @@
     }
   error2:
     {
-      "message": "failed to rewrite mutation payload because id 101 already exists for field refID
-         in some other implementing type of interface Member"
+      "message":
+        failed to rewrite mutation payload because id 101 already exists for field refID in some
+        other implementing type of interface Member,
     }
 
--
-  name: "Updating link to nested object inheriting @id field with interface argument-2"
-  explaination: "In below mutation manages is of type LibraryMember and node of type LibraryMember already
-   existed with given refID, so we link that correctly"
+- name: Updating link to nested object inheriting @id field with interface argument-2"
+  explaination:
+    In below mutation manages is of type LibraryMember and node of type LibraryMember already
+    existed with given refID, so we link that correctly
   gqlmutation: |
     mutation update($patch: UpdateLibraryManagerInput!) {
       updateLibraryManager(input: $patch) {
@@ -2436,20 +2408,19 @@
       }
     }
   dgmutations:
-  - setjson: |
-       {
-         "LibraryManager.manages": [
-           {
-             "uid": "0x123"
-           }
-         ],
-         "LibraryManager.name": "Bob",
-         "uid": "uid(x)"
-       }
-    cond: "@if(gt(len(x), 0))"
+    - setjson: |
+        {
+          "LibraryManager.manages": [
+            {
+              "uid": "0x123"
+            }
+          ],
+          "LibraryManager.name": "Bob",
+          "uid": "uid(x)"
+        }
+      cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update with @default directive"
+- name: Update with @default directive
   gqlmutation: |
     mutation updateBooking($patch: UpdateBookingInput!) {
       updateBooking(input: $patch) {
@@ -2468,7 +2439,9 @@
         }
       }
     }
-  explanation: "The update patch should include default values on the fields with the @default(update:) directive"
+  explanation:
+    The update patch should include default values on the fields with the @default(update:)
+    directive
   dgquerysec: |-
     query {
       x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {
@@ -2488,8 +2461,7 @@
         }
       cond: "@if(gt(len(x), 0))"
 
--
-  name: "Update with @default directive uses provided values"
+- name: Update with @default directive uses provided values
   gqlmutation: |
     mutation updateBooking($patch: UpdateBookingInput!) {
       updateBooking(input: $patch) {
@@ -2513,7 +2485,9 @@
         }
       }
     }
-  explanation: "Fields with @default(update) should use input values if provided (note that count is still using default)"
+  explanation:
+    Fields with @default(update) should use input values if provided (note that count is still using
+    default)
   dgquerysec: |-
     query {
       x as updateBooking(func: uid(0x123, 0x124)) @filter(type(Booking)) {

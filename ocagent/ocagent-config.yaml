@@ -4,6 +4,6 @@ receivers:
 
 exporters:
   datadog:
-    namespace: "oc_pool"
-    trace_addr: "datadog:8126"
+    namespace: oc_pool
+    trace_addr: datadog:8126
     enable_tracing: true

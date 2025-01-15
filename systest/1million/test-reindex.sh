@@ -1,31 +1,31 @@
 #!/bin/bash
 
 set -e
-readonly SRCDIR=$(dirname $0)
+readonly SRCDIR=$(dirname "$0")
 
 BENCHMARKS_REPO="$(pwd)/benchmarks"
-NO_INDEX_SCHEMA_FILE="$BENCHMARKS_REPO/data/1million-noindex.schema"
-SCHEMA_FILE="$BENCHMARKS_REPO/data/1million.schema"
-DATA_FILE="$BENCHMARKS_REPO/data/1million.rdf.gz"
+NO_INDEX_SCHEMA_FILE="${BENCHMARKS_REPO}/data/1million-noindex.schema"
+SCHEMA_FILE="${BENCHMARKS_REPO}/data/1million.schema"
+DATA_FILE="${BENCHMARKS_REPO}/data/1million.rdf.gz"
 
 function Info {
-    echo -e "INFO: $*"
+	echo -e "INFO: $*"
 }
 
 function DockerCompose {
-    docker compose -p dgraph "$@"
+	docker compose -p dgraph "$@"
 }
 
 Info "cloning benchmarks repo"
 BENCHMARKS_URL=https://github.com/dgraph-io/benchmarks/blob/master/data
-rm -rf $BENCHMARKS_REPO
-mkdir -p $BENCHMARKS_REPO/data
-wget -O $NO_INDEX_SCHEMA_FILE $BENCHMARKS_URL/1million-noindex.schema?raw=true
-wget -O $SCHEMA_FILE $BENCHMARKS_URL/1million.schema?raw=true
-wget -O $DATA_FILE $BENCHMARKS_URL/1million.rdf.gz?raw=true
+rm -rf "${BENCHMARKS_REPO}"
+mkdir -p "${BENCHMARKS_REPO}"/data
+wget -O "${NO_INDEX_SCHEMA_FILE}" "${BENCHMARKS_URL}"/1million-noindex.schema?raw=true
+wget -O "${SCHEMA_FILE}" "${BENCHMARKS_URL}"/1million.schema?raw=true
+wget -O "${DATA_FILE}" "${BENCHMARKS_URL}"/1million.rdf.gz?raw=true
 
-Info "entering directory $SRCDIR"
-cd $SRCDIR
+Info "entering directory ${SRCDIR}"
+cd "${SRCDIR}"
 
 Info "bringing down zero and alpha and data volumes"
 DockerCompose down -v --remove-orphans
@@ -37,12 +37,12 @@ Info "waiting for zero to become leader"
 DockerCompose logs -f zero1 | grep -q -m1 "I've become the leader"
 
 Info "bulk loading data set"
-DockerCompose run --rm -v $BENCHMARKS_REPO:$BENCHMARKS_REPO --name bulk_load zero1 \
-    bash -s <<EOF
+DockerCompose run --rm -v "${BENCHMARKS_REPO}":"${BENCHMARKS_REPO}" --name bulk_load zero1 \
+	bash -s <<EOF
         mkdir -p /data/alpha1
         mkdir -p /data/alpha2
         mkdir -p /data/alpha3
-        /gobin/dgraph bulk --schema=$NO_INDEX_SCHEMA_FILE --files=$DATA_FILE \
+        /gobin/dgraph bulk --schema=${NO_INDEX_SCHEMA_FILE} --files=${DATA_FILE} \
                             --format=rdf --zero=zero1:5180 --out=/data/zero1/bulk \
                             --reduce_shards 3 --map_shards 9
         mv /data/zero1/bulk/0/p /data/alpha1
@@ -60,11 +60,11 @@ Info "sleeping for 5 seconds for the server to be ready"
 sleep 5
 
 Info "building indexes"
-curl localhost:8180/alter --data-binary @$SCHEMA_FILE
+curl localhost:8180/alter --data-binary @"${SCHEMA_FILE}"
 
-if [[ ! -z "$TEAMCITY_VERSION" ]]; then
-    # Make TeamCity aware of Go tests
-    export GOFLAGS="-json"
+if [[ -n ${TEAMCITY_VERSION} ]]; then
+	# Make TeamCity aware of Go tests
+	export GOFLAGS="-json"
 fi
 
 Info "running regression queries"
@@ -73,11 +73,11 @@ go test -v -tags systest || FOUND_DIFFS=1
 Info "bringing down zero and alpha and data volumes"
 DockerCompose down -v --remove-orphans
 
-if [[ $FOUND_DIFFS -eq 0 ]]; then
-    Info "no diffs found in query results"
+if [[ ${FOUND_DIFFS} -eq 0 ]]; then
+	Info "no diffs found in query results"
 else
-    Info "found some diffs in query results"
+	Info "found some diffs in query results"
 fi
 
-rm -rf $BENCHMARKS_REPO
-exit $FOUND_DIFFS
+rm -rf "${BENCHMARKS_REPO}"
+exit "${FOUND_DIFFS}"

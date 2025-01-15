@@ -121,6 +121,13 @@ func newMutableLayer() *MutableLayer {
 	}
 }
 
+func (mm *MutableLayer) setTs(readTs uint64) {
+	if mm == nil {
+		return
+	}
+	mm.readTs = readTs
+}
+
 // This function clones an existing mutable layer for the new transactions. This function makes sure we copy the right
 // things from the existing mutable layer for the new list. It basically copies committedEntries using reference and
 // ignores currentEntires and readTs. Similarly, all the cache items related to currentEntries are ignored and
@@ -866,6 +873,12 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	return conflictKey
 }
 
+// SetTs allows us to set the transaction timestamp in mutation map. Should be used before the posting list is passed
+// on to the functions that would read the data.
+func (l *List) SetTs(readTs uint64) {
+	l.mutationMap.setTs(readTs)
+}
+
 func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
 	l.AssertLock()
 
@@ -978,6 +991,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 		}
 
 		l.mutationMap.committedUids[mpost.Uid] = mpost
+		if l.mutationMap.length == math.MaxInt64 {
+			l.mutationMap.length = 0
+		}
 		l.mutationMap.length += getLengthDelta(mpost.Op)
 	}
 
@@ -999,7 +1015,6 @@ func (l *List) setMutation(startTs uint64, data []byte) {
 		l.mutationMap = newMutableLayer()
 	}
 	l.mutationMap.setCurrentEntries(startTs, pl)
-
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
 	}
@@ -1258,6 +1273,7 @@ func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb
 	var count int
 	var found bool
 	var post *pb.Posting
+
 	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
 		if p.Uid == uid {
 			post = p

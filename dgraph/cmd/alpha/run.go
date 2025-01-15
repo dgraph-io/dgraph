@@ -145,6 +145,12 @@ they form a Raft group and provide synchronous replication.
 		Flag("percentage",
 			"Cache percentages summing up to 100 for various caches (FORMAT: PostingListCache,"+
 				"PstoreBlockCache,PstoreIndexCache)").
+		Flag("delete-on-updates",
+			"When set as true, we would delete the key from the cache once it's updated. If it's not "+
+				"we would update the value inside the cache. If the cache gets too full, it starts"+
+				" to get slow. So if your usecase has a lot of heavy mutations, this should be set"+
+				" as true. If you are modifying same data again and again, this should be set as"+
+				" false").
 		String())
 
 	flag.String("raft", worker.RaftDefaults, z.NewSuperFlagHelp(worker.RaftDefaults).
@@ -633,6 +639,7 @@ func run() {
 	x.AssertTruef(totalCache >= 0, "ERROR: Cache size must be non-negative")
 
 	cachePercentage := cache.GetString("percentage")
+	deleteOnUpdates := cache.GetBool("delete-on-updates")
 	cachePercent, err := x.GetCachePercentages(cachePercentage, 3)
 	x.Check(err)
 	postingListCacheSize := (cachePercent[0] * (totalCache << 20)) / 100
@@ -655,6 +662,7 @@ func run() {
 		WALDir:          Alpha.Conf.GetString("wal"),
 		CacheMb:         totalCache,
 		CachePercentage: cachePercentage,
+		DeleteOnUpdates: deleteOnUpdates,
 
 		MutationsMode:      worker.AllowMutations,
 		AuthToken:          security.GetString("token"),
@@ -782,7 +790,7 @@ func run() {
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
-	posting.Init(worker.State.Pstore, postingListCacheSize)
+	posting.Init(worker.State.Pstore, postingListCacheSize, deleteOnUpdates)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 

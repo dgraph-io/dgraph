@@ -1,5 +1,4 @@
--
-  name: "Unknown root field"
+- name: Unknown root field
   gqlrequest: |
     query {
       getAuthorszzz(id: "0x1") { name }
@@ -7,12 +6,16 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Cannot query field \"getAuthorszzz\" on type \"Query\". Did you mean
-       \"getAuthor\" or \"getauthor1\"?",
-      "locations": [ { "line": 2, "column": 3 } ] } ]
+    [
+      {
+        "message":
+          'Cannot query field "getAuthorszzz" on type "Query". Did you mean "getAuthor" or
+          "getauthor1"?',
+        "locations": [{ "line": 2, "column": 3 }],
+      },
+    ]
 
--
-  name: "Unknown field"
+- name: Unknown field
   gqlrequest: |
     query {
       getAuthor(id: "0x1") { namezzz }
@@ -20,11 +23,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Cannot query field \"namezzz\" on type \"Author\". Did you mean \"name\"?",
-      "locations": [ { "line": 2, "column": 26 } ] } ]
+    [
+      {
+        "message": 'Cannot query field "namezzz" on type "Author". Did you mean "name"?',
+        "locations": [{ "line": 2, "column": 26 }],
+      },
+    ]
 
--
-  name: "Undefined variable"
+- name: Undefined variable
   gqlrequest: |
     query {
       getAuthor(id: $theID) { name }
@@ -32,11 +38,9 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Variable \"$theID\" is not defined.",
-      "locations": [ { "line": 2, "column": 17 } ] } ]
+    [{ "message": Variable "$theID" is not defined., "locations": [{ "line": 2, "column": 17 }] }]
 
--
-  name: "input of wrong type"
+- name: input of wrong type
   gqlrequest: |
     query {
       queryAuthor(filter: { reputation: { le: "hi there" } }) { name }
@@ -44,11 +48,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Expected type Float, found \"hi there\".",
-      "locations": [ { "line": 2, "column": 44 } ] } ]
+    [
+      {
+        "message": 'Expected type Float, found "hi there".',
+        "locations": [{ "line": 2, "column": 44 }],
+      },
+    ]
 
--
-  name: "unknown variable type"
+- name: unknown variable type
   gqlrequest: |
     query queryAuthor($filter: AuthorFiltarzzz!) {
       queryAuthor(filter: $filter) { name }
@@ -56,40 +63,40 @@
   gqlvariables: |
     { "filter": "type was wrong" }
   errors:
-    [ { "message": "Variable type provided AuthorFiltarzzz! is incompatible with expected
-    type AuthorFilter",
-      "locations": [{ "line": 2, "column": 23}]},
-  { "message": "Variable \"$filter\" of type \"AuthorFiltarzzz!\" used in position
-       expecting type \"AuthorFilter\".",
-      "locations": [ { "line": 2, "column": 23 } ] },
-      { "message": "Unknown type \"AuthorFiltarzzz\".",
-      "locations": [ { "line": 1, "column": 1 } ] } ]
+    [
+      {
+        "message":
+          Variable type provided AuthorFiltarzzz! is incompatible with expected type AuthorFilter,
+        "locations": [{ "line": 2, "column": 23 }],
+      },
+      {
+        "message":
+          Variable "$filter" of type "AuthorFiltarzzz!" used in position expecting type
+          "AuthorFilter".,
+        "locations": [{ "line": 2, "column": 23 }],
+      },
+      { "message": Unknown type "AuthorFiltarzzz"., "locations": [{ "line": 1, "column": 1 }] },
+    ]
 
--
-  name: "variable of wrong type"
+- name: variable of wrong type
   gqlrequest: |
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
   gqlvariables: |
     { "filter": 57 }
-  errors:
-    [ { "message": "must be a AuthorFilter",
-      "path": [ "variable", "filter"] } ]
+  errors: [{ "message": must be a AuthorFilter, "path": [variable, filter] }]
 
--
-  name: "variable field of wrong type"
+- name: variable field of wrong type
   gqlrequest: |
     query queryAuthor($filter: AuthorFilter!) {
       queryAuthor(filter: $filter) { name }
     }
   gqlvariables: |
     { }
-  errors:
-    [ { "message": "must be defined",
-      "path": [ "variable", "filter"] } ]
--
-  name: "subscription on type without @withSubscription directive should return error"
+  errors: [{ "message": must be defined, "path": [variable, filter] }]
+
+- name: subscription on type without @withSubscription directive should return error
   gqlrequest: |
     subscription {
       getAuthor(id: "0x1") { name }
@@ -97,11 +104,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
-        "locations": [ { "line": 2, "column": 3 } ] } ]
+    [
+      {
+        "message": Cannot query field "getAuthor" on type "Subscription".,
+        "locations": [{ "line": 2, "column": 3 }],
+      },
+    ]
 
--
-  name: "@cascade only accepts those fields as a argument, which are present in given type"
+- name: "@cascade only accepts those fields as a argument, which are present in given type"
   gqlrequest: |
     query {
       queryAuthor @cascade(fields:["title"]){
@@ -112,12 +122,16 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Field `title` is not present in type `Author`. You can only use fields in cascade which are in type `Author`",
-        "locations":  [{ "line": 2, "column": 16}]
-    } ]
+    [
+      {
+        "message":
+          Field `title` is not present in type `Author`. You can only use fields in cascade which
+          are in type `Author`,
+        "locations": [{ "line": 2, "column": 16 }],
+      },
+    ]
 
--
-  name: "Out of range error for int32 type"
+- name: Out of range error for int32 type
   gqlrequest: |
     mutation {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:2147483648}]){
@@ -133,11 +147,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Out of range value '2147483648', for type `Int`",
-        "locations": [ { "line": 2, "column": 63 } ] } ]
+    [
+      {
+        "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [{ "line": 2, "column": 63 }],
+      },
+    ]
 
--
-  name: "Out of range error for int64 type"
+- name: Out of range error for int64 type
   gqlrequest: |
     mutation {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:9223372036854775808}]){
@@ -153,11 +170,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
-        "locations": [ { "line": 2, "column": 63 } ] } ]
+    [
+      {
+        "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "locations": [{ "line": 2, "column": 63 }],
+      },
+    ]
 
--
-  name: "@cascade only accepts numUids or given type name as arguments for add or update payload "
+- name: "@cascade only accepts numUids or given type name as arguments for add or update payload"
   gqlrequest: |
     mutation {
       addAuthor(input:[{name:"jatin"}]) @cascade(fields:["name"]) {
@@ -169,12 +189,16 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Field `name` is not present in type `AddAuthorPayload`. You can only use fields in cascade which are in type `AddAuthorPayload`",
-        "locations":  [{ "line": 2, "column": 38}]
-    } ]
+    [
+      {
+        "message":
+          Field `name` is not present in type `AddAuthorPayload`. You can only use fields in cascade
+          which are in type `AddAuthorPayload`,
+        "locations": [{ "line": 2, "column": 38 }],
+      },
+    ]
 
--
-  name: "String value is Incompatible with Int32 type given in variable"
+- name: String value is Incompatible with Int32 type given in variable
   gqlrequest: |
     mutation($numLikes:Int) {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:$numLikes}]){
@@ -189,12 +213,9 @@
       }
   gqlvariables: |
     { "numLikes": "21474836" }
-  errors:
-    [ { "message": "cannot use string as Int",
-        "path": [ "variable","numLikes" ] } ]
+  errors: [{ "message": cannot use string as Int, "path": [variable, numLikes] }]
 
--
-  name: "Float value is Incompatible with Int64 type"
+- name: Float value is Incompatible with Int64 type
   gqlrequest: |
     mutation {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:180143985094.0}]){
@@ -210,11 +231,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
-        "locations": [ { "line": 2, "column": 63 } ] } ]
+    [
+      {
+        "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
+        "locations": [{ "line": 2, "column": 63 }],
+      },
+    ]
 
--
-  name: "Out of range error for int32 type given in variable"
+- name: Out of range error for int32 type given in variable
   gqlrequest: |
     mutation($numLikes:Int) {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numLikes:$numLikes}]){
@@ -230,11 +254,9 @@
   gqlvariables: |
     { "numLikes": 2147483648 }
   errors:
-    [ { "message": "Out of range value '2147483648', for type `Int`",
-        "path": [ "variable","numLikes" ] } ]
+    [{ "message": "Out of range value '2147483648', for type `Int`", "path": [variable, numLikes] }]
 
--
-  name: "Out of range error for int64 type in variable"
+- name: Out of range error for int64 type in variable
   gqlrequest: |
     mutation($numViews:Int64) {
       addPost(input:[{title:"Dgraph",author:{name:"Bob"},numViews:$numViews}]){
@@ -250,11 +272,14 @@
   gqlvariables: |
     { "numViews":9223372036854775808}
   errors:
-    [ { "message": "Out of range value '9223372036854775808', for type `Int64`",
-        "path": [ "variable", "numViews" ] } ]
+    [
+      {
+        "message": "Out of range value '9223372036854775808', for type `Int64`",
+        "path": [variable, numViews],
+      },
+    ]
 
--
-  name: "Float value is Incompatible with Int64 type given in variable"
+- name: Float value is Incompatible with Int64 type given in variable
   gqlrequest: |
     mutation addPost($Post: [AddPostInput!]!){
       addPost(input:$Post){
@@ -275,11 +300,14 @@
       } ]
     }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
-        "path": [ "variable", "Post",0.0,"numViews" ] } ]
+    [
+      {
+        "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
+        "path": [variable, Post, 0.0, numViews],
+      },
+    ]
 
--
-  name: "Error for int64 value given in list as variable"
+- name: Error for int64 value given in list as variable
   gqlrequest: |
     mutation addpost1($Post: [Addpost1Input!]!){
       addpost1(input:$Post){
@@ -296,10 +324,14 @@
       } ]
     }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
-        "path": [ "variable", "Post",0.0,"likesByMonth",0.0 ] } ]
+    [
+      {
+        "message": "Type mismatched for Value `180143985094.0`, expected:`Int64`",
+        "path": [variable, Post, 0.0, likesByMonth, 0.0],
+      },
+    ]
 
-- name: "Error for int64 value given in list"
+- name: Error for int64 value given in list
   gqlrequest: |
     mutation {
       addpost1(input:[{title:"Dgraph",likesByMonth: [180143985094.0,33,1,66]}]){
@@ -312,11 +344,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
-        "locations": [ { "line": 2, "column": 50 } ] } ]
+    [
+      {
+        "message": "Type mismatched for Value `180143985094.0`, expected: Int64, got: 'Float'",
+        "locations": [{ "line": 2, "column": 50 }],
+      },
+    ]
 
--
-  name: "Error for int value given in list as variable"
+- name: Error for int value given in list as variable
   gqlrequest: |
     mutation addpost1($Post: [Addpost1Input!]!){
       addpost1(input:$Post){
@@ -333,10 +368,14 @@
       } ]
     }
   errors:
-    [ { "message": "Out of range value '2147483648', for type `Int`",
-        "path": [ "variable", "Post",0.0,"commentsByMonth",0.0 ] } ]
+    [
+      {
+        "message": "Out of range value '2147483648', for type `Int`",
+        "path": [variable, Post, 0.0, commentsByMonth, 0.0],
+      },
+    ]
 
-- name: "Error for int value given in list"
+- name: Error for int value given in list
   gqlrequest: |
     mutation {
       addpost1(input:[{title:"Dgraph",commentsByMonth: [2147483648,33,1,66]}]){
@@ -349,10 +388,14 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Out of range value '2147483648', for type `Int`",
-        "locations": [ { "line": 2, "column": 53 } ] } ]
+    [
+      {
+        "message": "Out of range value '2147483648', for type `Int`",
+        "locations": [{ "line": 2, "column": 53 }],
+      },
+    ]
 
-- name: "Error when multiple filter functions are used"
+- name: Error when multiple filter functions are used
   gqlrequest: |
     query {
       queryBook(filter:{bookId: {eq:2 le:2}})
@@ -363,11 +406,16 @@
   gqlvariables: |
     { }
   errors:
-    [ { "message": "Int64Filter filter expects only one filter function, got: 2",
-        "locations": [ { "line": 2, "column": 29 } ] } ]
+    [
+      {
+        "message": "Int64Filter filter expects only one filter function, got: 2",
+        "locations": [{ "line": 2, "column": 29 }],
+      },
+    ]
 
--
-  name: "@cascade only accepts those fields as a argument, which are present in given type at both root and deep levels"
+- name:
+    "@cascade only accepts those fields as a argument, which are present in given type at both root
+    and deep levels"
   gqlrequest: |
     query {
     	queryAuthor @cascade(fields: ["dob","reputation"]) {
@@ -380,12 +428,18 @@
     	}
     }
   errors:
-    [ { "message": "Field `text1` is not present in type `Post`. You can only use fields in cascade which are in type `Post`",
-        "locations":  [{ "line": 5, "column": 10}]
-    } ]
+    [
+      {
+        "message":
+          Field `text1` is not present in type `Post`. You can only use fields in cascade which are
+          in type `Post`,
+        "locations": [{ "line": 5, "column": 10 }],
+      },
+    ]
 
--
-  name: "@cascade only accepts those fields as a argument, which are present in given type at deep level using variables"
+- name:
+    "@cascade only accepts those fields as a argument, which are present in given type at deep level
+    using variables"
   gqlrequest: |
     query($fieldsRoot: [String], $fieldsDeep: [String]) {
     	queryAuthor @cascade(fields: $fieldsRoot) {
@@ -408,12 +462,18 @@
         ]
     }
   errors:
-    [ { "message": "input: variables.fieldsDeep.text1 Field `text1` is not present in type `Post`. You can only use fields in cascade which are in type `Post`",
-        "locations":  [{ "line": 5, "column": 10}]
-    } ]
+    [
+      {
+        "message":
+          "input: variables.fieldsDeep.text1 Field `text1` is not present in type `Post`. You can
+          only use fields in cascade which are in type `Post`",
+        "locations": [{ "line": 5, "column": 10 }],
+      },
+    ]
 
--
-  name: "@cascade only accepts those fields as a argument, which are present in given type at root level using variables"
+- name:
+    "@cascade only accepts those fields as a argument, which are present in given type at root level
+    using variables"
   gqlrequest: |
     query($fieldsRoot: [String], $fieldsDeep: [String]) {
     	queryAuthor @cascade(fields: $fieldsRoot) {
@@ -436,6 +496,11 @@
         ]
     }
   errors:
-    [ { "message": "input: variables.fieldsRoot.reputation1 Field `reputation1` is not present in type `Author`. You can only use fields in cascade which are in type `Author`",
-        "locations":  [{ "line": 2, "column": 15}]
-    } ]
+    [
+      {
+        "message":
+          "input: variables.fieldsRoot.reputation1 Field `reputation1` is not present in type
+          `Author`. You can only use fields in cascade which are in type `Author`",
+        "locations": [{ "line": 2, "column": 15 }],
+      },
+    ]

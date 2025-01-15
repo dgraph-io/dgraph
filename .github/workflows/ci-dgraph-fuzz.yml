@@ -1,9 +1,10 @@
 name: ci-dgraph-fuzz
+
 on:
   pull_request:
     paths:
-      - '**/*.go'
-      - '**/go.mod'
+      - "**/*.go"
+      - "**/go.mod"
     types:
       - opened
       - reopened
@@ -11,11 +12,16 @@ on:
       - ready_for_review
     branches:
       - main
-      - 'release/**'
+      - release/**
+
+permissions:
+  contents: read
+
 jobs:
   fuzz-test:
     if: github.event.pull_request.draft == false
     runs-on: warp-ubuntu-latest-x64-4x
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go

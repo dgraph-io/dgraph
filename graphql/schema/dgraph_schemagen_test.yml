@@ -1,5 +1,5 @@
 schemas:
-  - name: "Object data type"
+  - name: Object data type
     input: |
       type A {
         id: ID!
@@ -19,7 +19,7 @@ schemas:
       }
       P.q: uid .
 
-  - name: "Scalar list"
+  - name: Scalar list
     input: |
       type X {
         id: ID!
@@ -31,7 +31,7 @@ schemas:
       }
       X.names: [string] .
 
-  - name: "Password type"
+  - name: Password type
     input: |
       type X @secret(field: "pwd"){
         id: ID!
@@ -45,8 +45,7 @@ schemas:
       X.names: [string] .
       X.pwd: password .
 
-
-  - name: "Object list"
+  - name: Object list
     input: |
       type X {
         p: [P!]!
@@ -65,7 +64,7 @@ schemas:
       }
       P.name: string .
 
-  - name: "Scalar types"
+  - name: Scalar types
     input: |
       type X {
         p: Int
@@ -107,7 +106,7 @@ schemas:
       X.v: int .
       X.vList: [int] .
 
-  - name: "enum - always gets an index"
+  - name: enum - always gets an index
     input: |
       type X {
         e: E
@@ -122,8 +121,7 @@ schemas:
       X.e: string @index(hash) .
       X.f: [string] @index(hash) .
 
-
-  - name: "Search indexes are correct"
+  - name: Search indexes are correct
     input: |
       type X {
         i1: Int @search
@@ -231,7 +229,7 @@ schemas:
       X.e6: string @index(hash, trigram) .
       X.e7: string @index(exact, trigram) .
 
-  - name: "interface and types interact properly"
+  - name: interface and types interact properly
     input: |
       interface A {
         id: ID!
@@ -259,7 +257,7 @@ schemas:
       }
       C.dob: dateTime .
 
-  - name: "interface using other interface generate type in dgraph"
+  - name: interface using other interface generate type in dgraph
     input: |
       interface A {
         id: ID!
@@ -301,7 +299,7 @@ schemas:
       D.link: uid .
       D.correct: bool .
 
-  - name: "Schema with union"
+  - name: Schema with union
     input: |
       interface W {
         f1: ID!
@@ -349,7 +347,7 @@ schemas:
       data: [uid] .
       V.f6: uid .
 
-  - name: "Schema with @dgraph directive."
+  - name: Schema with @dgraph directive
     input: |
       type A @dgraph(type: "dgraph.type.A") {
         id: ID!
@@ -436,7 +434,9 @@ schemas:
       dgraph.pList: [int] .
       f: float .
 
-  - name: "Schema with multiple language tags, indexes on language tag fields got merged on language untagged field"
+  - name:
+      Schema with multiple language tags, indexes on language tag fields got merged on language
+      untagged field
     input: |
       interface Node {
         f1: String
@@ -474,7 +474,7 @@ schemas:
       Person.address: string @index(fulltext) @lang .
       Person.profession: string @lang .
 
-  - name: "Field with @id directive but no search directive gets hash index."
+  - name: Field with @id directive but no search directive gets hash index
     input: |
       interface A {
         id: String! @id
@@ -493,7 +493,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  - name: "Field with @id directive gets hash index."
+  - name: Field with @id directive gets hash index
     input: |
       interface A {
         id: String! @id @search(by: [trigram])
@@ -512,7 +512,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  - name: "Field with @id directive and a hash arg in search directive generates correct schema."
+  - name: Field with @id directive and a hash arg in search directive generates correct schema
     input: |
       interface A {
         id: String! @id @search(by: ["hash", "term"])
@@ -531,7 +531,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  - name: "Field with @id directive and a exact arg in search directive generates correct schema."
+  - name: Field with @id directive and a exact arg in search directive generates correct schema
     input: |
       interface A {
         id: String! @id @search(by: [exact])
@@ -550,7 +550,7 @@ schemas:
       }
       B.correct: bool @index(bool) .
 
-  - name: "Field with reverse predicate in dgraph directive adds @reverse to predicate."
+  - name: Field with reverse predicate in dgraph directive adds @reverse to predicate
     input: |
       type Movie {
         director: [Person] @dgraph(pred: "~directed.movies")
@@ -566,7 +566,7 @@ schemas:
       }
       directed.movies: [uid] @reverse .
 
-  - name: "Field with reverse predicate in dgraph directive where actual predicate comes first."
+  - name: Field with reverse predicate in dgraph directive where actual predicate comes first
     input: |
       type Person {
         directed: [Movie] @dgraph(pred: "directed.movies")
@@ -582,7 +582,7 @@ schemas:
       type Movie {
       }
 
-  - name: "deprecated fields get included in Dgraph schema"
+  - name: deprecated fields get included in Dgraph schema
     input: |
       type A {
         id: ID!
@@ -597,7 +597,7 @@ schemas:
       A.p: string .
       A.q: string .
 
-  - name: "remote types shouldn't be part of Dgraph schema"
+  - name: remote types shouldn't be part of Dgraph schema
     input: |
       type B {
         id: ID!
@@ -649,8 +649,8 @@ schemas:
       }
       C.name: string .
 
-  - name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
-    combined"
+  - name:
+      "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes combined"
     input: |
       type A {
         p: String @dgraph(pred: "name") @search(by: ["exact", "term"])
@@ -687,7 +687,7 @@ schemas:
       post: string @index(exact, term) .
       <公司>: string @index(exact, term) .
 
-  - name: "custom query and mutation shouldn't be part of Dgraph schema"
+  - name: custom query and mutation shouldn't be part of Dgraph schema
     input: |
       type User @remote {
         id: ID!
@@ -708,7 +708,7 @@ schemas:
         })
       }
 
-  - name: "custom field shouldn't be part of dgraph schema"
+  - name: custom field shouldn't be part of dgraph schema
     input: |
       type User {
         id: ID!
@@ -725,7 +725,7 @@ schemas:
       }
       User.name: string .
 
-  - name: "Geo field in schema."
+  - name: Geo field in schema
     input: |
       type Hotel {
         id: ID!
@@ -764,7 +764,7 @@ schemas:
       Hotel.branches2: geo .
       Hotel.branches3: geo @index(geo) .
 
-  - name: "Int field with @id Directive"
+  - name: Int field with @id Directive
     input: |
       type T {
         id : Int! @id
@@ -778,7 +778,7 @@ schemas:
       T.id: int @index(int) @upsert .
       T.value: string .
 
-  - name: "Int64 field with @id Directive"
+  - name: Int64 field with @id Directive
     input: |
       type T {
         id : Int64! @id
@@ -792,7 +792,7 @@ schemas:
       T.id: int @index(int) @upsert .
       T.value: string .
 
-  - name: "type extension having @external field of ID type which is @key"
+  - name: type extension having @external field of ID type which is @key
     input: |
       extend type Product @key(fields: "id") {
         id: ID! @external
@@ -810,7 +810,7 @@ schemas:
       Product.name: string .
       Product.reviews: [string] .
 
-  - name: "type extension having @external field of non ID type which is @key"
+  - name: type extension having @external field of non ID type which is @key
     input: |
       extend type Product @key(fields: "name") {
         id: ID! @external
@@ -825,7 +825,7 @@ schemas:
       Product.name: string @index(hash) @upsert .
       Product.reviews: [string] .
 
-  - name: "A full valid federation schema"
+  - name: A full valid federation schema
     input: |
       type Review {
         body: String
@@ -873,7 +873,7 @@ schemas:
       User.username: string .
       User.reviews: [uid] .
 
-  - name: "nothing is added in dgraph schema with lambdaOnMutate"
+  - name: nothing is added in dgraph schema with lambdaOnMutate
     input: |
       type T @lambdaOnMutate(add: true, update: true, delete: true) {
         id : ID!
@@ -884,4 +884,3 @@ schemas:
         T.value
       }
       T.value: string .
-

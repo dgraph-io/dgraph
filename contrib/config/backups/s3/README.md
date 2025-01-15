@@ -6,7 +6,8 @@ Binary backups can use AWS S3 (Simple Storage Service) for an object storage.
 
 Some example scripts have been provided to illustrate how to create S3.
 
-* [Terraform](terraform/README.md) - terraform scripts to provision S3 bucket and an IAM user with access to the S3 bucket.
+- [Terraform](terraform/README.md) - terraform scripts to provision S3 bucket and an IAM user with
+  access to the S3 bucket.
 
 ## Setting up the environment
 
@@ -14,14 +15,18 @@ Some example scripts have been provided to illustrate how to create S3.
 
 You will need these tools:
 
-* Docker Environment
-  * [Docker](https://docs.docker.com/get-docker/) - container engine platform
-  * [Docker Compose](https://docs.docker.com/compose/install/) - orchestrates running dokcer containers
-* Kubernetes Environment
-  * [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required for interacting with Kubenetes platform
-  * [helm](https://helm.sh/docs/intro/install/) - deploys Kuberetes packages called helm charts
-    * [helm-diff](https://github.com/databus23/helm-diff) [optional] - displays differences that will be applied to Kubernetes cluster
-  * [helmfile](https://github.com/roboll/helmfile#installation) [optional] - orchestrates helm chart deployments
+- Docker Environment
+  - [Docker](https://docs.docker.com/get-docker/) - container engine platform
+  - [Docker Compose](https://docs.docker.com/compose/install/) - orchestrates running dokcer
+    containers
+- Kubernetes Environment
+  - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) - required for interacting
+    with Kubenetes platform
+  - [helm](https://helm.sh/docs/intro/install/) - deploys Kuberetes packages called helm charts
+    - [helm-diff](https://github.com/databus23/helm-diff) [optional] - displays differences that
+      will be applied to Kubernetes cluster
+  - [helmfile](https://github.com/roboll/helmfile#installation) [optional] - orchestrates helm chart
+    deployments
 
 ### Using Docker Compose
 
@@ -29,7 +34,8 @@ A `docker-compose.yml` configuration is provided that will run the Dgraph cluste
 
 #### Configuring Docker Compose
 
-You will need to create an `s3.env` file first like the example below. If you created the S3 bucket using the [Terraform](terraform/README.md) scripts, this will have been created automatically.
+You will need to create an `s3.env` file first like the example below. If you created the S3 bucket
+using the [Terraform](terraform/README.md) scripts, this will have been created automatically.
 
 ```bash
 ## s3.env
@@ -37,7 +43,7 @@ AWS_ACCESS_KEY_ID=<aws-access-key>
 AWS_SECRET_ACCESS_KEY=<aws-secret-key>
 ```
 
-#### Using Docker Compose
+#### Running with Docker Compose
 
 ```bash
 ## Run a Dgraph Cluster
@@ -46,7 +52,7 @@ docker-compose up --detach
 
 #### Access Ratel UI
 
-* Ratel UI: http://localhost:8000
+- Ratel UI: http://localhost:8000
 
 #### Clean up the Docker Environment
 
@@ -57,13 +63,16 @@ docker-compose rm
 
 ### Using Kubernetes with Helm Charts
 
-For Kubernetes, you can deploy a Dgraph cluster and a Kubernetes Cronjob that triggers backups using [Helm](https://helm.sh/docs/intro/install/).
+For Kubernetes, you can deploy a Dgraph cluster and a Kubernetes Cronjob that triggers backups using
+[Helm](https://helm.sh/docs/intro/install/).
 
 #### Configuring secrets values
 
-These values are automatically created if you used the [Terraform](terraform/README.md) scripts.  
+These values are automatically created if you used the [Terraform](terraform/README.md) scripts.
 
-If you already an existing S3 bucket you would like to use, you will need to create `charts/dgraph_secrets.yaml` files as shown below.  Otherwise, if you created the bucket using the [Terraform](terraform/README.md) scripts, then this would be created automatically.
+If you already an existing S3 bucket you would like to use, you will need to create
+`charts/dgraph_secrets.yaml` files as shown below. Otherwise, if you created the bucket using the
+[Terraform](terraform/README.md) scripts, then this would be created automatically.
 
 For the `charts/dgraph_secrets.yaml`, you would create a file like this:
 
@@ -79,7 +88,8 @@ backups:
 
 #### Configuring Environments
 
-We need to define one environment variable `BACKUP_PATH`.  If [Terraform](terraform/README.md) scripts were used to create the S3 bucket, we can source the `env.sh` or otherwise create it here:
+We need to define one environment variable `BACKUP_PATH`. If [Terraform](terraform/README.md)
+scripts were used to create the S3 bucket, we can source the `env.sh` or otherwise create it here:
 
 ```bash
 ## env.sh
@@ -88,14 +98,17 @@ export BACKUP_PATH=s3://s3.<region>.amazonaws.com/<s3-bucket-name>
 
 #### Deploy using Helmfile
 
-If you have [helmfile](https://github.com/roboll/helmfile#installation) and the [helm-diff](https://github.com/databus23/helm-diff) plugin installed, you can deploy a Dgraph cluster with the following:
+If you have [helmfile](https://github.com/roboll/helmfile#installation) and the
+[helm-diff](https://github.com/databus23/helm-diff) plugin installed, you can deploy a Dgraph
+cluster with the following:
 
 ```bash
-## source script for BACKUP_PATH env var 
+## source script for BACKUP_PATH env var
 . env.sh
  ## deploy Dgraph cluster and configure K8S CronJob with BACKUP_PATH
 helmfile apply
 ```
+
 #### Deploy using Helm
 
 ```bash
@@ -157,7 +170,9 @@ kubectl delete pvc --selector release=my-release # dgraph release name used earl
 
 ## Triggering a backup
 
-This is run from the host with the alpha node accessible on localhost at port `8080`.  This can can be done by running the `docker-compose` environment, or in the Kubernetes environment, after running `kubectl --namespace default port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
+This is run from the host with the alpha node accessible on localhost at port `8080`. This can can
+be done by running the `docker-compose` environment, or in the Kubernetes environment, after running
+`kubectl --namespace default port-forward pod/dgraph-dgraph-alpha-0 8080:8080`.
 
 ### Using GraphQL
 
