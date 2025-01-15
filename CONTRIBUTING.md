@@ -94,8 +94,8 @@ You can build Dgraph using `make dgraph` or `make install` which add the version
 binary.
 
 - `make dgraph`: Creates a `dgraph` binary at `./dgraph/dgraph`
-- `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You should add
-  `$GOPATH/bin` to your `$PATH` if it isn't there already.
+- `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You should add `$GOPATH/bin` to
+  your `$PATH` if it isn't there already.
 
 ```sh
 $ make install
@@ -128,27 +128,30 @@ Copyright 2015-2025 Hypermode Inc.
 make image-local
 ```
 
-To build a test Docker image from source, use `make image-local`. This builds a linux-compatible 
-Dgraph binary using `make dgraph` and creates a Docker image tagged `dgraph/dgraph:local`.
-You can then use this local image to test Dgraph in your local Docker setup.
+To build a test Docker image from source, use `make image-local`. This builds a linux-compatible
+Dgraph binary using `make dgraph` and creates a Docker image tagged `dgraph/dgraph:local`. You can
+then use this local image to test Dgraph in your local Docker setup.
 
 ### Testing
 
-Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage. 
-Due to the comprehensive nature of these tests, a complete test run can take several hours, depending
-on your hardware. To manage this complex testing process efficiently, we've developed a custom test 
-framework implemented in Go, which resides in the [./t](/t) directory. This specialized framework provides
-enhanced control and flexibility beyond what's available through standard Go testing framework.
+Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage.
+Due to the comprehensive nature of these tests, a complete test run can take several hours,
+depending on your hardware. To manage this complex testing process efficiently, we've developed a
+custom test framework implemented in Go, which resides in the [./t](/t) directory. This specialized
+framework provides enhanced control and flexibility beyond what's available through standard Go
+testing framework.
 
-For dependencies, runner flags and instructions for running tests on non-Linux machines, see 
-the [README](t/README.md) in the [*t*](t) folder.
+For dependencies, runner flags and instructions for running tests on non-Linux machines, see the
+[README](t/README.md) in the [_t_](t) folder.
 
-Other integration tests do not use the testing framework located in the `t` folder. Consult the [github
-actions definitions](.github) folder to discover the tests we run as part of our continuous delivery process.
+Other integration tests do not use the testing framework located in the `t` folder. Consult the
+[github actions definitions](.github) folder to discover the tests we run as part of our continuous
+delivery process.
 
-Non-integration unit tests exist for many core packages that can be exercised without invoking the testing 
-framework. For instance, to unit test the core DQL parsing package: `go test github.com/hypermodeinc/dgraph/v24/dql`.
-  
+Non-integration unit tests exist for many core packages that can be exercised without invoking the
+testing framework. For instance, to unit test the core DQL parsing package:
+`go test github.com/hypermodeinc/dgraph/v24/dql`.
+
 ## Contributing
 
 ### Guidelines
