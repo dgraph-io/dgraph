@@ -30,7 +30,7 @@
   available through your OS package manager)
 - Install [Docker](https://docs.docker.com/install/) and
   [Docker Compose](https://docs.docker.com/compose/install/).
-- [Install Go 1.13 or above](https://golang.org/doc/install).
+- [Install Go 1.22.7 or above](https://golang.org/doc/install).
 
 ### Setup Dgraph from source repo
 
