@@ -1813,7 +1813,7 @@ func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
 		return true
 	}
 
-	if checkUidEmpty(uidlist) {
+	if !checkUidEmpty(uidlist) {
 		// We have a uid which has 0 in it. Mostly it would happen when there is only 0. But any one item
 		// being 0 could cause the query planner to fail. In case of 0 being present, we neeed to query the
 		// index itself.
