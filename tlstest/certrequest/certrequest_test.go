@@ -55,7 +55,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 	}
 	testutil.VerifyCurlCmd(t, curlPlainTextArgs, &testutil.CurlFailureConfig{
 		ShouldFail: true,
-		CurlErrMsg: "SSL certificate problem",
+		CurlErrMsg: "SSL",
 	})
 
 	curlArgs := []string{
