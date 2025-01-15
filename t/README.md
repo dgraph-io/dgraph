@@ -14,11 +14,11 @@ achieved—see [Running tests on OSX](#running-tests-on-osx) below.
 The framework requires several external dependencies. You can check your system for the required
 dependencies by running `make check`.
 
-#### Go
+### Go
 
 Version 1.22.7 or higher.
 
-#### Docker
+### Docker
 
 The framework uses Docker extensively for integration testing. Tests will often "fail" if Docker is
 not given enough resources, specifically memory. If you experience testing that seems to hang
@@ -30,12 +30,12 @@ limited resources, we advise you to not set this above _1_ (which is the default
 
 You can preserve the test Docker containers for failure analysis with the `--keep` flag.
 
-#### gotestsum
+### gotestsum
 
 The framework uses [gotestsum](https://github.com/gotestyourself/gotestsum#install) for collating
 test output and other advanced functions.
 
-#### protoc
+### protoc
 
 On non-Linux systems, protocol buffer tests are skipped. On Linux systems, instructions for
 installing and configuring protoc can be found [here](https://github.com/protocolbuffers/protobuf).
