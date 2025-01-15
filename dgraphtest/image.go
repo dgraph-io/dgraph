@@ -184,7 +184,7 @@ func copyBinary(fromDir, toDir, version string) error {
 func copy(src, dst string) error {
 	// Validate inputs
 	if src == "" || dst == "" {
-		return errors.New("source and destination paths cannot be empty")
+		return errors.New("source or destination paths cannot be empty")
 	}
 
 	// Check source file
@@ -197,15 +197,11 @@ func copy(src, dst string) error {
 	}
 
 	// Open source file
-	source, err := os.OpenFile(src, os.O_RDONLY, 0)
+	source, err := os.Open(src)
 	if err != nil {
 		return errors.Wrapf(err, "failed to open source file: %s", src)
 	}
-	defer func() {
-		if err := source.Close(); err != nil {
-			log.Printf("warning: failed to close source file: %v", err)
-		}
-	}()
+	defer source.Close()
 
 	// Create destination directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
@@ -217,37 +213,18 @@ func copy(src, dst string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to create destination file: %s", dst)
 	}
-	defer func() {
-		if err := destination.Close(); err != nil {
-			log.Printf("warning: failed to close destination file: %v", err)
-		}
-	}()
+	defer destination.Close()
 
-	// Use buffered I/O for better performance
-	buf := make([]byte, 1024*1024) // 1MB buffer
-	written, err := io.CopyBuffer(destination, source, buf)
-	if err != nil {
+	// Copy the file
+	if written, err := io.Copy(destination, source); err != nil {
 		return errors.Wrap(err, "failed to copy file contents")
-	}
-
-	// Verify file sizes match
-	if written != sourceFileStat.Size() {
+	} else if written != sourceFileStat.Size() {
 		return errors.Errorf("incomplete copy: wrote %d bytes, expected %d bytes", written, sourceFileStat.Size())
 	}
 
 	// Ensure data is flushed to disk
 	if err := destination.Sync(); err != nil {
 		return errors.Wrap(err, "failed to sync destination file")
-	}
-
-	// Verify the copy
-	destStat, err := os.Stat(dst)
-	if err != nil {
-		return errors.Wrapf(err, "failed to stat destination file: %s", dst)
-	}
-	if destStat.Size() != sourceFileStat.Size() {
-		return errors.Errorf("size mismatch after copy: source=%d bytes, destination=%d bytes",
-			sourceFileStat.Size(), destStat.Size())
 	}
 
 	return nil
