@@ -213,7 +213,6 @@ func copy(src, dst string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to create destination file: %s", dst)
 	}
-	defer destination.Close()
 
 	// Copy the file
 	if _, err := io.Copy(destination, source); err != nil {
@@ -223,6 +222,11 @@ func copy(src, dst string) error {
 	// Ensure data is flushed to disk
 	if err := destination.Sync(); err != nil {
 		return errors.Wrap(err, "failed to sync destination file")
+	}
+
+	// Close the destination file
+	if err := destination.Close(); err != nil {
+		return errors.Wrap(err, "failed to close destination file")
 	}
 
 	// Stat the new file to check file size match
