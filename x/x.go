@@ -619,6 +619,38 @@ func Max(a, b uint64) uint64 {
 	return b
 }
 
+// MinInt returns the smallest integer among the given numbers.
+// The first two arguments are mandatory, additional numbers are optional.
+func MinInt(a, b int, nums ...int) int {
+	min := a
+	if b < min {
+		min = b
+	}
+
+	for _, num := range nums {
+		if num < min {
+			min = num
+		}
+	}
+	return min
+}
+
+// MaxInt returns the largest integer among the given numbers.
+// The first two arguments are mandatory, additional numbers are optional.
+func MaxInt(a, b int, nums ...int) int {
+	max := a
+	if b > max {
+		max = b
+	}
+
+	for _, num := range nums {
+		if num > max {
+			max = num
+		}
+	}
+	return max
+}
+
 // ExponentialRetry runs the given function until it succeeds or can no longer be retried.
 func ExponentialRetry(maxRetries int, waitAfterFailure time.Duration,
 	f func() error) error {
