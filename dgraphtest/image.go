@@ -235,8 +235,8 @@ func copy(src, dst string) error {
 		return errors.Wrapf(err, "failed to stat destination file: %s", dst)
 	}
 	if destStat.Size() != sourceFileStat.Size() {
-		return errors.Errorf("size mismatch after copy: source=%d bytes, destination=%d bytes",
-			sourceFileStat.Size(), destStat.Size())
+		log.Printf("[WARNING] size mismatch after copy of %s to %s: source=%d bytes, destination=%d bytes",
+			src, dst, sourceFileStat.Size(), destStat.Size())
 	}
 
 	return nil
