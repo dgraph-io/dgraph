@@ -668,7 +668,7 @@ func run() {
 		AuthToken:          security.GetString("token"),
 		Audit:              conf,
 		ChangeDataConf:     Alpha.Conf.GetString("cdc"),
-		TypeFilterUidLimit: x.Config.Limit.GetInt64("type-filter-uid-limit"),
+		TypeFilterUidLimit: x.Config.Limit.GetUint64("type-filter-uid-limit"),
 	}
 
 	keys, err := ee.GetKeys(Alpha.Conf)
