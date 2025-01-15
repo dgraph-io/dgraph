@@ -18,13 +18,13 @@
 package protos
 
 import (
-	"fmt"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
 func TestProtosRegenerate(t *testing.T) {
@@ -32,15 +32,10 @@ func TestProtosRegenerate(t *testing.T) {
 		t.Skip("Skipping test on non-Linux platform")
 	}
 
-	// Run make regenerate
-	cmd := exec.Command("make", "regenerate")
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "Got error while regenerating protos: %s", output)
+	err := testutil.Exec("make", "regenerate")
+	require.NoError(t, err, "Got error while regenerating protos: %v\n", err)
 
-	// Check if generated files changed
 	generatedProtos := filepath.Join("pb", "pb.pb.go")
-	diffCmd := exec.Command("git", "diff", "--quiet", "--", generatedProtos)
-	fmt.Printf("diffCmd: %+v\n", diffCmd)
-	err = diffCmd.Run()
+	err = testutil.Exec("git", "diff", "-b", "--quiet", "--", generatedProtos)
 	require.NoError(t, err, "pb.pb.go changed after regenerating")
 }
