@@ -216,15 +216,23 @@ func copy(src, dst string) error {
 	defer destination.Close()
 
 	// Copy the file
-	if written, err := io.Copy(destination, source); err != nil {
+	if _, err := io.Copy(destination, source); err != nil {
 		return errors.Wrap(err, "failed to copy file contents")
-	} else if written != sourceFileStat.Size() {
-		return errors.Errorf("incomplete copy: wrote %d bytes, expected %d bytes", written, sourceFileStat.Size())
 	}
 
 	// Ensure data is flushed to disk
 	if err := destination.Sync(); err != nil {
 		return errors.Wrap(err, "failed to sync destination file")
+	}
+
+	// Stat the new file to check file size match
+	destStat, err := os.Stat(dst)
+	if err != nil {
+		return errors.Wrapf(err, "failed to stat destination file: %s", dst)
+	}
+	if destStat.Size() != sourceFileStat.Size() {
+		return errors.Errorf("size mismatch after copy: source=%d bytes, destination=%d bytes",
+			sourceFileStat.Size(), destStat.Size())
 	}
 
 	return nil
