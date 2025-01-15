@@ -550,7 +550,7 @@ func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, error)) error {
 	endpoint, err := url(c)
 	if err != nil {
-		return errors.Wrap(err, "error getting health URL")
+		return errors.Wrapf(err, "error getting health URL %v", endpoint)
 	}
 
 	for range 60 {
