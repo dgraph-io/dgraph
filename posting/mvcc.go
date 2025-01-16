@@ -399,9 +399,14 @@ func (c *Cache) clear() {
 }
 
 type MemoryLayer struct {
+	// config
 	deleteOnUpdates bool
-	cache           *Cache
 
+	// data
+	cache *Cache
+
+	// metrics
+	statsHolder  *StatsHolder
 	numDisksRead int
 }
 
@@ -412,9 +417,14 @@ func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
 }
 
+func GetStatsHolder() *StatsHolder {
+	return memoryLayer.statsHolder
+}
+
 func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 	ml := &MemoryLayer{}
 	ml.deleteOnUpdates = deleteOnUpdates
+	ml.statsHolder = NewStatsHolder()
 	if cacheSize > 0 {
 		cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
 			// Use 5% of cache memory for storing counters.

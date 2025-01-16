@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -834,6 +835,11 @@ func (qs *queryState) handleUidPostings(
 			pl, err := qs.cache.Get(key)
 			if err != nil {
 				return err
+			}
+
+			if srcFn.fnType == compareAttrFn {
+				posting.GetStatsHolder().InsertRecord(
+					q.Attr, []byte(srcFn.tokens[i]), uint64(pl.ApproxLen()))
 			}
 
 			switch {
@@ -1797,6 +1803,56 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
+func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
+	checkUidEmpty := func(uids []uint64) bool {
+		for _, i := range uids {
+			if i == 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	if !checkUidEmpty(uidlist) {
+		// We have a uid which has 0 in it. Mostly it would happen when there is only 0. But any one item
+		// being 0 could cause the query planner to fail. In case of 0 being present, we neeed to query the
+		// index itself.
+		fc.n = len(fc.tokens)
+		return
+	}
+
+	if uint64(len(uidlist)) < Config.TypeFilterUidLimit {
+		fc.tokens = fc.tokens[:0]
+		fc.n = len(uidlist)
+		return
+	}
+
+	estimatedCount := uint64(0)
+	gotEstimate := false
+	for _, eqToken := range fc.tokens {
+		count := posting.GetStatsHolder().ProcessEqPredicate(pred, []byte(eqToken))
+		if count != math.MaxUint64 {
+			estimatedCount += count
+			gotEstimate = true
+		} else {
+			break
+		}
+	}
+
+	if gotEstimate && estimatedCount == 0 {
+		gotEstimate = false
+	}
+
+	// TODO make a different config
+	if gotEstimate && uint64(len(uidlist)) < estimatedCount/Config.TypeFilterUidLimit {
+		fc.tokens = fc.tokens[:0]
+		fc.n = len(uidlist)
+		return
+	}
+
+	fc.n = len(fc.tokens)
+}
+
 func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
@@ -1886,15 +1942,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			fc.tokens = append(fc.tokens, tokens...)
 		}
 
-		checkUidEmpty := func(uids []uint64) bool {
-			for _, i := range uids {
-				if i == 0 {
-					return false
-				}
-			}
-			return true
-		}
-
 		// In case of non-indexed predicate, there won't be any tokens. We will fetch value
 		// from data keys.
 		// If number of index keys is more than no. of uids to filter, so its better to fetch values
@@ -1908,10 +1955,10 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		case q.UidList != nil && len(fc.tokens) > len(q.UidList.Uids) && fc.fname != eq:
 			fc.tokens = fc.tokens[:0]
 			fc.n = len(q.UidList.Uids)
-		case q.UidList != nil && fc.fname == eq && strings.HasSuffix(attr, "dgraph.type") &&
-			int64(len(q.UidList.Uids)) < Config.TypeFilterUidLimit && checkUidEmpty(q.UidList.Uids):
-			fc.tokens = fc.tokens[:0]
-			fc.n = len(q.UidList.Uids)
+		case q.UidList != nil && fc.fname == eq:
+			if len(fc.tokens) > 0 {
+				planForEqFilter(fc, attr, q.UidList.Uids)
+			}
 		default:
 			fc.n = len(fc.tokens)
 		}
