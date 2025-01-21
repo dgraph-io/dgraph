@@ -1681,6 +1681,78 @@ func (l *List) ApproxLen() int {
 	return l.mutationMap.len() + codec.ApproxLen(l.plist.Pack)
 }
 
+func getApproxResultLen(opt ListOptions, listApproxLen int) int {
+	preAllocateLength := min(x.AbsInt(opt.First), listApproxLen)
+	if opt.Intersect != nil {
+		preAllocateLength = min(preAllocateLength, len(opt.Intersect.Uids))
+	}
+	return preAllocateLength
+}
+
+func reverseArray(arr []uint64) {
+	left, right := 0, len(arr)-1
+	for left < right {
+		arr[left], arr[right] = arr[right], arr[left]
+		left++
+		right--
+	}
+}
+
+// intersects a list of uids with uids inside the list. should only be called if intersection list is not nill but is
+// small.
+func (l *List) intersectUids(opt ListOptions, out *pb.List) error {
+	// Pre-assign length to make it faster.
+	res := make([]uint64, 0, getApproxResultLen(opt, l.ApproxLen()))
+
+	start := 0
+	if opt.AfterUid > 0 {
+		start = sort.Search(len(opt.Intersect.Uids), func(i int) bool {
+			return opt.Intersect.Uids[i] > opt.AfterUid
+		})
+	}
+
+	checkUid := func(i int) (bool, error) {
+		uid := opt.Intersect.Uids[i]
+
+		found, _, err := l.findPosting(opt.ReadTs, uid)
+		if err != nil {
+			return true, errors.Wrapf(err, "While find posting for UIDs")
+		}
+		if found {
+			res = append(res, uid)
+			if len(res) > x.AbsInt(opt.First) {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}
+
+	if opt.First > 0 {
+		for i := start; i < len(opt.Intersect.Uids); i++ {
+			if ok, err := checkUid(i); ok || err != nil {
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	} else {
+		for i := len(opt.Intersect.Uids) - 1; i >= start; i-- {
+			if ok, err := checkUid(i); ok || err != nil {
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+		reverseArray(res)
+	}
+
+	out.Uids = res
+	return nil
+}
+
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
@@ -1701,17 +1773,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
-	absFirst := opt.First
-	if opt.First < 0 {
-		absFirst = -opt.First
+	if opt.Intersect != nil && l.ApproxLen() > len(opt.Intersect.Uids) {
+		err := l.intersectUids(opt, out)
+		l.RUnlock()
+		return out, err
 	}
-	preAllowcateLength := min(absFirst, l.mutationMap.len()+codec.ApproxLen(l.plist.Pack))
-	if opt.Intersect != nil {
-		preAllowcateLength = min(preAllowcateLength, len(opt.Intersect.Uids))
-	}
-	// Pre-assign length to make it faster.
-	res := make([]uint64, 0, preAllowcateLength)
 
+	res := make([]uint64, 0, getApproxResultLen(opt, l.ApproxLen()))
 	checkLimit := func() bool {
 		// We need the last N.
 		// TODO: This could be optimized by only considering some of the last UidBlocks.
@@ -1725,36 +1793,21 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return false
 	}
 
-	if opt.Intersect != nil && len(opt.Intersect.Uids) < l.mutationMap.len()+codec.ApproxLen(l.plist.Pack) {
-		start := 0
-		if opt.AfterUid > 0 {
-			start = sort.Search(len(opt.Intersect.Uids), func(i int) bool {
-				return opt.Intersect.Uids[i] > opt.AfterUid
-			})
-		}
-
-		for i := start; i < len(opt.Intersect.Uids); i++ {
-			uid := opt.Intersect.Uids[i]
-
-			found, _, err := l.findPosting(opt.ReadTs, uid)
-			if err != nil {
-				l.RUnlock()
-				return out, errors.Wrapf(err, "While find posting for UIDs")
-			}
-			if found {
-				res = append(res, uid)
-				if checkLimit() {
-					break
-				}
-			}
-		}
-		out.Uids = res
-		l.RUnlock()
-		return out, nil
+	uidMin, uidMax := uint64(0), uint64(0)
+	if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
+		uidMin = opt.Intersect.Uids[0]
+		uidMax = opt.Intersect.Uids[len(opt.Intersect.Uids)-1]
 	}
 
+	// Pre-assign length to make it faster.
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
+			if p.Uid < uidMin {
+				return nil
+			}
+			if p.Uid > uidMax && uidMax > 0 {
+				return ErrStopIteration
+			}
 			res = append(res, p.Uid)
 			if checkLimit() {
 				return ErrStopIteration

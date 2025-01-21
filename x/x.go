@@ -1170,6 +1170,13 @@ func IsGuardian(groups []string) bool {
 	return false
 }
 
+func AbsInt(a int) int {
+	if a > 0 {
+		return a
+	}
+	return -a
+}
+
 // RunVlogGC runs value log gc on store. It runs GC unconditionally after every 1 minute.
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
