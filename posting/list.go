@@ -105,9 +105,11 @@ type MutableLayer struct {
 	committedUids     map[uint64]*pb.Posting // Stores the uid to posting mapping in committedEntries.
 	committedUidsTime uint64                 // Stores the latest commitTs in the committedEntries.
 	length            int                    // Stores the length of the posting list until committedEntries.
+	lastEntry         *pb.PostingList        // Stores the last entry stored in committedUids
 
 	// We also cache some things required for us to update currentEntries faster
 	currentUids map[uint64]int // Stores the uid to index mapping in the currentEntries posting list
+
 }
 
 func newMutableLayer() *MutableLayer {
@@ -142,6 +144,7 @@ func (mm *MutableLayer) clone() *MutableLayer {
 		deleteAllMarker:   mm.deleteAllMarker,
 		committedUids:     mm.committedUids,
 		length:            mm.length,
+		lastEntry:         mm.lastEntry,
 		committedUidsTime: mm.committedUidsTime,
 	}
 }
@@ -310,6 +313,9 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 		mm.deleteAllMarker = 0
 	}
 
+	if pl.CommitTs > mm.committedUidsTime {
+		mm.lastEntry = pl
+	}
 	mm.committedUidsTime = x.Max(pl.CommitTs, mm.committedUidsTime)
 	mm.committedEntries[pl.CommitTs] = pl
 
@@ -980,6 +986,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 
 	if l.mutationMap.committedUidsTime == math.MaxUint64 {
 		l.mutationMap.committedUidsTime = 0
+	}
+	if pl.CommitTs > mm.committedUidsTime {
+		mm.lastEntry = pl
 	}
 	l.mutationMap.committedUidsTime = x.Max(l.mutationMap.committedUidsTime, commitTs)
 
@@ -1846,6 +1855,9 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 
 	// If maxTs < readTs then we need to read maxTs
 	if l.maxTs <= readTs {
+		if l.mutationMap.lastEntry != nil {
+			return l.mutationMap.lastEntry
+		}
 		if mutation := l.mutationMap.get(l.maxTs); mutation != nil {
 			return mutation
 		}
