@@ -412,6 +412,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 
 	posting.ResetCache()
 	ResetAclCache()
+	groups().applyInitialSchema()
+	groups().applyInitialTypes()
 
 	// Reset gql schema only when the restore is not partial, so that after this restore
 	// the cluster can be in non-draining mode and hence gqlSchema can be lazy loaded.

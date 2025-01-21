@@ -44,7 +44,8 @@ type Received struct {
 }
 
 func testDuplicateUserUpgradeStrat(t *testing.T, strat dgraphtest.UpgradeStrategy) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour).WithVersion("v23.0.1")
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithReplicas(1).WithACL(time.Hour).WithVersion("v23.0.1")
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	defer func() { c.Cleanup(t.Failed()) }()
@@ -94,7 +95,7 @@ func testDuplicateUserUpgradeStrat(t *testing.T, strat dgraphtest.UpgradeStrateg
 
 	query = `{
 		q(func: has(name)) {
-		count(uid)			
+		    count(uid)
 		}
 	}`
 	resp, err = gc.Query(query)

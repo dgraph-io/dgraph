@@ -2020,7 +2020,7 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 // validateForGraphql validate nquads for graphql
 func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
 	// Check whether the incoming predicate is graphql reserved predicate or not.
-	if !isGraphql && x.IsGraphqlReservedPredicate(nq.Predicate) {
+	if !isGraphql && x.IsOtherReservedPredicate(nq.Predicate) {
 		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
 	}
 	return nil
