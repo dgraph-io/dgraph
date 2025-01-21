@@ -73,6 +73,7 @@ func (sh *StatsHolder) InsertRecord(pred string, key []byte, count uint64) {
 		return
 	}
 
+	fmt.Println("INSERTING", pred, count)
 	val.InsertRecord(key, count)
 }
 
