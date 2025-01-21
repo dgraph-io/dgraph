@@ -987,8 +987,8 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	if l.mutationMap.committedUidsTime == math.MaxUint64 {
 		l.mutationMap.committedUidsTime = 0
 	}
-	if pl.CommitTs > mm.committedUidsTime {
-		mm.lastEntry = pl
+	if pl.CommitTs > l.mutationMap.committedUidsTime {
+		l.mutationMap.lastEntry = pl
 	}
 	l.mutationMap.committedUidsTime = x.Max(l.mutationMap.committedUidsTime, commitTs)
 
