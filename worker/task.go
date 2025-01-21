@@ -838,8 +838,10 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			if srcFn.fnType == compareAttrFn {
+				pl.RLock()
 				posting.GetStatsHolder().InsertRecord(
-					q.Attr, []byte(srcFn.tokens[i]), uint64(pl.ApproxLen()))
+					q.Attr, []byte(srcFn.tokens[i]), uint64(pl.GetLength(args.q.ReadTs)))
+				pl.RUnlock()
 			}
 
 			switch {
