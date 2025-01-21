@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"fmt"
 	"math"
 	"sync"
 
@@ -80,6 +81,7 @@ func (sh *StatsHolder) ProcessEqPredicate(pred string, key []byte) uint64 {
 	val, ok := sh.predStats[pred]
 	sh.RUnlock()
 	if ok {
+		fmt.Println("HERE ", pred, val.Estimate(key))
 		return val.Estimate(key)
 	}
 
