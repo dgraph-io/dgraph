@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -446,6 +447,7 @@ func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 			defer ticker.Stop()
 			for range ticker.C {
 				// Record the posting list cache hit ratio
+				fmt.Println(ml.cache.numCacheRead, ml.cache.numCacheReadFails, ml.cache.numCacheSave, ml.numDisksRead)
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 			}
 		}()
@@ -550,6 +552,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	}
 
 	l := new(List)
+	l.pk = pk
 	l.key = key
 	l.plist = new(pb.PostingList)
 	l.minTs = 0
@@ -627,6 +630,7 @@ func copyList(l *List) *List {
 	l.AssertRLock()
 	// No need to clone the immutable layer or the key since mutations will not modify it.
 	lCopy := &List{
+		pk:    l.pk,
 		minTs: l.minTs,
 		maxTs: l.maxTs,
 		key:   l.key,

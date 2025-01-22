@@ -77,6 +77,7 @@ const (
 type List struct {
 	x.SafeMutex
 	key         []byte
+	pk          x.ParsedKey
 	plist       *pb.PostingList
 	mutationMap *MutableLayer
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
@@ -751,14 +752,8 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		newPlist := &pb.PostingList{}
 		newPlist.Postings = append(newPlist.Postings, mpost)
 
-		// Add the deletions in the existing plist because those postings are not picked
-		// up by iterating. Not doing so would result in delete operations that are not
-		// applied when the transaction is committed.
-		for _, post := range l.mutationMap.currentEntries.Postings {
-			if post.Op == Del && post.Uid != mpost.Uid {
-				newPlist.Postings = append(newPlist.Postings, post)
-			}
-		}
+		// Set current entries as nil so that they don't show up in the iterate.
+		l.mutationMap.setCurrentEntries(mpost.StartTs, &pb.PostingList{})
 
 		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced

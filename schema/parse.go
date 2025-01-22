@@ -71,6 +71,9 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 		schema.Tokenizer = tokenizer
 		schema.IndexSpecs = vectorSpecs
 	case "count":
+		if !schema.List {
+			return next.Errorf("Cannot count for not list")
+		}
 		schema.Count = true
 	case "upsert":
 		schema.Upsert = true

@@ -522,8 +522,8 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	switch {
 	case hasCountIndex:
 		countBefore, found, currPost = l.getPostingAndLengthNoSort(txn.StartTs, 0, getUID(t))
-		if countBefore == -1 {
-			return val, false, emptyCountParams, errors.Wrapf(ErrTsTooOld, "Add mutation count index")
+		if countBefore < 0 {
+			return val, false, emptyCountParams, errors.Wrapf(ErrTsTooOld, "Count less than. Add mutation count index")
 		}
 	case doUpdateIndex || delNonListPredicate:
 		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
@@ -692,6 +692,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 
 		l := new(List)
 		l.key = key
+		l.pk = pk
 		l.plist = new(pb.PostingList)
 
 		found := false
