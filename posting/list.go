@@ -511,6 +511,9 @@ func (mm *MutableLayer) populateUidMap(pl *pb.PostingList) {
 	}
 
 	mm.currentUids = btree.TreeNew[uint64, int](btreeCmp)
+	if pl == nil {
+		return
+	}
 	for i, post := range pl.Postings {
 		mm.currentUids.Set(post.Uid, i)
 	}
