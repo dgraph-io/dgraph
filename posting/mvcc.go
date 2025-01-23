@@ -347,9 +347,9 @@ func RemoveCacheFor(key []byte) {
 type Cache struct {
 	data *ristretto.Cache[[]byte, *CachePL]
 
-	numCacheRead      int
-	numCacheReadFails int
-	numCacheSave      int
+	numCacheRead      int64
+	numCacheReadFails int64
+	numCacheSave      int64
 }
 
 func (c *Cache) wait() {
@@ -365,13 +365,14 @@ func (c *Cache) get(key []byte) (*CachePL, bool) {
 	}
 	val, ok := c.data.Get(key)
 	if !ok {
-		c.numCacheReadFails += 1
+		atomic.AddInt64(&c.numCacheReadFails, 1)
 		return val, ok
 	}
 	if val.list == nil {
-		c.numCacheReadFails += 1
+		atomic.AddInt64(&c.numCacheReadFails, 1)
 		return nil, false
 	}
+	atomic.AddInt64(&c.numCacheRead, 1)
 	c.numCacheRead += 1
 	return val, true
 }
@@ -407,7 +408,7 @@ type MemoryLayer struct {
 
 	// metrics
 	statsHolder  *StatsHolder
-	numDisksRead int
+	numDisksRead int64
 }
 
 func (ml *MemoryLayer) clear() {
@@ -656,7 +657,7 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 }
 
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	ml.numDisksRead += 1
+	atomic.AddInt64(&ml.numDisksRead, 1)
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
