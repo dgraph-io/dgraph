@@ -309,7 +309,7 @@ func (ph *persistentHNSW[T]) calculateNewEntryVec(
 	startVec *[]T) (uint64, error) {
 
 	itr, err := c.Find([]byte(ph.pred), func(value []byte) bool {
-		index.BytesAsFloatArray(value, startVec, ph.floatBits)
+		index.BytesAsFloatArray(&value, startVec, ph.floatBits)
 		return len(*startVec) != 0
 	})
 
@@ -337,7 +337,7 @@ func (ph *persistentHNSW[T]) PickStartNode(
 		return 0, err
 	}
 
-	entry := BytesToUint64(data.([]byte))
+	entry := BytesToUint64(data)
 	if err = ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
 		return 0, err
 	}
