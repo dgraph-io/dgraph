@@ -424,11 +424,12 @@ func (mli *mutableLayerIterator) next() (uint64, *pb.Posting) {
 }
 
 func (mm *MutableLayer) iterateUid(readTs uint64) (uint64, *mutableLayerIterator) {
+	mli := &mutableLayerIterator{}
 	if mm == nil {
-		return 0, nil
+		mli.useAllPostings = true
+		return 0, mli
 	}
 
-	mli := &mutableLayerIterator{}
 	return mli.init(mm, readTs), mli
 }
 
