@@ -41,6 +41,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/types"
 	"github.com/hypermodeinc/dgraph/v24/types/facets"
 	"github.com/hypermodeinc/dgraph/v24/x"
+	btree "modernc.org/b/v2"
 )
 
 var (
@@ -83,6 +84,18 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
+func btreeCmp(a, b uint64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return +1
+	default:
+		return 0
+	}
+
+}
+
 // MutableLayer is the structure that will store mutable layer of the posting list. Every posting list has an immutable
 // layer and a mutable layer. Whenever posting is added into a list, it's added as deltas into the posting list. Once
 // this list of deltas keep piling up, they are converted into a complete posting list through rollup and stored as
@@ -102,12 +115,12 @@ type MutableLayer struct {
 	// going to be used repeatedly.
 	deleteAllMarker uint64 // Stores the latest deleteAllMarker found in the posting list
 	// including currentEntries.
-	committedUids     map[uint64]*pb.Posting // Stores the uid to posting mapping in committedEntries.
-	committedUidsTime uint64                 // Stores the latest commitTs in the committedEntries.
-	length            int                    // Stores the length of the posting list until committedEntries.
+	committedUids     *btree.Tree[uint64, *pb.Posting] // Stores the uid to posting mapping in committedEntries.
+	committedUidsTime uint64                           // Stores the latest commitTs in the committedEntries.
+	length            int                              // Stores the length of the posting list until committedEntries.
 
 	// We also cache some things required for us to update currentEntries faster
-	currentUids map[uint64]int // Stores the uid to index mapping in the currentEntries posting list
+	currentUids *btree.Tree[uint64, int] // Stores the uid to index mapping in the currentEntries posting list
 }
 
 func newMutableLayer() *MutableLayer {
@@ -116,7 +129,7 @@ func newMutableLayer() *MutableLayer {
 		readTs:            0,
 		deleteAllMarker:   math.MaxUint64,
 		length:            math.MaxInt,
-		committedUids:     make(map[uint64]*pb.Posting),
+		committedUids:     btree.TreeNew[uint64, *pb.Posting](btreeCmp),
 		committedUidsTime: math.MaxUint64,
 	}
 }
@@ -159,7 +172,7 @@ func (mm *MutableLayer) setCurrentEntries(ts uint64, pl *pb.PostingList) {
 
 	mm.readTs = ts
 	mm.currentEntries = pl
-	clear(mm.currentUids)
+	mm.currentUids.Clear()
 	mm.deleteAllMarker = math.MaxUint64
 	mm.populateUidMap(pl)
 }
@@ -261,6 +274,164 @@ func (mm *MutableLayer) populateDeleteAll(readTs uint64) uint64 {
 	return deleteAllMarkerBelowTs
 }
 
+type mutableLayerIterator struct {
+	ml            *MutableLayer
+	currentUids   *btree.Enumerator[uint64, int]
+	committedUids *btree.Enumerator[uint64, *pb.Posting]
+
+	allPostings    []*pb.Posting
+	useAllPostings bool
+
+	valid bool
+	pos   *pb.Posting
+}
+
+func (mli *mutableLayerIterator) init(ml *MutableLayer, readTs uint64) uint64 {
+	mli.ml = ml
+
+	if readTs < ml.committedUidsTime {
+		mli.useAllPostings = true
+		deleteBelowTs, mposts := ml.pickPostings(readTs)
+		mli.allPostings = mposts
+		return deleteBelowTs
+	}
+
+	deleteAllMarker := ml.populateDeleteAll(readTs)
+	ml.populateUidMap(ml.currentEntries)
+
+	if readTs == ml.readTs {
+		currentUids, err := ml.currentUids.SeekFirst()
+		if err != nil {
+			mli.currentUids = currentUids
+		}
+	}
+
+	committedUids, err := ml.committedUids.SeekFirst()
+	if err != nil {
+		mli.committedUids = committedUids
+	}
+	return deleteAllMarker
+}
+
+func (mli *mutableLayerIterator) holdedValues() (bool, *pb.Posting) {
+	valid := mli.valid
+	pos := mli.pos
+	mli.pos = nil
+	mli.valid = false
+	return valid, pos
+}
+
+func (mli *mutableLayerIterator) nextAndHold() {
+	if mli.useAllPostings {
+		if len(mli.allPostings) > 0 {
+			mli.allPostings = mli.allPostings[1:]
+		}
+		return
+	}
+
+	uid, pos := mli.next()
+	if uid == 0 {
+		mli.valid = false
+		return
+	}
+
+	mli.valid = true
+	mli.pos = pos
+}
+
+func (mli *mutableLayerIterator) seek(uid uint64) {
+	if mli.useAllPostings {
+		if len(mli.allPostings) != 0 {
+			midx := sort.Search(len(mli.allPostings), func(idx int) bool {
+				mp := mli.allPostings[idx]
+				return uid < mp.Uid
+			})
+
+			if midx < len(mli.allPostings) && midx > 0 {
+				mli.allPostings = mli.allPostings[midx:]
+			}
+		}
+		return
+	}
+
+	mli.currentUids, _ = mli.ml.currentUids.Seek(uid)
+	mli.committedUids, _ = mli.ml.committedUids.Seek(uid)
+}
+
+func (mli *mutableLayerIterator) sendCommittedUids() (uint64, *pb.Posting) {
+	uid, pos, err := mli.committedUids.Next()
+	if err != nil {
+		mli.committedUids = nil
+		return 0, nil
+	}
+
+	return uid, pos
+}
+
+func (mli *mutableLayerIterator) sendCurrentUids() (uint64, *pb.Posting) {
+	uid, posIdx, err := mli.currentUids.Next()
+	if err != nil {
+		mli.currentUids = nil
+		return 0, nil
+	}
+
+	return uid, mli.ml.currentEntries.Postings[posIdx]
+}
+
+func (mli *mutableLayerIterator) checkBoth() (uint64, *pb.Posting) {
+	committedUid, committedPos := mli.sendCommittedUids()
+	currentUid, currentPos := mli.sendCurrentUids()
+
+	if currentUid == 0 {
+		return committedUid, committedPos
+	}
+
+	if committedUid == 0 {
+		return currentUid, currentPos
+	}
+
+	if committedUid < currentUid {
+		mli.currentUids.Prev()
+		return committedUid, committedPos
+	}
+
+	mli.committedUids.Prev()
+	return currentUid, currentPos
+}
+
+func (mli *mutableLayerIterator) next() (uint64, *pb.Posting) {
+	if mli.useAllPostings {
+		if len(mli.allPostings) > 0 {
+			pos := mli.allPostings[0]
+			mli.allPostings = mli.allPostings[1:]
+			return pos.Uid, pos
+		}
+		return 0, nil
+	}
+	if mli.currentUids == nil {
+		if mli.committedUids == nil {
+			return 0, nil
+		}
+
+		return mli.sendCommittedUids()
+	}
+
+	if mli.committedUids == nil {
+		return mli.sendCurrentUids()
+	}
+
+	return mli.checkBoth()
+}
+
+func (mm *MutableLayer) iterateUid(readTs uint64) (uint64, *mutableLayerIterator) {
+	if mm == nil {
+		return 0, nil
+	}
+
+	mli := &mutableLayerIterator{}
+	return mli.init(mm, readTs), mli
+}
+
 // iterateCommittedEntries is an internal function that's used to calculate delete all marker and iterate. No other
 // function should use this. They should use .iterate() instead.
 func (mm *MutableLayer) iterateCommittedEntries(f func(uint64, *pb.PostingList)) {
@@ -327,8 +498,8 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 			mm.length += getLengthDelta(mpost.Op)
 		}
 		// We insert old postings in reverse order. So we only need to read the first update to an UID.
-		if _, ok := mm.committedUids[mpost.Uid]; !ok {
-			mm.committedUids[mpost.Uid] = mpost
+		if _, ok := mm.committedUids.Get(mpost.Uid); !ok {
+			mm.committedUids.Set(mpost.Uid, mpost)
 		}
 	}
 }
@@ -338,9 +509,9 @@ func (mm *MutableLayer) populateUidMap(pl *pb.PostingList) {
 		return
 	}
 
-	mm.currentUids = make(map[uint64]int, len(pl.Postings))
+	mm.currentUids = btree.TreeNew[uint64, int](btreeCmp)
 	for i, post := range pl.Postings {
-		mm.currentUids[post.Uid] = i
+		mm.currentUids.Set(post.Uid, i)
 	}
 }
 
@@ -360,11 +531,11 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting) {
 
 	if mpost.Uid != 0 {
 		mm.populateUidMap(mm.currentEntries)
-		if postIndex, ok := mm.currentUids[mpost.Uid]; ok {
+		if postIndex, ok := mm.currentUids.Get(mpost.Uid); ok {
 			mm.currentEntries.Postings[postIndex] = mpost
 		} else {
 			mm.currentEntries.Postings = append(mm.currentEntries.Postings, mpost)
-			mm.currentUids[mpost.Uid] = len(mm.currentEntries.Postings) - 1
+			mm.currentUids.Set(mpost.Uid, len(mm.currentEntries.Postings)-1)
 		}
 		return
 	}
@@ -394,12 +565,12 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 	// If we get it using mm.iterate (in getPosting), we know that we only see postings >= deleteAllMarker
 	getPostingFromCachedValues := func() (*pb.Posting, uint64) {
 		if readTs == mm.readTs {
-			posI, ok := mm.currentUids[uid]
+			posI, ok := mm.currentUids.Get(uid)
 			if ok {
 				return mm.currentEntries.Postings[posI], mm.readTs
 			}
 		}
-		posting, ok := mm.committedUids[uid]
+		posting, ok := mm.committedUids.Get(uid)
 		if ok {
 			return posting, posting.CommitTs
 		}
@@ -990,7 +1161,7 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 			continue
 		}
 
-		l.mutationMap.committedUids[mpost.Uid] = mpost
+		l.mutationMap.committedUids.Set(mpost.Uid, mpost)
 		if l.mutationMap.length == math.MaxInt64 {
 			l.mutationMap.length = 0
 		}
@@ -1043,7 +1214,7 @@ func (l *List) Iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 // along with the timestamp of the delete marker, if any. If this timestamp is greater
 // than zero, it indicates that the immutable layer should be ignored during traversals.
 // If greater than zero, this timestamp must thus be greater than l.minTs.
-func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
+func (ml *MutableLayer) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	// This function would return zero ts for entries above readTs.
 	effective := func(start, commit uint64) uint64 {
 		if commit > 0 && commit <= readTs {
@@ -1059,7 +1230,7 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 
 	// First pick up the postings.
 	var posts []*pb.Posting
-	deleteAllMarker := l.mutationMap.iterate(func(ts uint64, plist *pb.PostingList) {
+	deleteAllMarker := ml.iterate(func(ts uint64, plist *pb.PostingList) {
 		// ts will be plist.CommitTs for committed transactions
 		// ts will be readTs for mutations that are me
 		posts = append(posts, plist.Postings...)
@@ -1079,22 +1250,23 @@ func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
 	return deleteAllMarker, posts
 }
 
+func (l *List) pickPostings(readTs uint64) (uint64, []*pb.Posting) {
+	return l.mutationMap.pickPostings(readTs)
+}
+
 func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) error) error {
 	l.AssertRLock()
 
-	// mposts is the list of mutable postings
-	deleteBelowTs, mposts := l.pickPostings(readTs)
+	// mposts is the iterator
+	deleteBelowTs, mitr := l.mutationMap.iterateUid(readTs)
 	if readTs < l.minTs {
 		return errors.Errorf("readTs: %d less than minTs: %d for key: %q", readTs, l.minTs, l.key)
 	}
 
-	midx, mlen := 0, len(mposts)
 	if afterUid > 0 {
-		midx = sort.Search(mlen, func(idx int) bool {
-			mp := mposts[idx]
-			return afterUid < mp.Uid
-		})
+		mitr.seek(afterUid)
 	}
+	mitr.nextAndHold()
 
 	numDeletePostingsRead := 0
 	numNormalPostingsRead := 0
@@ -1124,13 +1296,14 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 
 loop:
 	for err == nil {
-		if midx < mlen {
-			mp = mposts[midx]
+		valid, mpos := mitr.holdedValues()
+		if valid {
+			mp = mpos
 		} else {
 			mp = emptyPosting
 		}
 
-		valid, err := pitr.valid()
+		valid, err = pitr.valid()
 		switch {
 		case err != nil:
 			break loop
@@ -1144,7 +1317,7 @@ loop:
 		case mp.Uid > 0 && mp.Uid == prevUid:
 			// Only pick the latest version of this posting.
 			// mp.Uid can be zero if it's an empty posting.
-			midx++
+			mitr.nextAndHold()
 		case pp.Uid == 0 && mp.Uid == 0:
 			// Reached empty posting for both iterators.
 			return nil
@@ -1171,7 +1344,7 @@ loop:
 				numDeletePostingsRead += 1
 			}
 			prevUid = mp.Uid
-			midx++
+			mitr.nextAndHold()
 		case pp.Uid == mp.Uid:
 			if mp.Op != Del {
 				err = f(mp)
@@ -1186,7 +1359,7 @@ loop:
 			if err = pitr.next(); err != nil {
 				break loop
 			}
-			midx++
+			mitr.nextAndHold()
 		default:
 			log.Fatalf("Unhandled case during iteration of posting list.")
 		}

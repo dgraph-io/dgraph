@@ -19,6 +19,7 @@ package posting
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -38,7 +39,45 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/schema"
 	"github.com/hypermodeinc/dgraph/v24/x"
+	btree "modernc.org/b/v2"
 )
+
+func cmp(a, b uint64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return +1
+	default:
+		return 0
+	}
+
+}
+
+func TestBTree(t *testing.T) {
+	tree := btree.TreeNew[uint64, string](cmp)
+
+	tree.Set(3, "1")
+	tree.Set(1, "1")
+	tree.Set(2, "1")
+
+	iter, err := tree.SeekFirst()
+	if err != nil {
+		t.Fatalf("tree.SeekFirst: %v", err)
+	}
+	for {
+		ksink, vsink, err := iter.Next()
+		fmt.Println(ksink, vsink)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("iter.Next: %v", err)
+		}
+	}
+	iter.Close()
+
+}
 
 func setMaxListSize(newMaxListSize int) {
 	maxListSize = newMaxListSize

@@ -65,6 +65,7 @@ require (
 	google.golang.org/grpc v1.69.2
 	google.golang.org/protobuf v1.36.2
 	gopkg.in/yaml.v2 v2.4.0
+	modernc.org/b/v2 v2.1.2
 )
 
 require (
