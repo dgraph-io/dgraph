@@ -568,7 +568,7 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 	// To get the posting from cached values, we need to make sure that it is >= deleteAllMarker
 	// If we get it using mm.iterate (in getPosting), we know that we only see postings >= deleteAllMarker
 	getPostingFromCachedValues := func() (*pb.Posting, uint64) {
-		if readTs == mm.readTs {
+		if readTs == mm.readTs && mm.currentUids != nil {
 			posI, ok := mm.currentUids.Get(uid)
 			if ok {
 				return mm.currentEntries.Postings[posI], mm.readTs
