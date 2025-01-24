@@ -129,7 +129,6 @@ func newMutableLayer() *MutableLayer {
 		readTs:            0,
 		deleteAllMarker:   math.MaxUint64,
 		length:            math.MaxInt,
-		committedUids:     btree.TreeNew[uint64, *pb.Posting](btreeCmp),
 		committedUidsTime: math.MaxUint64,
 	}
 }
@@ -298,17 +297,20 @@ func (mli *mutableLayerIterator) init(ml *MutableLayer, readTs uint64) uint64 {
 
 	deleteAllMarker := ml.populateDeleteAll(readTs)
 	ml.populateUidMap(ml.currentEntries)
+	ml.populateCommittedPostings()
 
-	if readTs == ml.readTs {
+	if readTs == ml.readTs && ml.currentUids != nil {
 		currentUids, err := ml.currentUids.SeekFirst()
 		if err != nil {
 			mli.currentUids = currentUids
 		}
 	}
 
-	committedUids, err := ml.committedUids.SeekFirst()
-	if err != nil {
-		mli.committedUids = committedUids
+	if ml.committedUids != nil {
+		committedUids, err := ml.committedUids.SeekFirst()
+		if err != nil {
+			mli.committedUids = committedUids
+		}
 	}
 	return deleteAllMarker
 }
@@ -354,8 +356,12 @@ func (mli *mutableLayerIterator) seek(uid uint64) {
 		return
 	}
 
-	mli.currentUids, _ = mli.ml.currentUids.Seek(uid)
-	mli.committedUids, _ = mli.ml.committedUids.Seek(uid)
+	if mli.ml.currentUids != nil {
+		mli.currentUids, _ = mli.ml.currentUids.Seek(uid)
+	}
+	if mli.ml.committedUids != nil {
+		mli.committedUids, _ = mli.ml.committedUids.Seek(uid)
+	}
 }
 
 func (mli *mutableLayerIterator) sendCommittedUids() (uint64, *pb.Posting) {
@@ -498,9 +504,19 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 		if mpost.CommitTs >= mm.deleteAllMarker {
 			mm.length += getLengthDelta(mpost.Op)
 		}
-		// We insert old postings in reverse order. So we only need to read the first update to an UID.
-		if _, ok := mm.committedUids.Get(mpost.Uid); !ok {
-			mm.committedUids.Set(mpost.Uid, mpost)
+	}
+}
+
+func (ml *MutableLayer) populateCommittedPostings() {
+	if ml.committedUids != nil {
+		return
+	}
+	ml.committedUids = btree.TreeNew[uint64, *pb.Posting](btreeCmp)
+	for ts, pl := range ml.committedEntries {
+		for _, mpost := range pl.Postings {
+			if pl, ok := ml.committedUids.Get(mpost.Uid); !ok || pl.CommitTs > ts {
+				ml.committedUids.Set(mpost.Uid, mpost)
+			}
 		}
 	}
 }
@@ -574,9 +590,12 @@ func (mm *MutableLayer) findPosting(readTs, uid uint64) (bool, *pb.Posting) {
 				return mm.currentEntries.Postings[posI], mm.readTs
 			}
 		}
-		posting, ok := mm.committedUids.Get(uid)
-		if ok {
-			return posting, posting.CommitTs
+		mm.populateCommittedPostings()
+		if mm.committedUids != nil {
+			posting, ok := mm.committedUids.Get(uid)
+			if ok {
+				return posting, posting.CommitTs
+			}
 		}
 		return nil, 0
 	}
@@ -1165,7 +1184,9 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 			continue
 		}
 
-		l.mutationMap.committedUids.Set(mpost.Uid, mpost)
+		if l.mutationMap.committedUids != nil {
+			l.mutationMap.committedUids.Set(mpost.Uid, mpost)
+		}
 		if l.mutationMap.length == math.MaxInt64 {
 			l.mutationMap.length = 0
 		}
