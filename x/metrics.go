@@ -72,6 +72,9 @@ var (
 	LatencyMs = ostats.Float64("latency",
 		"Latency of the various methods", ostats.UnitMilliseconds)
 
+	DiskLatencyMs = ostats.Float64("disk_read_latency",
+		"Latency of the various methods", ostats.UnitMilliseconds)
+
 	// Point-in-time metrics.
 
 	// PendingQueries records the current number of pending queries.
@@ -198,6 +201,13 @@ var (
 			Name:        LatencyMs.Name(),
 			Measure:     LatencyMs,
 			Description: LatencyMs.Description(),
+			Aggregation: defaultLatencyMsDistribution,
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        DiskLatencyMs.Name(),
+			Measure:     DiskLatencyMs,
+			Description: DiskLatencyMs.Description(),
 			Aggregation: defaultLatencyMsDistribution,
 			TagKeys:     allTagKeys,
 		},

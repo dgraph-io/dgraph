@@ -29,6 +29,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -547,6 +548,16 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
 	}
+
+	start := time.Now()
+	defer func() {
+		ms := x.SinceMs(start)
+		var tags []tag.Mutator
+		tags = append(tags, tag.Upsert(x.KeyMethod, "iterate"))
+		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
+		_ = ostats.RecordWithTags(context.Background(), tags, x.DiskLatencyMs.M(ms))
+	}()
+
 	if pk.HasStartUid {
 		// Trying to read a single part of a multi part list. This type of list
 		// should be read using using the main key because the information needed

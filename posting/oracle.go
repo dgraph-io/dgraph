@@ -24,8 +24,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok/index"
@@ -161,6 +163,38 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 // GetFromDelta retrieves the posting list from delta cache, not from Badger.
 func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
+}
+
+func (txn *Txn) GetScalarList(key []byte) (*List, error) {
+	start := time.Now()
+	defer func() {
+		pk, _ := x.Parse(key)
+		ms := x.SinceMs(start)
+		var tags []tag.Mutator
+		tags = append(tags, tag.Upsert(x.KeyMethod, "get"))
+		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
+		_ = ostats.RecordWithTags(context.Background(), tags, x.DiskLatencyMs.M(ms))
+	}()
+
+	l, err := txn.cache.GetFromDelta(key)
+	if err != nil {
+		return nil, err
+	}
+	if l.mutationMap.len() == 0 && len(l.plist.Postings) == 0 {
+		pl, err := txn.cache.readPostingListAt(key)
+		if err == badger.ErrKeyNotFound {
+			return l, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if pl.CommitTs == 0 {
+			l.mutationMap.setCurrentEntries(txn.StartTs, pl)
+		} else {
+			l.mutationMap.insertCommittedPostings(pl)
+		}
+	}
+	return l, nil
 }
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.

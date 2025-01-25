@@ -300,6 +300,23 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
+func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
+	pl := &pb.PostingList{}
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	defer txn.Discard()
+
+	item, err := txn.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	err = item.Value(func(val []byte) error {
+		return proto.Unmarshal(val, pl)
+	})
+
+	return pl, err
+}
+
 // GetSinglePosting retrieves the cached version of the first item in the list associated with the
 // given key. This is used for retrieving the value of a scalar predicats.
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
@@ -332,20 +349,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 			return pl, err
 		}
 
-		pl = &pb.PostingList{}
-		txn := pstore.NewTransactionAt(lc.startTs, false)
-		defer txn.Discard()
-
-		item, err := txn.Get(key)
-		if err != nil {
-			return nil, err
-		}
-
-		err = item.Value(func(val []byte) error {
-			return proto.Unmarshal(val, pl)
-		})
-
-		return pl, err
+		return lc.readPostingListAt(key)
 	}
 
 	pl, err := getPostings()
