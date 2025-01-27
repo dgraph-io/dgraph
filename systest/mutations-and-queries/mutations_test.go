@@ -2935,10 +2935,12 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 
 	q := `{ me(func: has(name)) { name } }`
 	resp, err := txn2.Query(ctx, q)
-	if !ssuite.CheckAllowedErrorPreUpgrade(err) {
-		require.NoError(t, err)
-	} else {
-		t.Skip()
+	if err != nil {
+		if !ssuite.CheckAllowedErrorPreUpgrade(err) {
+			require.NoError(t, err)
+		} else {
+			t.Skip()
+		}
 	}
 	dgraphapi.CompareJSON(`{"me":[{"name":"Alice"}]}`,
 		string(resp.GetJson()))

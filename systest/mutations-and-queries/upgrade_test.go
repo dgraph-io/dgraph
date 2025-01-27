@@ -59,9 +59,6 @@ func (ssuite *SystestTestSuite) TearDownSubTest() {
 }
 
 func (ssuite *SystestTestSuite) CheckAllowedErrorPreUpgrade(err error) bool {
-	if err == nil {
-		return true
-	}
 	if val, checkErr := dgraphtest.IsHigherVersion(
 		ssuite.dc.GetVersion(),
 		"315747a19e9d5c5b98055c8b943a6e6462153bb3"); checkErr == nil && val || checkErr != nil {
