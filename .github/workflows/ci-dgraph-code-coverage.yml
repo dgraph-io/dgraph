@@ -5,6 +5,9 @@ on:
     paths:
       - "**/*.go"
       - "**/go.mod"
+      - "**/*.yml"
+      - "**/Dockerfile"
+      - "**/Makefile"
     branches:
       - main
       - release/**

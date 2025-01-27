@@ -2,7 +2,7 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.22.8
+  version: 1.22.9
 
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
@@ -25,8 +25,8 @@ lint:
       paths:
         - contrib/**
   enabled:
-    - actionlint@1.7.6
-    - checkov@3.2.351
+    - actionlint@1.7.7
+    - checkov@3.2.353
     - dotenv-linter@3.3.0
     - git-diff-check
     - gofmt@1.20.4
@@ -36,11 +36,11 @@ lint:
     - osv-scanner@1.9.2
     - oxipng@9.1.3
     - prettier@3.4.2
-    - renovate@39.92.0
+    - renovate@39.119.0
     - shellcheck@0.10.0
     - shfmt@3.6.0
-    - tflint@0.54.0
-    - trufflehog@3.88.1
+    - tflint@0.55.0
+    - trufflehog@3.88.2
     - yamllint@1.35.1
 actions:
   enabled:
