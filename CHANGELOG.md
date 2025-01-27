@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project will
 adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.X.X] - YYYY-MM-DD
+
+- **GraphQL**
+
+  - feat(graphql): adds translated DQL to extensions response when the "--graphql debug" super flag
+    is set to true (#9280)
+
+[v24.X.X]: https://github.com/hypermodeinc/dgraph/compare/v24.0.5...v24.X.X
+
 ## [v24.0.5] - 2024-11-05
 
 [v24.0.5]: https://github.com/hypermodeinc/dgraph/compare/v24.0.4...v24.0.5
