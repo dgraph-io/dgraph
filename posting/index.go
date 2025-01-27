@@ -268,7 +268,8 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 		}
 	}
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, edge.Op)
+		isScalarPredicate := !schema.State().IsList(edge.Attr)
+		countAfter = countAfterMutation(countBefore, found, edge.Op, isScalarPredicate)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -475,7 +476,21 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
-func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
+// Gives the count of the posting after the mutation has finished. Currently we use this to figure after the mutation
+// what is the count. For non scalar predicate, we need to use found and the operation that the user did to figure out
+// if the new node was inserted or not. However, for single uid predicates this information is not useful. For scalar
+// predicate, delete only works if the value was found. Set would just result in 1 alaways.
+func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op, isScalarPredicate bool) int {
+	if isScalarPredicate {
+		if op == pb.DirectedEdge_SET {
+			return 1
+		} else if op == pb.DirectedEdge_DEL && found {
+			return 0
+		} else {
+			return countBefore
+		}
+	}
+
 	if !found && op != pb.DirectedEdge_DEL {
 		return countBefore + 1
 	} else if found && op == pb.DirectedEdge_DEL {
@@ -516,7 +531,8 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	var found bool
 	var err error
 
-	delNonListPredicate := !schema.State().IsList(t.Attr) &&
+	isScalarPredicate := !schema.State().IsList(t.Attr)
+	delNonListPredicate := isScalarPredicate &&
 		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
 
 	switch {
@@ -560,7 +576,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, t.Op)
+		countAfter = countAfterMutation(countBefore, found, t.Op, isScalarPredicate)
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
