@@ -752,12 +752,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		// Add the deletions in the existing plist because those postings are not picked
 		// up by iterating. Not doing so would result in delete operations that are not
 		// applied when the transaction is committed.
-		for _, post := range l.mutationMap.currentEntries.Postings {
-			if post.Op == Del && post.Uid != mpost.Uid {
-				newPlist.Postings = append(newPlist.Postings, post)
-			}
-		}
-
+		l.mutationMap.currentEntries = &pb.PostingList{}
 		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
@@ -776,9 +771,6 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		if err != nil {
 			return err
 		}
-
-		// Update the mutation map with the new plist. Return here since the code below
-		// does not apply for predicates of type uid.
 		l.mutationMap.setCurrentEntries(mpost.StartTs, newPlist)
 		return nil
 	}
