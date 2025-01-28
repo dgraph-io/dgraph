@@ -345,7 +345,7 @@ func (mm *MutableLayer) populateUidMap(pl *pb.PostingList) {
 }
 
 // insertPosting inserts a new posting in the mutable layers. It updates the currentUids map.
-func (mm *MutableLayer) insertPosting(mpost *pb.Posting) {
+func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 	if mm.readTs != 0 {
 		x.AssertTrue(mpost.StartTs == mm.readTs)
 	}
@@ -360,6 +360,28 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting) {
 
 	if mpost.Uid != 0 {
 		mm.populateUidMap(mm.currentEntries)
+		// If hasCountIndex, in that case while inserting uids, if there's a delete, we only delete from the
+		// current entries, we dont' insert the delete posting. If we insert the delete posting, there won't be
+		// any set posting in the list. This would mess up the count. We can do this for all types, however,
+		// there might be a performance hit becasue of it.
+		if hasCountIndex && mpost.Op == Del {
+			postIndex, ok := mm.currentUids[mpost.Uid]
+			if !ok {
+				return
+			}
+
+			// If the posting was there before, just remove it from the map, and then remove it from the
+			// array.
+			delete(mm.currentUids, mpost.Uid)
+			res := mm.currentEntries.Postings[:postIndex]
+			if postIndex+1 <= len(mm.currentEntries.Postings) {
+				mm.currentEntries.Postings = append(res,
+					mm.currentEntries.Postings[(postIndex+1):]...)
+			}
+			mm.currentEntries.Postings = res
+			return
+		}
+
 		if postIndex, ok := mm.currentUids[mpost.Uid]; ok {
 			mm.currentEntries.Postings[postIndex] = mpost
 		} else {
@@ -721,7 +743,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
+func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate, hasCountIndex bool) error {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del || mpost.Op == Ovr)
 
@@ -775,7 +797,7 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 		return nil
 	}
 
-	l.mutationMap.insertPosting(mpost)
+	l.mutationMap.insertPosting(mpost, hasCountIndex)
 	return nil
 }
 
@@ -899,7 +921,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		pk.IsData() && mpost.Op != Del && mpost.PostingType == pb.Posting_REF
 
-	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
+	if err != l.updateMutationLayer(mpost, isSingleUidUpdate, pred.GetCount()) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
 			hex.EncodeToString(l.key), mpost)
 	}

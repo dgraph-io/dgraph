@@ -253,21 +253,18 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 	found := false
-	var currPost *pb.Posting
 	isScalarPredicate := !schema.State().IsList(edge.Attr)
 
 	plist.Lock()
 	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore, found, currPost = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
+		countBefore, found, _ = plist.getPostingAndLengthNoSort(txn.StartTs, 0, edge.ValueId)
 		if countBefore < 0 {
 			return emptyCountParams, errors.Wrapf(ErrTsTooOld, "Adding reverse mutation helper count")
 		}
 	}
 
-	if isScalarPredicate && edge.Op == pb.DirectedEdge_DEL && currPost != nil && currPost.StartTs == txn.StartTs {
-		plist.mutationMap.setCurrentEntries(txn.StartTs, &pb.PostingList{})
-	} else if !(hasCountIndex && !shouldAddCountEdge(found, edge)) {
+	if !(hasCountIndex && !shouldAddCountEdge(found, edge)) {
 		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 			return emptyCountParams, err
 		}
