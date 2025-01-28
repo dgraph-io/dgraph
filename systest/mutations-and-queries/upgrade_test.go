@@ -21,6 +21,7 @@ package main
 import (
 	"errors"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,15 @@ func (ssuite *SystestTestSuite) SetupSubTest() {
 
 func (ssuite *SystestTestSuite) TearDownSubTest() {
 	ssuite.lc.Cleanup(ssuite.T().Failed())
+}
+
+func (ssuite *SystestTestSuite) CheckAllowedErrorPreUpgrade(err error) bool {
+	if val, checkErr := dgraphtest.IsHigherVersion(
+		ssuite.dc.GetVersion(),
+		"315747a19e9d5c5b98055c8b943a6e6462153bb3"); checkErr == nil && val || checkErr != nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "cannot initialize iterator when calling List.iterate: deleteBelowTs")
 }
 
 func (ssuite *SystestTestSuite) Upgrade() {

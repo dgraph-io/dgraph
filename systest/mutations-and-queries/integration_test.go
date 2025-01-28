@@ -45,6 +45,10 @@ func (ssuite *SystestTestSuite) SetupSubTest() {
 	require.NoError(t, gcli.DropAll())
 }
 
+func (ssuite *SystestTestSuite) CheckAllowedErrorPreUpgrade(err error) bool {
+	return false
+}
+
 func (ssuite *SystestTestSuite) Upgrade() {
 	// Not implemented for integration tests
 }
