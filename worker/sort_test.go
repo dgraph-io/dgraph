@@ -66,6 +66,85 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 	return writer.Flush()
 }
 
+func TestScalarPredicateRevCount(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	posting.Init(ps, 0, false)
+	Init(ps)
+	err = schema.ParseBytes([]byte("scalarPredicateCount: uid @reverse @count ."), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	attr := x.GalaxyAttr("scalarPredicateCount")
+
+	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		for _, edge := range edges {
+			x.Check(runMutation(ctx, edge, txn))
+		}
+		txn.Update()
+		writer := posting.NewTxnWriter(pstore)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+		txn.UpdateCachedKeys(commitTs)
+	}
+
+	runM(9, 11, []*pb.DirectedEdge{{
+		ValueId:   3,
+		ValueType: pb.Posting_UID,
+		Attr:      attr,
+		Entity:    1,
+		Op:        pb.DirectedEdge_SET,
+	}, {
+		ValueId:   3,
+		ValueType: pb.Posting_UID,
+		Attr:      attr,
+		Entity:    1,
+		Op:        pb.DirectedEdge_DEL,
+	}})
+
+	txn := posting.Oracle().RegisterStartTs(13)
+	key := x.CountKey(attr, 1, false)
+	l, err := txn.Get(key)
+	l.RLock()
+	require.Equal(t, 0, l.GetLength(13))
+	l.RUnlock()
+
+	runM(15, 17, []*pb.DirectedEdge{{
+		ValueId:   3,
+		ValueType: pb.Posting_UID,
+		Attr:      attr,
+		Entity:    1,
+		Op:        pb.DirectedEdge_SET,
+	}})
+
+	txn = posting.Oracle().RegisterStartTs(18)
+	l, err = txn.Get(key)
+	l.RLock()
+	require.Equal(t, 1, l.GetLength(18))
+	l.RUnlock()
+
+	runM(18, 19, []*pb.DirectedEdge{{
+		ValueId:   3,
+		ValueType: pb.Posting_UID,
+		Attr:      attr,
+		Entity:    1,
+		Op:        pb.DirectedEdge_DEL,
+	}})
+
+	txn = posting.Oracle().RegisterStartTs(20)
+	l, err = txn.Get(key)
+	l.RLock()
+	require.Equal(t, 0, l.GetLength(20))
+	l.RUnlock()
+}
+
 func TestScalarPredicateIntCount(t *testing.T) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
