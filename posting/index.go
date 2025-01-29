@@ -253,7 +253,8 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 	found := false
-	isScalarPredicate := !schema.State().IsList(edge.Attr)
+	pk, _ := x.Parse(plist.key)
+	isScalarPredicate := !schema.State().IsList(edge.Attr) && !pk.IsReverse()
 
 	plist.Lock()
 	defer plist.Unlock()
