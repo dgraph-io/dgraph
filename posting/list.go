@@ -365,24 +365,24 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 		// there might be a performance hit becasue of it.
 		mm.populateUidMap(mm.currentEntries)
 		if postIndex, ok := mm.currentUids[mpost.Uid]; ok {
-			if hasCountIndex && mpost.Op == Del {
-				// If the posting was there before, just remove it from the map, and then remove it
-				// from the array.
-				post := mm.currentEntries.Postings[postIndex]
-				if post.Op == Del {
-					// No need to do anything
-					mm.currentEntries.Postings[postIndex] = mpost
-					return
-				}
-				res := mm.currentEntries.Postings[:postIndex]
-				if postIndex+1 <= len(mm.currentEntries.Postings) {
-					mm.currentEntries.Postings = append(res,
-						mm.currentEntries.Postings[(postIndex+1):]...)
-				}
-				mm.currentUids = nil
-				mm.currentEntries.Postings = res
-				return
-			}
+			//if hasCountIndex && mpost.Op == Del {
+			//	// If the posting was there before, just remove it from the map, and then remove it
+			//	// from the array.
+			//	post := mm.currentEntries.Postings[postIndex]
+			//	if post.Op == Del {
+			//		// No need to do anything
+			//		mm.currentEntries.Postings[postIndex] = mpost
+			//		return
+			//	}
+			//	res := mm.currentEntries.Postings[:postIndex]
+			//	if postIndex+1 <= len(mm.currentEntries.Postings) {
+			//		mm.currentEntries.Postings = append(res,
+			//			mm.currentEntries.Postings[(postIndex+1):]...)
+			//	}
+			//	mm.currentUids = nil
+			//	mm.currentEntries.Postings = res
+			//	return
+			//}
 			mm.currentEntries.Postings[postIndex] = mpost
 		} else {
 			mm.currentEntries.Postings = append(mm.currentEntries.Postings, mpost)
@@ -774,7 +774,13 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate, hasCountI
 		// Add the deletions in the existing plist because those postings are not picked
 		// up by iterating. Not doing so would result in delete operations that are not
 		// applied when the transaction is committed.
-		l.mutationMap.currentEntries = &pb.PostingList{}
+		//l.mutationMap.currentEntries = &pb.PostingList{}
+		for _, post := range l.mutationMap.currentEntries.Postings {
+			if post.Op == Del && post.Uid != mpost.Uid {
+				newPlist.Postings = append(newPlist.Postings, post)
+			}
+		}
+
 		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
 			// Ignore values which have the same uid as they will get replaced
 			// by the current value.
