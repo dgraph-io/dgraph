@@ -364,7 +364,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 		Facets:  t.Facets,
 	}
 
-	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
+	cp, err := txn.addReverseMutationHelper(ctx, plist, true, edge)
 	if err != nil {
 		return err
 	}
