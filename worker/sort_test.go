@@ -77,11 +77,11 @@ func TestScalarPredicateRevCount(t *testing.T) {
 	pstore = ps
 	posting.Init(ps, 0, false)
 	Init(ps)
-	err = schema.ParseBytes([]byte("scalarPredicateCount: uid @reverse @count ."), 1)
+	err = schema.ParseBytes([]byte("scalarPredicateCount2: uid @reverse @count ."), 1)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount")
+	attr := x.GalaxyAttr("scalarPredicateCount2")
 
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
@@ -156,11 +156,11 @@ func TestScalarPredicateIntCount(t *testing.T) {
 	pstore = ps
 	posting.Init(ps, 0, false)
 	Init(ps)
-	err = schema.ParseBytes([]byte("scalarPredicateCount: string @count ."), 1)
+	err = schema.ParseBytes([]byte("scalarPredicateCount1: string @count ."), 1)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount")
+	attr := x.GalaxyAttr("scalarPredicateCount1")
 
 	runM := func(startTs, commitTs uint64, edge *pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
