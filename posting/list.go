@@ -378,7 +378,7 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 				res := mm.currentEntries.Postings[:postIndex]
 				if postIndex+1 <= len(mm.currentEntries.Postings) {
 					for i, pos := range mm.currentEntries.Postings[(postIndex + 1):] {
-						mm.currentUids[pos.Uid] = i - 1
+						mm.currentUids[pos.Uid] = i + postIndex
 					}
 					mm.currentEntries.Postings = append(res,
 						mm.currentEntries.Postings[(postIndex+1):]...)
