@@ -378,10 +378,8 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 				if postIndex+1 <= len(mm.currentEntries.Postings) {
 					mm.currentEntries.Postings = append(res,
 						mm.currentEntries.Postings[(postIndex+1):]...)
-					mm.currentUids = nil
-				} else {
-					delete(mm.currentUids, mpost.Uid)
 				}
+				mm.currentUids = nil
 				mm.currentEntries.Postings = res
 				return
 			}
