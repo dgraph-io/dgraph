@@ -369,6 +369,11 @@ func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 				// If the posting was there before, just remove it from the map, and then remove it
 				// from the array.
 				delete(mm.currentUids, mpost.Uid)
+				post := mm.currentEntries.Postings[postIndex]
+				if post.Op == Del {
+					// No need to do anything
+					return
+				}
 				res := mm.currentEntries.Postings[:postIndex]
 				if postIndex+1 <= len(mm.currentEntries.Postings) {
 					mm.currentEntries.Postings = append(res,
