@@ -253,8 +253,6 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 	found := false
-	pk, _ := x.Parse(plist.key)
-	isScalarPredicate := !schema.State().IsList(edge.Attr) && !pk.IsReverse()
 
 	plist.Lock()
 	defer plist.Unlock()
@@ -272,7 +270,9 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	}
 
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, edge.Op, isScalarPredicate)
+		pk, _ := x.Parse(plist.key)
+		shouldCountOneUid := !schema.State().IsList(edge.Attr) && !pk.IsReverse()
+		countAfter = countAfterMutation(countBefore, found, edge.Op, shouldCountOneUid)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -365,7 +365,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 		Facets:  t.Facets,
 	}
 
-	cp, err := txn.addReverseMutationHelper(ctx, plist, true, edge)
+	cp, err := txn.addReverseMutationHelper(ctx, plist, hasCountIndex, edge)
 	if err != nil {
 		return err
 	}
@@ -483,8 +483,8 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 // what is the count. For non scalar predicate, we need to use found and the operation that the user did to figure out
 // if the new node was inserted or not. However, for single uid predicates this information is not useful. For scalar
 // predicate, delete only works if the value was found. Set would just result in 1 alaways.
-func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op, isScalarPredicate bool) int {
-	if isScalarPredicate {
+func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op, shouldCountOneUid bool) int {
+	if shouldCountOneUid {
 		if op == pb.DirectedEdge_SET {
 			return 1
 		} else if op == pb.DirectedEdge_DEL && found {
@@ -579,7 +579,9 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if hasCountIndex {
-		countAfter = countAfterMutation(countBefore, found, t.Op, isScalarPredicate)
+		pk, _ := x.Parse(l.key)
+		shouldCountOneUid := isScalarPredicate && !pk.IsReverse()
+		countAfter = countAfterMutation(countBefore, found, t.Op, shouldCountOneUid)
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,
