@@ -171,6 +171,7 @@ func TestScalarPredicateRevCount(t *testing.T) {
 	txn := posting.Oracle().RegisterStartTs(13)
 	key := x.DataKey(attr, 1)
 	l, err := txn.Get(key)
+	require.Nil(t, err)
 	l.RLock()
 	require.Equal(t, 0, l.GetLength(13))
 	l.RUnlock()
@@ -185,6 +186,7 @@ func TestScalarPredicateRevCount(t *testing.T) {
 
 	txn = posting.Oracle().RegisterStartTs(18)
 	l, err = txn.Get(key)
+	require.Nil(t, err)
 	l.RLock()
 	require.Equal(t, 1, l.GetLength(18))
 	l.RUnlock()
@@ -199,6 +201,7 @@ func TestScalarPredicateRevCount(t *testing.T) {
 
 	txn = posting.Oracle().RegisterStartTs(20)
 	l, err = txn.Get(key)
+	require.Nil(t, err)
 	l.RLock()
 	require.Equal(t, 0, l.GetLength(20))
 	l.RUnlock()
