@@ -507,7 +507,10 @@ type pIterator struct {
 }
 
 func (it *pIterator) seek(l *List, afterUid, deleteBelowTs uint64) error {
-	if deleteBelowTs > 0 && deleteBelowTs <= l.minTs {
+	// Because we store rollup at commitTs + 1, it could happen that a transaction has a startTs = prev commitTs
+	// + 1. Within that transcation if there's a delete all, deleteBelowTs (=startT) would be equal to l.minTs
+	// (rollup timestamp, prev commitTs + 1). So it's allowed deleteBelowTs == l.minTs
+	if deleteBelowTs > 0 && deleteBelowTs < l.minTs {
 		return errors.Errorf("deleteBelowTs (%d) must be greater than the minTs in the list (%d)",
 			deleteBelowTs, l.minTs)
 	}
