@@ -1282,11 +1282,9 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	// TODO: Following trace messages have been commented out as stringified trace messages allocate
-	// too much memory. These trace messages need to be generated if tracing is enabled.
-	// if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-	// 	glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
-	// }
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
+	}
 
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
