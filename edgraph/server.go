@@ -1283,7 +1283,8 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l.Start = time.Now()
 
 	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a query, DQL form: %+v at %+v", req.req, l.Start.Format(time.RFC3339))
+		glog.Infof("Got a query, DQL form: %+v %+v at %+v",
+			req.req.Query, req.req.Mutations, l.Start.Format(time.RFC3339))
 	}
 
 	isMutation := len(req.req.Mutations) > 0
