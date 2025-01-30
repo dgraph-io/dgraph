@@ -1712,8 +1712,21 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
 	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, l.mutationMap.len()+codec.ApproxLen(l.plist.Pack))
+	res := make([]uint64, 0, l.ApproxLen())
 	out := &pb.List{}
+
+	if opt.Intersect != nil && len(opt.Intersect) < l.ApproxLen() {
+		for _, uid := range opt.Intersect {
+			ok, _, err := l.findPosting(uid, opt.ReadTs)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, p.Uid)
+		}
+		out.Uids = res
+		return out, nil
+	}
+
 	if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
@@ -1724,9 +1737,22 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil
 	}
 
+	var uidMin, uidMax uint64 = 0, 0
+	if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
+		uidMin = opt.Intersect.Uids[0]
+		uidMax = opt.Intersect.Uids[len(opt.Intersect.Uids)-1]
+	}
+
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
+			if p.Uid < uidMin {
+				return nil
+			}
+			if p.Uid > uidMax && uidMax > 0 {
+				return ErrStopIteration
+			}
 			res = append(res, p.Uid)
+
 			if opt.First < 0 {
 				// We need the last N.
 				// TODO: This could be optimized by only considering some of the last UidBlocks.
