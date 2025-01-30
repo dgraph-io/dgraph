@@ -1715,13 +1715,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	res := make([]uint64, 0, l.ApproxLen())
 	out := &pb.List{}
 
-	if opt.Intersect != nil && len(opt.Intersect) < l.ApproxLen() {
-		for _, uid := range opt.Intersect {
+	if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+		for _, uid := range opt.Intersect.Uids {
 			ok, _, err := l.findPosting(uid, opt.ReadTs)
 			if err != nil {
 				return nil, err
 			}
-			res = append(res, p.Uid)
+			if ok {
+				res = append(res, uid)
+			}
 		}
 		out.Uids = res
 		return out, nil
