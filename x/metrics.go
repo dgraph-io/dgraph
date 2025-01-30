@@ -72,7 +72,7 @@ var (
 	LatencyMs = ostats.Float64("latency",
 		"Latency of the various methods", ostats.UnitMilliseconds)
 
-	DiskLatencyMs = ostats.Float64("disk_read_latency",
+	BadgerReadLatencyMs = ostats.Float64("disk_read_latency",
 		"Latency of the various methods", ostats.UnitMilliseconds)
 
 	// Point-in-time metrics.
@@ -205,9 +205,9 @@ var (
 			TagKeys:     allTagKeys,
 		},
 		{
-			Name:        DiskLatencyMs.Name(),
-			Measure:     DiskLatencyMs,
-			Description: DiskLatencyMs.Description(),
+			Name:        BadgerReadLatencyMs.Name(),
+			Measure:     BadgerReadLatencyMs,
+			Description: BadgerReadLatencyMs.Description(),
 			Aggregation: defaultLatencyMsDistribution,
 			TagKeys:     allTagKeys,
 		},

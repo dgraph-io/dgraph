@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
-	"go.opencensus.io/tag"
 
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok/index"
@@ -166,16 +165,6 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 }
 
 func (txn *Txn) GetScalarList(key []byte) (*List, error) {
-	start := time.Now()
-	defer func() {
-		pk, _ := x.Parse(key)
-		ms := x.SinceMs(start)
-		var tags []tag.Mutator
-		tags = append(tags, tag.Upsert(x.KeyMethod, "get"))
-		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
-		_ = ostats.RecordWithTags(context.Background(), tags, x.DiskLatencyMs.M(ms))
-	}()
-
 	l, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return nil, err

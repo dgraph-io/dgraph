@@ -555,7 +555,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		var tags []tag.Mutator
 		tags = append(tags, tag.Upsert(x.KeyMethod, "iterate"))
 		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
-		_ = ostats.RecordWithTags(context.Background(), tags, x.DiskLatencyMs.M(ms))
+		_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
 	}()
 
 	if pk.HasStartUid {

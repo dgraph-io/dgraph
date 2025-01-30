@@ -18,9 +18,13 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -301,6 +305,16 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 }
 
 func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
+	start := time.Now()
+	defer func() {
+		pk, _ := x.Parse(key)
+		ms := x.SinceMs(start)
+		var tags []tag.Mutator
+		tags = append(tags, tag.Upsert(x.KeyMethod, "get"))
+		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
+		_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
+	}()
+
 	pl := &pb.PostingList{}
 	txn := pstore.NewTransactionAt(lc.startTs, false)
 	defer txn.Discard()
