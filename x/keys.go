@@ -645,11 +645,13 @@ var aclPredicateMap = map[string]struct{}{
 // TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
 // predicates, but for all those which are PreDefined and whose value is not allowed to be mutated
 // by users. When renaming this also rename the IsGraphql context key in edgraph/server.go.
-var graphqlReservedPredicate = map[string]struct{}{
+var otherReservedPredicate = map[string]struct{}{
 	"dgraph.graphql.xid":     {},
 	"dgraph.graphql.schema":  {},
 	"dgraph.drop.op":         {},
 	"dgraph.graphql.p_query": {},
+	"dgraph.namespace.id":    {},
+	"dgraph.namespace.name":  {},
 }
 
 // internalPredicateMap stores a set of Dgraph's internal predicate. An internal
@@ -666,13 +668,14 @@ var preDefinedTypeMap = map[string]struct{}{
 	"dgraph.type.Group":              {},
 	"dgraph.type.Rule":               {},
 	"dgraph.graphql.persisted_query": {},
+	"dgraph.namespace":               {},
 }
 
-// IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
+// IsOtherReservedPredicate returns true if it is the predicate is reserved by graphql.
 // These are a subset of PreDefined predicates, so follow all their properties. In addition,
 // the value for these predicates is also not allowed to be mutated directly by the users.
-func IsGraphqlReservedPredicate(pred string) bool {
-	_, ok := graphqlReservedPredicate[pred]
+func IsOtherReservedPredicate(pred string) bool {
+	_, ok := otherReservedPredicate[pred]
 	return ok
 }
 
@@ -710,7 +713,7 @@ func IsReservedPredicate(pred string) bool {
 func IsPreDefinedPredicate(pred string) bool {
 	pred = ParseAttr(pred)
 	_, ok := starAllPredicateMap[strings.ToLower(pred)]
-	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
+	return ok || IsAclPredicate(pred) || IsOtherReservedPredicate(pred)
 }
 
 // IsAclPredicate returns true if the predicate is in the list of reserved

@@ -40,7 +40,7 @@ type SystestTestSuite struct {
 	uc dgraphtest.UpgradeCombo
 }
 
-func (ssuite *SystestTestSuite) SetupSubTest() {
+func (ssuite *SystestTestSuite) SetupTest() {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithACL(20 * time.Second).WithEncryption().WithVersion(ssuite.uc.Before)
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -54,7 +54,7 @@ func (ssuite *SystestTestSuite) SetupSubTest() {
 	ssuite.lc = c
 }
 
-func (ssuite *SystestTestSuite) TearDownSubTest() {
+func (ssuite *SystestTestSuite) TearDownTest() {
 	ssuite.lc.Cleanup(ssuite.T().Failed())
 }
 
@@ -71,14 +71,14 @@ func (ssuite *SystestTestSuite) Upgrade() {
 	require.NoError(ssuite.T(), ssuite.lc.Upgrade(ssuite.uc.After, ssuite.uc.Strategy))
 }
 
-func TestSystestTestSuite(t *testing.T) {
+func TestSystestSuite(t *testing.T) {
 	for _, uc := range dgraphtest.AllUpgradeCombos(false) {
 		log.Printf("running: backup in [%v], restore in [%v]", uc.Before, uc.After)
 		var ssuite SystestTestSuite
 		ssuite.uc = uc
 		suite.Run(t, &ssuite)
 		if t.Failed() {
-			x.Panic(errors.New("TestSystestTestSuite tests failed"))
+			x.Panic(errors.New("TestSystestSuite tests failed"))
 		}
 	}
 }

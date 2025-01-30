@@ -41,65 +41,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
 
-// TestSystem uses the externally run Dgraph cluster for testing. Most other
-// tests in this package are using a suite struct system, which runs Dgraph and
-// loads data with bulk and live loader.
-func (ssuite *SystestTestSuite) TestSystem() {
-	ssuite.Run("n-quad mutation", ssuite.NQuadMutationTest)
-	ssuite.Run("list with languages", ssuite.ListWithLanguagesTest)
-	ssuite.Run("delete all reverse index", ssuite.DeleteAllReverseIndex)
-	ssuite.Run("normalise edge cases", ssuite.NormalizeEdgeCasesTest)
-	ssuite.Run("facets with order", ssuite.FacetOrderTest)
-	ssuite.Run("facets on scalar list", ssuite.FacetsOnScalarList)
-	ssuite.Run("lang and sort bug", ssuite.LangAndSortBugTest)
-	ssuite.Run("sort facets return nil", ssuite.SortFacetsReturnNil)
-	ssuite.Run("check schema after deleting node", ssuite.SchemaAfterDeleteNode)
-	ssuite.Run("fulltext equal", ssuite.FullTextEqual)
-	ssuite.Run("json blank node", ssuite.JSONBlankNode)
-	ssuite.Run("scalar to list", ssuite.ScalarToList)
-	ssuite.Run("list to scalar", ssuite.ListToScalar)
-	ssuite.Run("set after delete for list", ssuite.SetAfterDeletionListType)
-	ssuite.Run("empty strings with exact", ssuite.EmptyNamesWithExact)
-	ssuite.Run("empty strings with term", ssuite.EmptyRoomsWithTermIndex)
-	ssuite.Run("delete with expand all", ssuite.DeleteWithExpandAll)
-	ssuite.Run("facets using nquads", ssuite.FacetsUsingNQuadsError)
-	ssuite.Run("skip empty pl for has", ssuite.SkipEmptyPLForHas)
-	ssuite.Run("has with dash", ssuite.HasWithDash)
-	ssuite.Run("list geo filter", ssuite.ListGeoFilterTest)
-	ssuite.Run("list regex filter", ssuite.ListRegexFilterTest)
-	ssuite.Run("regex query with vars with slash", ssuite.RegexQueryWithVarsWithSlash)
-	ssuite.Run("regex query vars", ssuite.RegexQueryWithVars)
-	ssuite.Run("graphql var child", ssuite.GraphQLVarChild)
-	ssuite.Run("math ge", ssuite.MathGe)
-	ssuite.Run("has should not have deleted edge", ssuite.HasDeletedEdge)
-	ssuite.Run("has should have reverse edges", ssuite.HasReverseEdge)
-	ssuite.Run("facet json input supports anyofterms query", ssuite.FacetJsonInputSupportsAnyOfTerms)
-	ssuite.Run("max predicate size", ssuite.MaxPredicateSize)
-	ssuite.Run("restore reserved preds", ssuite.RestoreReservedPreds)
-	ssuite.Run("drop data", ssuite.DropData)
-	ssuite.Run("drop data and drop all", ssuite.DropDataAndDropAll)
-	ssuite.Run("drop type", ssuite.DropType)
-	ssuite.Run("drop type without specified type", ssuite.DropTypeNoValue)
-	ssuite.Run("reverse count index", ssuite.ReverseCountIndex)
-	ssuite.Run("type predicate check", ssuite.TypePredicateCheck)
-	ssuite.Run("internal predicate check", ssuite.InternalPredicateCheck)
-	ssuite.Run("infer schema as list", ssuite.InferSchemaAsList)
-	ssuite.Run("infer schema as list JSON", ssuite.InferSchemaAsListJSON)
-	ssuite.Run("force schema as list JSON", ssuite.ForceSchemaAsListJSON)
-	ssuite.Run("force schema as single JSON", ssuite.ForceSchemaAsSingleJSON)
-	ssuite.Run("count index concurrent setdel", ssuite.CountIndexConcurrentSetDelUIDList)
-	ssuite.Run("count index concurrent setdel scalar predicate",
-		ssuite.CountIndexConcurrentSetDelScalarPredicate)
-	ssuite.Run("count index delete on non list predicate", ssuite.CountIndexNonlistPredicateDelete)
-	ssuite.Run("Reverse count index delete", ssuite.ReverseCountIndexDelete)
-	ssuite.Run("overwrite uid predicates", ssuite.OverwriteUidPredicates)
-	ssuite.Run("overwrite uid predicates across txns", ssuite.OverwriteUidPredicatesMultipleTxn)
-	ssuite.Run("overwrite uid predicates reverse index", ssuite.OverwriteUidPredicatesReverse)
-	ssuite.Run("delete and query same txn", ssuite.DeleteAndQuerySameTxn)
-	ssuite.Run("add and query zero datetime value", ssuite.AddAndQueryZeroTimeValue)
-}
-
-func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
+func (ssuite *SystestTestSuite) TestFacetJsonInputSupportsAnyOfTerms() {
 	t := ssuite.T()
 
 	type Node struct {
@@ -178,7 +120,7 @@ func (ssuite *SystestTestSuite) FacetJsonInputSupportsAnyOfTerms() {
 	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) ListWithLanguagesTest() {
+func (ssuite *SystestTestSuite) TestListWithLanguages() {
 	t := ssuite.T()
 
 	// Upgrade
@@ -195,7 +137,7 @@ func (ssuite *SystestTestSuite) ListWithLanguagesTest() {
 	require.Error(t, err)
 }
 
-func (ssuite *SystestTestSuite) NQuadMutationTest() {
+func (ssuite *SystestTestSuite) TestNQuadMutation() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -283,7 +225,7 @@ func (ssuite *SystestTestSuite) NQuadMutationTest() {
 	}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
+func (ssuite *SystestTestSuite) TestDeleteAllReverseIndex() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -343,7 +285,7 @@ func (ssuite *SystestTestSuite) DeleteAllReverseIndex() {
 	dgraphapi.CompareJSON(fmt.Sprintf(`{"q":[{"~link": [{"uid": "%s"}]}]}`, aId), string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
+func (ssuite *SystestTestSuite) TestNormalizeEdgeCases() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -431,7 +373,7 @@ func (ssuite *SystestTestSuite) NormalizeEdgeCasesTest() {
 	}
 }
 
-func (ssuite *SystestTestSuite) FacetOrderTest() {
+func (ssuite *SystestTestSuite) TestFacetOrder() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -510,7 +452,7 @@ func (ssuite *SystestTestSuite) FacetOrderTest() {
 	`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) FacetsOnScalarList() {
+func (ssuite *SystestTestSuite) TestFacetsOnScalarList() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -593,7 +535,7 @@ func (ssuite *SystestTestSuite) FacetsOnScalarList() {
 }
 
 // Shows fix for issue #1918.
-func (ssuite *SystestTestSuite) LangAndSortBugTest() {
+func (ssuite *SystestTestSuite) TestLangAndSortBug() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -642,7 +584,7 @@ func (ssuite *SystestTestSuite) LangAndSortBugTest() {
 	`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
+func (ssuite *SystestTestSuite) TestSortFacetsReturnNil() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -710,7 +652,7 @@ func (ssuite *SystestTestSuite) SortFacetsReturnNil() {
 	`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
+func (ssuite *SystestTestSuite) TestSchemaAfterDeleteNode() {
 	// Upgrade
 	ssuite.Upgrade()
 
@@ -752,7 +694,7 @@ func (ssuite *SystestTestSuite) SchemaAfterDeleteNode() {
 		`{"predicate":"name","type":"default"}`})
 }
 
-func (ssuite *SystestTestSuite) FullTextEqual() {
+func (ssuite *SystestTestSuite) TestFullTextEqual() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -803,7 +745,7 @@ func (ssuite *SystestTestSuite) FullTextEqual() {
 	}
 }
 
-func (ssuite *SystestTestSuite) JSONBlankNode() {
+func (ssuite *SystestTestSuite) TestJSONBlankNode() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -842,7 +784,7 @@ func (ssuite *SystestTestSuite) JSONBlankNode() {
 	require.JSONEq(t, `{"q":[{"name":"Michael","friend":[{"name":"Alice"}]}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) ScalarToList() {
+func (ssuite *SystestTestSuite) TestScalarToList() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -942,7 +884,7 @@ func (ssuite *SystestTestSuite) ScalarToList() {
 	require.Equal(t, `{"me":[]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) ListToScalar() {
+func (ssuite *SystestTestSuite) TestListToScalar() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -969,7 +911,7 @@ func (ssuite *SystestTestSuite) ListToScalar() {
 	require.NoError(t, gcli.Alter(ctx, op))
 }
 
-func (ssuite *SystestTestSuite) SetAfterDeletionListType() {
+func (ssuite *SystestTestSuite) TestSetAfterDeletionListType() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1030,7 +972,7 @@ func (ssuite *SystestTestSuite) SetAfterDeletionListType() {
 	require.Equal(t, `{"me":[{"property.test":["rewritten value"]}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) EmptyNamesWithExact() {
+func (ssuite *SystestTestSuite) TestEmptyNamesWithExact() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1069,7 +1011,7 @@ func (ssuite *SystestTestSuite) EmptyNamesWithExact() {
 	require.Equal(t, `{"names":[{"count":2}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) EmptyRoomsWithTermIndex() {
+func (ssuite *SystestTestSuite) TestEmptyRoomsWithTermIndex() {
 	op := &api.Operation{}
 	op.Schema = `
 		room: string @index(term) .
@@ -1112,7 +1054,7 @@ func (ssuite *SystestTestSuite) EmptyRoomsWithTermIndex() {
 	require.Equal(t, `{"offices":[{"count(office.room)":1}]}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) DeleteWithExpandAll() {
+func (ssuite *SystestTestSuite) TestDeleteWithExpandAll() {
 	op := &api.Operation{}
 	op.Schema = `
 		to: [uid] .
@@ -1222,7 +1164,7 @@ func testTimeValue(t *testing.T, c *dgraphapi.GrpcClient, timeBytes []byte) {
 	require.Contains(t, string(resp.Json), "since")
 }
 
-func (ssuite *SystestTestSuite) FacetsUsingNQuadsError() {
+func (ssuite *SystestTestSuite) TestFacetsUsingNQuadsError() {
 	// test time in go binary format
 	t := ssuite.T()
 	timeBinary, err := time.Now().MarshalBinary()
@@ -1241,7 +1183,7 @@ func (ssuite *SystestTestSuite) FacetsUsingNQuadsError() {
 	testTimeValue(t, gcli, []byte("2018-01-01"))
 }
 
-func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
+func (ssuite *SystestTestSuite) TestSkipEmptyPLForHas() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1288,7 +1230,7 @@ func (ssuite *SystestTestSuite) SkipEmptyPLForHas() {
 	require.JSONEq(t, `{"users": []}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) HasWithDash() {
+func (ssuite *SystestTestSuite) TestHasWithDash() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1335,7 +1277,7 @@ func (ssuite *SystestTestSuite) HasWithDash() {
 	dgraphapi.CompareJSON(`{"q":[{"new-friend":[{"name":"Bob"},{"name":"Charlie"}]}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) ListGeoFilterTest() {
+func (ssuite *SystestTestSuite) TestListGeoFilter() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1393,7 +1335,7 @@ func (ssuite *SystestTestSuite) ListGeoFilterTest() {
 	`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) ListRegexFilterTest() {
+func (ssuite *SystestTestSuite) TestListRegexFilter() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1451,7 +1393,7 @@ func (ssuite *SystestTestSuite) ListRegexFilterTest() {
 	`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
+func (ssuite *SystestTestSuite) TestRegexQueryWithVarsWithSlash() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1515,7 +1457,7 @@ func (ssuite *SystestTestSuite) RegexQueryWithVarsWithSlash() {
 	`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) RegexQueryWithVars() {
+func (ssuite *SystestTestSuite) TestRegexQueryWithVars() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1574,7 +1516,7 @@ func (ssuite *SystestTestSuite) RegexQueryWithVars() {
 	`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) GraphQLVarChild() {
+func (ssuite *SystestTestSuite) TestGraphQLVarChild() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1685,7 +1627,7 @@ func (ssuite *SystestTestSuite) GraphQLVarChild() {
 
 }
 
-func (ssuite *SystestTestSuite) MathGe() {
+func (ssuite *SystestTestSuite) TestMathGe() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1734,7 +1676,7 @@ func (ssuite *SystestTestSuite) MathGe() {
 	`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) HasDeletedEdge() {
+func (ssuite *SystestTestSuite) TestHasDeletedEdge() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1844,7 +1786,7 @@ func (ssuite *SystestTestSuite) HasDeletedEdge() {
 	}
 }
 
-func (ssuite *SystestTestSuite) HasReverseEdge() {
+func (ssuite *SystestTestSuite) TestHasReverseEdge() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1903,7 +1845,7 @@ func (ssuite *SystestTestSuite) HasReverseEdge() {
 	require.Equal(t, revs[0].Name, "carol")
 }
 
-func (ssuite *SystestTestSuite) MaxPredicateSize() {
+func (ssuite *SystestTestSuite) TestMaxPredicateSize() {
 	// Create a string that has more than 2^16 chars.
 	var b strings.Builder
 	for i := 0; i < 10000; i++ {
@@ -1944,7 +1886,7 @@ func (ssuite *SystestTestSuite) MaxPredicateSize() {
 	require.Contains(t, err.Error(), "Predicate name length cannot be bigger than 2^16")
 }
 
-func (ssuite *SystestTestSuite) RestoreReservedPreds() {
+func (ssuite *SystestTestSuite) TestRestoreReservedPreds() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -1962,7 +1904,7 @@ func (ssuite *SystestTestSuite) RestoreReservedPreds() {
 	dgraphapi.CompareJSON(`{"schema": [{"predicate":"dgraph.type"}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) DropData() {
+func (ssuite *SystestTestSuite) TestDropData() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2019,7 +1961,7 @@ func (ssuite *SystestTestSuite) DropData() {
 	dgraphapi.CompareJSON(`{"q": []}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) DropDataAndDropAll() {
+func (ssuite *SystestTestSuite) TestDropDataAndDropAll() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2034,7 +1976,7 @@ func (ssuite *SystestTestSuite) DropDataAndDropAll() {
 	require.Contains(t, err.Error(), "Only one of DropAll and DropData can be true")
 }
 
-func (ssuite *SystestTestSuite) DropType() {
+func (ssuite *SystestTestSuite) TestDropType() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2076,7 +2018,7 @@ func (ssuite *SystestTestSuite) DropType() {
 	dgraphapi.CompareJSON("{}", string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) DropTypeNoValue() {
+func (ssuite *SystestTestSuite) TestDropTypeNoValue() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2089,7 +2031,7 @@ func (ssuite *SystestTestSuite) DropTypeNoValue() {
 	require.Contains(t, err.Error(), "DropValue must not be empty")
 }
 
-func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
+func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelUIDList() {
 	t := ssuite.T()
 	dgraphtest.ShouldSkipTest(t, "8631dab37c951b288f839789bbabac5e7088b58f", ssuite.dc.GetVersion())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
@@ -2220,7 +2162,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelUIDList() {
 	dgraphapi.CompareJSON(`{"me":[]}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
+func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelScalarPredicate() {
 	t := ssuite.T()
 	dgraphtest.ShouldSkipTest(t, "8631dab37c951b288f839789bbabac5e7088b58f", ssuite.dc.GetVersion())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
@@ -2305,7 +2247,7 @@ func (ssuite *SystestTestSuite) CountIndexConcurrentSetDelScalarPredicate() {
 	dgraphapi.CompareJSON(`{"q":[]}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
+func (ssuite *SystestTestSuite) TestCountIndexNonlistPredicateDelete() {
 	t := ssuite.T()
 	dgraphtest.ShouldSkipTest(t, "8631dab37c951b288f839789bbabac5e7088b58f", ssuite.dc.GetVersion())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
@@ -2357,7 +2299,7 @@ func (ssuite *SystestTestSuite) CountIndexNonlistPredicateDelete() {
 	dgraphapi.CompareJSON(`{"q": [{"uid": "0x1"}]}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
+func (ssuite *SystestTestSuite) TestReverseCountIndexDelete() {
 	t := ssuite.T()
 	dgraphtest.ShouldSkipTest(t, "8631dab37c951b288f839789bbabac5e7088b58f", ssuite.dc.GetVersion())
 	gcli, cleanup, err := doGrpcLogin(ssuite)
@@ -2407,7 +2349,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndexDelete() {
 
 }
 
-func (ssuite *SystestTestSuite) ReverseCountIndex() {
+func (ssuite *SystestTestSuite) TestReverseCountIndex() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2473,7 +2415,7 @@ func (ssuite *SystestTestSuite) ReverseCountIndex() {
 	dgraphapi.CompareJSON(`{"me":[{"name":"Alice","count(~friend)":10}]}`, string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) TypePredicateCheck() {
+func (ssuite *SystestTestSuite) TestTypePredicateCheck() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2526,7 +2468,7 @@ func (ssuite *SystestTestSuite) TypePredicateCheck() {
 	require.NoError(t, gcli.Alter(ctx, op))
 }
 
-func (ssuite *SystestTestSuite) InternalPredicateCheck() {
+func (ssuite *SystestTestSuite) TestInternalPredicateCheck() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2548,7 +2490,7 @@ func (ssuite *SystestTestSuite) InternalPredicateCheck() {
 	require.Contains(t, err.Error(), "Cannot create user-defined predicate with internal name uid")
 }
 
-func (ssuite *SystestTestSuite) InferSchemaAsList() {
+func (ssuite *SystestTestSuite) TestInferSchemaAsList() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2579,7 +2521,7 @@ func (ssuite *SystestTestSuite) InferSchemaAsList() {
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
+func (ssuite *SystestTestSuite) TestInferSchemaAsListJSON() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2607,7 +2549,7 @@ func (ssuite *SystestTestSuite) InferSchemaAsListJSON() {
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
+func (ssuite *SystestTestSuite) TestForceSchemaAsListJSON() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2636,7 +2578,7 @@ func (ssuite *SystestTestSuite) ForceSchemaAsListJSON() {
 		{"predicate":"nickname"}]}`, string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
+func (ssuite *SystestTestSuite) TestForceSchemaAsSingleJSON() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2665,7 +2607,7 @@ func (ssuite *SystestTestSuite) ForceSchemaAsSingleJSON() {
 		string(resp.Json))
 }
 
-func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
+func (ssuite *SystestTestSuite) TestOverwriteUidPredicates() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2730,7 +2672,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicates() {
 		string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
+func (ssuite *SystestTestSuite) TestOverwriteUidPredicatesReverse() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2834,7 +2776,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesReverse() {
 		string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) OverwriteUidPredicatesMultipleTxn() {
+func (ssuite *SystestTestSuite) TestOverwriteUidPredicatesMultipleTxn() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2896,7 +2838,7 @@ func (ssuite *SystestTestSuite) OverwriteUidPredicatesMultipleTxn() {
 		string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
+func (ssuite *SystestTestSuite) TestDeleteAndQuerySameTxn() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -2959,7 +2901,7 @@ func (ssuite *SystestTestSuite) DeleteAndQuerySameTxn() {
 		string(resp.GetJson()))
 }
 
-func (ssuite *SystestTestSuite) AddAndQueryZeroTimeValue() {
+func (ssuite *SystestTestSuite) TestAddAndQueryZeroTimeValue() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()

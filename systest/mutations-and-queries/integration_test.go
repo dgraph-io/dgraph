@@ -35,9 +35,7 @@ type SystestTestSuite struct {
 
 func (ssuite *SystestTestSuite) SetupTest() {
 	ssuite.dc = dgraphtest.NewComposeCluster()
-}
 
-func (ssuite *SystestTestSuite) SetupSubTest() {
 	t := ssuite.T()
 	gcli, cleanup, err := doGrpcLogin(ssuite)
 	defer cleanup()
@@ -53,6 +51,6 @@ func (ssuite *SystestTestSuite) Upgrade() {
 	// Not implemented for integration tests
 }
 
-func TestSystestTestSuite(t *testing.T) {
+func TestSystestSuite(t *testing.T) {
 	suite.Run(t, new(SystestTestSuite))
 }
