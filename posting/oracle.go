@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v4"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
@@ -161,6 +162,28 @@ func (txn *Txn) Get(key []byte) (*List, error) {
 // GetFromDelta retrieves the posting list from delta cache, not from Badger.
 func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
+}
+
+func (txn *Txn) GetScalarList(key []byte) (*List, error) {
+	l, err := txn.cache.GetFromDelta(key)
+	if err != nil {
+		return nil, err
+	}
+	if l.mutationMap.len() == 0 && len(l.plist.Postings) == 0 {
+		pl, err := txn.cache.readPostingListAt(key)
+		if err == badger.ErrKeyNotFound {
+			return l, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if pl.CommitTs == 0 {
+			l.mutationMap.setCurrentEntries(txn.StartTs, pl)
+		} else {
+			l.mutationMap.insertCommittedPostings(pl)
+		}
+	}
+	return l, nil
 }
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.

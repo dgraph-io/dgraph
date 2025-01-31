@@ -71,6 +71,9 @@ var (
 	// LatencyMs is the latency of the various Dgraph operations.
 	LatencyMs = ostats.Float64("latency",
 		"Latency of the various methods", ostats.UnitMilliseconds)
+	// BadgerReadLatencyMs is the latency of various different predicate reads from badger.
+	BadgerReadLatencyMs = ostats.Float64("badger_read_latency_ms",
+		"Latency of the various methods", ostats.UnitMilliseconds)
 
 	// Point-in-time metrics.
 
@@ -198,6 +201,13 @@ var (
 			Name:        LatencyMs.Name(),
 			Measure:     LatencyMs,
 			Description: LatencyMs.Description(),
+			Aggregation: defaultLatencyMsDistribution,
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        BadgerReadLatencyMs.Name(),
+			Measure:     BadgerReadLatencyMs,
+			Description: BadgerReadLatencyMs.Description(),
 			Aggregation: defaultLatencyMsDistribution,
 			TagKeys:     allTagKeys,
 		},
