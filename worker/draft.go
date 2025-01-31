@@ -863,12 +863,15 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		txn := posting.Oracle().GetTxn(start)
+		defer func() {
+			txn.Clear()
+		}()
 		if txn == nil || commit == 0 {
 			return
 		}
-		// If the transaction has failed, we dont need to update it.
-		if commit != 0 {
-			txn.Update()
+		// If the transaction has failed, we dont need to do anything.
+		if commit == 0 {
+			return
 		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.

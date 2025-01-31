@@ -134,9 +134,9 @@ func NewViLocalCache(delegate *LocalCache) *viLocalCache {
 func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
 		startTs:     startTs,
-		deltas:      make(map[string][]byte),
+		deltas:      memoryLayer.getNewDeltasMap(),
 		plists:      make(map[string]*List),
-		maxVersions: make(map[string]uint64),
+		maxVersions: memoryLayer.getNewMaxVersionMap(),
 	}
 }
 

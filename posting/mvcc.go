@@ -409,6 +409,10 @@ type MemoryLayer struct {
 	// metrics
 	statsHolder  *StatsHolder
 	numDisksRead int64
+
+	deltasMapProvider   sync.Pool
+	maxVersionsProvider sync.Pool
+	newPostingsProvider sync.Pool
 }
 
 func (ml *MemoryLayer) clear() {
@@ -418,12 +422,58 @@ func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
 }
 
+func (ml *MemoryLayer) getNewPosting() *pb.Posting {
+	return ml.newPostingsProvider.Get().(&pb.Posting)
+}
+
+func (ml *MemoryLayer) putNewPosting(m *pb.Posting) {
+	// Reset the map (avoid lingering references)
+	ml.newPostingsProvider.Put(m)
+}
+
+func (ml *MemoryLayer) getNewMaxVersionMap() map[string]uint64 {
+	return ml.maxVersionsProvider.Get().(map[string]uint64)
+}
+
+func (ml *MemoryLayer) putNewMaxVersionMap(m map[string]uint64) {
+	// Reset the map (avoid lingering references)
+	for key := range m {
+		delete(m, key)
+	}
+	ml.maxVersionsProvider.Put(m)
+}
+
+func (ml *MemoryLayer) getNewDeltasMap() map[string][]byte {
+	return ml.deltasMapProvider.Get().(map[string][]byte)
+}
+
+func (ml *MemoryLayer) putDeltasMap(m map[string][]byte) {
+	// Reset the map (avoid lingering references)
+	for key := range m {
+		delete(m, key)
+	}
+	ml.deltasMapProvider.Put(m)
+}
+
 func GetStatsHolder() *StatsHolder {
 	return memoryLayer.statsHolder
 }
 
 func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 	ml := &MemoryLayer{}
+
+	ml.deltasMapProvider = sync.Pool{
+		New: func() any {
+			return make(map[string][]byte) // Allocate new map when needed
+		},
+	}
+
+	ml.maxVersionsProvider = sync.Pool{
+		New: func() any {
+			return make(map[string]uint64) // Allocate new map when needed
+		},
+	}
+
 	ml.deleteOnUpdates = deleteOnUpdates
 	ml.statsHolder = NewStatsHolder()
 	if cacheSize > 0 {

@@ -173,6 +173,11 @@ func (txn *Txn) Store(pl *List) *List {
 	return txn.cache.SetIfAbsent(string(pl.key), pl)
 }
 
+func (txn *Txn) Clear() {
+	memoryLayer.putDeltasMap(txn.cache.deltas)
+	memoryLayer.putNewMaxVersionMap(txn.cache.maxVersions)
+}
+
 type oracle struct {
 	x.SafeMutex
 
