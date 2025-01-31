@@ -1734,7 +1734,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 		if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 			if opt.ReadTs < l.minTs {
-				return out, errors.Wrapf(ErrTsTooOld, "While reading UIDs")
+				return out, errors.Wrapf(ErrTsTooOld, "While reading UIDs"), false
 			}
 			algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 			return out, nil, false
@@ -1782,7 +1782,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, err
 	}
 
-	lenBefore := len(res)
+	lenBefore := len(out.Uids)
 	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
