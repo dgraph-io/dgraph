@@ -347,9 +347,9 @@ func RemoveCacheFor(key []byte) {
 type Cache struct {
 	data *ristretto.Cache[[]byte, *CachePL]
 
-	numCacheRead      int64
-	numCacheReadFails int64
-	numCacheSave      int64
+	numCacheRead      atomic.Int64
+	numCacheReadFails atomic.Int64
+	numCacheSave      atomic.Int64
 }
 
 func (c *Cache) wait() {
@@ -365,15 +365,14 @@ func (c *Cache) get(key []byte) (*CachePL, bool) {
 	}
 	val, ok := c.data.Get(key)
 	if !ok {
-		atomic.AddInt64(&c.numCacheReadFails, 1)
+		c.numCacheReadFails.Add(1)
 		return val, ok
 	}
 	if val.list == nil {
-		atomic.AddInt64(&c.numCacheReadFails, 1)
+		c.numCacheReadFails.Add(1)
 		return nil, false
 	}
-	atomic.AddInt64(&c.numCacheRead, 1)
-	c.numCacheRead += 1
+	c.numCacheRead.Add(1)
 	return val, true
 }
 
@@ -381,7 +380,7 @@ func (c *Cache) set(key []byte, i *CachePL) {
 	if c == nil {
 		return
 	}
-	c.numCacheSave += 1
+	c.numCacheSave.Add(1)
 	c.data.Set(key, i, 1)
 }
 
@@ -407,8 +406,7 @@ type MemoryLayer struct {
 	cache *Cache
 
 	// metrics
-	statsHolder  *StatsHolder
-	numDisksRead int64
+	statsHolder *StatsHolder
 }
 
 func (ml *MemoryLayer) clear() {
@@ -448,6 +446,15 @@ func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 			for range ticker.C {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+
+				x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
+				ml.cache.numCacheSave.Store(0)
+
+				x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
+				ml.cache.numCacheRead.Store(0)
+
+				x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
+				ml.cache.numCacheReadFails.Store(0)
 			}
 		}()
 
@@ -657,7 +664,6 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 }
 
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	atomic.AddInt64(&ml.numDisksRead, 1)
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
