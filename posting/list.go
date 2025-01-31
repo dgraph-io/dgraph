@@ -729,15 +729,14 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 		postingType = pb.Posting_REF
 	}
 
-	p := &pb.Posting{
-		Uid:         t.ValueId,
-		Value:       t.Value,
-		ValType:     t.ValueType,
-		PostingType: postingType,
-		LangTag:     []byte(t.Lang),
-		Op:          op,
-		Facets:      t.Facets,
-	}
+	p := memoryLayer.getNewPosting()
+	p.Uid = t.ValueId
+	p.Value = t.Value
+	p.ValType = t.ValueType
+	p.PostingType = postingType
+	p.LangTag = []byte(t.Lang)
+	p.Op = op
+	p.Facets = t.Facets
 	return p
 }
 

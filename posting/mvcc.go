@@ -423,10 +423,17 @@ func (ml *MemoryLayer) del(key []byte) {
 }
 
 func (ml *MemoryLayer) getNewPosting() *pb.Posting {
-	return ml.newPostingsProvider.Get().(&pb.Posting)
+	return ml.newPostingsProvider.Get().(*pb.Posting)
 }
 
 func (ml *MemoryLayer) putNewPosting(m *pb.Posting) {
+	m.Uid = 0
+	m.Value = nil
+	m.LangTag = nil
+	m.Op = 0
+	m.StartTs = 0
+	m.CommitTs = 0
+
 	// Reset the map (avoid lingering references)
 	ml.newPostingsProvider.Put(m)
 }
@@ -461,6 +468,12 @@ func GetStatsHolder() *StatsHolder {
 
 func initMemoryLayer(cacheSize int64, deleteOnUpdates bool) *MemoryLayer {
 	ml := &MemoryLayer{}
+
+	ml.newPostingsProvider = sync.Pool{
+		New: func() any {
+			return &pb.Posting{} // Allocate new map when needed
+		},
+	}
 
 	ml.deltasMapProvider = sync.Pool{
 		New: func() any {
