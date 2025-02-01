@@ -1718,20 +1718,6 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		res := make([]uint64, 0, l.ApproxLen())
 		out := &pb.List{}
 
-		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
-			for _, uid := range opt.Intersect.Uids {
-				ok, _, err := l.findPosting(uid, opt.ReadTs)
-				if err != nil {
-					return nil, err, false
-				}
-				if ok {
-					res = append(res, uid)
-				}
-			}
-			out.Uids = res
-			return out, nil, false
-		}
-
 		if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 			if opt.ReadTs < l.minTs {
 				return out, errors.Wrapf(ErrTsTooOld, "While reading UIDs"), false
@@ -1739,6 +1725,20 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
 			return out, nil, false
 		}
+
+		//if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+		//	for _, uid := range opt.Intersect.Uids {
+		//		ok, _, err := l.findPosting(uid, opt.ReadTs)
+		//		if err != nil {
+		//			return nil, err, false
+		//		}
+		//		if ok {
+		//			res = append(res, uid)
+		//		}
+		//	}
+		//	out.Uids = res
+		//	return out, nil, false
+		//}
 
 		var uidMin, uidMax uint64 = 0, 0
 		if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
