@@ -1726,19 +1726,19 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
-		//if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
-		//	for _, uid := range opt.Intersect.Uids {
-		//		ok, _, err := l.findPosting(uid, opt.ReadTs)
-		//		if err != nil {
-		//			return nil, err, false
-		//		}
-		//		if ok {
-		//			res = append(res, uid)
-		//		}
-		//	}
-		//	out.Uids = res
-		//	return out, nil, false
-		//}
+		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+			for _, uid := range opt.Intersect.Uids {
+				ok, _, err := l.findPosting(uid, opt.ReadTs)
+				if err != nil {
+					return nil, err, false
+				}
+				if ok {
+					res = append(res, uid)
+				}
+			}
+			out.Uids = res
+			return out, nil, false
+		}
 
 		var uidMin, uidMax uint64 = 0, 0
 		if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
