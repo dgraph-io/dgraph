@@ -1727,8 +1727,9 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		}
 
 		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+			var pitr pIterator
 			for _, uid := range opt.Intersect.Uids {
-				ok, _, err := l.findPosting(opt.ReadTs, uid)
+				ok, _, err := l.findPostingWithItr(opt.ReadTs, uid, pitr)
 				if err != nil {
 					return nil, err, false
 				}
@@ -2081,7 +2082,7 @@ func (l *List) FindPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	return l.findPosting(readTs, uid)
 }
 
-func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
+func (l *List) findPostingWithItr(readTs uint64, uid uint64, pitr pIterator) (found bool, pos *pb.Posting, err error) {
 	// Iterate starts iterating after the given argument, so we pass UID - 1
 	// TODO Find what happens when uid = math.MaxUint64
 	searchFurther, pos := l.mutationMap.findPosting(readTs, uid)
@@ -2092,7 +2093,6 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 		return false, nil, nil
 	}
 
-	var pitr pIterator
 	err = pitr.seek(l, uid-1, 0)
 	if err != nil {
 		return false, nil, errors.Wrapf(err,
@@ -2114,6 +2114,11 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 		return false, nil, nil
 	}
 	return false, nil, nil
+}
+
+func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posting, err error) {
+	var pitr pIterator
+	return l.findPostingWithItr(readTs, uid, pitr)
 }
 
 // Facets gives facets for the posting representing value.
