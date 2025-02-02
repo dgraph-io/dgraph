@@ -1726,7 +1726,10 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
+		// If we need to intersect and the number of elements are small, in that case it's better to
+		// just check each item is present or not.
 		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+			// Cache the iterator as it makes the search space smaller each time.
 			var pitr pIterator
 			for _, uid := range opt.Intersect.Uids {
 				ok, _, err := l.findPostingWithItr(opt.ReadTs, uid, pitr)
@@ -1742,6 +1745,8 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
+		// If we are going to iterate over the list, in that case we only need to read between min and max
+		// of opt.Intersect.
 		var uidMin, uidMax uint64 = 0, 0
 		if opt.Intersect != nil && len(opt.Intersect.Uids) > 0 {
 			uidMin = opt.Intersect.Uids[0]
