@@ -1775,17 +1775,15 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
 				hex.EncodeToString(l.key)), false
 		}
-		if len(resFromIterate) > 0 {
-			if len(res) != len(resFromIterate) {
-				fmt.Println(l.key, l.Print(), res, resFromIterate)
-				panic("hi")
-			}
-			if len(res) == len(resFromIterate) {
-				for i := range res {
-					if res[i] != resFromIterate[i] {
-						fmt.Println(l.key, l.Print(), res, resFromIterate)
-						panic("hi")
-					}
+		if len(res) != len(resFromIterate) {
+			fmt.Println(l.key, l.Print(), res, resFromIterate)
+			panic("hi")
+		}
+		if len(res) == len(resFromIterate) {
+			for i := range res {
+				if res[i] != resFromIterate[i] {
+					fmt.Println(l.key, l.Print(), res, resFromIterate)
+					panic("hi")
 				}
 			}
 		}
