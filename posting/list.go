@@ -1778,6 +1778,10 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				hex.EncodeToString(l.key)), false
 		}
 		if ranIterate {
+			if opt.Intersect != nil {
+				out.Uids = res
+				algo.IntersectWith(out, opt.Intersect, out)
+			}
 			if len(res) != len(resFromIterate) {
 				fmt.Println(l.key, l.print(), res, resFromIterate)
 				panic("hi")
