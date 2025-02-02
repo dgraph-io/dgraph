@@ -1728,7 +1728,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
 			for _, uid := range opt.Intersect.Uids {
-				ok, _, err := l.findPosting(uid, opt.ReadTs)
+				ok, _, err := l.findPosting(opt.ReadTs, uid)
 				if err != nil {
 					return nil, err, false
 				}
