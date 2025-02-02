@@ -1716,6 +1716,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		defer l.RUnlock()
 		// Use approximate length for initial capacity.
 		res := make([]uint64, 0, l.ApproxLen())
+		ranIterate := false
 		resFromIterate := make([]uint64, 0)
 		out := &pb.List{}
 
@@ -1728,6 +1729,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		}
 
 		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+			ranIterate = true
 			for _, uid := range opt.Intersect.Uids {
 				ok, _, err := l.findPosting(uid, opt.ReadTs)
 				if err != nil {
@@ -1775,15 +1777,17 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
 				hex.EncodeToString(l.key)), false
 		}
-		if len(res) != len(resFromIterate) {
-			fmt.Println(l.key, l.print(), res, resFromIterate)
-			panic("hi")
-		}
-		if len(res) == len(resFromIterate) {
-			for i := range res {
-				if res[i] != resFromIterate[i] {
-					fmt.Println(l.key, l.print(), res, resFromIterate)
-					panic("hi")
+		if ranIterate {
+			if len(res) != len(resFromIterate) {
+				fmt.Println(l.key, l.print(), res, resFromIterate)
+				panic("hi")
+			}
+			if len(res) == len(resFromIterate) {
+				for i := range res {
+					if res[i] != resFromIterate[i] {
+						fmt.Println(l.key, l.print(), res, resFromIterate)
+						panic("hi")
+					}
 				}
 			}
 		}
