@@ -1716,6 +1716,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		defer l.RUnlock()
 		// Use approximate length for initial capacity.
 		res := make([]uint64, 0, l.ApproxLen())
+		resFromIterate := make([]uint64, 0)
 		out := &pb.List{}
 
 		if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
@@ -1734,10 +1735,12 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				}
 				if ok {
 					res = append(res, uid)
+					resFromIterate = append(resFromIterate, uid)
 				}
 			}
-			out.Uids = res
-			return out, nil, false
+
+			//out.Uids = res
+			//return out, nil, false
 		}
 
 		var uidMin, uidMax uint64 = 0, 0
@@ -1771,6 +1774,20 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		if err != nil {
 			return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
 				hex.EncodeToString(l.key)), false
+		}
+		if len(resFromIterate) > 0 {
+			if len(res) != len(resFromIterate) {
+				fmt.Println(l.key, l.Print(), res, resFromIterate)
+				panic("hi")
+			}
+			if len(res) == len(resFromIterate) {
+				for i := range res {
+					if res[i] != resFromIterate[i] {
+						fmt.Println(l.key, l.Print(), res, resFromIterate)
+						panic("hi")
+					}
+				}
+			}
 		}
 		out.Uids = res
 		return out, nil, true
