@@ -1776,13 +1776,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				hex.EncodeToString(l.key)), false
 		}
 		if len(res) != len(resFromIterate) {
-			fmt.Println(l.key, l.Print(), res, resFromIterate)
+			fmt.Println(l.key, l.print(), res, resFromIterate)
 			panic("hi")
 		}
 		if len(res) == len(resFromIterate) {
 			for i := range res {
 				if res[i] != resFromIterate[i] {
-					fmt.Println(l.key, l.Print(), res, resFromIterate)
+					fmt.Println(l.key, l.print(), res, resFromIterate)
 					panic("hi")
 				}
 			}
