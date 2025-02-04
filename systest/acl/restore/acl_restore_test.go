@@ -1,5 +1,9 @@
 //go:build integration
 
+/*
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ */
+
 package main
 
 import (

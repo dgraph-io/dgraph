@@ -1,6 +1,11 @@
 //go:build linux
 // +build linux
 
+/*
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package x
 
 // Only setting linux because some of the darwin/BSDs have a different struct for syscall.statfs_t
