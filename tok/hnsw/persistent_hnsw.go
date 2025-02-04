@@ -309,7 +309,7 @@ func (ph *persistentHNSW[T]) calculateNewEntryVec(
 	startVec *[]T) (uint64, error) {
 
 	itr, err := c.Find([]byte(ph.pred), func(value []byte) bool {
-		index.BytesAsFloatArray(&value, startVec, ph.floatBits)
+		index.BytesAsFloatArray(value, startVec, ph.floatBits)
 		return len(*startVec) != 0
 	})
 

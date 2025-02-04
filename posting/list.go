@@ -82,7 +82,7 @@ type List struct {
 	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs       uint64 // max commit timestamp seen for this list.
 
-	cache *[]byte
+	cache []byte
 }
 
 // MutableLayer is the structure that will store mutable layer of the posting list. Every posting list has an immutable

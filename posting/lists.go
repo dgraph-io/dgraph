@@ -97,7 +97,7 @@ func (vc *viLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64, e
 	return vc.delegate.Find(prefix, filter)
 }
 
-func (vc *viLocalCache) Get(key []byte) (*[]byte, error) {
+func (vc *viLocalCache) Get(key []byte) ([]byte, error) {
 	pl, err := vc.delegate.Get(key)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (vc *viLocalCache) Get(key []byte) (*[]byte, error) {
 	return vc.GetValueFromPostingList(pl)
 }
 
-func (vc *viLocalCache) GetWithLockHeld(key []byte) (*[]byte, error) {
+func (vc *viLocalCache) GetWithLockHeld(key []byte) ([]byte, error) {
 	pl, err := vc.delegate.Get(key)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) (*[]byte, error) {
 	return vc.GetValueFromPostingList(pl)
 }
 
-func (vc *viLocalCache) GetValueFromPostingList(pl *List) (*[]byte, error) {
+func (vc *viLocalCache) GetValueFromPostingList(pl *List) ([]byte, error) {
 	if pl.cache != nil {
 		return pl.cache, nil
 	}
@@ -129,7 +129,7 @@ func (vc *viLocalCache) GetValueFromPostingList(pl *List) (*[]byte, error) {
 		return nil, ErrNoValue
 	}
 
-	pl.cache = &value.Postings[0].Value
+	pl.cache = value.Postings[0].Value
 	return pl.cache, nil
 }
 

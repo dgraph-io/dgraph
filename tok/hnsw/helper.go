@@ -249,7 +249,7 @@ type TxnCache struct {
 	startTs uint64
 }
 
-func (tc *TxnCache) Get(key []byte) (rval *[]byte, rerr error) {
+func (tc *TxnCache) Get(key []byte) (rval []byte, rerr error) {
 	return tc.txn.Get(key)
 }
 
@@ -278,7 +278,7 @@ func (qc *QueryCache) Find(prefix []byte, filter func([]byte) bool) (uint64, err
 	return qc.cache.Find(prefix, filter)
 }
 
-func (qc *QueryCache) Get(key []byte) (rval *[]byte, rerr error) {
+func (qc *QueryCache) Get(key []byte) (rval []byte, rerr error) {
 	return qc.cache.Get(key)
 }
 
@@ -295,7 +295,7 @@ func NewQueryCache(cache index.LocalCache, readTs uint64) *QueryCache {
 
 // getDataFromKeyWithCacheType(keyString, uid, c) looks up data in c
 // associated with keyString and uid.
-func getDataFromKeyWithCacheType(keyString string, uid uint64, c index.CacheType) (*[]byte, error) {
+func getDataFromKeyWithCacheType(keyString string, uid uint64, c index.CacheType) ([]byte, error) {
 	key := DataKey(keyString, uid)
 	data, err := c.Get(key)
 	if err != nil {
@@ -377,7 +377,7 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 	if err != nil {
 		if errors.Is(err, errFetchingPostingList) {
 			// no vector. Return empty array of floats
-			index.BytesAsFloatArray(&emptyVec, vec, ph.floatBits)
+			index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 			return fmt.Errorf("%w; %w", errNilVector, err)
 		}
 		return err
@@ -386,7 +386,7 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		index.BytesAsFloatArray(data, vec, ph.floatBits)
 		return nil
 	} else {
-		index.BytesAsFloatArray(&emptyVec, vec, ph.floatBits)
+		index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 		return errNilVector
 	}
 }
@@ -473,26 +473,26 @@ func encodeUint64MatrixUnsafe(matrix [][]uint64) []byte {
 	return data
 }
 
-func decodeUint64MatrixUnsafe(data *[]byte, matrix *[][]uint64) error {
-	if len(*data) == 0 {
+func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
+	if len(data) == 0 {
 		return nil
 	}
 
 	offset := 0
 	// Read number of rows
-	rows := *(*uint64)(unsafe.Pointer(&(*data)[offset]))
+	rows := *(*uint64)(unsafe.Pointer(&data[offset]))
 	offset += 8
 
 	*matrix = make([][]uint64, rows)
 
 	for i := 0; i < int(rows); i++ {
 		// Read row length
-		rowLen := *(*uint64)(unsafe.Pointer(&(*data)[offset]))
+		rowLen := *(*uint64)(unsafe.Pointer(&data[offset]))
 		offset += 8
 
 		(*matrix)[i] = make([]uint64, rowLen)
 		for j := 0; j < int(rowLen); j++ {
-			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&(*data)[offset]))
+			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
 			offset += 8
 		}
 	}
@@ -673,7 +673,7 @@ func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, tc *TxnCache) ([]
 
 		var deadNodes []uint64
 		if data != nil { // if dead nodes exist, convert to []uint64
-			deadNodes, err = ParseEdges(string(*data))
+			deadNodes, err = ParseEdges(string(data))
 			if err != nil {
 				return []uint64{}, err
 			}
@@ -704,8 +704,8 @@ func Uint64ToBytes(key uint64) []byte {
 	return b
 }
 
-func BytesToUint64(bytes *[]byte) uint64 {
-	return binary.BigEndian.Uint64(*bytes)
+func BytesToUint64(bytes []byte) uint64 {
+	return binary.BigEndian.Uint64(bytes)
 }
 
 func isEqual[T c.Float](a []T, b []T) bool {

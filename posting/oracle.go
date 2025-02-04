@@ -85,7 +85,7 @@ func (vt *viTxn) StartTs() uint64 {
 	return vt.delegate.StartTs
 }
 
-func (vt *viTxn) Get(key []byte) (*[]byte, error) {
+func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (vt *viTxn) Get(key []byte) (*[]byte, error) {
 	return vt.GetValueFromPostingList(pl)
 }
 
-func (vt *viTxn) GetWithLockHeld(key []byte) (*[]byte, error) {
+func (vt *viTxn) GetWithLockHeld(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (vt *viTxn) GetWithLockHeld(key []byte) (*[]byte, error) {
 	return vt.GetValueFromPostingList(pl)
 }
 
-func (vt *viTxn) GetValueFromPostingList(pl *List) (*[]byte, error) {
+func (vt *viTxn) GetValueFromPostingList(pl *List) ([]byte, error) {
 	if pl.cache != nil {
 		return pl.cache, nil
 	}
@@ -117,7 +117,7 @@ func (vt *viTxn) GetValueFromPostingList(pl *List) (*[]byte, error) {
 		return nil, ErrNoValue
 	}
 
-	pl.cache = &value.Postings[0].Value
+	pl.cache = value.Postings[0].Value
 	return pl.cache, nil
 }
 
