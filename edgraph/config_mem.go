@@ -2,6 +2,11 @@
 // +build linux darwin
 // +build cgo
 
+/*
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // This file is compiled on linux and darwin when cgo is enabled.
 
 package edgraph
