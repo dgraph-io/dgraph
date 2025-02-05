@@ -1,7 +1,6 @@
 //
 // SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
 // SPDX-License-Identifier: Apache-2.0
-//
 
 // Style guide for Protocol Buffer 3.
 // Use CamelCase (with an initial capital) for message names – for example,
