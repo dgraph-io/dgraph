@@ -1,5 +1,5 @@
 FROM dgraph/dgraph:local
-LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
+LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nfs-client

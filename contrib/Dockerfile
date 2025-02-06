@@ -5,7 +5,7 @@
 # already built and placed there.
 
 FROM ubuntu:22.04
-LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
+LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
 
 # need to remove the cache of sources lists
 # apt-get Error Code 100
