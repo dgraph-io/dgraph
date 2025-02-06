@@ -161,9 +161,6 @@ type LocalCache interface {
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
 }
 
-// Value is an interface representation of the value of a persistent storage system
-type Value interface{}
-
 // CacheType is an interface representation of the cache of a persistent storage system
 type CacheType interface {
 	Get(key []byte) (rval []byte, rerr error)

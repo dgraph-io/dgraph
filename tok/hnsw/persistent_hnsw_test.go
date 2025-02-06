@@ -171,22 +171,22 @@ func flatInMemListWriteMutation(test flatInMemListAddMutationTest, t *testing.T)
 		}
 	}
 	// should not modify db [test.startTs, test.finishTs)
-	if tsDbs[test.finishTs-1].inMemTestDb[test.key] != tsDbs[test.startTs].inMemTestDb[test.key] {
+	if string(tsDbs[test.finishTs-1].inMemTestDb[test.key]) != string(tsDbs[test.startTs].inMemTestDb[test.key]) {
 		t.Errorf(
 			"Database at time %q not equal to expected database at time %q. Expected: %q, Got: %q",
 			test.finishTs-1, test.startTs,
 			tsDbs[test.startTs].inMemTestDb[test.key],
 			tsDbs[test.finishTs-1].inMemTestDb[test.key])
 	}
-	if string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]) != string(test.t.Value[:]) {
+	if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) != string(test.t.Value[:]) {
 		t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
-			test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]), string(test.t.Value[:]))
+			test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 	}
-	if string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]) !=
-		string(tsDbs[99].inMemTestDb[test.key].([]byte)[:]) {
+	if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) !=
+		string(tsDbs[99].inMemTestDb[test.key][:]) {
 		t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
-			test.key, string(tsDbs[99].inMemTestDb[test.key].([]byte)[:]),
-			string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]))
+			test.key, string(tsDbs[99].inMemTestDb[test.key][:]),
+			string(tsDbs[test.finishTs].inMemTestDb[test.key][:]))
 	}
 }
 
@@ -243,14 +243,14 @@ func TestFlatInMemListAddMultipleWritesMutation(t *testing.T) {
 			conv := flatInMemListAddMutationTest{test.key, test.startTs, test.finishTs, test.t, test.expectedErr}
 			flatInMemListWriteMutation(conv, t)
 		} else {
-			if string(tsDbs[test.finishTs-1].inMemTestDb[test.key].([]byte)[:]) !=
+			if string(tsDbs[test.finishTs-1].inMemTestDb[test.key][:]) !=
 				string(flatInMemListAddMultipleWritesMutationTests[test.currIteration-1].t.Value[:]) {
 				t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
-					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]), string(test.t.Value[:]))
+					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 			}
-			if string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]) != string(test.t.Value[:]) {
+			if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) != string(test.t.Value[:]) {
 				t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
-					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key].([]byte)[:]), string(test.t.Value[:]))
+					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 			}
 		}
 	}
@@ -352,8 +352,8 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 		}
 		var float1, float2 = []float64{}, []float64{}
 		skey := string(key[:])
-		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[skey].([]byte), &float1, 64)
-		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[skey].([]byte), &float2, 64)
+		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[skey], &float1, 64)
+		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[skey], &float2, 64)
 		if !equalFloat64Slice(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
 				"not equivalent. Start Value: %v\n, End Value: %v\n %v\n %v", flatPh.pred, tsDbs[0].inMemTestDb[skey],
@@ -368,7 +368,7 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 			t.Errorf("Edges created during insert is incorrect. Expected: %v, Got: %v", test.expectedEdgesList, edgesNameList)
 		}
 		entryKey := DataKey(ConcatStrings(flatPh.pred, VecEntry), 1)
-		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])].([]byte))
+		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])])
 		if entryVal != test.inUuid {
 			t.Errorf("entry value stored is incorrect. Expected: %q, Got: %q", test.inUuid, entryVal)
 		}
@@ -429,7 +429,7 @@ func TestNonflatEntryInsertToPersistentFlatStorage(t *testing.T) {
 	// fmt.Print(tsDbs[1].inMemTestDb[string(testKey[:])])
 	for _, test := range nonflatEntryInsertToPersistentFlatStorageTests {
 		entryKey := DataKey(ConcatStrings(flatPh.pred, VecEntry), 1)
-		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])].([]byte))
+		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])])
 		if entryVal != 5 {
 			t.Errorf("entry value stored is incorrect. Expected: %q, Got: %q", 5, entryVal)
 		}
@@ -448,12 +448,12 @@ func TestNonflatEntryInsertToPersistentFlatStorage(t *testing.T) {
 			}
 		}
 		var float1, float2 = []float64{}, []float64{}
-		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[string(key[:])].([]byte), &float1, 64)
-		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[string(key[:])].([]byte), &float2, 64)
+		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[string(key[:])], &float1, 64)
+		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[string(key[:])], &float2, 64)
 		if !equalFloat64Slice(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
-				"not equivalent. Start Value: %v, End Value: %v", flatPh.pred, tsDbs[0].inMemTestDb[flatPh.pred].([]float64),
-				tsDbs[99].inMemTestDb[flatPh.pred].([]float64))
+				"not equivalent. Start Value: %v, End Value: %v", flatPh.pred, tsDbs[0].inMemTestDb[flatPh.pred],
+				tsDbs[99].inMemTestDb[flatPh.pred])
 		}
 		edgesNameList := []string{}
 		for _, edge := range edges {

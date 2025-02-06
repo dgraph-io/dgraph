@@ -32,7 +32,7 @@ import (
 // holds an map in memory that is a string (which will be []bytes as string)
 // as the key, with an index.Val as the value
 type indexStorage struct {
-	inMemTestDb map[string]index.Value
+	inMemTestDb map[string][]byte
 
 	//Two locks allow for lock promotion when writing, so we promote a read lock
 	//between the start and finish times to a full lock on the finish time
@@ -50,7 +50,7 @@ var tsDbs [100]indexStorage
 
 func emptyTsDbs() {
 	for i := range tsDbs {
-		tsDbs[i] = indexStorage{inMemTestDb: make(map[string]index.Value)}
+		tsDbs[i] = indexStorage{inMemTestDb: make(map[string][]byte)}
 	}
 }
 
@@ -74,7 +74,7 @@ func newInMemList(key string, startTs, finishTs uint64) *inMemList {
 }
 
 // locks the posting list & invokes ValueWithLockHeld
-func (l *inMemList) Value(readTs uint64) (rval index.Value, rerr error) {
+func (l *inMemList) Value(readTs uint64) (rval []byte, rerr error) {
 	// reading should only lock the db at current instance in time
 	tsDbs[readTs].readMu.RLock()
 	defer tsDbs[readTs].readMu.RUnlock()
@@ -82,7 +82,7 @@ func (l *inMemList) Value(readTs uint64) (rval index.Value, rerr error) {
 }
 
 // reads value from the database at readTs corresponding to List's key
-func (l *inMemList) ValueWithLockHeld(readTs uint64) (rval index.Value, rerr error) {
+func (l *inMemList) ValueWithLockHeld(readTs uint64) (rval []byte, rerr error) {
 	val, ok := tsDbs[readTs].inMemTestDb[l.key]
 	if !ok {
 		return nil, errors.New("Could not find data with key " + l.key)
@@ -145,7 +145,7 @@ func (t *inMemTxn) Find(prefix []byte, filter func([]byte) bool) (uint64, error)
 	tsDbs[t.startTs].readMu.RLock()
 	defer tsDbs[t.startTs].readMu.RUnlock()
 	for _, b := range tsDbs[t.startTs].inMemTestDb {
-		if filter(b.([]byte)) {
+		if filter(b) {
 			return 1, nil
 		}
 	}
@@ -169,7 +169,7 @@ func (t *inMemTxn) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	if !ok {
 		return nil, errors.New("Could not find data with key " + string(key[:]))
 	}
-	return val.([]byte), nil
+	return val, nil
 }
 
 // locks the txn and invokes AddMutationWithLockHeld
@@ -229,7 +229,7 @@ func (c *inMemLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64,
 	tsDbs[c.readTs].readMu.RLock()
 	defer tsDbs[c.readTs].readMu.RUnlock()
 	for _, b := range tsDbs[c.readTs].inMemTestDb {
-		if filter(b.([]byte)) {
+		if filter(b) {
 			return 1, nil
 		}
 	}
@@ -242,7 +242,7 @@ func (c *inMemLocalCache) GetWithLockHeld(key []byte) (rval []byte, rerr error) 
 	if !ok {
 		return nil, errors.New("Could not find data with key " + string(key[:]))
 	}
-	return val.([]byte), nil
+	return val, nil
 }
 
 func equalFloat64Slice(a, b []float64) bool {
