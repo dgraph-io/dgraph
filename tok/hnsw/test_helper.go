@@ -157,19 +157,19 @@ func (t *inMemTxn) StartTs() uint64 {
 }
 
 // locks the txn and invokes GetWithLockHeld
-func (t *inMemTxn) Get(key []byte) (rval index.Value, rerr error) {
+func (t *inMemTxn) Get(key []byte) (rval []byte, rerr error) {
 	tsDbs[t.startTs].readMu.RLock()
 	defer tsDbs[t.startTs].readMu.RUnlock()
 	return t.GetWithLockHeld(key)
 }
 
 // reads value from the database at txn's startTs
-func (t *inMemTxn) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+func (t *inMemTxn) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	val, ok := tsDbs[t.startTs].inMemTestDb[string(key[:])]
 	if !ok {
 		return nil, errors.New("Could not find data with key " + string(key[:]))
 	}
-	return val, nil
+	return val.([]byte), nil
 }
 
 // locks the txn and invokes AddMutationWithLockHeld
@@ -219,7 +219,7 @@ type inMemLocalCache struct {
 }
 
 // locks the local cache and invokes GetWithLockHeld
-func (c *inMemLocalCache) Get(key []byte) (rval index.Value, rerr error) {
+func (c *inMemLocalCache) Get(key []byte) (rval []byte, rerr error) {
 	tsDbs[c.readTs].readMu.RLock()
 	defer tsDbs[c.readTs].readMu.RUnlock()
 	return c.GetWithLockHeld(key)
@@ -237,12 +237,12 @@ func (c *inMemLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64,
 }
 
 // reads value from the database at c's readTs
-func (c *inMemLocalCache) GetWithLockHeld(key []byte) (rval index.Value, rerr error) {
+func (c *inMemLocalCache) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	val, ok := tsDbs[c.readTs].inMemTestDb[string(key[:])]
 	if !ok {
 		return nil, errors.New("Could not find data with key " + string(key[:]))
 	}
-	return val, nil
+	return val.([]byte), nil
 }
 
 func equalFloat64Slice(a, b []float64) bool {
