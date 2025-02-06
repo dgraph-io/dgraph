@@ -1,17 +1,6 @@
 /*
- * Copyright 2017-2025 Hypermode Inc. and Contributors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package x
@@ -45,7 +34,7 @@ const (
 // SentryOptOutNote - This is an opt out banner.
 func SentryOptOutNote() {
 	glog.Infof("\nThis instance of Dgraph will send anonymous reports of panics back " +
-		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
+		"to Hypermode Inc. via Sentry. No confidential information is sent. These reports " +
 		`help improve Dgraph. To opt-out, restart your instance with the --telemetry "sentry=false;" ` +
 		"flag. For more info, see https://dgraph.io/docs/howto/dgraph-sentry-integration/#data-handling.")
 }

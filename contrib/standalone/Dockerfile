@@ -1,6 +1,6 @@
 ARG DGRAPH_VERSION=latest
 FROM dgraph/dgraph:${DGRAPH_VERSION}
-LABEL MAINTAINER="Dgraph Labs <contact@dgraph.io>"
+LABEL MAINTAINER="Hypermode Inc. <hello@hypermode.com>"
 
 # Ratel port
 # EXPOSE 8000 ## Ratel is not supported in the standalone image
