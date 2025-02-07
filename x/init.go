@@ -62,7 +62,7 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-Copyright 2015-2025 Hypermode Inc.
+© Hypermode Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
