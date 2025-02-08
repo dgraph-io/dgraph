@@ -35,11 +35,12 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v24/dql"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/query"
 	"github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
@@ -53,7 +54,16 @@ func defaultContext() context.Context {
 	return context.WithValue(context.Background(), mutationAllowedKey, true)
 }
 
-var ts uint64
+var (
+	addr         string
+	alphaSockAdd string
+	dg           *dgraphapi.GrpcClient
+	hc           *dgraphapi.HTTPClient
+	ts           uint64
+	// the grootAccessJWT stores the access JWT extracted from the response
+	// of http login
+	token *Token
+)
 
 func timestamp() uint64 {
 	return atomic.AddUint64(&ts, 1)
@@ -233,10 +243,9 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
-
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{
+	require.NoError(t, dgraphapi.CompareJSON(dgraphapi.GetFullSchemaHTTPResponse(dgraphapi.SchemaOptions{
 		UserPreds: `{"predicate":"age","type":"default"},` +
-			`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}), output)
+			`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]}`}), output))
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -1016,8 +1025,8 @@ func TestListTypeSchemaChange(t *testing.T) {
 	q = `schema{}`
 	res, err = runGraphqlQuery(q)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(
-		testutil.SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res)
+	require.NoError(t, dgraphapi.CompareJSON(dgraphapi.GetFullSchemaHTTPResponse(
+		dgraphapi.SchemaOptions{UserPreds: `{"predicate":"occupations","type":"string"}`}), res))
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1251,7 +1260,7 @@ func TestDropAll(t *testing.T) {
 	q3 := "schema{}"
 	output, err = runGraphqlQuery(q3)
 	require.NoError(t, err)
-	testutil.CompareJSON(t, testutil.GetFullSchemaHTTPResponse(testutil.SchemaOptions{}), output)
+	require.NoError(t, dgraphapi.CompareJSON(dgraphapi.GetFullSchemaHTTPResponse(dgraphapi.SchemaOptions{}), output))
 
 	// Reinstate schema so that we can re-run the original query.
 	require.NoError(t, alterSchemaWithRetry(s))
@@ -1302,7 +1311,7 @@ func TestJsonUnicode(t *testing.T) {
 }
 
 func TestGrpcCompressionSupport(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr,
+	conn, err := grpc.NewClient(alphaSockAdd,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
 	)
@@ -1500,9 +1509,6 @@ func TestJSONQueryWithVariables(t *testing.T) {
 }
 
 func TestGeoDataInvalidString(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
@@ -1516,7 +1522,7 @@ func TestGeoDataInvalidString(t *testing.T) {
 			},
 		},
 	}
-	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		Set:       []*api.NQuad{n},
 	})
@@ -1527,9 +1533,6 @@ func TestGeoDataInvalidString(t *testing.T) {
 // succeeds querying the data returns an error. Ideally, we should not accept
 // invalid data in a mutation though that is left as future work.
 func TestGeoCorruptData(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
@@ -1543,7 +1546,7 @@ func TestGeoCorruptData(t *testing.T) {
 			},
 		},
 	}
-	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		Set:       []*api.NQuad{n},
 	})
@@ -1564,9 +1567,6 @@ func TestGeoCorruptData(t *testing.T) {
 // As far as I (Aman) know, this is something that should not be used
 // by a common user unless user knows what she is doing.
 func TestGeoValidWkbData(t *testing.T) {
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err)
-
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `loc: geo .`}))
@@ -1604,16 +1604,10 @@ func TestGeoValidWkbData(t *testing.T) {
 	require.Contains(t, string(resp.Json), `{"type":"Point","coordinates":[1,2]}`)
 }
 
-var addr string
-
 type Token struct {
-	token *testutil.HttpToken
+	token *dgraphapi.HttpToken
 	sync.RWMutex
 }
-
-// // the grootAccessJWT stores the access JWT extracted from the response
-// // of http login
-var token *Token
 
 func (t *Token) getAccessJWTToken() string {
 	t.RLock()
@@ -1624,22 +1618,40 @@ func (t *Token) getAccessJWTToken() string {
 func (t *Token) refreshToken() error {
 	t.Lock()
 	defer t.Unlock()
-	newToken, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   addr + "/admin",
-		RefreshJwt: t.token.RefreshToken,
-	})
+	err := hc.LoginUsingToken(0)
 	if err != nil {
 		return err
 	}
-	t.token.AccessJwt = newToken.AccessJwt
-	t.token.RefreshToken = newToken.RefreshToken
+	t.token.AccessJwt = hc.AccessJwt
+	t.token.RefreshToken = hc.RefreshToken
 	return nil
 }
 
 func TestMain(m *testing.M) {
-	addr = "http://" + testutil.SockAddrHttp
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+
+	x.Panic(err)
+	x.Panic(c.Start())
+	var cleanup func()
+	dg, cleanup, err = c.Client()
+	x.Panic(err)
+	defer cleanup()
+
+	x.Panic(dg.Login(context.Background(), dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
+
+	alphaGrpcPort, err := c.GetAlphaGrpcPublicPort()
+	x.Panic(err)
+
+	alphaSockAdd = "0.0.0.0:" + alphaGrpcPort
+	alphaSockAddHttp, err := c.GetAlphaHttpPublicPort()
+	x.Panic(err)
+	addr = "http://0.0.0.0:" + alphaSockAddHttp
+	zeroSockAdd, err := c.GetZeroGrpcPublicPort()
+	x.Panic(err)
+
 	// Increment lease, so that mutations work.
-	conn, err := grpc.Dial(testutil.SockAddrZero, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("0.0.0.0:"+zeroSockAdd, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -1648,11 +1660,21 @@ func TestMain(m *testing.M) {
 		&pb.Num{Val: 1e6, Type: pb.Num_UID}); err != nil {
 		log.Fatal(err)
 	}
-	httpToken := testutil.GrootHttpLogin(addr + "/admin")
+	hc, err = c.HTTPClient()
+	x.Panic(err)
+
+	x.Panic(hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, 0))
+
+	httpToken := hc.HttpToken
 	token = &Token{
 		token:   httpToken,
 		RWMutex: sync.RWMutex{},
 	}
-	r := m.Run()
-	os.Exit(r)
+	code := m.Run()
+	if code != 0 {
+		c.Cleanup(true)
+	} else {
+		c.Cleanup(false)
+	}
+	os.Exit(code)
 }

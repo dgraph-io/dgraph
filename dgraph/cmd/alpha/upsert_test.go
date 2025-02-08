@@ -2210,9 +2210,6 @@ upsert {
 
 func TestEmptyRequest(t *testing.T) {
 	// We are using the dgo client in this test here to test the grpc interface
-	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	require.NoError(t, err, "error while getting a dgraph client")
-
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{
 		DropOp: api.Operation_ALL,
 	}))
@@ -2223,7 +2220,7 @@ branch: string .
 amount: float .`}))
 
 	req := &api.Request{}
-	_, err = dg.NewTxn().Do(context.Background(), req)
+	_, err := dg.NewTxn().Do(context.Background(), req)
 	require.Contains(t, strings.ToLower(err.Error()), "empty request")
 }
 
