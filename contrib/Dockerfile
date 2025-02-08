@@ -4,8 +4,8 @@
 # This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
 # already built and placed there.
 
-FROM ubuntu:22.04
-LABEL maintainer="Dgraph Labs <contact@dgraph.io>"
+FROM ubuntu:24.04
+LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
 
 # need to remove the cache of sources lists
 # apt-get Error Code 100
