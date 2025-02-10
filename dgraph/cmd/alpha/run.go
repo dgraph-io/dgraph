@@ -39,6 +39,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"
+	apiv25 "github.com/dgraph-io/dgo/v240/protos/api.v25"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/edgraph"
@@ -461,6 +462,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
+	apiv25.RegisterDgraphHMServer(s, &edgraph.Server{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	worker.RegisterZeroProxyServer(s)
 

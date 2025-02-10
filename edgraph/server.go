@@ -33,6 +33,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
+	apiv25 "github.com/dgraph-io/dgo/v240/protos/api.v25"
 	"github.com/hypermodeinc/dgraph/v24/chunker"
 	"github.com/hypermodeinc/dgraph/v24/conn"
 	"github.com/hypermodeinc/dgraph/v24/dql"
@@ -93,6 +94,7 @@ var (
 type Server struct {
 	// embedding the api.UnimplementedZeroServer struct to ensure forward compatibility of the server.
 	api.UnimplementedDgraphServer
+	apiv25.UnimplementedDgraphHMServer
 }
 
 // graphQLSchemaNode represents the node which contains GraphQL schema
@@ -548,7 +550,6 @@ func annotateStartTs(span *otrace.Span, ts uint64) {
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
-
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
@@ -2005,9 +2006,9 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-// validateForGraphql validate nquads for graphql
-func validateForGraphql(nq *api.NQuad, isGraphql bool) error {
-	// Check whether the incoming predicate is graphql reserved predicate or not.
+// validateForOtherReserved validate nquads for other reserved predicates
+func validateForOtherReserved(nq *api.NQuad, isGraphql bool) error {
+	// Check whether the incoming predicate is other reserved predicate.
 	if !isGraphql && x.IsOtherReservedPredicate(nq.Predicate) {
 		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
 	}
@@ -2029,7 +2030,7 @@ func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
-		if err := validateForGraphql(nq, isGraphql); err != nil {
+		if err := validateForOtherReserved(nq, isGraphql); err != nil {
 			return err
 		}
 	}
@@ -2044,7 +2045,7 @@ func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateForGraphql(nq, isGraphql); err != nil {
+		if err := validateForOtherReserved(nq, isGraphql); err != nil {
 			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
