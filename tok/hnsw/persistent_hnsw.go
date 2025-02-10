@@ -324,7 +324,7 @@ func (ph *persistentHNSW[T]) PickStartNode(
 		return 0, err
 	}
 
-	entry := BytesToUint64(data.([]byte))
+	entry := BytesToUint64(data)
 	if err = ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
 		return 0, err
 	}
