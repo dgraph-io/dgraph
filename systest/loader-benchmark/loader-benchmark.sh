@@ -6,7 +6,7 @@ readonly SRCDIR=$(dirname "$0")
 
 BENCHMARKS_REPO="https://github.com/hypermodeinc/dgraph-benchmarks"
 BENCHMARK_SIZE=${BENCHMARK_SIZE:=big}
-SCHEMA_URL="${BENCHMARKS_REPO}/blob/master/data/21million.schema?raw=true"
+SCHEMA_URL="${BENCHMARKS_REPO}/blob/main/data/21million.schema?raw=true"
 DGRAPH_LOADER=${DGRAPH_LOADER:=bulk}
 
 function Info {
