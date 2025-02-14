@@ -3,7 +3,7 @@
 set -e
 readonly SRCDIR=$(dirname "$0")
 
-BENCHMARKS_REPO="$(pwd)/benchmarks"
+BENCHMARKS_REPO="$(pwd)/dgraph-benchmarks"
 NO_INDEX_SCHEMA_FILE="${BENCHMARKS_REPO}/data/1million-noindex.schema"
 SCHEMA_FILE="${BENCHMARKS_REPO}/data/1million.schema"
 DATA_FILE="${BENCHMARKS_REPO}/data/1million.rdf.gz"
