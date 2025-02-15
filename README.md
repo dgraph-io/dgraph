@@ -17,8 +17,7 @@
 [![ci-dgraph-load-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
 [![ci-golang-lint](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-golang-lint.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-golang-lint.yml)
 [![ci-aqua-security-trivy-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-aqua-security-trivy-tests.yml)
-[![Coverage Status](https://coveralls.io/repos/github/hypermodeinc/dgraph/badge.svg?branch=main)](https://coveralls.io/github/hypermodeinc/dgraph?branch=main)
-[![Go Report Card](https://goreportcard.com/badge/github.com/hypermodeinc/dgraph)](https://goreportcard.com/report/github.com/hypermodeinc/dgraph)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 [![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/hypermodeinc/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/hypermodeinc/dgraph&branch=main)
 
 Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides
