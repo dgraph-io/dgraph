@@ -10,7 +10,6 @@
       <img alt="Dgraph Logo" src="/logo.png">
 </picture>
 
-[![GitHub License](https://img.shields.io/github/license/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph)
 [![chat](https://img.shields.io/discord/1267579648657850441)](https://discord.hypermode.com)
 [![GitHub Repo stars](https://img.shields.io/github/stars/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/stargazers)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/commits/main/)
