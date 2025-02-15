@@ -10,13 +10,11 @@
       <img alt="Dgraph Logo" src="/logo.png">
 </picture>
 
-**The Only Native GraphQL Database With A Graph Backend.**
-
-[![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
-[![ci-dgraph-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-tests.yml)
-[![ci-dgraph-load-tests](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml/badge.svg)](https://github.com/hypermodeinc/dgraph/actions/workflows/ci-dgraph-load-tests.yml)
+[![GitHub License](https://img.shields.io/github/license/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph)
+[![chat](https://img.shields.io/discord/1267579648657850441)](https://discord.hypermode.com)
+[![GitHub Repo stars](https://img.shields.io/github/stars/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/stargazers)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/commits/main/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
-[![TODOs](https://badgen.net/https/api.tickgit.com/badgen/github.com/hypermodeinc/dgraph/main)](https://www.tickgit.com/browse?repo=github.com/hypermodeinc/dgraph&branch=main)
 
 Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides
 ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to
