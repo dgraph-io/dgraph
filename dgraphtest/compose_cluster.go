@@ -7,6 +7,9 @@ package dgraphtest
 
 import (
 	"github.com/dgraph-io/dgo/v240"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v24/testutil"
 )
@@ -18,12 +21,12 @@ func NewComposeCluster() *ComposeCluster {
 }
 
 func (c *ComposeCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
-	client, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := dgo.NewClient(testutil.SockAddr,
+		dgo.WithGrpcOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
 	if err != nil {
 		return nil, nil, err
 	}
-
-	return &dgraphapi.GrpcClient{Dgraph: client}, func() {}, nil
+	return &dgraphapi.GrpcClient{Dgraph: dg}, func() { dg.Close() }, nil
 }
 
 // HTTPClient creates an HTTP client

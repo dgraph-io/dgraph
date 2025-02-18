@@ -114,8 +114,7 @@ func (s *Server) Login(ctx context.Context,
 // authenticateLogin authenticates the login request using either the refresh token if present, or
 // the <userId, password> pair. If authentication passes, it queries the user's uid and associated
 // groups from DB and returns the user object
-func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User,
-	error) {
+func (s *Server) authenticateLogin(ctx context.Context, request *api.LoginRequest) (*acl.User, error) {
 	if err := validateLoginRequest(request); err != nil {
 		return nil, errors.Wrapf(err, "invalid login request")
 	}

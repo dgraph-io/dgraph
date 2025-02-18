@@ -13,9 +13,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/mod/modfile"
+)
+
+var (
+	cloneOnce sync.Once
 )
 
 func (c *LocalCluster) dgraphImage() string {
@@ -23,6 +28,10 @@ func (c *LocalCluster) dgraphImage() string {
 }
 
 func (c *LocalCluster) setupBinary() error {
+	if err := ensureDgraphClone(); err != nil {
+		panic(err)
+	}
+
 	if c.conf.customPlugins {
 		race := false // Explicit var declaration to avoid confusion on the next line
 		if err := c.GeneratePlugins(race); err != nil {
@@ -52,21 +61,25 @@ func (c *LocalCluster) setupBinary() error {
 }
 
 func ensureDgraphClone() error {
-	if _, err := os.Stat(repoDir); err != nil {
-		return runGitClone()
-	}
-
-	if err := runGitStatus(); err != nil {
-		if ierr := cleanupRepo(); ierr != nil {
-			return ierr
+	f := func() error {
+		if _, err := os.Stat(repoDir); err != nil {
+			return runGitClone()
 		}
-		return runGitClone()
-	}
-	return nil
-}
 
-func cleanupRepo() error {
-	return os.RemoveAll(repoDir)
+		if err := runGitStatus(); err != nil {
+			if err := os.RemoveAll(repoDir); err != nil {
+				return err
+			}
+			return runGitClone()
+		}
+		return nil
+	}
+
+	var err error
+	cloneOnce.Do(func() {
+		err = f()
+	})
+	return err
 }
 
 func runGitClone() error {
