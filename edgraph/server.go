@@ -27,6 +27,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -1251,6 +1252,7 @@ var serverOverloadErr = errors.New("429 Too Many Requests. Please throttle your 
 
 func Init() {
 	maxPendingQueries = x.Config.Limit.GetInt64("max-pending-queries")
+	encoding.RegisterCodec(&x.GrpcCodec{})
 }
 
 func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response, rerr error) {

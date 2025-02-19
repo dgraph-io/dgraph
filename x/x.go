@@ -920,6 +920,22 @@ func DivideAndRule(num int) (numGo, width int) {
 	return
 }
 
+type GrpcCodec struct{}
+
+func (c *GrpcCodec) Marshal(v interface{}) ([]byte, error) {
+	fmt.Printf("GOT OBJECT TO MARSHAL %v, TYPE: %T\n", v, v)
+	return nil, nil
+}
+
+func (c *GrpcCodec) Unmarshal(data []byte, v interface{}) error {
+	fmt.Println("UNMARSHALLING", data, v)
+	return nil
+}
+
+func (c *GrpcCodec) Name() string {
+	return "memcodec"
+}
+
 // SetupConnection starts a secure gRPC connection to the given host.
 func SetupConnection(
 	host string,
@@ -929,7 +945,8 @@ func SetupConnection(
 ) (*grpc.ClientConn, error) {
 	callOpts := append([]grpc.CallOption{},
 		grpc.MaxCallRecvMsgSize(GrpcMaxSize),
-		grpc.MaxCallSendMsgSize(GrpcMaxSize))
+		grpc.MaxCallSendMsgSize(GrpcMaxSize),
+		grpc.ForceCodec(&GrpcCodec{}))
 
 	if useGz {
 		fmt.Fprintf(os.Stderr, "Using compression with %s\n", host)

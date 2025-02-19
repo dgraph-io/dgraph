@@ -541,6 +541,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 	numChanCreated := 0
 
+	if len(m.Edges) > 100 {
+		return nil
+	}
+
 	errCh := make(chan error, numGo)
 	for i := 0; i < len(m.Edges); {
 		end := i + width
