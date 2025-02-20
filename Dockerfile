@@ -26,6 +26,5 @@ COPY --from=builder /go/src/repo/dgraph/dgraph /usr/local/bin/
 COPY --from=builder /go/src/repo/contrib/standalone/run.sh /
 RUN chmod +x /run.sh
 WORKDIR /dgraph
-HEALTHCHECK NONE
 ENV GODEBUG=madvdontneed=1
 CMD ["/run.sh"]

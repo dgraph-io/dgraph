@@ -28,21 +28,21 @@ lint:
   enabled:
     - trivy@0.59.1
     - actionlint@1.7.7
-    - checkov@3.2.369
+    - checkov@3.2.372
     - dotenv-linter@3.3.0
     - git-diff-check
     - gofmt@1.20.4
-    - golangci-lint@1.63.4
+    - golangci-lint@1.64.5
     - hadolint@2.12.1-beta
     - markdownlint@0.44.0
     - osv-scanner@1.9.2
-    - oxipng@9.1.3
-    - prettier@3.5.0
-    - renovate@39.169.3
+    - oxipng@9.1.4
+    - prettier@3.5.1
+    - renovate@39.176.4
     - shellcheck@0.10.0
     - shfmt@3.6.0
     - tflint@0.55.1
-    - trufflehog@3.88.7
+    - trufflehog@3.88.11
     - yamllint@1.35.1
 actions:
   enabled:
