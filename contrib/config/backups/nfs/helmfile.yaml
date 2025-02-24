@@ -1,2 +1,0 @@
-helmfiles:
-  - ./charts/helmfile.yaml

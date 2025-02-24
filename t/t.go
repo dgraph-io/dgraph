@@ -795,7 +795,6 @@ var loadPackages = []string{
 	"/systest/bulk_live/bulk",
 	"/systest/bulk_live/live",
 	"/systest/bgindex",
-	"/contrib/scripts",
 	"/dgraph/cmd/bulk/systest",
 }
 
