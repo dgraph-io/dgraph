@@ -1,6 +1,0 @@
-{
- me(func:anyofterms(name@en, "good bad")) {
-  uid
-  name@en
- }
-}
