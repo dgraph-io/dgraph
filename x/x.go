@@ -907,6 +907,12 @@ func PredicateLang(s string) (string, string) {
 	return s[0:i], s[i+1:]
 }
 
+func MultiSplit(num int) (numGo, width int) {
+	numGo := 16
+	width := int(math.Ceil(float64(num) / float(numGo)))
+	return numGo, width
+}
+
 // DivideAndRule is used to divide a number of tasks among multiple go routines.
 func DivideAndRule(num int) (numGo, width int) {
 	numGo, width = 64, 0
