@@ -9,7 +9,6 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.43.3
 	github.com/Masterminds/semver/v3 v3.3.0
-	github.com/bits-and-blooms/bitset v1.14.3
 	github.com/blevesearch/bleve/v2 v2.4.2
 	github.com/dgraph-io/badger/v4 v4.3.0
 	github.com/dgraph-io/dgo/v240 v240.0.0
@@ -75,6 +74,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bits-and-blooms/bitset v1.14.3 // indirect
 	github.com/blevesearch/bleve_index_api v1.1.12 // indirect
 	github.com/blevesearch/geo v0.1.20 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect

@@ -858,6 +858,7 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 			if err != nil {
 				return err
 			}
+			glog.Infof("Updated membership state, new size: %d", ms.Size())
 			if err := stream.Send(ms); err != nil {
 				return err
 			}
