@@ -348,12 +348,13 @@ func (c *Cache) wait() {
 	}
 	result := make(chan struct{}, 1)
 	go func() {
-		result <- c.data.Wait()
+		c.data.Wait()
+		result <- struct{}{}
 	}()
 	select {
 	case <-time.After(10 * time.Second):
 		return
-	case result := <-result:
+	case <-result:
 		return
 	}
 }
