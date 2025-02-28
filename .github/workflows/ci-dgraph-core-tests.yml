@@ -65,7 +65,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and core tests
-          cd t; ./t --suite=core
+          cd t; ./t --suite=core --keep=true
           # clean up docker containers after test execution
           ./t -r
           # sleep
