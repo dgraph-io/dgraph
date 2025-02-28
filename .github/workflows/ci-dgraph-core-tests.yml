@@ -70,6 +70,9 @@ jobs:
           ./t -r
           # sleep
           sleep 5
+      - name: Setup interactive ssh session
+        if: ${{ failure() }}
+        uses: Warpbuilds/action-debugger@v1.3
       - name: Upload Test Results
         if: always() # Upload the results even if the tests fail
         continue-on-error: true # don't fail this job if the upload fails
