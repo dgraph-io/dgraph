@@ -479,6 +479,9 @@ func decodeUint64MatrixUnsafe(data []byte, matrix *[][]uint64) error {
 
 		(*matrix)[i] = make([]uint64, rowLen)
 		for j := 0; j < int(rowLen); j++ {
+			if offset >= len(data) {
+				fmt.Println(data)
+			}
 			(*matrix)[i][j] = *(*uint64)(unsafe.Pointer(&data[offset]))
 			offset += 8
 		}
