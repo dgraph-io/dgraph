@@ -25,7 +25,7 @@ permissions:
 jobs:
   dgraph-core-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -65,14 +65,11 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and core tests
-          cd t; ./t --suite=core --keep=true
+          cd t; ./t --suite=core
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
-      - name: Setup interactive ssh session
-        if: ${{ failure() }}
-        uses: Warpbuilds/action-debugger@v1.3
       - name: Upload Test Results
         if: always() # Upload the results even if the tests fail
         continue-on-error: true # don't fail this job if the upload fails

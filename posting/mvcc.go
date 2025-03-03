@@ -346,17 +346,7 @@ func (c *Cache) wait() {
 	if c == nil {
 		return
 	}
-	result := make(chan struct{}, 1)
-	go func() {
-		c.data.Wait()
-		result <- struct{}{}
-	}()
-	select {
-	case <-time.After(10 * time.Second):
-		return
-	case <-result:
-		return
-	}
+	c.data.Wait()
 }
 
 func (c *Cache) get(key []byte) (*CachePL, bool) {
