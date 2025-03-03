@@ -449,8 +449,10 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		started = true
 	}
 
+	hasErrored := false
+
 	stop := func() {
-		if *keepCluster || stopped {
+		if (*keepCluster && hasErrored) || stopped {
 			return
 		}
 		wg.Add(1)
@@ -502,12 +504,14 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			start()
 			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
+				hasErrored = true
 				return err
 			}
 		} else {
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
 			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
+				hasErrored = true
 				return cerr
 			}
 		}
