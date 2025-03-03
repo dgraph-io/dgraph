@@ -503,8 +503,14 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 		p := new(pb.PostingList)
 		x.Check(proto.Unmarshal(delta, p))
 
-		val.list.setMutationAfterCommit(startTs, commitTs, p, true)
-		checkForRollup([]byte(key), val.list)
+		if p.Pack == nil {
+			val.list.setMutationAfterCommit(startTs, commitTs, p, true)
+			checkForRollup([]byte(key), val.list)
+		} else {
+			// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
+			ml.del([]byte(key))
+		}
+
 	}
 }
 
