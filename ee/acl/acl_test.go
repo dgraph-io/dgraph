@@ -2087,7 +2087,7 @@ func (asuite *AclTestSuite) TestQueryUserInfo() {
 
 func (asuite *AclTestSuite) TestQueriesWithUserAndGroupOfSameName() {
 	t := asuite.T()
-	dgraphtest.ShouldSkipTest(t, asuite.dc.GetVersion(), "7b1f473ddf01547e24b44f580a68e6b049502d69")
+	dgraphtest.ShouldSkipTest(t, asuite.dc.GetVersion(), "532df27a09ba25f88687bab344e3add2b81b5c23")
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
