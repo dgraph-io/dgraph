@@ -1,6 +1,6 @@
 module github.com/hypermodeinc/dgraph/v24
 
-go 1.22.11
+go 1.22.12
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
@@ -10,7 +10,7 @@ require (
 	github.com/IBM/sarama v1.45.0
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.4.4
-	github.com/dgraph-io/badger/v4 v4.5.1
+	github.com/dgraph-io/badger/v4 v4.5.2
 	github.com/dgraph-io/dgo/v240 v240.1.0
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
@@ -53,17 +53,17 @@ require (
 	go.etcd.io/etcd/raft/v3 v3.5.18
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.32.0
+	golang.org/x/crypto v0.33.0
 	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c
 	golang.org/x/mod v0.22.0
-	golang.org/x/net v0.34.0
-	golang.org/x/sync v0.10.0
-	golang.org/x/sys v0.29.0
-	golang.org/x/term v0.28.0
-	golang.org/x/text v0.21.0
+	golang.org/x/net v0.35.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/sys v0.30.0
+	golang.org/x/term v0.29.0
+	golang.org/x/text v0.22.0
 	golang.org/x/tools v0.29.0
 	google.golang.org/grpc v1.70.0
-	google.golang.org/protobuf v1.36.4
+	google.golang.org/protobuf v1.36.5
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -98,7 +98,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/flatbuffers v25.1.24+incompatible // indirect
+	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/pprof v0.0.0-20250128161936-077ca0a936bf // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

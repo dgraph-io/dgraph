@@ -421,7 +421,7 @@ func mountBinary(c *LocalCluster) (mount.Mount, error) {
 }
 
 // ShouldSkipTest skips a given test if clusterVersion < minVersion
-func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
+func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) {
 	supported, err := IsHigherVersion(clusterVersion, minVersion)
 	if err != nil {
 		t.Fatal(err)
@@ -429,5 +429,4 @@ func ShouldSkipTest(t *testing.T, minVersion, clusterVersion string) error {
 	if !supported {
 		t.Skipf("test is valid for commits greater than [%v]", minVersion)
 	}
-	return nil
 }
