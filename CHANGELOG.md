@@ -5,14 +5,195 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project will
 adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
-## [v24.X.X] - YYYY-MM-DD
+## [v24.1.0] - 2025-03-06
 
+[v24.1.0]: https://github.com/hypermodeinc/dgraph/compare/v24.0.5...v24.1.0
+
+**Added**
+
+- **Core**
+  - Adds support for BigFloat https://github.com/hypermodeinc/dgraph/pull/3981
 - **GraphQL**
+  - feat(graphql): adds @default directive to graphql (#8017)
+    https://github.com/hypermodeinc/dgraph/pull/8837
+  - feat(graphql): output translated DQL query when the graphql debug superflag is set
+    https://github.com/hypermodeinc/dgraph/pull/9280
 
-  - feat(graphql): adds translated DQL to extensions response when the "--graphql debug" super flag
-    is set to true (#9280)
+**Fixed**
 
-[v24.X.X]: https://github.com/hypermodeinc/dgraph/compare/v24.0.5...v24.X.X
+- **Core**
+
+  - fix(core): update latest badger https://github.com/hypermodeinc/dgraph/pull/9169
+  - fix(core): Update error msg for txn too old to give more context
+    https://github.com/hypermodeinc/dgraph/pull/9170
+  - fix(core): fix sampling rate of jaeger https://github.com/hypermodeinc/dgraph/pull/9147
+  - fix(core): add the posting list risteretto cache back
+    https://github.com/hypermodeinc/dgraph/pull/9181
+  - fix(core): fix performance impact in mutation due to vector
+    https://github.com/hypermodeinc/dgraph/pull/9196
+  - fix(core): fix duplicate mutation entries for count index
+    https://github.com/hypermodeinc/dgraph/pull/9208
+  - fix(core): Change name of new config flag https://github.com/hypermodeinc/dgraph/pull/9274
+  - fix(core): Improve error handling in hnsw module by @xqqp in
+    https://github.com/hypermodeinc/dgraph/pull/9236
+  - fix(core): Build to show correct version (#9192)
+    https://github.com/hypermodeinc/dgraph/pull/9227
+  - fix(core): fix visited uids bitset memory (#9221)
+    https://github.com/hypermodeinc/dgraph/pull/9226
+  - fix(core): fix batching of running mutations in one transaction
+    https://github.com/hypermodeinc/dgraph/pull/9230
+  - fix(core): fix race in metrics collection variables
+    https://github.com/hypermodeinc/dgraph/pull/9288
+  - fix(core): Fix deleteBelowTs rollup issue https://github.com/hypermodeinc/dgraph/pull/9296
+  - fix(core): Fix count index for scalar predicates
+    https://github.com/hypermodeinc/dgraph/pull/9292
+  - fix unique query for non-latin predicate name and whitespace in query
+    https://github.com/hypermodeinc/dgraph/pull/9201
+  - fix(other): update patch version in go.mod https://github.com/hypermodeinc/dgraph/pull/9127
+  - fix(multi-tenancy): upsert groot for namespace after drop data
+    https://github.com/hypermodeinc/dgraph/pull/9159
+  - fix(DQL): unsupported ordering should raise an error
+    https://github.com/hypermodeinc/dgraph/pull/9173
+  - fix(export): delete temporary export directory after completion of remote export
+    https://github.com/hypermodeinc/dgraph/pull/9206
+  - fix the unique constraint when adding two mutations in a single request
+    https://github.com/hypermodeinc/dgraph/pull/9238
+  - fix: ensure consistent time units and prevent erroneous cleanup in incrRollupi Process by
+    @gooohgb in https://github.com/hypermodeinc/dgraph/pull/9259
+  - fix: compile on Windows in https://github.com/hypermodeinc/dgraph/pull/9284
+
+- **CI**
+
+  - fix(ci): delete all issue in upgrade test https://github.com/hypermodeinc/dgraph/pull/9291
+  - fix(tests): add explicit permissions for Trivy scan
+    https://github.com/hypermodeinc/dgraph/pull/9130
+  - fix(git): fix Labeler formatting https://github.com/hypermodeinc/dgraph/pull/9148
+  - fix(repo): labeler config https://github.com/hypermodeinc/dgraph/pull/9144
+
+- **Vector**
+  - fix(vector): fix index rebuild when options change
+    https://github.com/hypermodeinc/dgraph/pull/9149
+  - fix(vector): fixed euclidean spelling and a bug in parameters
+    https://github.com/hypermodeinc/dgraph/pull/9165
+
+**Performance**
+
+- **Core**
+  - perf(core): Introduce mutable map struct https://github.com/hypermodeinc/dgraph/pull/9199
+  - perf(core): Fixing ristretto cache to pass jepsen tests
+    https://github.com/hypermodeinc/dgraph/pull/9237
+  - perf(core): Add a count min sketch for eq filter
+    https://github.com/hypermodeinc/dgraph/pull/9218
+
+**Chore**
+
+- chore(deps): bump github.com/docker/docker from 24.0.5+incompatible to 25.0.6+incompatible
+  https://github.com/hypermodeinc/dgraph/pull/9123
+- use /v24 in the import https://github.com/hypermodeinc/dgraph/pull/9131
+- upgrade go mod https://github.com/hypermodeinc/dgraph/pull/9115
+- chore(): add Dependabot version bumps https://github.com/hypermodeinc/dgraph/pull/9132
+- chore(deps): bump actions/labeler from 4 to 5 https://github.com/hypermodeinc/dgraph/pull/9134
+- chore(deps): bump golangci/golangci-lint-action from 4 to 6
+  https://github.com/hypermodeinc/dgraph/pull/9133
+- chore(deps): bump docker/login-action from 2 to 3 https://github.com/hypermodeinc/dgraph/pull/9135
+- chore(deps): bump actions/upload-artifact from 3 to 4
+  https://github.com/hypermodeinc/dgraph/pull/9136
+- chore(deps): bump github.com/spf13/cobra from 1.7.0 to 1.8.1
+  https://github.com/hypermodeinc/dgraph/pull/9139
+- chore(deps): bump github.com/bits-and-blooms/bitset from 1.13.0 to 1.14.2
+  https://github.com/hypermodeinc/dgraph/pull/9140
+- chore(deps): bump github.com/prometheus/client_golang from 1.20.1 to 1.20.2
+  https://github.com/hypermodeinc/dgraph/pull/9142
+- chore(deps): bump google.golang.org/grpc from 1.65.0 to 1.66.0
+  https://github.com/hypermodeinc/dgraph/pull/9152
+- chore(deps): bump github.com/Masterminds/semver/v3 from 3.2.1 to 3.3.0
+  https://github.com/hypermodeinc/dgraph/pull/9151
+- chore(deps): bump github.com/docker/docker from 27.1.2+incompatible to 27.2.0+incompatible
+  https://github.com/hypermodeinc/dgraph/pull/9150
+- upgrade dgo to v240.0.0 https://github.com/hypermodeinc/dgraph/pull/9154
+- chore(deps): bump golang.org/x/mod from 0.20.0 to 0.21.0
+  https://github.com/hypermodeinc/dgraph/pull/9157
+- chore(deps): bump golang.org/x/text from 0.17.0 to 0.18.0
+  https://github.com/hypermodeinc/dgraph/pull/9156
+- chore(deps): bump github.com/dgraph-io/dgo/v240 from 240.0.0-rc1 to 240.0.0
+  https://github.com/hypermodeinc/dgraph/pull/9155
+- chore: Upgrade go.mod dependencies, fix jose v2 vulnerability, upgrade jemalloc by @RJKeevil in
+  https://github.com/hypermodeinc/dgraph/pull/9158
+- chore(deps): bump google.golang.org/grpc from 1.66.0 to 1.66.1
+  https://github.com/hypermodeinc/dgraph/pull/9163
+- upgrade go.mod https://github.com/hypermodeinc/dgraph/pull/9164
+- Update README.md https://github.com/hypermodeinc/dgraph/pull/9175
+- chore(deps): bump the minor-and-patch group across 1 directory with 2 updates
+  https://github.com/hypermodeinc/dgraph/pull/9174
+- update expired certificate that are used for testing
+  https://github.com/hypermodeinc/dgraph/pull/9177
+- chore(deps): bump the minor-and-patch group with 2 updates
+  https://github.com/hypermodeinc/dgraph/pull/9178
+- Expose APIs that can be used outside Dgraph https://github.com/hypermodeinc/dgraph/pull/9176
+- chore(deps): bump google.golang.org/grpc from 1.67.0 to 1.67.1 in the minor-and-patch group
+  https://github.com/hypermodeinc/dgraph/pull/9185
+- Retract v24.0.3 in go.mod https://github.com/hypermodeinc/dgraph/pull/9188
+- chore(repo): use go 1.22 int range loop by @xqqp in
+  https://github.com/hypermodeinc/dgraph/pull/9186
+- chore(deps): bump github.com/dgraph-io/ristretto from 0.1.2-0.20240116140435-c67e07994f91 to 1.0.0
+  https://github.com/hypermodeinc/dgraph/pull/9179
+- chore(deps): bump the minor-and-patch group with 8 updates
+  https://github.com/hypermodeinc/dgraph/pull/9195
+- chore(repo): close response bodies to prevent resource leaks by @xqqp in
+  https://github.com/hypermodeinc/dgraph/pull/9193
+- chore(deps): bump the minor-and-patch group with 2 updates
+  https://github.com/hypermodeinc/dgraph/pull/9200
+- expose API that can be used outside Dgraph https://github.com/hypermodeinc/dgraph/pull/9197
+- Enhancing Dgraph cd pipeline to only push images to Dockerhub when both AMD and ARM builds are
+  successful https://github.com/hypermodeinc/dgraph/pull/9202
+- chore: fix some function names in comment by @cangqiaoyuzhuo in
+  https://github.com/hypermodeinc/dgraph/pull/9204
+- Adding 24.0.4 to CHANGELOG.md https://github.com/hypermodeinc/dgraph/pull/9205
+- Update cd-dgraph.yml to avoid conflict during artifact upload
+  https://github.com/hypermodeinc/dgraph/pull/9207
+- Update CHANGELOG.md to add 24.0.5 https://github.com/hypermodeinc/dgraph/pull/9210
+- Megha/cd pipeline enhancement https://github.com/hypermodeinc/dgraph/pull/9222
+- Fixing README.md to mention 24.0.5 as latest also fixing wrong link
+  https://github.com/hypermodeinc/dgraph/pull/9224
+- chore(deps): bump the minor-and-patch group across 1 directory with 16 updates
+  https://github.com/hypermodeinc/dgraph/pull/9223
+- chore(deps): bump the minor-and-patch group with 2 updates
+  https://github.com/hypermodeinc/dgraph/pull/9225
+- expose function to Query without auth in https://github.com/hypermodeinc/dgraph/pull/9216
+- upgrade to use google protobuf https://github.com/hypermodeinc/dgraph/pull/9190
+- chore(deps): bump the minor-and-patch group with 8 updates
+  https://github.com/hypermodeinc/dgraph/pull/9232
+- check for error in vector hnsw code https://github.com/hypermodeinc/dgraph/pull/9235
+- Add index after adding data without vector schema for vector predicate
+  https://github.com/hypermodeinc/dgraph/pull/9214
+- chore(deps): bump the minor-and-patch group with 6 updates
+  https://github.com/hypermodeinc/dgraph/pull/9240
+- chore(deps): bump the minor-and-patch group with 5 updates
+  https://github.com/hypermodeinc/dgraph/pull/9244
+- chore(deps): bump golang.org/x/crypto from 0.30.0 to 0.31.0
+  https://github.com/hypermodeinc/dgraph/pull/9242
+- ci: separate CI workflows https://github.com/hypermodeinc/dgraph/pull/9243
+- ci(test): integrate Trunk into multiple CI workflows to identify flaky tests
+  https://github.com/hypermodeinc/dgraph/pull/9245
+- chore(deps): bump the minor-and-patch group with 3 updates
+  https://github.com/hypermodeinc/dgraph/pull/9247
+- chore(deps): bump github.com/IBM/sarama from 1.43.3 to 1.44.0 in the minor-and-patch group
+  https://github.com/hypermodeinc/dgraph/pull/9249
+- update pull request template https://github.com/hypermodeinc/dgraph/pull/9253
+- ci: Add cron job to run workflow once a day https://github.com/hypermodeinc/dgraph/pull/9251
+- rename dgraph-io/dgraph to hypermodeinc/dgraph https://github.com/hypermodeinc/dgraph/pull/9257
+- chore: repo alignment https://github.com/hypermodeinc/dgraph/pull/9256
+- chore(deps): Update go minor and patch https://github.com/hypermodeinc/dgraph/pull/9267
+- chore: init trunk https://github.com/hypermodeinc/dgraph/pull/9273
+- chore: make testing more resilient and update docs
+  https://github.com/hypermodeinc/dgraph/pull/9278
+- chore(deps): Update infra minor and patch https://github.com/hypermodeinc/dgraph/pull/9276
+- chore(deps): Update go minor and patch https://github.com/hypermodeinc/dgraph/pull/9286
+- chore: Upgrade from yaml v2 to v3 everywhere by @RJKeevil in
+  https://github.com/hypermodeinc/dgraph/pull/9279
+- chore(deps): Update omnition/opencensus-agent Docker tag to v1
+  https://github.com/hypermodeinc/dgraph/pull/9277
+- chore(deps): Update go minor and patch https://github.com/hypermodeinc/dgraph/pull/9293
 
 ## [v24.0.5] - 2024-11-05
 
