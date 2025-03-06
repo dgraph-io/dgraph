@@ -28,6 +28,6 @@ func (s *Server) ResetPassword(ctx context.Context, ns *ResetPasswordInput) erro
 	return nil
 }
 
-func createGuardianAndGroot(ctx context.Context, namespace uint64) error {
+func createGuardianAndGroot(ctx context.Context, namespace uint64, passwd string) error {
 	return nil
 }
