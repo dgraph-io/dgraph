@@ -106,6 +106,7 @@ type TestSuite struct {
 	Name       string     `xml:"name,attr"`
 	Tests      int        `xml:"tests,attr"`
 	Failures   int        `xml:"failures,attr"`
+	Errors     int        `xml:"errors,attr,omitempty"`
 	Time       float64    `xml:"time,attr"`
 	Timestamp  string     `xml:"timestamp,attr,omitempty"`
 	TestCases  []TestCase `xml:"testcase"`
@@ -117,6 +118,14 @@ type TestCase struct {
 	ClassName string   `xml:"classname,attr"`
 	Name      string   `xml:"name,attr"`
 	Time      float64  `xml:"time,attr"`
+	Failure   *Failure `xml:"failure,omitempty"`
+}
+
+type Failure struct {
+	XMLName xml.Name `xml:"failure"`
+	Message string   `xml:"message,attr"`
+	Type    string   `xml:"type,attr,omitempty"`
+	Content string   `xml:",chardata"`
 }
 
 type Property struct {
