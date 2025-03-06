@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -163,7 +162,7 @@ func (c *LocalCluster) init() error {
 
 func (c *LocalCluster) createNetwork() error {
 	c.net.name = c.conf.prefix + "-net"
-	opts := types.NetworkCreate{
+	opts := network.CreateOptions{
 		Driver: "bridge",
 		IPAM:   &network.IPAM{Driver: "default"},
 	}
