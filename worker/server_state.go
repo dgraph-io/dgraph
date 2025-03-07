@@ -53,7 +53,7 @@ const (
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 	CacheDefaults        = `size-mb=1024; percentage=40,40,20; remove-on-update=false`
-	FeatureFlagsDefaults = `normalize-compatibility-mode=`
+	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false`
 )
 
 // ServerState holds the state of the Dgraph server.
