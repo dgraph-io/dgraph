@@ -437,13 +437,14 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 
-				x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
+				if EnableDetailedMetrics {
+					x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
+					x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
+					x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
+				}
+
 				ml.cache.numCacheSave.Store(0)
-
-				x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
 				ml.cache.numCacheRead.Store(0)
-
-				x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
 				ml.cache.numCacheReadFails.Store(0)
 			}
 		}()
@@ -547,10 +548,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	start := time.Now()
 	defer func() {
 		ms := x.SinceMs(start)
-		var tags []tag.Mutator
-		tags = append(tags, tag.Upsert(x.KeyMethod, "iterate"))
-		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
-		_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
+		if EnableDetailedMetrics {
+			var tags []tag.Mutator
+			tags = append(tags, tag.Upsert(x.KeyMethod, "iterate"))
+			tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
+			_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
+		}
 	}()
 
 	if pk.HasStartUid {
