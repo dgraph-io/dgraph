@@ -279,6 +279,7 @@ they form a Raft group and provide synchronous replication.
 		Flag("normalize-compatibility-mode", "configure @normalize response formatting."+
 			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
 			" For more details, see https://github.com/hypermodeinc/dgraph/pull/7639").
+		Flag("enable-detailed-metrics", "Enable metrics about disk reads and cache per predicate").
 		String())
 }
 
@@ -770,6 +771,7 @@ func run() {
 	featureFlagsConf := z.NewSuperFlag(Alpha.Conf.GetString("feature-flags")).MergeAndCheckDefault(
 		worker.FeatureFlagsDefaults)
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
+	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -794,6 +796,7 @@ func run() {
 	// schema before calling posting.Init().
 	schema.Init(worker.State.Pstore)
 	posting.Init(worker.State.Pstore, postingListCacheSize, removeOnUpdate)
+	posting.SetEnabledDetailedMetrics(enableDetailedMetrics)
 	defer posting.Cleanup()
 	worker.Init(worker.State.Pstore)
 

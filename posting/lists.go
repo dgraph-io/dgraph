@@ -40,8 +40,9 @@ const (
 )
 
 var (
-	pstore *badger.DB
-	closer *z.Closer
+	pstore                *badger.DB
+	closer                *z.Closer
+	EnableDetailedMetrics bool
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
@@ -51,6 +52,10 @@ func Init(ps *badger.DB, cacheSize int64, removeOnUpdate bool) {
 	go x.MonitorMemoryMetrics(closer)
 
 	memoryLayer = initMemoryLayer(cacheSize, removeOnUpdate)
+}
+
+func SetEnabledDetailedMetrics(enableMetrics bool) {
+	EnableDetailedMetrics = enableMetrics
 }
 
 func UpdateMaxCost(maxCost int64) {
@@ -305,15 +310,17 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 }
 
 func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
-	start := time.Now()
-	defer func() {
-		pk, _ := x.Parse(key)
-		ms := x.SinceMs(start)
-		var tags []tag.Mutator
-		tags = append(tags, tag.Upsert(x.KeyMethod, "get"))
-		tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
-		_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
-	}()
+	if EnableDetailedMetrics {
+		start := time.Now()
+		defer func() {
+			ms := x.SinceMs(start)
+			pk, _ := x.Parse(key)
+			var tags []tag.Mutator
+			tags = append(tags, tag.Upsert(x.KeyMethod, "get"))
+			tags = append(tags, tag.Upsert(x.KeyStatus, pk.Attr))
+			_ = ostats.RecordWithTags(context.Background(), tags, x.BadgerReadLatencyMs.M(ms))
+		}()
+	}
 
 	pl := &pb.PostingList{}
 	txn := pstore.NewTransactionAt(lc.startTs, false)
