@@ -8,6 +8,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -51,9 +52,157 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 	return edge.Entity == 0 && isStarAll(edge.Value)
 }
 
+type PredicatePipeline struct {
+	predicate string
+	edges     chan *pb.DirectedEdge
+	txn       *posting.Txn
+	wg        *sync.WaitGroup
+	errCh     chan error
+}
+
+type MutationPipeline struct {
+	predicatePipelines map[string]*PredicatePipeline
+	txn                *posting.Txn
+	wg                 *sync.WaitGroup
+}
+
+func newMutationPipeline(txn *posting.Txn) *MutationPipeline {
+	return &MutationPipeline{
+		predicatePipelines: make(map[string]*PredicatePipeline),
+		txn:                txn,
+		wg:                 &sync.WaitGroup{},
+	}
+}
+
+func (mp *MutationPipeline) RunMutation(ctx context.Context, edges *pb.DirectedEdge) {
+	pipeline := mp.getOrCreatePipeline(ctx, edges.Attr)
+	pipeline.edges <- edges
+}
+
+func (mp *MutationPipeline) Wait() error {
+	if len(mp.predicatePipelines) == 0 {
+		return nil
+	}
+	for _, pipeline := range mp.predicatePipelines {
+		close(pipeline.edges)
+	}
+	mp.wg.Wait()
+	for _, pipeline := range mp.predicatePipelines {
+		err := <-pipeline.errCh
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mp *MutationPipeline) getOrCreatePipeline(ctx context.Context, predicate string) *PredicatePipeline {
+	if pipeline, ok := mp.predicatePipelines[predicate]; ok {
+		return pipeline
+	}
+	return mp.newPredicatePipeline(ctx, predicate)
+}
+
+func (mp *MutationPipeline) newPredicatePipeline(ctx context.Context, predicate string) *PredicatePipeline {
+	su, ok := schema.State().Get(ctx, predicate)
+	numGo := 5
+	if ok {
+		if len(su.Tokenizer) > 2 {
+			numGo = 10
+		}
+	}
+	p := &PredicatePipeline{
+		predicate: predicate,
+		edges:     make(chan *pb.DirectedEdge, 1000),
+		txn:       mp.txn,
+		wg:        mp.wg,
+		errCh:     make(chan error, numGo),
+	}
+	mp.predicatePipelines[predicate] = p
+	mp.wg.Add(numGo)
+	for i := 0; i < numGo; i++ {
+		go func() {
+			defer mp.wg.Done()
+			p.runPredicateMutation(ctx)
+		}()
+	}
+	return p
+}
+
+func (pp *PredicatePipeline) runPredicateMutation(ctx context.Context) {
+	postingHolder := pp.txn.GetPredicateHolder(pp.predicate)
+	su, ok := schema.State().Get(ctx, pp.predicate)
+	dataKey := x.DataKey(pp.predicate, 0)
+
+	for edge := range pp.edges {
+		if edge.Op != pb.DirectedEdge_DEL {
+			if !ok {
+				pp.errCh <- errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+				return
+			}
+		}
+
+		if isDeletePredicateEdge(edge) {
+			pp.errCh <- errors.New("We should never reach here")
+			return
+		}
+
+		// Once mutation comes via raft we do best effort conversion
+		// Type check is done before proposing mutation, in case schema is not
+		// present, some invalid entries might be written initially
+		if err := ValidateAndConvert(edge, &su); err != nil {
+			pp.errCh <- err
+			return
+		}
+
+		isList := su.GetList()
+		var getFn func(uid uint64) (*posting.List, error)
+		switch {
+		case len(edge.Lang) == 0 && !isList:
+			// Scalar Predicates, without lang
+			getFn = postingHolder.GetPartialDataList
+		case len(edge.Lang) > 0 || su.GetCount():
+			// Language or Count Index
+			getFn = postingHolder.GetDataListFromDisk
+		case edge.Op == pb.DirectedEdge_DEL:
+			// Covers various delete cases to keep things simple.
+			getFn = postingHolder.GetDataListFromDisk
+		default:
+			// Only count index needs to be read. For other indexes on list, we don't need to read any data.
+			// For indexes on scalar prediactes, only the last element needs to be left.
+			// Delete cases covered above.
+			getFn = postingHolder.GetDataListFromDelta
+		}
+
+		t := time.Now()
+		plist, err := getFn(edge.Entity)
+		if err != nil {
+			pp.errCh <- err
+			return
+		}
+		if dur := time.Since(t); dur > time.Millisecond {
+			if span := otrace.FromContext(ctx); span != nil {
+				span.Annotatef([]otrace.Attribute{otrace.BoolAttribute("slow-get", true)},
+					"GetLru took %s", dur)
+			}
+		}
+		x.AssertTrue(plist != nil)
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], edge.Entity)
+		plist.SetKey(&dataKey)
+		err = plist.AddMutationWithIndex(ctx, edge, pp.txn, &su)
+		if err != nil {
+			pp.errCh <- err
+			return
+		}
+	}
+
+	pp.errCh <- nil
+}
+
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
 	ctx = schema.GetWriteContext(ctx)
+	postingHolder := txn.GetPredicateHolder(edge.Attr)
 
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
@@ -87,18 +236,18 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	switch {
 	case len(edge.Lang) == 0 && !isList:
 		// Scalar Predicates, without lang
-		getFn = txn.GetScalarList
+		getFn = postingHolder.GetScalarList
 	case len(edge.Lang) > 0 || su.GetCount():
 		// Language or Count Index
-		getFn = txn.Get
+		getFn = postingHolder.Get
 	case edge.Op == pb.DirectedEdge_DEL:
 		// Covers various delete cases to keep things simple.
-		getFn = txn.Get
+		getFn = postingHolder.Get
 	default:
 		// Only count index needs to be read. For other indexes on list, we don't need to read any data.
 		// For indexes on scalar prediactes, only the last element needs to be left.
 		// Delete cases covered above.
-		getFn = txn.GetFromDelta
+		getFn = postingHolder.GetFromDelta
 	}
 
 	t := time.Now()
@@ -112,7 +261,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	if err != nil {
 		return err
 	}
-	return plist.AddMutationWithIndex(ctx, edge, txn)
+	return plist.AddMutationWithIndex(ctx, edge, txn, &su)
 }
 
 func undoSchemaUpdate(predicate string) {

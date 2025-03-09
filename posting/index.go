@@ -49,19 +49,19 @@ type indexMutationInfo struct {
 
 // indexTokens return tokens, without the predicate prefix and
 // index rune, for specific tokenizers.
-func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
+func indexTokens(ctx context.Context, info *indexMutationInfo, su *pb.SchemaUpdate) ([]string, error) {
 	attr := info.edge.Attr
 	lang := info.edge.GetLang()
 
-	schemaType, err := schema.State().TypeOf(attr)
-	if err != nil || !schemaType.IsScalar() {
+	if !su.List && su.ValueType == pb.Posting_UID {
 		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
-	if !schema.State().IsIndexed(ctx, attr) {
+	if su.Directive != pb.SchemaUpdate_INDEX {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
-	sv, err := types.Convert(info.val, schemaType)
+
+	sv, err := types.Convert(info.val, types.TypeID(su.ValueType))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
 
-func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) ([]*pb.DirectedEdge, error) {
+func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo, su *pb.SchemaUpdate) ([]*pb.DirectedEdge, error) {
 	if info.tokenizers == nil {
 		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
 	}
@@ -100,86 +100,12 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		return []*pb.DirectedEdge{}, errors.New("invalid UID with value 0")
 	}
 
+	// Handle vector index mutations separately
 	if len(info.factorySpecs) > 0 {
-		inKey := x.DataKey(info.edge.Attr, uid)
-		pl, err := txn.Get(inKey)
-		if err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-		data, err := pl.AllValues(txn.StartTs)
-		if err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-
-		if info.op == pb.DirectedEdge_DEL &&
-			len(data) > 0 && data[0].Tid == types.VFloatID {
-			// TODO look into better alternatives
-			//      The issue here is that we will create dead nodes in the Vector Index
-			//      assuming an HNSW index type. What we should do instead is invoke
-			//      index.Remove(<key to dead index value>). However, we currently do
-			//      not support this in VectorIndex code!!
-			// if a delete & dealing with vfloats, add this to dead node in persistent store.
-			// What we should do instead is invoke the factory.Remove(key) operation.
-			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
-			deadKey := x.DataKey(deadAttr, 1)
-			pl, err := txn.Get(deadKey)
-			if err != nil {
-				return []*pb.DirectedEdge{}, err
-			}
-			var deadNodes []uint64
-			deadData, _ := pl.Value(txn.StartTs)
-			if deadData.Value == nil {
-				deadNodes = append(deadNodes, uid)
-			} else {
-				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
-				if err != nil {
-					return []*pb.DirectedEdge{}, err
-				}
-				deadNodes = append(deadNodes, uid)
-			}
-			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
-			if marshalErr != nil {
-				return []*pb.DirectedEdge{}, marshalErr
-			}
-			edge := &pb.DirectedEdge{
-				Entity:    1,
-				Attr:      deadAttr,
-				Value:     deadNodesBytes,
-				ValueType: pb.Posting_ValType(0),
-			}
-			if err := pl.addMutation(ctx, txn, edge); err != nil {
-				return nil, err
-			}
-		}
-
-		// TODO: As stated earlier, we need to validate that it is okay to assume
-		//       that we care about just data[0].
-		//       Similarly, the current assumption is that we have at most one
-		//       Vector Index, but this assumption may break later.
-		if info.op != pb.DirectedEdge_DEL &&
-			len(data) > 0 && data[0].Tid == types.VFloatID &&
-			len(info.factorySpecs) > 0 {
-			// retrieve vector from inUuid save as inVec
-			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
-			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-			indexer, err := info.factorySpecs[0].CreateIndex(attr)
-			if err != nil {
-				return []*pb.DirectedEdge{}, err
-			}
-			edges, err := indexer.Insert(ctx, tc, uid, inVec)
-			if err != nil {
-				return []*pb.DirectedEdge{}, err
-			}
-			pbEdges := []*pb.DirectedEdge{}
-			for _, e := range edges {
-				pbe := indexEdgeToPbEdge(e)
-				pbEdges = append(pbEdges, pbe)
-			}
-			return pbEdges, nil
-		}
+		return txn.addVectorIndexMutations(ctx, info, uid)
 	}
 
-	tokens, err := indexTokens(ctx, info)
+	tokens, err := indexTokens(ctx, info, su)
 	if err != nil {
 		// This data is not indexable
 		return []*pb.DirectedEdge{}, err
@@ -192,23 +118,100 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		Op:      info.op,
 	}
 
+	ph := txn.cache.GetPredicateHolder(attr)
+
 	for _, token := range tokens {
-		if err := txn.addIndexMutation(ctx, edge, token); err != nil {
+		if err := txn.addIndexMutation(ctx, edge, token, ph); err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
 	}
 	return []*pb.DirectedEdge{}, nil
 }
 
-func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string) error {
-	key := x.IndexKey(edge.Attr, token)
-	plist, err := txn.cache.GetFromDelta(key)
+func (txn *Txn) addVectorIndexMutations(ctx context.Context, info *indexMutationInfo, uid uint64) ([]*pb.DirectedEdge, error) {
+	inKey := x.DataKey(info.edge.Attr, uid)
+	ph := txn.cache.GetPredicateHolder(info.edge.Attr)
+	pl, err := txn.Get(inKey)
+	if err != nil {
+		return []*pb.DirectedEdge{}, err
+	}
+	data, err := pl.AllValues(txn.StartTs)
+	if err != nil {
+		return []*pb.DirectedEdge{}, err
+	}
+
+	if info.op == pb.DirectedEdge_DEL &&
+		len(data) > 0 && data[0].Tid == types.VFloatID {
+		// Handle dead nodes for vector index
+		deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+		deadKey := x.DataKey(deadAttr, 1)
+		pl, err := txn.Get(deadKey)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		var deadNodes []uint64
+		deadData, _ := pl.Value(txn.StartTs)
+		if deadData.Value == nil {
+			deadNodes = append(deadNodes, uid)
+		} else {
+			deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			deadNodes = append(deadNodes, uid)
+		}
+		deadNodesBytes, marshalErr := json.Marshal(deadNodes)
+		if marshalErr != nil {
+			return []*pb.DirectedEdge{}, marshalErr
+		}
+		edge := &pb.DirectedEdge{
+			Entity:    1,
+			Attr:      deadAttr,
+			Value:     deadNodesBytes,
+			ValueType: pb.Posting_ValType(0),
+		}
+		if err := pl.addMutation(ctx, txn, ph, edge); err != nil {
+			return nil, err
+		}
+	}
+
+	// Handle vector index insertion
+	if info.op != pb.DirectedEdge_DEL &&
+		len(data) > 0 && data[0].Tid == types.VFloatID &&
+		len(info.factorySpecs) > 0 {
+		inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+		tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+		indexer, err := info.factorySpecs[0].CreateIndex(info.edge.Attr)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		edges, err := indexer.Insert(ctx, tc, uid, inVec)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		pbEdges := []*pb.DirectedEdge{}
+		for _, e := range edges {
+			pbe := indexEdgeToPbEdge(e)
+			pbEdges = append(pbEdges, pbe)
+		}
+		return pbEdges, nil
+	}
+
+	return []*pb.DirectedEdge{}, nil
+}
+
+func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string, ph *PredicateHolder) error {
+	plist, err := ph.GetIndexListFromDelta(token)
+	//fmt.Println("ADD INDEX MUTATION", edge.Attr, edge.Entity, edge.ValueId, edge.Value, plist.key, plist.mutationMap.currentEntries, plist.mutationMap.currentUids, token)
 	if err != nil {
 		return err
 	}
 
+	key := x.IndexKey(edge.Attr, token)
+	plist.SetKey(&key)
+
 	x.AssertTrue(plist != nil)
-	if err = plist.addMutation(ctx, txn, edge); err != nil {
+	if err = plist.addMutation(ctx, txn, ph, edge); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -242,6 +245,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
 	found := false
+	ph := txn.cache.GetPredicateHolder(edge.Attr)
 
 	plist.Lock()
 	defer plist.Unlock()
@@ -253,7 +257,7 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	}
 
 	if !(hasCountIndex && !shouldAddCountEdge(found, edge)) {
-		if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
+		if err := plist.addMutationInternal(ctx, txn, ph, edge); err != nil {
 			return emptyCountParams, err
 		}
 	}
@@ -289,7 +293,8 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 		Op:      t.Op,
 		Facets:  t.Facets,
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
+	ph := txn.cache.GetPredicateHolder(edge.Attr)
+	if err := plist.addMutation(ctx, txn, ph, edge); err != nil {
 		return err
 	}
 
@@ -369,10 +374,10 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	return nil
 }
 
-func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
-	isReversed := schema.State().IsReversed(ctx, edge.Attr)
-	isIndexed := schema.State().IsIndexed(ctx, edge.Attr)
-	hasCount := schema.State().HasCount(ctx, edge.Attr)
+func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *Txn, su *pb.SchemaUpdate) error {
+	isReversed := su.Directive == pb.SchemaUpdate_REVERSE
+	isIndexed := su.Directive == pb.SchemaUpdate_INDEX
+	hasCount := su.Count
 	delEdge := &pb.DirectedEdge{
 		Attr:   edge.Attr,
 		Op:     edge.Op,
@@ -403,7 +408,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				edge:         edge,
 				val:          val,
 				op:           pb.DirectedEdge_DEL,
-			})
+			}, su)
 			return err
 		default:
 			return nil
@@ -425,7 +430,8 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		}
 	}
 
-	return l.addMutation(ctx, txn, edge)
+	ph := txn.cache.GetPredicateHolder(edge.Attr)
+	return l.addMutation(ctx, txn, ph, edge)
 }
 
 func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count uint32,
@@ -438,7 +444,8 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 
 	x.AssertTruef(plist != nil, "plist is nil [%s] %d",
 		t.Attr, t.ValueId)
-	if err = plist.addMutation(ctx, txn, t); err != nil {
+	ph := txn.cache.GetPredicateHolder(t.Attr)
+	if err = plist.addMutation(ctx, txn, ph, t); err != nil {
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
@@ -495,7 +502,7 @@ func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op, shou
 }
 
 func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
-	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
+	hasCountIndex bool, t *pb.DirectedEdge, su *pb.SchemaUpdate) (types.Val, bool, countParams, error) {
 
 	t1 := time.Now()
 	l.Lock()
@@ -523,7 +530,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	var found bool
 	var err error
 
-	isScalarPredicate := !schema.State().IsList(t.Attr)
+	isScalarPredicate := !su.List
 	delNonListPredicate := isScalarPredicate &&
 		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
 
@@ -539,11 +546,14 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			return val, found, emptyCountParams, err
 		}
 	}
+	ph := txn.cache.GetPredicateHolder(t.Attr)
 
+	// fmt.Println("HERE", delNonListPredicate, found, currPost, hasCountIndex, l.print())
+	// debug.PrintStack()
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
 	if delNonListPredicate {
-		newPost := NewPosting(t)
+		newPost := NewPosting(t, ph)
 
 		// This is a scalar value of non-list type and a delete edge mutation, so if the value
 		// given by the user doesn't match the value we have, we return found to be false, to avoid
@@ -558,7 +568,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	}
 
 	if !(hasCountIndex && !shouldAddCountEdge(found && currPost.Op != Del, t)) {
-		if err = l.addMutationInternal(ctx, txn, t); err != nil {
+		if err = l.addMutationInternal(ctx, txn, ph, t); err != nil {
 			return val, found, emptyCountParams, err
 		}
 	}
@@ -569,7 +579,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	if hasCountIndex {
 		pk, _ := x.Parse(l.key)
-		shouldCountOneUid := isScalarPredicate && !pk.IsReverse()
+		shouldCountOneUid := !su.List && !pk.IsReverse()
 		countAfter = countAfterMutation(countBefore, found, t.Op, shouldCountOneUid)
 		return val, found, countParams{
 			attr:        t.Attr,
@@ -581,30 +591,35 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 	return val, found, emptyCountParams, nil
 }
 
+func (l *List) SetKey(key *[]byte) {
+	l.key = *key
+}
+
 // AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn, su *pb.SchemaUpdate) error {
+	//fmt.Println("ADD MUTATION WITH INDEX", edge.Attr, edge.Entity, edge.ValueId, edge.Value, l.key, l.mutationMap.currentEntries, l.mutationMap.currentUids)
 	if edge.Attr == "" {
 		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
 
 	if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
-		return l.handleDeleteAll(ctx, edge, txn)
+		return l.handleDeleteAll(ctx, edge, txn, su)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.Attr)
-	hasCountIndex := schema.State().HasCount(ctx, edge.Attr)
+	doUpdateIndex := pstore != nil && (len(su.IndexSpecs) > 0 || len(su.Tokenizer) > 0)
+	hasCountIndex := pstore != nil && su.Count
 
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
+	if (pstore != nil) && (edge.ValueId != 0) && (su.Directive == pb.SchemaUpdate_REVERSE) {
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
 	}
 
-	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
+	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge, su)
 	if err != nil {
 		return err
 	}
@@ -622,7 +637,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
-			}); err != nil {
+			}, su); err != nil {
 				return err
 			}
 		}
@@ -636,7 +651,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_SET,
-			}); err != nil {
+			}, su); err != nil {
 				return err
 			}
 		}
@@ -771,7 +786,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	}
 
 	if os.Getenv("DEBUG_SHOW_HNSW_TREE") != "" {
-		printTreeStats(txn)
+		printTreeStats(txn, r.attr)
 	}
 
 	txn.Update()
@@ -795,7 +810,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		})
 }
 
-func printTreeStats(txn *Txn) {
+func printTreeStats(txn *Txn, attr string) {
 	txn.cache.Lock()
 
 	numLevels := 20
@@ -803,7 +818,7 @@ func printTreeStats(txn *Txn) {
 	numConnections := make([]int, numLevels)
 
 	var temp [][]uint64
-	for key, pl := range txn.cache.plists {
+	for key, pl := range txn.cache.plists[attr].plists {
 		pk, _ := x.Parse([]byte(key))
 		if strings.HasSuffix(pk.Attr, "__vector_") {
 			data := pl.getPosting(txn.cache.startTs)
@@ -966,15 +981,17 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		for key, data := range streamTxn.cache.deltas {
-			version := atomic.AddUint64(&counter, 1)
-			kv := bpb.KV{
-				Key:      []byte(key),
-				Value:    data,
-				UserMeta: []byte{BitDeltaPosting},
-				Version:  version,
+		for _, ph := range streamTxn.cache.plists {
+			for key, data := range ph.deltas {
+				version := atomic.AddUint64(&counter, 1)
+				kv := bpb.KV{
+					Key:      []byte(key),
+					Value:    data,
+					UserMeta: []byte{BitDeltaPosting},
+					Version:  version,
+				}
+				kvs = append(kvs, &kv)
 			}
-			kvs = append(kvs, &kv)
 		}
 
 		return &bpb.KVList{Kv: kvs}, nil
@@ -1400,6 +1417,8 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
 
+		txn.GetPredicateHolder(rb.Attr)
+
 		processAddIndexMutation := func(edge *pb.DirectedEdge, val types.Val) ([]*pb.DirectedEdge, error) {
 			for {
 				newEdges, err := txn.addIndexMutations(ctx, &indexMutationInfo{
@@ -1408,7 +1427,7 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 					edge:         edge,
 					val:          val,
 					op:           pb.DirectedEdge_SET,
-				})
+				}, rb.CurrentSchema)
 				switch err {
 				case ErrRetry:
 					time.Sleep(10 * time.Millisecond)
@@ -1449,7 +1468,8 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 					return []*pb.DirectedEdge{}, err
 				}
 
-				if err := p.addMutation(ctx, txn, &edge); err != nil {
+				ph := txn.cache.GetPredicateHolder(rb.Attr)
+				if err := p.addMutation(ctx, txn, ph, &edge); err != nil {
 					return []*pb.DirectedEdge{}, err
 				}
 			}
@@ -1793,8 +1813,13 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 
 		// Ensure that list is in the cache run by txn. Otherwise, nothing would
 		// get updated.
-		pl = txn.cache.SetIfAbsent(string(pl.key), pl)
-		if err := pl.addMutation(ctx, txn, t); err != nil {
+		pk, err := x.Parse(pl.key)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		pl = txn.cache.SetIfAbsent(string(pl.key), pk.Attr, pl)
+		ph := txn.cache.GetPredicateHolder(rb.Attr)
+		if err := pl.addMutation(ctx, txn, ph, t); err != nil {
 			return []*pb.DirectedEdge{}, err
 		}
 		// Add the new edge with the fingerprinted value id.
@@ -1805,7 +1830,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 			Op:        pb.DirectedEdge_SET,
 			Facets:    mpost.Facets,
 		}
-		return []*pb.DirectedEdge{}, pl.addMutation(ctx, txn, newEdge)
+		return []*pb.DirectedEdge{}, pl.addMutation(ctx, txn, ph, newEdge)
 	}
 	return builder.Run(ctx)
 }

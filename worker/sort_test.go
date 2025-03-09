@@ -336,6 +336,7 @@ func TestScalarPredicateIntCount(t *testing.T) {
 	l, err := txn.Get(key)
 	require.Nil(t, err)
 	l.RLock()
+	l.Print()
 	require.Equal(t, 0, l.GetLength(20))
 	l.RUnlock()
 }
@@ -390,6 +391,8 @@ func TestScalarPredicateCount(t *testing.T) {
 	l, err := txn.Get(key)
 	require.Nil(t, err)
 	l.RLock()
+	fmt.Println("COUNT KEY", key)
+	l.Print()
 	require.Equal(t, 1, l.GetLength(15))
 	l.RUnlock()
 }

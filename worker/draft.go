@@ -537,6 +537,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
+	featureFlag := true
+	if featureFlag {
+		mp := newMutationPipeline(txn)
+		for _, edge := range m.Edges {
+			mp.RunMutation(ctx, edge)
+		}
+		return mp.Wait()
+	}
+
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
 		for _, edge := range edges {
@@ -894,6 +903,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// If the transaction has failed, we dont need to update it.
 		if commit != 0 {
 			txn.Update()
+		} else {
+			txn.ReleaseAll()
 		}
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.

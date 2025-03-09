@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
@@ -115,7 +114,8 @@ func (vt *viTxn) AddMutation(ctx context.Context, key []byte, t *index.KeyValue)
 	if err != nil {
 		return err
 	}
-	return pl.addMutation(ctx, vt.delegate, indexEdgeToPbEdge(t))
+	ph := vt.delegate.cache.GetOrCreatePredicateHolder(t.Attr)
+	return pl.addMutation(ctx, vt.delegate, ph, indexEdgeToPbEdge(t))
 }
 
 func (vt *viTxn) AddMutationWithLockHeld(ctx context.Context, key []byte, t *index.KeyValue) error {
@@ -123,7 +123,8 @@ func (vt *viTxn) AddMutationWithLockHeld(ctx context.Context, key []byte, t *ind
 	if err != nil {
 		return err
 	}
-	return pl.addMutationInternal(ctx, vt.delegate, indexEdgeToPbEdge(t))
+	ph := vt.delegate.cache.GetOrCreatePredicateHolder(t.Attr)
+	return pl.addMutationInternal(ctx, vt.delegate, ph, indexEdgeToPbEdge(t))
 }
 
 func (vt *viTxn) LockKey(key []byte) {
@@ -155,43 +156,42 @@ func (txn *Txn) GetFromDelta(key []byte) (*List, error) {
 	return txn.cache.GetFromDelta(key)
 }
 
+func (txn *Txn) GetPredicateHolder(attr string) *PredicateHolder {
+	return txn.cache.GetOrCreatePredicateHolder(attr)
+}
+
 func (txn *Txn) GetScalarList(key []byte) (*List, error) {
-	l, err := txn.cache.GetFromDelta(key)
+	pk, err := x.Parse(key)
 	if err != nil {
 		return nil, err
 	}
-	l.Lock()
-	defer l.Unlock()
-	if l.mutationMap.len() == 0 && len(l.plist.Postings) == 0 {
-		pl, err := txn.cache.readPostingListAt(key)
-		if err == badger.ErrKeyNotFound {
-			return l, nil
-		}
-		if err != nil {
-			return nil, err
-		}
+	ph := txn.GetPredicateHolder(pk.Attr)
+	return ph.GetScalarList(key)
+}
 
-		if pl.Pack != nil {
-			l.plist = pl
-		} else {
-			if pl.CommitTs == 0 {
-				l.mutationMap.setCurrentEntries(txn.StartTs, pl)
-			} else {
-				l.mutationMap.insertCommittedPostings(pl)
-			}
-		}
+func (txn *Txn) ReleaseAll() {
+	for _, ph := range txn.cache.plists {
+		ph.releaseAll()
 	}
-	return l, nil
 }
 
 // Update calls UpdateDeltasAndDiscardLists on the local cache.
 func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
+	for _, ph := range txn.cache.plists {
+		ph.UpdateUidDelta()
+		ph.UpdateIndexDelta()
+		ph.releaseAll()
+	}
 }
 
 // Store is used by tests.
 func (txn *Txn) Store(pl *List) *List {
-	return txn.cache.SetIfAbsent(string(pl.key), pl)
+	pk, err := x.Parse(pl.key)
+	if err != nil {
+		return nil
+	}
+	return txn.cache.SetIfAbsent(string(pl.key), pk.Attr, pl)
 }
 
 type oracle struct {
@@ -324,8 +324,10 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	for _, status := range delta.Txns {
 		txn := o.pendingTxns[status.StartTs]
 		if txn != nil && status.CommitTs > 0 {
-			for k := range txn.cache.deltas {
-				IncrRollup.addKeyToBatch([]byte(k), 0)
+			for _, ph := range txn.cache.plists {
+				for key := range ph.deltas {
+					IncrRollup.addKeyToBatch([]byte(key), 0)
+				}
 			}
 		}
 		delete(o.pendingTxns, status.StartTs)
@@ -382,9 +384,11 @@ func (o *oracle) GetTxn(startTs uint64) *Txn {
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
 	txn.Lock()
 	defer txn.Unlock()
-	for key := range txn.cache.deltas {
-		if ok([]byte(key)) {
-			return true
+	for _, ph := range txn.cache.plists {
+		for key := range ph.deltas {
+			if ok([]byte(key)) {
+				return true
+			}
 		}
 	}
 	return false
