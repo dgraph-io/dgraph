@@ -28,7 +28,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/golang/glog v1.2.4
-	github.com/golang/snappy v0.0.4
+	github.com/golang/snappy v1.0.0
 	github.com/google/codesearch v1.2.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
