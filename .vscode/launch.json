@@ -1,45 +1,59 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Alpha",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceRoot}/dgraph/",
-            "env": {},
-            "args": ["alpha", "--trace",  "jaeger=http://localhost:14268; ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;"],
-            "showLog": true
-        },
-        {
-            "name": "Zero",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceRoot}/dgraph/",
-            "env": {},
-            "args": ["zero"],
-            "showLog": true
-        },
-        {
-            "name": "AlphaACL",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceRoot}/dgraph/", 
-            "env": {},
-            "args": ["alpha", "--trace", "jaeger=http://localhost:14268; ratio=0.99;", "--telemetry", "sentry=false;", "--security", "whitelist=0.0.0.0/0;", "--acl", "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"],
-            "showLog": true
-        }
-    ],
-    "compounds": [
-        {
-            "name": "normal",
-            "configurations": ["Alpha", "Zero"]
-        },
-        {
-            "name": "ACL",
-            "configurations": ["AlphaACL", "Zero"]
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Alpha",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/dgraph/",
+      "env": {},
+      "args": [
+        "alpha",
+        "--trace",
+        "jaeger=http://localhost:14268; ratio=0.99;",
+        "--security",
+        "whitelist=0.0.0.0/0;"
+      ],
+      "showLog": true
+    },
+    {
+      "name": "Zero",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/dgraph/",
+      "env": {},
+      "args": ["zero"],
+      "showLog": true
+    },
+    {
+      "name": "AlphaACL",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceRoot}/dgraph/",
+      "env": {},
+      "args": [
+        "alpha",
+        "--trace",
+        "jaeger=http://localhost:14268; ratio=0.99;",
+        "--security",
+        "whitelist=0.0.0.0/0;",
+        "--acl",
+        "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"
+      ],
+      "showLog": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "normal",
+      "configurations": ["Alpha", "Zero"]
+    },
+    {
+      "name": "ACL",
+      "configurations": ["AlphaACL", "Zero"]
+    }
+  ]
 }
