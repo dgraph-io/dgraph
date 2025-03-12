@@ -202,15 +202,9 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).MergeAndCheckDefault(
-		x.TelemetryDefaults)
-	if telemetry.GetBool("sentry") {
-		x.InitSentry(enc.EeBuild)
-		defer x.FlushSentry()
-		x.ConfigureSentryScope("zero")
-		x.WrapPanics()
-		x.SentryOptOutNote()
-	}
+	// keeping this flag for backward compatibility
+	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).
+		MergeAndCheckDefault(x.TelemetryDefaults)
 
 	x.PrintVersion()
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Zero.Conf)
@@ -365,8 +359,6 @@ func run() {
 		st.node.closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
-
-		x.RemoveCidFile()
 	}()
 
 	st.zero.closer.AddRunning(2)

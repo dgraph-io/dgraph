@@ -45,7 +45,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/edgraph"
 	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/ee/audit"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
 	"github.com/hypermodeinc/dgraph/v24/graphql/admin"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/schema"
@@ -616,15 +615,8 @@ func setupServer(closer *z.Closer) {
 func run() {
 	var err error
 
-	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).MergeAndCheckDefault(
-		x.TelemetryDefaults)
-	if telemetry.GetBool("sentry") {
-		x.InitSentry(enc.EeBuild)
-		defer x.FlushSentry()
-		x.ConfigureSentryScope("alpha")
-		x.WrapPanics()
-		x.SentryOptOutNote()
-	}
+	telemetry := z.NewSuperFlag(Alpha.Conf.GetString("telemetry")).
+		MergeAndCheckDefault(x.TelemetryDefaults)
 
 	bindall = Alpha.Conf.GetBool("bindall")
 	cache := z.NewSuperFlag(Alpha.Conf.GetString("cache")).MergeAndCheckDefault(
@@ -853,7 +845,6 @@ func run() {
 	audit.Close()
 
 	worker.State.Dispose()
-	x.RemoveCidFile()
 	glog.Info("worker.State disposed.")
 
 	updaters.Wait()
