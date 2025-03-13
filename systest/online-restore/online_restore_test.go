@@ -205,7 +205,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr,
+	conn, err := grpc.NewClient(testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -244,7 +244,7 @@ func TestBasicRestore(t *testing.T) {
 // drop all
 // Take backup b6
 func TestIncrementalRestore(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr,
+	conn, err := grpc.NewClient(testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -333,7 +333,7 @@ func TestIncrementalRestore(t *testing.T) {
 func TestRestoreBackupNum(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
 	)
@@ -355,7 +355,7 @@ func TestRestoreBackupNum(t *testing.T) {
 func TestRestoreBackupNumInvalid(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
 	)
@@ -415,7 +415,7 @@ func TestRestoreBackupNumInvalid(t *testing.T) {
 func TestMoveTablets(t *testing.T) {
 	disableDraining(t)
 
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))),
 	)
@@ -514,8 +514,7 @@ func TestListBackups(t *testing.T) {
 }
 
 func TestRestoreWithDropOperations(t *testing.T) {
-	conn, err := grpc.Dial(
-		testutil.SockAddr,
+	conn, err := grpc.NewClient(testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))

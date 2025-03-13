@@ -140,7 +140,7 @@ func mutateExistingAllowed2(t *testing.T, dg *dgo.Dgraph) {
 
 func TestMutationsDisallow(t *testing.T) {
 	a := testutil.ContainerAddr("alpha1", 9080)
-	conn, err := grpc.Dial(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
@@ -158,14 +158,14 @@ func TestMutationsDisallow(t *testing.T) {
 
 func TestMutationsStrict(t *testing.T) {
 	a1 := testutil.ContainerAddr("alpha2", 9080)
-	conn1, err := grpc.Dial(a1, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn1, err := grpc.NewClient(a1, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}
 	defer conn1.Close()
 
 	a2 := testutil.ContainerAddr("alpha3", 9080)
-	conn2, err := grpc.Dial(a2, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn2, err := grpc.NewClient(a2, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Cannot perform drop all op: %s", err.Error())
 	}

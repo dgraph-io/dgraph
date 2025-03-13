@@ -173,7 +173,7 @@ func newPool(addr string, tlsClientConf *tls.Config) (*Pool, error) {
 		conOpts = append(conOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	conn, err := grpc.Dial(addr, conOpts...)
+	conn, err := grpc.NewClient(addr, conOpts...)
 	if err != nil {
 		glog.Errorf("unable to connect with %s : %s", addr, err)
 		return nil, err
@@ -284,7 +284,7 @@ func (p *Pool) MonitorHealth() {
 				return
 			}
 			ctx, cancel := context.WithTimeout(p.closer.Ctx(), 10*time.Second)
-			conn, err := grpc.DialContext(ctx, p.Addr, p.dialOpts...)
+			conn, err := grpc.NewClient(p.Addr, p.dialOpts...)
 			if err == nil {
 				// Make a dummy request to test out the connection.
 				client := pb.NewRaftClient(conn)

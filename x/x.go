@@ -938,8 +938,7 @@ func SetupConnection(
 
 	dialOpts = append(dialOpts,
 		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
-		grpc.WithDefaultCallOptions(callOpts...),
-		grpc.WithBlock())
+		grpc.WithDefaultCallOptions(callOpts...))
 
 	if tlsCfg != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
@@ -947,10 +946,7 @@ func SetupConnection(
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	return grpc.DialContext(ctx, host, dialOpts...)
+	return grpc.NewClient(host, dialOpts...)
 }
 
 // Diff computes the difference between the keys of the two given maps.
