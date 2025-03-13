@@ -77,8 +77,7 @@ func TestBackupOfOldRestore(t *testing.T) {
 	common.DirSetup(t)
 	common.CopyOldBackupDir(t)
 
-	conn, err := grpc.Dial(testutil.SockAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
+	conn, err := grpc.NewClient(testutil.SockAddr, grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	require.NoError(t, err)
@@ -119,7 +118,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 		common.DirSetup(t)
 		common.CopyOldBackupDir(t)
 
-		conn, err := grpc.Dial(testutil.SockAddr,
+		conn, err := grpc.NewClient(testutil.SockAddr,
 			grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 		require.NoError(t, err)
 		dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -149,7 +148,7 @@ func TestRestoreOfOldBackup(t *testing.T) {
 }
 
 func TestBackupFilesystem(t *testing.T) {
-	conn, err := grpc.Dial(testutil.SockAddr,
+	conn, err := grpc.NewClient(testutil.SockAddr,
 		grpc.WithTransportCredentials(credentials.NewTLS(testutil.GetAlphaClientConfig(t))))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))

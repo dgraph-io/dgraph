@@ -103,20 +103,16 @@ func newLoader(opt *options) *loader {
 	}
 
 	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 
 	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
 	x.Check(err)
-	dialOpts := []grpc.DialOption{
-		grpc.WithBlock(),
-	}
+	dialOpts := []grpc.DialOption{}
 	if tlsConf != nil {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	zero, err := grpc.DialContext(ctx, opt.ZeroAddr, dialOpts...)
+	zero, err := grpc.NewClient(opt.ZeroAddr, dialOpts...)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	st := &state{
 		opt:    opt,

@@ -47,12 +47,9 @@ func TestIdLeaseOverflow(t *testing.T) {
 }
 
 func TestIdBump(t *testing.T) {
-	dialOpts := []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
+	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	ctx := context.Background()
-	con, err := grpc.DialContext(ctx, testutil.SockAddrZero, dialOpts...)
+	con, err := grpc.NewClient(testutil.SockAddrZero, dialOpts...)
 	require.NoError(t, err)
 
 	zc := pb.NewZeroClient(con)

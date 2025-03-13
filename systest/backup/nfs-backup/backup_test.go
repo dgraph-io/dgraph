@@ -53,7 +53,7 @@ func TestBackupNonHAClust(t *testing.T) {
 func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
 	backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
 
-	conn, err := grpc.Dial(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()

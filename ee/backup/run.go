@@ -182,19 +182,17 @@ func runRestoreCmd() error {
 	var zc pb.ZeroClient
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
 
 		tlsConfig, err := x.LoadClientTLSConfigForInternalPort(Restore.Conf)
 		x.Checkf(err, "Unable to generate helper TLS config")
-		callOpts := []grpc.DialOption{grpc.WithBlock()}
+		callOpts := []grpc.DialOption{}
 		if tlsConfig != nil {
 			callOpts = append(callOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		} else {
 			callOpts = append(callOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 
-		zero, err := grpc.DialContext(ctx, opt.zero, callOpts...)
+		zero, err := grpc.NewClient(opt.zero, callOpts...)
 		if err != nil {
 			return errors.Wrapf(err, "Unable to connect to %s", opt.zero)
 		}

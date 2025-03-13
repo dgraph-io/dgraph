@@ -265,9 +265,8 @@ func dirCleanup(t *testing.T) {
 }
 
 func setupDgraph(t *testing.T, nquads, schema string) {
-
 	require.NoError(t, os.MkdirAll("./data", os.ModePerm))
-	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 

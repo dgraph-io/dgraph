@@ -774,7 +774,7 @@ func (c *LocalCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error getting health URL")
 		}
-		conn, err := grpc.Dial(url,
+		conn, err := grpc.NewClient(url,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultServiceConfig(retryPolicy))
 		if err != nil {
@@ -804,7 +804,7 @@ func (c *LocalCluster) AlphaClient(id int) (*dgraphapi.GrpcClient, func(), error
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error getting health URL")
 	}
-	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error connecting to alpha")
 	}

@@ -744,9 +744,7 @@ func BootstrapServer(schema, data []byte) {
 				"Got last error %+v", err.Error()))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	d, err := grpc.DialContext(ctx, Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	d, err := grpc.NewClient(Alpha1gRPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		x.Panic(err)
 	}

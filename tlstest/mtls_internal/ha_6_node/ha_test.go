@@ -141,7 +141,7 @@ func getClientForAlpha(t *testing.T, name string) *dgo.Dgraph {
 	}
 	tlsConf, err := x.GenerateClientTLSConfig(c)
 	require.NoError(t, err)
-	dgConn, err := grpc.Dial(testutil.ContainerAddr(name, 9080),
+	dgConn, err := grpc.NewClient(testutil.ContainerAddr(name, 9080),
 		grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(dgConn))
