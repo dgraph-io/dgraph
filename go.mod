@@ -22,9 +22,8 @@ require (
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/getsentry/sentry-go v0.31.1
-	github.com/go-jose/go-jose/v4 v4.0.4
-	github.com/go-sql-driver/mysql v1.8.1
+	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/go-sql-driver/mysql v1.9.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/golang/glog v1.2.4
@@ -36,7 +35,6 @@ require (
 	github.com/graph-gophers/graphql-go v1.5.0
 	github.com/hashicorp/vault/api v1.15.0
 	github.com/minio/minio-go/v6 v6.0.57
-	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v1.5.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.7.0

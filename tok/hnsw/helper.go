@@ -31,7 +31,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/getsentry/sentry-go"
 	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
 	"github.com/hypermodeinc/dgraph/v24/tok/index"
 	"github.com/pkg/errors"
@@ -791,14 +790,6 @@ func strToUint(s string) uint64 {
 func Check(err error) {
 	if err != nil {
 		err = errors.Wrap(err, "")
-		CaptureSentryException(err)
 		log.Fatalf("%+v", err)
-	}
-}
-
-// CaptureSentryException sends the error report to Sentry.
-func CaptureSentryException(err error) {
-	if err != nil {
-		sentry.CaptureException(err)
 	}
 }

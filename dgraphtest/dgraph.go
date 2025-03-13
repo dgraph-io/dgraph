@@ -142,7 +142,7 @@ func (z *zero) cmd(c *LocalCluster) []string {
 	if c.lowerThanV21 {
 		zcmd = append(zcmd, fmt.Sprintf(`--idx=%v`, z.id+1), "--telemetry=false")
 	} else {
-		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--telemetry=reports=false;sentry=false;",
+		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--telemetry=reports=false;",
 			fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease))
 	}
 
@@ -247,7 +247,7 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		acmd = append(acmd, `--whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, "--telemetry=false")
 	} else {
 		acmd = append(acmd, `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`,
-			"--telemetry=reports=false;sentry=false;")
+			"--telemetry=reports=false;")
 	}
 
 	if c.conf.lambdaURL != "" {

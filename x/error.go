@@ -40,7 +40,6 @@ import (
 func Check(err error) {
 	if err != nil {
 		err = errors.Wrap(err, "")
-		CaptureSentryException(err)
 		log.Fatalf("%+v", err)
 	}
 }
@@ -49,7 +48,6 @@ func Check(err error) {
 func Checkf(err error, format string, args ...interface{}) {
 	if err != nil {
 		err = errors.Wrapf(err, format, args...)
-		CaptureSentryException(err)
 		log.Fatalf("%+v", err)
 	}
 }
@@ -57,7 +55,6 @@ func Checkf(err error, format string, args ...interface{}) {
 // CheckfNoTrace is Checkf without a stack trace.
 func CheckfNoTrace(err error) {
 	if err != nil {
-		CaptureSentryException(err)
 		log.Fatalf(err.Error())
 	}
 }
@@ -65,7 +62,6 @@ func CheckfNoTrace(err error) {
 // CheckfNoLog exits on error without any message (to avoid duplicate error messages).
 func CheckfNoLog(err error) {
 	if err != nil {
-		CaptureSentryException(err)
 		os.Exit(1)
 	}
 }
