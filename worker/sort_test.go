@@ -55,6 +55,41 @@ func writePostingListToDisk(kvs []*bpb.KV) error {
 	return writer.Flush()
 }
 
+func TestEmptyTypeSchema(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	posting.Init(ps, 0, false)
+	Init(ps)
+
+	typeName := "1-temp"
+	ts := uint64(10)
+	txn := pstore.NewTransactionAt(ts, true)
+	defer txn.Discard()
+	e := &badger.Entry{
+		Key:      x.TypeKey(typeName),
+		Value:    make([]byte, 0),
+		UserMeta: posting.BitSchemaPosting,
+	}
+	require.Nil(t, txn.SetEntry(e.WithDiscard()))
+	require.Nil(t, txn.CommitAt(ts, nil))
+
+	schema.Init(ps)
+	require.Nil(t, schema.LoadFromDb(context.Background()))
+
+	req := &pb.SchemaRequest{}
+	types, err := GetTypes(context.Background(), req)
+	require.Nil(t, err)
+
+	require.Equal(t, 1, len(types))
+	x.ParseNamespaceAttr(types[0].TypeName)
+}
+
 func TestMultipleTxnListCount(t *testing.T) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
