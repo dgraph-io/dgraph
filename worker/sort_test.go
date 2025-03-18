@@ -77,10 +77,10 @@ func TestEmptyTypeSchema(t *testing.T) {
 		UserMeta: posting.BitSchemaPosting,
 	}
 	require.Nil(t, txn.SetEntry(e.WithDiscard()))
-	txn.CommitAt(ts, nil)
+	require.Nil(t, txn.CommitAt(ts, nil))
 
 	schema.Init(ps)
-	schema.LoadFromDb(context.Background())
+	require.Nil(t, schema.LoadFromDb(context.Background()))
 
 	req := &pb.SchemaRequest{}
 	types, err := GetTypes(context.Background(), req)
