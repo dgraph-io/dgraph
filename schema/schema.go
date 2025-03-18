@@ -605,8 +605,9 @@ func loadFromDB(ctx context.Context, loadType int) error {
 			err := item.Value(func(val []byte) error {
 				if len(val) == 0 {
 					s = pb.SchemaUpdate{Predicate: pk.Attr, ValueType: pb.Posting_DEFAULT}
+				} else {
+					x.Checkf(proto.Unmarshal(val, &s), "Error while loading schema from db")
 				}
-				x.Checkf(proto.Unmarshal(val, &s), "Error while loading schema from db")
 				State().Set(pk.Attr, &s)
 				return nil
 			})
@@ -616,8 +617,9 @@ func loadFromDB(ctx context.Context, loadType int) error {
 			err := item.Value(func(val []byte) error {
 				if len(val) == 0 {
 					t = pb.TypeUpdate{TypeName: pk.Attr}
+				} else {
+					x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
 				}
-				x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
 				State().SetType(pk.Attr, &t)
 				return nil
 			})
