@@ -169,6 +169,8 @@ func (txn *Txn) GetScalarList(key []byte) (*List, error) {
 	if err != nil {
 		return nil, err
 	}
+	l.Lock()
+	defer l.Unlock()
 	if l.mutationMap.len() == 0 && len(l.plist.Postings) == 0 {
 		pl, err := txn.cache.readPostingListAt(key)
 		if err == badger.ErrKeyNotFound {
@@ -177,10 +179,15 @@ func (txn *Txn) GetScalarList(key []byte) (*List, error) {
 		if err != nil {
 			return nil, err
 		}
-		if pl.CommitTs == 0 {
-			l.mutationMap.setCurrentEntries(txn.StartTs, pl)
+
+		if pl.Pack != nil {
+			l.plist = pl
 		} else {
-			l.mutationMap.insertCommittedPostings(pl)
+			if pl.CommitTs == 0 {
+				l.mutationMap.setCurrentEntries(txn.StartTs, pl)
+			} else {
+				l.mutationMap.insertCommittedPostings(pl)
+			}
 		}
 	}
 	return l, nil
