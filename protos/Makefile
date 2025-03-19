@@ -31,7 +31,8 @@ check:
 	@./depcheck.sh && \
 		(echo "Installing proto libraries to versions in go.mod." ; \
 		go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0 ; \
-		go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0)
+		go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 ; \
+		go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@latest)
 
 .PHONY: copy-protos
 copy-protos:
@@ -56,6 +57,8 @@ regenerate: tidy-deps copy-protos check clean
 		--go_opt=paths=source_relative \
 		--go-grpc_opt=paths=source_relative \
 		--go_opt=M{DGO_PATH}/protos/api.proto={DGO_PATH}/protos/api \
+		--go-vtproto_out=pb \
+		--go-vtproto_opt=features=marshal+unmarshal+size+pool,paths=source_relative \
 		pb.proto
 	@$(MAKE) patch-pb  
 	@rm -rf ${TMPDIR}
