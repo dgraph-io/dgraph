@@ -16,7 +16,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
@@ -543,7 +542,7 @@ func Load(predicate string) error {
 	}
 	var s pb.SchemaUpdate
 	err = item.Value(func(val []byte) error {
-		x.Check(proto.Unmarshal(val, &s))
+		x.Check(s.UnmarshalVT(val))
 		return nil
 	})
 	if err != nil {
@@ -606,7 +605,7 @@ func loadFromDB(ctx context.Context, loadType int) error {
 				if len(val) == 0 {
 					s = pb.SchemaUpdate{Predicate: pk.Attr, ValueType: pb.Posting_DEFAULT}
 				} else {
-					x.Checkf(proto.Unmarshal(val, &s), "Error while loading schema from db")
+					x.Checkf(s.UnmarshalVT(val), "Error while loading schema from db")
 				}
 				State().Set(pk.Attr, &s)
 				return nil
@@ -618,7 +617,7 @@ func loadFromDB(ctx context.Context, loadType int) error {
 				if len(val) == 0 {
 					t = pb.TypeUpdate{TypeName: pk.Attr}
 				} else {
-					x.Checkf(proto.Unmarshal(val, &t), "Error while loading types from db")
+					x.Checkf(t.UnmarshalVT(val), "Error while loading types from db")
 				}
 				State().SetType(pk.Attr, &t)
 				return nil
@@ -891,7 +890,7 @@ func CheckAndModifyPreDefPredicate(update *pb.SchemaUpdate) bool {
 				return false
 			}
 		}
-		return !proto.Equal(original, update)
+		return !reflect.DeepEqual(original, update)
 	}
 	return true
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -492,7 +491,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 
 	if val.list != nil {
 		p := new(pb.PostingList)
-		x.Check(proto.Unmarshal(delta, p))
+		x.Check(p.UnmarshalVT(delta))
 
 		if p.Pack == nil {
 			val.list.setMutationAfterCommit(startTs, commitTs, p, true)
@@ -528,7 +527,7 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 			// empty pl
 			return nil
 		}
-		return proto.Unmarshal(val, plist)
+		return plist.UnmarshalVT(val)
 	})
 }
 
@@ -611,7 +610,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
-				if err := proto.Unmarshal(val, pl); err != nil {
+				if err := pl.UnmarshalVT(val); err != nil {
 					return err
 				}
 				pl.CommitTs = item.Version()

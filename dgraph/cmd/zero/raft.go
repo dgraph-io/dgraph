@@ -378,7 +378,7 @@ func (n *node) applySnapshot(snap *pb.ZeroSnapshot) error {
 	}
 	n.server.orc.purgeBelow(snap.CheckpointTs)
 
-	data, err := proto.Marshal(snap)
+	data, err := snap.MarshalVT()
 	x.Check(err)
 
 	for {
@@ -397,7 +397,7 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 
 	var p pb.ZeroProposal
 	key := binary.BigEndian.Uint64(e.Data[:8])
-	if err := proto.Unmarshal(e.Data[8:], &p); err != nil {
+	if err := p.UnmarshalVT(e.Data[8:]); err != nil {
 		return key, err
 	}
 	span := otrace.FromContext(n.Proposals.Ctx(key))

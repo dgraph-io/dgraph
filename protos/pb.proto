@@ -20,6 +20,10 @@ import "github.com/planetscale/vtprotobuf/vtproto/ext.proto";
 
 option go_package = "./pb";
 
+option (vtproto.equal_all) = true;
+option (vtproto.marshal_all) = true;
+option (vtproto.unmarshal_all) = true;
+
 message List {
   repeated fixed64 uids = 1;
 }

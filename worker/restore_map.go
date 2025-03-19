@@ -209,7 +209,7 @@ func (m *mapper) writeToDisk(buf *z.Buffer) error {
 	}
 
 	// Write the header to the map file.
-	headerBuf, err := proto.Marshal(header)
+	headerBuf, err := header.MarshalVT()
 	x.Check(err)
 	var lenBuf [4]byte
 	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(headerBuf)))

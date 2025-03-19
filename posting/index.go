@@ -733,7 +733,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 			case BitDeltaPosting:
 				err := item.Value(func(val []byte) error {
 					pl := &pb.PostingList{}
-					if err := proto.Unmarshal(val, pl); err != nil {
+					if err := pl.UnmarshalVT(val); err != nil {
 						return err
 					}
 					pl.CommitTs = item.Version()

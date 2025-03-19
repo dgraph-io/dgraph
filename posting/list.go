@@ -951,7 +951,7 @@ func (l *List) getMutation(startTs uint64) []byte {
 	l.RLock()
 	defer l.RUnlock()
 	if pl := l.mutationMap.get(startTs); pl != nil {
-		data, err := proto.Marshal(pl)
+		data, err := pl.MarshalVT()
 		x.Check(err)
 		return data
 	}
@@ -1029,7 +1029,7 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 
 func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
-	x.Check(proto.Unmarshal(data, pl))
+	x.Check(pl.UnmarshalVT(data))
 
 	l.Lock()
 	if l.mutationMap == nil {
@@ -1471,7 +1471,8 @@ func (l *List) ToBackupPostingList(
 	bl.CommitTs = ol.CommitTs
 	bl.Splits = ol.Splits
 
-	val, err := x.MarshalToSizedBuffer(alloc.Allocate(proto.Size(bl)), bl)
+	data := alloc.Allocate(bl.SizeVT())
+	_, err = bl.MarshalToSizedBufferVT(data)
 	if err != nil {
 		return nil, err
 	}
@@ -1479,7 +1480,7 @@ func (l *List) ToBackupPostingList(
 	kv := y.NewKV(alloc)
 	kv.Key = alloc.Copy(l.key)
 	kv.Version = out.newMinTs
-	kv.Value = val
+	kv.Value = data
 	if isPlistEmpty(ol) {
 		kv.UserMeta = alloc.Copy([]byte{BitEmptyPosting})
 	} else {
@@ -1518,7 +1519,8 @@ func MarshalPostingList(plist *pb.PostingList, alloc *z.Allocator) *bpb.KV {
 		plist.Pack.AllocRef = 0
 	}
 
-	out, err := x.MarshalToSizedBuffer(alloc.Allocate(proto.Size(plist)), plist)
+	out := alloc.Allocate(plist.SizeVT())
+	_, err := plist.MarshalToSizedBufferVT(out)
 	x.Check(err)
 	if plist.Pack != nil {
 		plist.Pack.AllocRef = ref

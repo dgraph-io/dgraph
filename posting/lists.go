@@ -14,7 +14,6 @@ import (
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -324,7 +323,7 @@ func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
 	}
 
 	err = item.Value(func(val []byte) error {
-		return proto.Unmarshal(val, pl)
+		return pl.UnmarshalVT(val)
 	})
 
 	return pl, err
@@ -339,7 +338,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 		pl := &pb.PostingList{}
 		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-			err := proto.Unmarshal(delta, pl)
+			err := pl.UnmarshalVT(delta)
 			lc.RUnlock()
 			return pl, err
 		}

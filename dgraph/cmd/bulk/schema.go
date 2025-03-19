@@ -11,7 +11,6 @@ import (
 	"math"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/hypermodeinc/dgraph/v24/posting"
@@ -164,7 +163,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 			continue
 		}
 		k := x.SchemaKey(pred)
-		v, err := proto.Marshal(sch)
+		v, err := sch.MarshalVT()
 		x.Check(err)
 		// Write schema and types always at timestamp 1, s.state.writeTs may not be equal to 1
 		// if bulk loader was restarted or other similar scenarios.
@@ -174,7 +173,7 @@ func (s *schemaStore) write(db *badger.DB, preds []string) {
 	// Write all the types as all groups should have access to all the types.
 	for _, typ := range s.types {
 		k := x.TypeKey(typ.TypeName)
-		v, err := proto.Marshal(typ)
+		v, err := typ.MarshalVT()
 		x.Check(err)
 		x.Check(w.SetAt(k, v, posting.BitSchemaPosting, 1))
 	}

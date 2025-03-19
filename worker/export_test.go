@@ -124,7 +124,7 @@ func populateGraphExport(t *testing.T) {
 func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
-	val, err := proto.Marshal(&pb.SchemaUpdate{ValueType: pb.Posting_UID})
+	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).MarshalVT()
 	require.NoError(t, err)
 
 	txn := pstore.NewTransactionAt(math.MaxUint64, true)
@@ -142,7 +142,7 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.Set(testutil.GalaxySchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
 
-	val, err = proto.Marshal(personType)
+	val, err = personType.MarshalVT()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)

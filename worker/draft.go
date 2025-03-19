@@ -694,7 +694,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		n.elog.Printf("Creating snapshot: %+v", snap)
 		glog.Infof("Creating snapshot at Index: %d, ReadTs: %d\n", snap.Index, snap.ReadTs)
 
-		data, err := proto.Marshal(snap)
+		data, err := snap.MarshalVT()
 		x.Check(err)
 		for {
 			// We should never let CreateSnapshot have an error.
@@ -808,7 +808,7 @@ func (n *node) processApplyCh() {
 
 			var proposal pb.Proposal
 			key := binary.BigEndian.Uint64(entry.Data[:8])
-			x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
+			x.Check(proposal.UnmarshalVT(entry.Data[8:]))
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
@@ -966,7 +966,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 		return nil, err
 	}
 	res := &pb.Snapshot{}
-	if err := proto.Unmarshal(snap.Data, res); err != nil {
+	if err := res.UnmarshalVT(snap.Data); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -1031,9 +1031,12 @@ func (n *node) proposeCDCState(ts uint64) error {
 		},
 	}
 	glog.V(2).Infof("Proposing new CDC state ts: %d\n", ts)
-	sz := proto.Size(proposal)
+	sz := proposal.SizeVT()
 	data := make([]byte, 8+sz)
-	x.Check2(x.MarshalToSizedBuffer(data[8:], proposal))
+	_, err := proposal.MarshalToSizedBufferVT(data[8:])
+	if err != nil {
+		return err
+	}
 	data = data[:8+sz]
 	return n.Raft().Propose(n.ctx, data)
 }
@@ -1063,9 +1066,10 @@ func (n *node) proposeSnapshot() error {
 		Snapshot: snap,
 	}
 	glog.V(2).Infof("Proposing snapshot: %+v\n", snap)
-	sz := proto.Size(proposal)
+	sz := proposal.SizeVT()
 	data := make([]byte, 8+sz)
-	x.Check2(x.MarshalToSizedBuffer(data[8:], proposal))
+	_, err = proposal.MarshalToSizedBufferVT(data[8:])
+	x.Check(err)
 	data = data[:8+sz]
 	return n.Raft().Propose(n.ctx, data)
 }
