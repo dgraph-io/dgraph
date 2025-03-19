@@ -13,6 +13,7 @@ import (
 	proto "google.golang.org/protobuf/proto"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
+	sync "sync"
 )
 
 const (
@@ -5335,6 +5336,90 @@ func (m *TaskStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+var vtprotoPool_Posting = sync.Pool{
+	New: func() interface{} {
+		return &Posting{}
+	},
+}
+
+func (m *Posting) ResetVT() {
+	if m != nil {
+		f0 := m.Value[:0]
+		f1 := m.LangTag[:0]
+		for _, mm := range m.Facets {
+			mm.Reset()
+		}
+		f2 := m.Facets[:0]
+		m.Reset()
+		m.Value = f0
+		m.LangTag = f1
+		m.Facets = f2
+	}
+}
+func (m *Posting) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_Posting.Put(m)
+	}
+}
+func PostingFromVTPool() *Posting {
+	return vtprotoPool_Posting.Get().(*Posting)
+}
+
+var vtprotoPool_UidPack = sync.Pool{
+	New: func() interface{} {
+		return &UidPack{}
+	},
+}
+
+func (m *UidPack) ResetVT() {
+	if m != nil {
+		for _, mm := range m.Blocks {
+			mm.Reset()
+		}
+		f0 := m.Blocks[:0]
+		m.Reset()
+		m.Blocks = f0
+	}
+}
+func (m *UidPack) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_UidPack.Put(m)
+	}
+}
+func UidPackFromVTPool() *UidPack {
+	return vtprotoPool_UidPack.Get().(*UidPack)
+}
+
+var vtprotoPool_PostingList = sync.Pool{
+	New: func() interface{} {
+		return &PostingList{}
+	},
+}
+
+func (m *PostingList) ResetVT() {
+	if m != nil {
+		m.Pack.ReturnToVTPool()
+		for _, mm := range m.Postings {
+			mm.ResetVT()
+		}
+		f0 := m.Postings[:0]
+		f1 := m.Splits[:0]
+		m.Reset()
+		m.Postings = f0
+		m.Splits = f1
+	}
+}
+func (m *PostingList) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_PostingList.Put(m)
+	}
+}
+func PostingListFromVTPool() *PostingList {
+	return vtprotoPool_PostingList.Get().(*PostingList)
+}
 func (m *List) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -14274,7 +14359,14 @@ func (m *Posting) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Facets = append(m.Facets, &api.Facet{})
+			if len(m.Facets) == cap(m.Facets) {
+				m.Facets = append(m.Facets, &api.Facet{})
+			} else {
+				m.Facets = m.Facets[:len(m.Facets)+1]
+				if m.Facets[len(m.Facets)-1] == nil {
+					m.Facets[len(m.Facets)-1] = &api.Facet{}
+				}
+			}
 			if unmarshal, ok := interface{}(m.Facets[len(m.Facets)-1]).(interface {
 				UnmarshalVT([]byte) error
 			}); ok {
@@ -14566,7 +14658,14 @@ func (m *UidPack) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Blocks = append(m.Blocks, &UidBlock{})
+			if len(m.Blocks) == cap(m.Blocks) {
+				m.Blocks = append(m.Blocks, &UidBlock{})
+			} else {
+				m.Blocks = m.Blocks[:len(m.Blocks)+1]
+				if m.Blocks[len(m.Blocks)-1] == nil {
+					m.Blocks[len(m.Blocks)-1] = &UidBlock{}
+				}
+			}
 			if err := m.Blocks[len(m.Blocks)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14671,7 +14770,7 @@ func (m *PostingList) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Pack == nil {
-				m.Pack = &UidPack{}
+				m.Pack = UidPackFromVTPool()
 			}
 			if err := m.Pack.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -14706,7 +14805,14 @@ func (m *PostingList) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Postings = append(m.Postings, &Posting{})
+			if len(m.Postings) == cap(m.Postings) {
+				m.Postings = append(m.Postings, &Posting{})
+			} else {
+				m.Postings = m.Postings[:len(m.Postings)+1]
+				if m.Postings[len(m.Postings)-1] == nil {
+					m.Postings[len(m.Postings)-1] = &Posting{}
+				}
+			}
 			if err := m.Postings[len(m.Postings)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -14782,7 +14888,7 @@ func (m *PostingList) UnmarshalVT(dAtA []byte) error {
 					}
 				}
 				elementCount = count
-				if elementCount != 0 && len(m.Splits) == 0 {
+				if elementCount != 0 && len(m.Splits) == 0 && cap(m.Splits) < elementCount {
 					m.Splits = make([]uint64, 0, elementCount)
 				}
 				for iNdEx < postIndex {

@@ -50,6 +50,7 @@ patch-pb:
 .PHONY: regenerate
 regenerate: tidy-deps copy-protos check clean
 	@protoc \
+		-I$(shell go list -m -f '{{.Dir}}/include' github.com/planetscale/vtprotobuf) \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \

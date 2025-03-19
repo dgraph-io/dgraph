@@ -16,6 +16,7 @@ import "github.com/dgraph-io/dgo/v240/protos/api.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
 import "google/protobuf/descriptor.proto";
 
+import "github.com/planetscale/vtprotobuf/vtproto/ext.proto";
 
 option go_package = "./pb";
 
@@ -345,6 +346,7 @@ message KVS {
 
 // Posting messages.
 message Posting {
+  option (vtproto.mempool) = true;
   reserved 6;  // This was used for label.
   fixed64 uid = 1;
   bytes value = 2;
@@ -397,12 +399,14 @@ message UidBlock {
 }
 
 message UidPack {
+  option (vtproto.mempool) = true;
   uint32 block_size = 1;
   repeated UidBlock blocks = 2;
   uint64 alloc_ref = 23;  // This field should be set to 0 during marshal.
 }
 
 message PostingList {
+  option (vtproto.mempool) = true;
   UidPack pack = 1;  // Encoded list of uids in this posting list.
   repeated Posting postings = 2;
   uint64 commit_ts = 3;  // More inclination towards smaller values.
