@@ -15,7 +15,7 @@ import (
 func ParseMutation(mutation string) (req *api.Request, err error) {
 	var lexer lex.Lexer
 	lexer.Reset(mutation)
-	lexer.Run(lexIdentifyBlock)
+	lexer.Run(lexTopLevel)
 	if err := lexer.ValidateResult(); err != nil {
 		return nil, err
 	}

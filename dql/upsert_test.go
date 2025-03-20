@@ -22,9 +22,8 @@ query {
     }
   }
 }`
-	_, err := ParseMutation(query)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid block: [query]")
+	_, err := ParseDQL(query)
+	require.NoError(t, err)
 }
 
 func TestExtraRightCurlErr(t *testing.T) {
@@ -42,7 +41,7 @@ upsert {
 }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Too many right curl")
 }
@@ -60,7 +59,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Empty mutation block")
 }
@@ -95,21 +94,21 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Multiple query ops inside upsert block")
 }
 
 func TestEmptyUpsertErr(t *testing.T) {
 	query := `upsert {}`
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Empty mutation block")
 }
 
 func TestNoRightCurlErr(t *testing.T) {
 	query := `upsert {`
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Contains(t, err.Error(), "Unclosed upsert block")
 }
 
@@ -125,7 +124,7 @@ upsert {
   query {
     me(func: eq(age, "{
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unexpected end of input")
 }
@@ -140,7 +139,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Query op not found in upsert block")
 }
@@ -169,7 +168,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -193,7 +192,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -226,7 +225,7 @@ upsert
     }}
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -250,7 +249,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -274,7 +273,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -297,9 +296,8 @@ upsert {
       uid(b) <age> "45" .
     }
   }
-}
-`
-	_, err := ParseMutation(query)
+}`
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -326,7 +324,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -355,7 +353,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -384,7 +382,7 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.NoError(t, err)
 }
 
@@ -411,21 +409,21 @@ upsert {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Contains(t, err.Error(), "Matching brackets not found")
 }
 
 func TestConditionalUpsertErrUnclosed(t *testing.T) {
 	query := `upsert {
   mutation @if(eq(len(m), 1) AND gt(len(f), 0))`
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Contains(t, err.Error(), "Unclosed mutation action")
 }
 
 func TestConditionalUpsertErrInvalidIf(t *testing.T) {
 	query := `upsert {
   mutation @if`
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Contains(t, err.Error(), "Matching brackets not found")
 }
 
@@ -453,7 +451,7 @@ func TestConditionalUpsertErrWrongIf(t *testing.T) {
   }
 }
 `
-	_, err := ParseMutation(query)
+	_, err := ParseDQL(query)
 	require.Contains(t, err.Error(), "Expected @if, found [@fi]")
 }
 
@@ -484,7 +482,7 @@ upsert {
     }
   }
 }`
-	req, err := ParseMutation(query)
+	req, err := ParseDQL(query)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(req.Mutations))
 }
@@ -516,7 +514,7 @@ upsert {
     }
   }
 }`
-	req, err := ParseMutation(query)
+	req, err := ParseDQL(query)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(req.Mutations))
 }

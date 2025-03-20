@@ -55,43 +55,6 @@ const (
 	itemStar
 )
 
-// lexIdentifyBlock identifies whether it is an upsert block
-// If the block begins with "{" => mutation block
-// Else if the block begins with "upsert" => upsert block
-func lexIdentifyBlock(l *lex.Lexer) lex.StateFn {
-	l.Mode = lexIdentifyBlock
-	for {
-		switch r := l.Next(); {
-		case isSpace(r) || lex.IsEndOfLine(r):
-			l.Ignore()
-		case isNameBegin(r):
-			return lexNameBlock
-		case r == leftCurl:
-			l.Backup()
-			return lexInsideMutation
-		case r == '#':
-			return lexComment
-		case r == lex.EOF:
-			return l.Errorf("Invalid mutation block")
-		default:
-			return l.Errorf("Unexpected character while identifying mutation block: %#U", r)
-		}
-	}
-}
-
-// lexNameBlock lexes the blocks, for now, only upsert block
-func lexNameBlock(l *lex.Lexer) lex.StateFn {
-	// The caller already checked isNameBegin, and absorbed one rune.
-	l.AcceptRun(isNameSuffix)
-	switch word := l.Input[l.Start:l.Pos]; word {
-	case "upsert":
-		l.Emit(itemUpsertBlock)
-		return lexUpsertBlock
-	default:
-		return l.Errorf("Invalid block: [%s]", word)
-	}
-}
-
 // lexUpsertBlock lexes the upsert block
 func lexUpsertBlock(l *lex.Lexer) lex.StateFn {
 	l.Mode = lexUpsertBlock
@@ -368,7 +331,7 @@ Loop:
 		case r == leftCurl:
 			l.Depth++ // one level down.
 			l.Emit(itemLeftCurl)
-			return lexQuery
+			return lexIdentifyMutationOrQuery
 		case r == rightCurl:
 			return l.Errorf("Too many right curl")
 		case r == lex.EOF:
@@ -394,6 +357,33 @@ Loop:
 	}
 	l.Emit(lex.ItemEOF)
 	return nil
+}
+
+func lexIdentifyMutationOrQuery(l *lex.Lexer) lex.StateFn {
+	l.Mode = lexIdentifyMutationOrQuery
+	for {
+		switch r := l.Next(); {
+		case isSpace(r) || lex.IsEndOfLine(r):
+			l.Ignore()
+		case isNameBegin(r):
+			l.AcceptRun(isNameSuffix)
+			op := l.Input[l.Start:l.Pos]
+			// If it is a mutation
+			if op == "set" || op == "delete" || op == "del" {
+				l.Emit(itemMutationOp)
+				return lexInsideMutation
+			}
+			// else it is a query
+			l.Emit(itemName)
+			return lexQuery
+		case r == '#':
+			return lexComment
+		case r == lex.EOF:
+			return l.Errorf("Invalid DQL")
+		default:
+			return l.Errorf("Unexpected character while lexing DQL: %#U", r)
+		}
+	}
 }
 
 // lexQuery lexes the input string and calls other lex functions.
@@ -592,6 +582,9 @@ func lexOperationType(l *lex.Lexer) lex.StateFn {
 	case "schema":
 		l.Emit(itemOpType)
 		return lexInsideSchema
+	case "upsert":
+		l.Emit(itemUpsertBlock)
+		return lexUpsertBlock
 	default:
 		return l.Errorf("Invalid operation type: %s", word)
 	}
