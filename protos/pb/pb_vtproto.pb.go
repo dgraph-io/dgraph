@@ -5336,6 +5336,59 @@ func (m *TaskStatusResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+var vtprotoPool_Proposal = sync.Pool{
+	New: func() interface{} {
+		return &Proposal{}
+	},
+}
+
+func (m *Proposal) ResetVT() {
+	if m != nil {
+		for _, mm := range m.Kv {
+			mm.Reset()
+		}
+		f0 := m.Kv[:0]
+		m.Reset()
+		m.Kv = f0
+	}
+}
+func (m *Proposal) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_Proposal.Put(m)
+	}
+}
+func ProposalFromVTPool() *Proposal {
+	return vtprotoPool_Proposal.Get().(*Proposal)
+}
+
+var vtprotoPool_KVS = sync.Pool{
+	New: func() interface{} {
+		return &KVS{}
+	},
+}
+
+func (m *KVS) ResetVT() {
+	if m != nil {
+		f0 := m.Predicates[:0]
+		f1 := m.Types[:0]
+		f2 := m.Data[:0]
+		m.Reset()
+		m.Predicates = f0
+		m.Types = f1
+		m.Data = f2
+	}
+}
+func (m *KVS) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_KVS.Put(m)
+	}
+}
+func KVSFromVTPool() *KVS {
+	return vtprotoPool_KVS.Get().(*KVS)
+}
+
 var vtprotoPool_Posting = sync.Pool{
 	New: func() interface{} {
 		return &Posting{}
@@ -13606,7 +13659,14 @@ func (m *Proposal) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Kv = append(m.Kv, &pb.KV{})
+			if len(m.Kv) == cap(m.Kv) {
+				m.Kv = append(m.Kv, &pb.KV{})
+			} else {
+				m.Kv = m.Kv[:len(m.Kv)+1]
+				if m.Kv[len(m.Kv)-1] == nil {
+					m.Kv[len(m.Kv)-1] = &pb.KV{}
+				}
+			}
 			if unmarshal, ok := interface{}(m.Kv[len(m.Kv)-1]).(interface {
 				UnmarshalVT([]byte) error
 			}); ok {

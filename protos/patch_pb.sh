@@ -15,4 +15,9 @@ sed -i 's/SecretKey    string/SecretKey    Sensitive/' "${PB_GEN_FILE}"
 sed -i 's/GetSessionToken() string {/GetSessionToken() Sensitive {/' "${PB_GEN_FILE}"
 sed -i 's/GetSecretKey() string/GetSecretKey() Sensitive/' "${PB_GEN_FILE}"
 
+PB_VT_PROTO_FILE="./pb/pb_vtproto.pb.go"
+
+sed -i 's/m.SecretKey = string(/m.SecretKey = Sensitive(/' "${PB_VT_PROTO_FILE}"
+sed -i 's/m.SessionToken = string(/m.SessionToken = Sensitive(/' "${PB_VT_PROTO_FILE}"
+
 echo "Patches applied successfully."
