@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project will
 adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## [v24.1.1] - 2025-03-20
+
+[v24.1.1]: https://github.com/hypermodeinc/dgraph/compare/v24.1.0...v24.1.1
+
+**Fixed**
+
+- **Core**
+  - fix(core): put new metrics behind a feature flag
+    https://github.com/hypermodeinc/dgraph/pull/9337
+  - Remove sentry integration from both Alpha & Zero
+    https://github.com/hypermodeinc/dgraph/pull/9344
+  - fix(core): fix unmarshal protobuf when len val is 0
+    https://github.com/hypermodeinc/dgraph/pull/9349
+  - fix(core): fix read scalar list with rollups https://github.com/hypermodeinc/dgraph/pull/9351
+
 ## [v24.1.0] - 2025-03-06
 
 [v24.1.0]: https://github.com/hypermodeinc/dgraph/compare/v24.0.5...v24.1.0
