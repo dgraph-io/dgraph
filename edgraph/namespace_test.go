@@ -36,66 +36,47 @@ func TestNamespaces(t *testing.T) {
 	require.NoError(t, client.CreateNamespace(ctx, "ns2"))
 
 	// namespace 1
-	// require.NoError(t, client.LoginToNamespace(context.Background(),
-	// 	"ns1", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
-	// require.NoError(t, client.SetupSchema(`name: string @index(exact) .`))
-	// _, err = client.Mutate(&api.Mutation{
-	// 	SetNquads: []byte(`_:a <name> "Alice" .`),
-	// 	CommitNow: true,
-	// })
-	// require.NoError(t, err)
-	// resp, err := client.Query(`{ q(func: has(name)) { name } }`)
-	// require.NoError(t, err)
-	// require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
+	require.NoError(t, client.SetSchema(ctx, "ns1", `name: string @index(exact) .`))
+	resp, err := client.RunDQL(ctx, "ns1", `{ set {_:a <name> "Alice" .}}`)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(resp.BlankUids))
+	resp, err = client.RunDQL(ctx, "ns1", `{ q(func: has(name)) { name } }`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetQueryResult()))
 
 	// namespace 2
-	// require.NoError(t, client.LoginToNamespace(context.Background(),
-	// 	"ns2", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
-	// require.NoError(t, client.SetupSchema(`name: string @index(exact) .`))
-	// _, err = client.Mutate(&api.Mutation{
-	// 	SetNquads: []byte(`_:a <name> "Bob" .`),
-	// 	CommitNow: true,
-	// })
-	// require.NoError(t, err)
-	// resp, err = client.Query(`{ q(func: has(name)) { name } }`)
-	// require.NoError(t, err)
-	// require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetJson()))
+	require.NoError(t, client.SetSchema(ctx, "ns2", `name: string @index(exact) .`))
+	_, err = client.RunDQL(ctx, "ns2", `{ set {_:a <name> "Bob" .}}`)
+	require.NoError(t, err)
+	resp, err = client.RunDQL(ctx, "ns2", `{ q(func: has(name)) { name } }`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetQueryResult()))
 
 	// rename ns2 namespace
-	require.NoError(t, client.SignInUser(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.RenameNamespace(ctx, "ns2", "ns2-new"))
 
 	// check if the data is still there
-	// require.NoError(t, client.LoginToNamespace(context.Background(),
-	// 	"ns2-new", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
-	// resp, err = client.Query(`{ q(func: has(name)) { name } }`)
-	// require.NoError(t, err)
-	// require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetJson()))
+	resp, err = client.RunDQL(ctx, "ns2-new", `{ q(func: has(name)) { name } }`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetQueryResult()))
 
 	// List Namespaces
-	require.NoError(t, client.SignInUser(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	nsMaps, err := client.ListNamespaces(ctx)
 	require.NoError(t, err)
 	require.Len(t, nsMaps, 3)
 
 	// drop ns2-new namespace
 	require.NoError(t, client.DropNamespace(ctx, "ns2-new"))
-	// require.ErrorContains(t, client.LoginToNamespace(context.Background(),
-	// 	"ns2-new", dgraphapi.DefaultUser, dgraphapi.DefaultPassword),
-	// 	"invalid username or password")
+	_, err = client.RunDQL(ctx, "ns2-new", `{ q(func: has(name)) { name } }`)
+	require.ErrorContains(t, err, "namespace \"ns2-new\" not found")
 	nsMaps, err = client.ListNamespaces(ctx)
 	require.NoError(t, err)
 	require.Len(t, nsMaps, 2)
 
 	// drop ns1 namespace
-	require.NoError(t, client.SignInUser(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropNamespace(ctx, "ns1"))
-	// require.ErrorContains(t, client.LoginToNamespace(context.Background(),
-	// 	"ns1", dgraphapi.DefaultUser, dgraphapi.DefaultPassword),
-	// 	"invalid username or password")
+	_, err = client.RunDQL(ctx, "ns1", `{ q(func: has(name)) { name } }`)
+	require.ErrorContains(t, err, "namespace \"ns1\" not found")
 }
 
 func TestNamespacesPreV25(t *testing.T) {
@@ -159,19 +140,15 @@ func TestNamespacesPreV25(t *testing.T) {
 	require.Contains(t, nsMaps, "ns3")
 
 	// Add two pre v25 namespaces and ensure login works
-	// ns4, err := hc.AddNamespace()
-	// require.NoError(t, err)
-	// require.NoError(t, client.LoginToNamespace(context.Background(),
-	// 	fmt.Sprintf("dgraph-%v", ns4), dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
-	// require.NoError(t, client.SetupSchema(`name: string @index(exact) .`))
-	// _, err = client.Mutate(&api.Mutation{
-	// 	SetNquads: []byte(`_:a <name> "Alice" .`),
-	// 	CommitNow: true,
-	// })
-	// require.NoError(t, err)
-	// resp, err := client.Query(`{ q(func: has(name)) { name } }`)
-	// require.NoError(t, err)
-	// require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
+	ns4ID, err := hc.AddNamespace()
+	require.NoError(t, err)
+	ns4 := fmt.Sprintf("dgraph-%v", ns4ID)
+	require.NoError(t, client.SetSchema(ctx, ns4, `name: string @index(exact) .`))
+	_, err = client.RunDQL(ctx, ns4, `{set{_:a <name> "Alice" .}}`)
+	require.NoError(t, err)
+	resp, err := client.RunDQL(ctx, ns4, `{ q(func: has(name)) { name } }`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetQueryResult()))
 }
 
 func TestCreateNamespaceErr(t *testing.T) {

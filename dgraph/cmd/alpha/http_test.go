@@ -934,7 +934,7 @@ func TestContentTypeCharset(t *testing.T) {
 	require.True(t, err != nil && strings.Contains(err.Error(), "Unsupported charset"))
 
 	_, err = mutationWithTs(
-		mutationInp{body: `{}`, typ: "application/rdf; charset=utf-8", commitNow: true})
+		mutationInp{body: `{ set {_:a <name> "alice" .}}`, typ: "application/rdf; charset=utf-8", commitNow: true})
 	require.NoError(t, err)
 
 	_, err = mutationWithTs(
