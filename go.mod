@@ -24,7 +24,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/go-sql-driver/mysql v1.9.0
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217
 	github.com/golang/glog v1.2.4
 	github.com/golang/snappy v1.0.0
