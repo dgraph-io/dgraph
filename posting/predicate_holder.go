@@ -513,6 +513,11 @@ func (ph *PredicateHolder) releaseAll() {
 	ph.dataPublisher.Lock()
 	defer ph.dataPublisher.Unlock()
 	ph.dataPublisher.done = true
+	if ph.dataPublisher.getBatches != int64(len(ph.dataPublisher.batch)) {
+		fmt.Println("NOT EQUAL")
+		panic("Not equal")
+	}
+
 	atomic.AddInt64(&numPutPostingListBatches, int64(len(ph.dataPublisher.batch)))
 	atomic.AddInt64(&numPutPostingBatches, int64(len(ph.dataPublisher.postingBatch)))
 	for _, batch := range ph.dataPublisher.batch {
