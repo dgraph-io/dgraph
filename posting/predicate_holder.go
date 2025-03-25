@@ -435,8 +435,6 @@ func (ph *PostingListPublisher) NewPosting() *pb.Posting {
 	posting := lastBatch.postings[idx]
 	atomic.AddInt64(&lastBatch.nextIdx, 1)
 
-	// Reset the posting before returning
-	posting.Reset()
 	ph.Unlock()
 	return posting
 }
@@ -472,7 +470,7 @@ func (ph *PostingListPublisher) NewPostingList() *pb.PostingList {
 }
 
 const (
-	initialBatchSize = 10
+	initialBatchSize = 1000
 )
 
 var (
@@ -522,11 +520,17 @@ func (ph *PredicateHolder) releaseAll() {
 	atomic.AddInt64(&numPutPostingListBatches, int64(len(ph.dataPublisher.batch)))
 	atomic.AddInt64(&numPutPostingBatches, int64(len(ph.dataPublisher.postingBatch)))
 	for _, batch := range ph.dataPublisher.batch {
+		for _, b := range batch.lists {
+			b.Reset()
+		}
 		postingListPool.Put(batch)
 	}
 	ph.dataPublisher.batch = nil
 
 	for _, batch := range ph.dataPublisher.postingBatch {
+		for _, b := range batch.postings {
+			b.Reset()
+		}
 		postingPool.Put(batch)
 	}
 	ph.dataPublisher.postingBatch = nil
