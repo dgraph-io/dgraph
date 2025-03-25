@@ -489,7 +489,7 @@ var (
 				}
 			}
 			atomic.AddInt64(&numNewPostingListBatches, 1)
-			return batch
+			return batchnewPredicateHolder
 		},
 	}
 
@@ -513,8 +513,8 @@ func (ph *PredicateHolder) releaseAll() {
 	ph.dataPublisher.Lock()
 	defer ph.dataPublisher.Unlock()
 	ph.dataPublisher.done = true
-	fmt.Println("HERE", ph.dataPublisher.getBatches, int64(len(ph.dataPublisher.batch)))
-	if ph.dataPublisher.getBatches != int64(len(ph.dataPublisher.batch)) {
+	fmt.Println("HERE", ph.dataPublisher.getBatches, int64(len(ph.dataPublisher.postingBatch)))
+	if ph.dataPublisher.getBatches != int64(len(ph.dataPublisher.postingBatch)) {
 		fmt.Println("NOT EQUAL")
 		panic("Not equal")
 	}
