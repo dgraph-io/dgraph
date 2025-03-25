@@ -489,7 +489,7 @@ var (
 				}
 			}
 			atomic.AddInt64(&numNewPostingListBatches, 1)
-			return batchnewPredicateHolder
+			return batch
 		},
 	}
 
