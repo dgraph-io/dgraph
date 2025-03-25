@@ -513,6 +513,7 @@ func (ph *PredicateHolder) releaseAll() {
 	ph.dataPublisher.Lock()
 	defer ph.dataPublisher.Unlock()
 	ph.dataPublisher.done = true
+	fmt.Println("HERE", ph.dataPublisher.getBatches, int64(len(ph.dataPublisher.batch)))
 	if ph.dataPublisher.getBatches != int64(len(ph.dataPublisher.batch)) {
 		fmt.Println("NOT EQUAL")
 		panic("Not equal")
