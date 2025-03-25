@@ -530,4 +530,5 @@ func (ph *PredicateHolder) releaseAll() {
 		postingPool.Put(batch)
 	}
 	ph.dataPublisher.postingBatch = nil
+	ph.dataPublisher.getBatches = 0
 }
