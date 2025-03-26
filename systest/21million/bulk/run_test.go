@@ -19,8 +19,10 @@ import (
 	"time"
 
 	"github.com/hypermodeinc/dgraph/v24/chunker"
+	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v24/systest/21million/common"
 	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
 func TestQueries(t *testing.T) {
@@ -32,10 +34,17 @@ func BenchmarkQueries(b *testing.B) {
 	queryDir := filepath.Join(filepath.Dir(thisFile), "../queries")
 
 	// For this test we DON'T want to start with an empty database.
-	dg, err := testutil.DgraphClient(testutil.ContainerAddr("alpha1", 9080))
-	if err != nil {
-		panic(fmt.Sprintf("Error while getting a dgraph client: %v", err))
-	}
+
+	c, err := dgraphtest.NewDCloudCluster()
+	x.Panic(err)
+
+	dg, cleanup, err := c.Client()
+	x.Panic(err)
+	defer cleanup()
+
+	//ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	//defer cancel()
+	//x.Panic(dg.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 
 	files, err := os.ReadDir(queryDir)
 	if err != nil {
@@ -69,24 +78,24 @@ func BenchmarkQueries(b *testing.B) {
 }
 
 func TestMain(m *testing.M) {
-	schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
-	rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
-	if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
-		os.Exit(1)
-	}
+	//schemaFile := filepath.Join(testutil.TestDataDirectory, "21million.schema")
+	//rdfFile := filepath.Join(testutil.TestDataDirectory, "21million.rdf.gz")
+	//if err := testutil.MakeDirEmpty([]string{"out/0", "out/1", "out/2"}); err != nil {
+	//	os.Exit(1)
+	//}
 
-	if err := testutil.BulkLoad(testutil.BulkOpts{
-		Zero:       testutil.SockAddrZero,
-		Shards:     1,
-		RdfFile:    rdfFile,
-		SchemaFile: schemaFile,
-	}); err != nil {
-		cleanupAndExit(1)
-	}
+	//if err := testutil.BulkLoad(testutil.BulkOpts{
+	//	Zero:       testutil.SockAddrZero,
+	//	Shards:     1,
+	//	RdfFile:    rdfFile,
+	//	SchemaFile: schemaFile,
+	//}); err != nil {
+	//	cleanupAndExit(1)
+	//}
 
-	if err := testutil.StartAlphas("./alpha.yml"); err != nil {
-		cleanupAndExit(1)
-	}
+	//if err := testutil.StartAlphas("./alpha.yml"); err != nil {
+	//	cleanupAndExit(1)
+	//}
 	exitCode := m.Run()
 	cleanupAndExit(exitCode)
 }
