@@ -88,7 +88,7 @@ func BenchmarkQueries(b *testing.B) {
 			dbTime += runQuery()
 		}
 
-		dbDuration := time.Duration(dbTime) * time.Nanosecond
+		dbDuration := time.Duration(dbTime/uint64(meanCheckTries)) * time.Nanosecond
 		duration := time.Since(startTime) / time.Duration(meanCheckTries)
 		fmt.Println("QUERY: ", file.Name(), " took ", duration, dbDuration)
 	}
