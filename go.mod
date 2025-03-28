@@ -19,7 +19,7 @@ require (
 	github.com/dgraph-io/simdjson-go v0.3.0
 	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da
 	github.com/dgryski/go-groupvarint v0.0.0-20230630160417-2bfb7969fb3c
-	github.com/docker/docker v28.0.2+incompatible
+	github.com/docker/docker v28.0.4+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-jose/go-jose/v4 v4.0.5
@@ -62,7 +62,7 @@ require (
 	golang.org/x/text v0.23.0
 	golang.org/x/tools v0.31.0
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 
