@@ -35,6 +35,9 @@ func BenchmarkQueries(b *testing.B) {
 
 	// For this test we DON'T want to start with an empty database.
 
+	cacheHeatTries := 4
+	meanCheckTries := 10
+
 	c, err := dgraphtest.NewDCloudCluster()
 	x.Panic(err)
 
@@ -55,25 +58,39 @@ func BenchmarkQueries(b *testing.B) {
 		if !strings.HasPrefix(file.Name(), "query-") {
 			continue
 		}
-		b.Run(file.Name(), func(b *testing.B) {
-			filename := filepath.Join(queryDir, file.Name())
-			reader, cleanup := chunker.FileReader(filename, nil)
-			bytes, _ := io.ReadAll(reader)
-			contents := string(bytes[:])
-			cleanup()
 
-			// The test query and expected result are separated by a delimiter.
-			bodies := strings.SplitN(contents, "\n---\n", 2)
-			// Dgraph can get into unhealthy state sometime. So, add retry for every query.
-			// If a query takes too long to run, it probably means dgraph is stuck and there's
-			// no point in waiting longer or trying more tests.
+		filename := filepath.Join(queryDir, file.Name())
+		reader, cleanupi := chunker.FileReader(filename, nil)
+		bytes, _ := io.ReadAll(reader)
+		contents := string(bytes[:])
+		cleanupi()
+
+		// The test query and expected result are separated by a delimiter.
+		bodies := strings.SplitN(contents, "\n---\n", 2)
+		// Dgraph can get into unhealthy state sometime. So, add retry for every query.
+		// If a query takes too long to run, it probably means dgraph is stuck and there's
+		// no point in waiting longer or trying more tests.
+		runQuery := func() uint64 {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			_, err := dg.NewTxn().Query(ctx, bodies[0])
+			resp, err := dg.NewTxn().Query(ctx, bodies[0])
 			if err != nil {
 				panic(err)
 			}
 			cancel()
-		})
+			return resp.Latency.TotalNs
+		}
+		for retry := 0; retry < cacheHeatTries; retry++ {
+			runQuery()
+		}
+		dbTime := uint64(0)
+		startTime := time.Now()
+		for retry := 0; retry < meanCheckTries; retry++ {
+			dbTime += runQuery()
+		}
+
+		dbDuration := time.Duration(dbTime) * time.Nanosecond
+		duration := time.Since(startTime) / time.Duration(meanCheckTries)
+		fmt.Println("QUERY: ", file.Name(), " took ", duration, dbDuration)
 	}
 }
 

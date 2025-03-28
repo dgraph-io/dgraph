@@ -30,7 +30,7 @@ type DCloudCluster struct {
 func NewDCloudCluster() (*DCloudCluster, error) {
 	url := os.Getenv("TEST_DGRAPH_CLOUD_CLUSTER_URL")
 	token := os.Getenv("TEST_DGRAPH_CLOUD_CLUSTER_TOKEN")
-	if url == "" || token == "" {
+	if url == "" {
 		return nil, errors.New("cloud cluster params needed in env")
 	}
 
@@ -62,6 +62,13 @@ func (c *DCloudCluster) init() error {
 }
 
 func (c *DCloudCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
+	if c.token == "" {
+		conn, err := dgo.Open(c.url)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error creating dgraph client")
+		}
+		return &dgraphapi.GrpcClient{Dgraph: conn}, func() {}, nil
+	}
 	var conns []*grpc.ClientConn
 	conn, err := dgo.DialCloud(c.url, c.token)
 	if err != nil {
