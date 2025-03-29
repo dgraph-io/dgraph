@@ -9,7 +9,7 @@ Please explain the changes you made here.
       this PR
 - [ ] Tests added for new functionality, or regression tests for bug fixes added as applicable
 - [ ] For public APIs, new features, etc., PR on
-      [docs repo](https://github.com/dgraph-io/dgraph-docs) staged and linked here
+      [docs repo](https://github.com/hypermodeinc/docs) staged and linked here
 
 **Instructions**
 
