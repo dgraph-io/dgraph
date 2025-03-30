@@ -310,7 +310,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if hasCountIndex {
 		// We need to retrieve the full posting list from disk, to allow us to get the length of the
 		// posting list for the counts.
-		getFn = txn.Get
+		getFn = txn.GetFromDelta
 	} else {
 		// We are just adding a reverse edge. No need to read the list from disk.
 		getFn = txn.GetFromDelta
