@@ -23,7 +23,7 @@ calls in a cluster.
 
 Dgraph's goal is to provide Google production-level scale and throughput, with low enough latency to
 serve real-time user queries over terabytes of structured data. Dgraph supports
-[GraphQL query syntax](https://dgraph.io/docs/main/query-language/), and responds in
+[GraphQL query syntax](https://docs.hypermode.com/dgraph/graphql/overview), and responds in
 [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/)
 over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
@@ -42,7 +42,7 @@ community, it is being used in production at multiple Fortune 500 companies, and
 Dgraph officially supports the Linux/amd64 architecture. Support for Linux/arm64 is in development.
 In order to take advantage of memory performance gains and other architecture-specific advancements
 in Linux, we dropped official support Mac and Windows in 2021, see
-[this blog post](https://discuss.dgraph.io/t/dropping-support-for-windows-and-mac/12913) for more
+[this blog post](https://discuss.hypermode.com/t/dropping-support-for-windows-and-mac/12913) for more
 information. You can still build and use Dgraph on other platforms (for live or bulk loading for
 instance), but support for platforms other than Linux/amd64 is not available.
 
@@ -58,7 +58,7 @@ docker pull dgraph/dgraph:latest
 ```
 
 For more information on a variety Docker deployment methods including Docker Compose and Kubernetes,
-see the [docs](https://dgraph.io/docs/installation/single-host-setup/#docker).
+see the [docs](https://docs.hypermode.com/dgraph/self-managed/overview).
 
 ## Run a Quick Standalone Cluster
 
@@ -93,8 +93,7 @@ make install
 
 **To get started with Dgraph, follow:**
 
-- Installation to queries in 3 steps via [dgraph.io/docs/](https://dgraph.io/docs/get-started/).
-- A longer interactive tutorial via [dgraph.io/tour/](https://dgraph.io/tour/).
+- [Installation to queries in 3 steps](https://docs.hypermode.com/dgraph/quickstart).
 - Tutorial and presentation videos on
   [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
 
@@ -127,39 +126,33 @@ operations, which makes it easy to build applications with it.
 
 ## Users
 
-- **Dgraph official documentation is present at [dgraph.io/docs/](https://dgraph.io/docs/).**
-- For feature requests or questions, visit [https://discuss.dgraph.io](https://discuss.dgraph.io).
-- Check out [the demo at dgraph.io](http://dgraph.io) and
-  [the visualization at play.dgraph.io](http://play.dgraph.io/).
+- **Dgraph official documentation is present at [docs.hypermode.com/dgraph](https://docs.hypermode.com/dgraph).**
+- For feature requests or questions, visit [https://discuss.hypermode.com](https://discuss.hypermode.com).
 - Please see [releases tab](https://github.com/hypermodeinc/dgraph/releases) to find the latest
   release and corresponding release notes.
-- [See the Roadmap](https://discuss.dgraph.io/t/product-roadmap-2020/8479) for a list of working and
-  planned features.
-- Read about the latest updates from the Dgraph team [on our blog](https://open.dgraph.io/).
+- Read about the latest updates from the Dgraph team [on our blog](https://hypermode.com/blog).
 - Watch tech talks on our
   [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
 
 ## Developers
 
-- See a list of issues
-  [that we need help with](https://github.com/hypermodeinc/dgraph/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-- Please see
+Please see
   [Contributing to Dgraph](https://github.com/hypermodeinc/dgraph/blob/main/CONTRIBUTING.md) for
   guidelines on contributions.
 
 ## Client Libraries
 
 The Dgraph team maintains several
-[officially supported client libraries](https://dgraph.io/docs/clients/). There are also libraries
+[officially supported client libraries](https://docs.hypermode.com/dgraph/sdks/overview). There are also libraries
 contributed by the community
-[unofficial client libraries](https://dgraph.io/docs/clients#unofficial-dgraph-clients).
+[unofficial client libraries](https://docs.hypermode.com/dgraph/sdks/unofficial-clients#unofficial-dgraph-clients).
 
 ##
 
 ## Contact
 
-- Please use [discuss.dgraph.io](https://discuss.dgraph.io) for documentation, questions, feature
+- Please use [discuss.hypermode.com](https://discuss.hypermode.com) for documentation, questions, feature
   requests and discussions.
-- Please use [discuss.dgraph.io](https://discuss.dgraph.io/c/issues/dgraph/38) for filing bugs or
+- Please use [GitHub Issues](https://github.com/hypermodeinc/dgraph/issues) for filing bugs or
   feature requests.
 - Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
