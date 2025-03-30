@@ -302,7 +302,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 	return nil
 }
 
-func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
+func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge, l *List) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
 	hasCountIndex := schema.State().HasCount(ctx, t.Attr)
 
@@ -329,24 +329,21 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		t.Op != pb.DirectedEdge_DEL && t.ValueId != 0
 	if isSingleUidUpdate {
-		dataKey := x.DataKey(t.Attr, t.Entity)
-		dataList, err := getFn(dataKey)
-		if err != nil {
-			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
-				hex.Dump(dataKey))
+		if l == nil {
+			return errors.Errorf("nil posting list for reverse key %s", hex.Dump(key))
 		}
-		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+		err = l.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
 			delEdge := &pb.DirectedEdge{
 				Entity:  t.Entity,
 				ValueId: p.Uid,
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(ctx, delEdge)
+			return txn.addReverseAndCountMutation(ctx, delEdge, nil)
 		})
 		if err != nil {
 			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
-				hex.Dump(dataKey))
+				hex.Dump(key))
 		}
 	}
 
@@ -391,7 +388,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 		case isReversed:
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			return txn.addReverseAndCountMutation(ctx, delEdge)
+			return txn.addReverseAndCountMutation(ctx, delEdge, l)
 		case isIndexed:
 			// Delete index edge of each posting.
 			val := types.Val{
@@ -614,7 +611,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (edge.ValueId != 0) && (su.Directive == pb.SchemaUpdate_REVERSE) {
-		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
+		if err := txn.addReverseAndCountMutation(ctx, edge, l); err != nil {
 			return err
 		}
 	}
