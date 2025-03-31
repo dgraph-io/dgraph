@@ -40,8 +40,12 @@ func importP() error {
 		return err
 	}
 
-	alphas, err := client.InitiateSnapShotStream(context.Background())
-	if err := client.StreamSnapshot(context.Background(), "/home/shiva/workspace/dgraph-work/benchmarks/data/out", alphas.LeaderAlphas); err != nil {
+	// myMap := make(map[uint32]string) // start streaming sp directory
+	// groups := []uint32{0, 1}
+	alphas, err := client.InitiateSnapshotStream(context.Background())
+	fmt.Println("alpha", alphas, err)
+
+	if err := client.StreamSnapshot(context.Background(), "/home/shiva/workspace/dgraph-work/benchmarks/data/out", alphas.Groups); err != nil {
 		fmt.Println("error is---------", err)
 	}
 

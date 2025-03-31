@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
@@ -24,9 +25,11 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/conn"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v24/schema"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
@@ -97,6 +100,113 @@ func (w *grpcWorker) ApplyDrainmode(ctx context.Context, req *pb.Drainmode) (*pb
 	err := node.proposeAndWait(ctx, &pb.Proposal{Drainmode: drainMode}) // Subscribe on given prefixes.
 
 	return nil, err
+}
+
+// StreamPt handles the stream of key-value pairs sent from proxy alpha.
+// It writes the data to BadgerDB, sends an acknowledgment once all data is received,
+// and proposes to accept the newly added data to other group nodes.
+func (w *grpcWorker) StreamPt(stream pb.Worker_StreamPtServer) error {
+	var writer badgerWriter
+	sw := pstore.NewStreamWriter()
+	defer sw.Cancel()
+
+	// Prepare the stream writer, which involves deleting existing data.
+	if err := sw.Prepare(); err != nil {
+		return err
+	}
+
+	writer = sw
+
+	// Track the total size of key-value data received.
+	size := 0
+	for {
+		// Receive a batch of key-value pairs from the stream.
+		kvs, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		// Check if all key-value pairs have been received.
+		if kvs != nil && kvs.Done {
+			glog.Infoln("All key-values have been received.")
+			break
+		}
+
+		// Increment the total size and log the batch size received.
+		size += len(kvs.Data)
+		glog.Infof("Received batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
+
+		// Write the received data to BadgerDB.
+		buf := z.NewBufferSlice(kvs.Data)
+		if err := writer.Write(buf); err != nil {
+			return err
+		}
+	}
+
+	// Flush any remaining data to ensure it is written to BadgerDB.
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	glog.Infof("P dir writes DONE. Sending ACK")
+
+	// Send an acknowledgment to the leader indicating completion.
+	if err := stream.SendAndClose(&pb.ReceiveSnapshotKVRequest{Done: true}); err != nil {
+		return err
+	}
+
+	// Propose a stream operation to the raft node.
+	currentNode := groups().Node
+	streamProposal := &pb.ReqPStream{Addr: currentNode.MyAddr}
+	err := currentNode.proposeAndWait(stream.Context(), &pb.Proposal{Reqpstream: streamProposal})
+	if err != nil {
+		return err
+	}
+
+	// Reload the schema from the database after restoring data.
+	if err := schema.LoadFromDb(stream.Context()); err != nil {
+		return errors.Wrapf(err, "cannot load schema after restore")
+	}
+
+	// Inform Zero (the management node) about the updated tablets.
+	gr.informZeroAboutTablets()
+	return nil
+}
+
+// this fucntion will called by leader of group or the node of group which got data from
+// proxy alpha or import client
+func (w *grpcWorker) StreamInGroup(out pb.Worker_StreamInGroupServer) error {
+	stream := pstore.NewStreamAt(math.MaxUint64)
+	// Use the default implementation. We no longer try to generate a rolled up posting list here.
+	// Instead, we just stream out all the versions as they are.
+	stream.KeyToList = nil
+	stream.Send = func(buf *z.Buffer) error {
+		kvs := &pb.PKVS{Data: buf.Bytes()}
+		return out.Send(kvs)
+	}
+
+	// Orchestrate the stream. This will block until the context is cancelled or the stream is closed.
+	if err := stream.Orchestrate(out.Context()); err != nil {
+		return err
+	}
+
+	// Indicate that we are done sending data.
+	done := &pb.PKVS{
+		Done: true,
+	}
+	if err := out.Send(done); err != nil {
+		return err
+	}
+
+	glog.Infof("Streaming done. Waiting for ACK...")
+	ack, err := out.Recv()
+	if err != nil {
+		return err
+	}
+	glog.Infof("Received ACK with done: %v\n", ack.Done)
+
+	return nil
 }
 
 // RunServer initializes a tcp server on port which listens to requests from

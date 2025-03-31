@@ -7,6 +7,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -35,22 +36,110 @@ type badgerWriter interface {
 	Flush() error
 }
 
-func FlushKvs(stream api_v25.Dgraph_StreamPSnapshotServer) error {
+type Stream interface {
+}
 
-	// schema.Init(State.Pstore)
-	// postingListCacheSize := (x.CachePercent[0] * (x.TotalCache << 20)) / 100
-	// pstoreBlockCacheSize := (x.CachePercent[1] * (totalCacx.TotalCachehe << 20)) / 100
-	// pstoreIndexCacheSize := (x.CachePercent[2] * (x.TotalCache << 20)) / 100
-	// posting.Init(State.Pstore, postingListCacheSize, x.RemoveOnUpdate)
-	// defer posting.Cleanup()
-	// Init(State.Pstore)
-	if err := pstore.DropAll(); err != nil {
+// DoStreamPDir handles streaming of snapshots to a target group. It first checks the group
+// associated with the incoming stream and, if it's the same as the current node's group, it
+// flushes the data using FlushKvs1. If the group is different, it establishes a connection
+// with the leader of that group and streams data to it. The function returns an error if
+// there are any issues in the process, such as a broken connection or failure to establish
+// a stream with the leader.
+func DoStreamPDir(stream api_v25.Dgraph_StreamSnapshotServer) error {
+	groupId, err := checkGroup(stream)
+	if err != nil {
 		return err
 	}
+
+	if groupId == groups().Node.gid {
+		return FlushKvs(stream)
+	}
+
+	pl := groups().Leader(groupId)
+	if pl == nil {
+		return fmt.Errorf("ubable to connect with group[%v] leader", groupId)
+	}
+
+	con := pl.Get()
+	c := pb.NewWorkerClient(con)
+	out, err := c.StreamPt(stream.Context())
+	if err != nil {
+		return fmt.Errorf("failed to establish stream with leader: %v", err)
+	}
+
+	return streamToAnotherGroup(stream, out)
+}
+
+// streamToAnotherGroup takes an incoming stream and sends it to another group's leader (out).
+// It receives data from the incoming stream, forwards it to the leader, and handles the completion signal.
+func streamToAnotherGroup(in api_v25.Dgraph_StreamSnapshotServer, out pb.Worker_StreamPtClient) error {
+	size := 0
+	for {
+		// Receive a request from the incoming stream.
+		req, err := in.Recv()
+		if err != nil {
+			return err
+		}
+
+		// Prepare the data to send to the leader.
+		data := &pb.PKVS{Data: req.Kvs.Data}
+		if req.Kvs.Done {
+			glog.Infoln("All key-values have been received.")
+			// Send the completion signal to the leader.
+			if err := out.Send(&pb.PKVS{Done: true}); err != nil {
+				return fmt.Errorf("failed to send 'done' signal: %w", err)
+			}
+			break
+		}
+
+		// Send the data to the leader.
+		if err := out.Send(data); err != nil {
+			glog.Errorf("Error sending to leader Alpha: %v", err)
+			return err
+		}
+
+		// Update and log the size of the data sent so far.
+		size += len(req.Kvs.Data)
+		glog.Infof("Sent batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(req.Kvs.Data))), humanize.IBytes(uint64(size)))
+	}
+
+	// Send a close signal to the incoming stream.
+	if err := in.SendAndClose(&api_v25.ReceiveSnapshotKVRequest{Done: true}); err != nil {
+		return fmt.Errorf("failed to send: %v", err)
+	}
+
+	// Receive an acknowledgment from the leader.
+	ack, err := out.CloseAndRecv()
+	if err != nil {
+		return fmt.Errorf("failed to receive ACK: %w", err)
+	}
+
+	glog.Infof("Received ACK with message: %v\n", ack.Done)
+
+	return nil
+}
+
+// checkGroup receives the initial message from the stream and extracts the group ID.
+// It returns the group ID if successful, otherwise an error if there is an issue
+// receiving the message.
+func checkGroup(stream api_v25.Dgraph_StreamSnapshotServer) (uint32, error) {
+	req, err := stream.Recv()
+	if err != nil {
+		return 0, fmt.Errorf("failed to receive initial stream message: %v", err)
+	}
+
+	return req.GroupId, nil
+}
+
+// FlushKvs receives the stream of data from the client and writes it to BadgerDB.
+// It also sends a streams the data to other nodes of the same group and reloads the schema from the DB.
+func FlushKvs(stream api_v25.Dgraph_StreamSnapshotServer) error {
 	var writer badgerWriter
 	sw := pstore.NewStreamWriter()
 	defer sw.Cancel()
 
+	// we should delete all the existing data before starting the stream
 	if err := sw.Prepare(); err != nil {
 		return err
 	}
@@ -60,14 +149,12 @@ func FlushKvs(stream api_v25.Dgraph_StreamPSnapshotServer) error {
 	// We can use count to check the number of posting lists returned in tests.
 	size := 0
 	for {
-		kvs, err := stream.Recv()
-		if kvs != nil {
-			glog.Infoln("All key-values have been received.", string(kvs.Data))
-		}
-
+		req, err := stream.Recv()
 		if err != nil {
 			return err
 		}
+		kvs := req.GetKvs()
+
 		if kvs.Done {
 			glog.Infoln("All key-values have been received.")
 			break
@@ -82,20 +169,32 @@ func FlushKvs(stream api_v25.Dgraph_StreamPSnapshotServer) error {
 			return err
 		}
 	}
+
 	if err := writer.Flush(); err != nil {
 		return err
 	}
 
 	glog.Infof("P dir writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
-	if err := stream.SendAndClose(&api_v25.ReceiveSnapshotKVRequest{Message: "done"}); err != nil {
+	if err := stream.SendAndClose(&api_v25.ReceiveSnapshotKVRequest{Done: true}); err != nil {
 		return err
 	}
 
-	// posting.ResetCache()
-	// ResetAclCache()
-	// State.Dispose()
-	// InitServerState()
+	// Inform other nodes of the group about the new data.
+	node := groups().Node
+	streamProposal := &pb.ReqPStream{Addr: node.MyAddr}
+	err := node.proposeAndWait(stream.Context(), &pb.Proposal{Reqpstream: streamProposal})
+	if err != nil {
+		return err
+	}
+
+	// Reload the schema from the DB.
+	if err := schema.LoadFromDb(stream.Context()); err != nil {
+		return errors.Wrapf(err, "cannot load schema after streaming data")
+	}
+
+	// Inform Zero about the new tablets.
+	gr.informZeroAboutTablets()
 
 	return nil
 }

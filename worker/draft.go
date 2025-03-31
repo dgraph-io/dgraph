@@ -86,6 +86,8 @@ func (id op) String() string {
 		return "opBackup"
 	case opPredMove:
 		return "opPredMove"
+	case opStreamPDirs:
+		return "opPredMove"
 	default:
 		return "opUnknown"
 	}
@@ -98,6 +100,7 @@ const (
 	opRestore
 	opBackup
 	opPredMove
+	opStreamPDirs
 )
 
 // startTask is used for the tasks that do not require tracking of timestamp.
@@ -679,8 +682,42 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 		return n.commitOrAbort(key, proposal.Delta)
 
 	case proposal.Drainmode != nil:
+		fmt.Println("aplpling drainmoder!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>")
 		x.UpdateDrainingMode(proposal.Drainmode.State)
 		return nil
+
+	case proposal.Reqpstream != nil:
+		// Requesting a pstream from another node. Ignore if the proposal's origin is this node.
+		if proposal.Reqpstream.Addr == n.MyAddr {
+			return nil
+		}
+
+		var err error
+		var closer *z.Closer
+		closer, err = n.startTask(opStreamPDirs)
+		if err != nil {
+			return errors.Wrapf(err, "cannot start stream p dir task")
+		}
+		defer closer.Done()
+
+		pl, err := conn.GetPools().Get(proposal.Reqpstream.Addr)
+		if err != nil {
+			return err
+		}
+
+		if pl == nil {
+			return fmt.Errorf("connection is broken")
+		}
+
+		con := pl.Get()
+		c := pb.NewWorkerClient(con)
+		// Invoke server stub to get stream from lthe leader
+		out, err := c.StreamInGroup(ctx)
+		if err != nil {
+			return err
+		}
+
+		return fulshKv3(out)
 
 	case proposal.Snapshot != nil:
 		existing, err := n.Store.Snapshot()
@@ -766,6 +803,58 @@ func (n *node) processTabletSizes() {
 			n.calculateTabletSizes()
 		}
 	}
+}
+
+// this funtion will flush all cvs
+func fulshKv3(stream pb.Worker_StreamInGroupClient) error {
+	var writer badgerWriter
+	sw := pstore.NewStreamWriter()
+	defer sw.Cancel()
+
+	// we should delete all the existing data before starting the stream
+	if err := sw.Prepare(); err != nil {
+		return err
+	}
+
+	writer = sw
+
+	// We can use count to check the number of posting lists returned in tests.
+	size := 0
+	for {
+		kvs, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		if kvs != nil && kvs.Done {
+			glog.Infoln("All key-values have been received.")
+			break
+		}
+
+		size += len(kvs.Data)
+		glog.Infof("Received batch of size: %s. Total so far: %s\n",
+			humanize.IBytes(uint64(len(kvs.Data))), humanize.IBytes(uint64(size)))
+
+		buf := z.NewBufferSlice(kvs.Data)
+		if err := writer.Write(buf); err != nil {
+			return err
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	glog.Infof("P dir writes DONE. Sending ACK")
+	// Send an acknowledgement back to the leader.
+	if err := stream.Send(&pb.PKVS{Done: true}); err != nil {
+		return err
+	}
+
+	if err := schema.LoadFromDb(stream.Context()); err != nil {
+		return errors.Wrapf(err, "cannot load schema after restore")
+	}
+	gr.informZeroAboutTablets()
+	return nil
 }
 
 func updateStartTs(p *pb.Proposal) {

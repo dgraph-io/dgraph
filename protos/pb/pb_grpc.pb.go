@@ -973,6 +973,8 @@ const (
 	Worker_DeleteNamespace_FullMethodName     = "/pb.Worker/DeleteNamespace"
 	Worker_TaskStatus_FullMethodName          = "/pb.Worker/TaskStatus"
 	Worker_ApplyDrainmode_FullMethodName      = "/pb.Worker/ApplyDrainmode"
+	Worker_StreamPt_FullMethodName            = "/pb.Worker/StreamPt"
+	Worker_StreamInGroup_FullMethodName       = "/pb.Worker/StreamInGroup"
 )
 
 // WorkerClient is the client API for Worker service.
@@ -995,6 +997,8 @@ type WorkerClient interface {
 	DeleteNamespace(ctx context.Context, in *DeleteNsRequest, opts ...grpc.CallOption) (*Status, error)
 	TaskStatus(ctx context.Context, in *TaskStatusRequest, opts ...grpc.CallOption) (*TaskStatusResponse, error)
 	ApplyDrainmode(ctx context.Context, in *Drainmode, opts ...grpc.CallOption) (*Status, error)
+	StreamPt(ctx context.Context, opts ...grpc.CallOption) (Worker_StreamPtClient, error)
+	StreamInGroup(ctx context.Context, opts ...grpc.CallOption) (Worker_StreamInGroupClient, error)
 }
 
 type workerClient struct {
@@ -1210,6 +1214,71 @@ func (c *workerClient) ApplyDrainmode(ctx context.Context, in *Drainmode, opts .
 	return out, nil
 }
 
+func (c *workerClient) StreamPt(ctx context.Context, opts ...grpc.CallOption) (Worker_StreamPtClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Worker_ServiceDesc.Streams[3], Worker_StreamPt_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workerStreamPtClient{stream}
+	return x, nil
+}
+
+type Worker_StreamPtClient interface {
+	Send(*PKVS) error
+	CloseAndRecv() (*ReceiveSnapshotKVRequest, error)
+	grpc.ClientStream
+}
+
+type workerStreamPtClient struct {
+	grpc.ClientStream
+}
+
+func (x *workerStreamPtClient) Send(m *PKVS) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *workerStreamPtClient) CloseAndRecv() (*ReceiveSnapshotKVRequest, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(ReceiveSnapshotKVRequest)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *workerClient) StreamInGroup(ctx context.Context, opts ...grpc.CallOption) (Worker_StreamInGroupClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Worker_ServiceDesc.Streams[4], Worker_StreamInGroup_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workerStreamInGroupClient{stream}
+	return x, nil
+}
+
+type Worker_StreamInGroupClient interface {
+	Send(*PKVS) error
+	Recv() (*PKVS, error)
+	grpc.ClientStream
+}
+
+type workerStreamInGroupClient struct {
+	grpc.ClientStream
+}
+
+func (x *workerStreamInGroupClient) Send(m *PKVS) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *workerStreamInGroupClient) Recv() (*PKVS, error) {
+	m := new(PKVS)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // WorkerServer is the server API for Worker service.
 // All implementations must embed UnimplementedWorkerServer
 // for forward compatibility
@@ -1230,6 +1299,8 @@ type WorkerServer interface {
 	DeleteNamespace(context.Context, *DeleteNsRequest) (*Status, error)
 	TaskStatus(context.Context, *TaskStatusRequest) (*TaskStatusResponse, error)
 	ApplyDrainmode(context.Context, *Drainmode) (*Status, error)
+	StreamPt(Worker_StreamPtServer) error
+	StreamInGroup(Worker_StreamInGroupServer) error
 	mustEmbedUnimplementedWorkerServer()
 }
 
@@ -1281,6 +1352,12 @@ func (UnimplementedWorkerServer) TaskStatus(context.Context, *TaskStatusRequest)
 }
 func (UnimplementedWorkerServer) ApplyDrainmode(context.Context, *Drainmode) (*Status, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyDrainmode not implemented")
+}
+func (UnimplementedWorkerServer) StreamPt(Worker_StreamPtServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamPt not implemented")
+}
+func (UnimplementedWorkerServer) StreamInGroup(Worker_StreamInGroupServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamInGroup not implemented")
 }
 func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
 
@@ -1584,6 +1661,58 @@ func _Worker_ApplyDrainmode_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_StreamPt_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServer).StreamPt(&workerStreamPtServer{stream})
+}
+
+type Worker_StreamPtServer interface {
+	SendAndClose(*ReceiveSnapshotKVRequest) error
+	Recv() (*PKVS, error)
+	grpc.ServerStream
+}
+
+type workerStreamPtServer struct {
+	grpc.ServerStream
+}
+
+func (x *workerStreamPtServer) SendAndClose(m *ReceiveSnapshotKVRequest) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *workerStreamPtServer) Recv() (*PKVS, error) {
+	m := new(PKVS)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Worker_StreamInGroup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServer).StreamInGroup(&workerStreamInGroupServer{stream})
+}
+
+type Worker_StreamInGroupServer interface {
+	Send(*PKVS) error
+	Recv() (*PKVS, error)
+	grpc.ServerStream
+}
+
+type workerStreamInGroupServer struct {
+	grpc.ServerStream
+}
+
+func (x *workerStreamInGroupServer) Send(m *PKVS) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *workerStreamInGroupServer) Recv() (*PKVS, error) {
+	m := new(PKVS)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Worker_ServiceDesc is the grpc.ServiceDesc for Worker service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1656,6 +1785,17 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Subscribe",
 			Handler:       _Worker_Subscribe_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamPt",
+			Handler:       _Worker_StreamPt_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "StreamInGroup",
+			Handler:       _Worker_StreamInGroup_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "pb.proto",

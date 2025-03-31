@@ -1883,17 +1883,13 @@ func (s *Server) CheckVersion(ctx context.Context, c *api.Check) (v *api.Version
 	return v, nil
 }
 
-func (s *ServerV25) InitiateSnapShotStream(ctx context.Context,
-	c *apiv25.InitiateSnapShotStreamRequest) (v *apiv25.InitiateSnapShotStreamResponse, err error) {
-	leaders := make(map[uint32]string)
+func (s *ServerV25) InitiateSnapshotStream(ctx context.Context,
+	c *apiv25.InitiateSnapshotStreamRequest) (v *apiv25.InitiateSnapshotStreamResponse, err error) {
+	groups := []uint32{}
 	ms := worker.GetMembershipState()
 
-	for groupID, n := range ms.Groups {
-		for _, a := range n.Members {
-			if a.Leader {
-				leaders[uint32(groupID)] = a.GrpcAddr
-			}
-		}
+	for groupID := range ms.Groups {
+		groups = append(groups, groupID)
 	}
 
 	drainMode := &pb.Drainmode{State: true}
@@ -1901,26 +1897,16 @@ func (s *ServerV25) InitiateSnapShotStream(ctx context.Context,
 		return nil, err
 	}
 
-	resp := &apiv25.InitiateSnapShotStreamResponse{
-		LeaderAlphas: leaders,
+	resp := &apiv25.InitiateSnapshotStreamResponse{
+		Groups: groups,
 	}
 
 	return resp, nil
 }
 
-func (s *ServerV25) StreamPSnapshot(stream apiv25.Dgraph_StreamPSnapshotServer) error {
-	leaders := make(map[uint32]string)
-	ms := worker.GetMembershipState()
+func (s *ServerV25) StreamSnapshot(stream apiv25.Dgraph_StreamSnapshotServer) error {
 
-	for groupID, n := range ms.Groups {
-		for _, a := range n.Members {
-			if a.Leader {
-				leaders[uint32(groupID)] = a.GrpcAddr
-			}
-		}
-	}
-
-	if err := worker.FlushKvs(stream); err != nil {
+	if err := worker.DoStreamPDir(stream); err != nil {
 		return err
 	}
 

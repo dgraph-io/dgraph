@@ -695,11 +695,17 @@ func (hc *HTTPClient) GetAlphaState() (*pb.MembershipState, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("resp is", string(resp))
 
 	var state pb.MembershipState
-	if err = protojson.Unmarshal(resp, &state); err != nil {
+
+	unmarshaler := protojson.UnmarshalOptions{
+		AllowPartial: true, // Ignores unknown fields but still processes valid ones
+	}
+	if err := unmarshaler.Unmarshal(resp, &state); err != nil {
 		return nil, err
 	}
+
 	return &state, err
 }
 

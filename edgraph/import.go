@@ -29,21 +29,25 @@ func NewImportClient(endpoint string, opts grpc.DialOption) (*Client, error) {
 	return &Client{dg: apiv25.NewDgraphClient(conn), opts: opts}, nil
 }
 
-func (c *Client) InitiateSnapShotStream(ctx context.Context) (*apiv25.InitiateSnapShotStreamResponse, error) {
-	req := &apiv25.InitiateSnapShotStreamRequest{}
-	return c.dg.InitiateSnapShotStream(ctx, req)
+func (c *Client) InitiateSnapshotStream(ctx context.Context) (*apiv25.InitiateSnapshotStreamResponse, error) {
+	req := &apiv25.InitiateSnapshotStreamRequest{}
+	return c.dg.InitiateSnapshotStream(ctx, req)
 }
 
-func (c *Client) StreamSnapshot(ctx context.Context, pDir string, alphas map[uint32]string) error {
+// StreamSnapshot takes a p directory and a set of group IDs and streams the data from the
+// p directory to the corresponding group IDs. The function will skip any groups that do not
+// have a corresponding p directory
+func (c *Client) StreamSnapshot(ctx context.Context, pDir string, groups []uint32) error {
 	groupDirs, err := getPDiPdirrectories(pDir)
 	if err != nil {
 		return fmt.Errorf("Error getting p directories: %v", err)
 	}
 
-	for key, leader := range alphas {
-		pDir, exists := groupDirs[key-1]
+	for _, group := range groups {
+		fmt.Println("groups are ------------>", group)
+		pDir, exists := groupDirs[group-1]
 		if !exists {
-			fmt.Printf("No p directory found for group %d, skipping...\n", key)
+			fmt.Printf("No p directory found for group %d, skipping...\n", group)
 			continue
 		}
 
@@ -52,14 +56,7 @@ func (c *Client) StreamSnapshot(ctx context.Context, pDir string, alphas map[uin
 			continue
 		}
 
-		conn, err := grpc.NewClient(leader, c.opts)
-		if err != nil {
-			return fmt.Errorf("Failed to connect to leader %s: %v", leader, err)
-		}
-		defer conn.Close()
-
-		dg := apiv25.NewDgraphClient(conn)
-		err = stream(ctx, dg, pDir)
+		err = stream(ctx, c.dg, pDir, group)
 		if err != nil {
 			return err
 		}
@@ -68,8 +65,8 @@ func (c *Client) StreamSnapshot(ctx context.Context, pDir string, alphas map[uin
 	return nil
 }
 
-func stream(ctx context.Context, dg apiv25.DgraphClient, pdir string) error {
-	out, err := dg.StreamPSnapshot(ctx)
+func stream(ctx context.Context, dg apiv25.DgraphClient, pdir string, groudId uint32) error {
+	out, err := dg.StreamSnapshot(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start snapshot stream: %w", err)
 	}
@@ -81,12 +78,21 @@ func stream(ctx context.Context, dg apiv25.DgraphClient, pdir string) error {
 	}
 	defer ps.Close()
 
+	// Send group ID first
+	groupReq := &apiv25.StreamSnapshotRequest{
+		GroupId: groudId,
+	}
+	if err := out.Send(groupReq); err != nil {
+		return fmt.Errorf("Failed to send group ID: %v", err)
+	}
+
 	stream := ps.NewStreamAt(math.MaxUint64)
 	stream.LogPrefix = "Sending P dir"
 	stream.KeyToList = nil
 	stream.Send = func(buf *z.Buffer) error {
 		kvs := &apiv25.KVS{Data: buf.Bytes()}
-		if err := out.Send(kvs); err != nil {
+		if err := out.Send(&apiv25.StreamSnapshotRequest{
+			Kvs: kvs}); err != nil {
 			return fmt.Errorf("failed to send data: %w", err)
 		}
 		return nil
@@ -97,20 +103,19 @@ func stream(ctx context.Context, dg apiv25.DgraphClient, pdir string) error {
 	}
 
 	done := &apiv25.KVS{
-		Done:       true,
-		Predicates: []string{},
-		Types:      []string{},
+		Done: true,
 	}
-	if err := out.Send(done); err != nil {
+
+	if err := out.Send(&apiv25.StreamSnapshotRequest{
+		Kvs: done}); err != nil {
 		return fmt.Errorf("failed to send 'done' signal: %w", err)
 	}
 
-	fmt.Println("Snapshot writes DONE. Sending ACK")
 	ack, err := out.CloseAndRecv()
 	if err != nil {
 		return fmt.Errorf("failed to receive ACK: %w", err)
 	}
-	glog.Infof("Received ACK with message: %v\n", ack.Message)
+	glog.Infof("Received ACK with message: %v\n", ack.Done)
 
 	return nil
 }

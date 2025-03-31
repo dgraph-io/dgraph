@@ -103,7 +103,7 @@ func TestInitiateSnapshotStreamForSingleNode(t *testing.T) {
 
 	require.NoError(t, err)
 
-	resp, err := client.InitiateSnapShotStream(context.Background())
+	resp, err := client.InitiateSnapshotStream(context.Background())
 	require.NoError(t, err)
 
 	require.Equal(t, `leader_alphas:{key:1  value:"localhost:9080"}`, resp.String())
@@ -130,13 +130,13 @@ func TestInitiateSnapshotStreamForHA(t *testing.T) {
 	client, err := NewImportClient(dgraphtest.GetLocalHostUrl(pubPort, ""), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
-	resp, err := client.InitiateSnapShotStream(context.Background())
+	resp, err := client.InitiateSnapshotStream(context.Background())
 	require.NoError(t, err)
 
 	for _, group := range state.Groups {
 		for _, node := range group.Members {
 			if node.Leader {
-				require.Equal(t, resp.LeaderAlphas[node.GroupId], node.GrpcAddr)
+				require.Equal(t, resp.Groups[node.GroupId], node.GrpcAddr)
 			}
 		}
 	}
@@ -160,7 +160,6 @@ func TestInitiateSnapshotStreamForHASharded(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-
 	state, err := hc.GetAlphaState()
 	require.NoError(t, err)
 	pubPort, err := c.GetAlphaGrpcPublicPort()
@@ -169,12 +168,12 @@ func TestInitiateSnapshotStreamForHASharded(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
-	resp, err := client.InitiateSnapShotStream(context.Background())
+	resp, err := client.InitiateSnapshotStream(context.Background())
 	require.NoError(t, err)
 	for _, group := range state.Groups {
 		for _, node := range group.Members {
 			if node.Leader {
-				require.Equal(t, resp.LeaderAlphas[node.GroupId], node.GrpcAddr)
+				require.Equal(t, resp.Groups[node.GroupId], node.GrpcAddr)
 			}
 		}
 	}
@@ -190,17 +189,15 @@ func TestInitiateSnapshotStreamForHASharded(t *testing.T) {
 }
 
 func TestImportApis(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1)
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(2).WithNumZeros(1).WithReplicas(1)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
+	// defer func() { c.Cleanup(t.Failed()) }()
 	require.NoError(t, c.Start())
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	// check current leader of cluster
-	state, err := hc.GetAlphaState()
-	require.NoError(t, err)
 
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
@@ -220,42 +217,26 @@ func TestImportApis(t *testing.T) {
 	require.NoError(t, err)
 
 	// initiating snapshot
-	resp, err := importClient.InitiateSnapShotStream(context.Background())
+	resp, err := importClient.InitiateSnapshotStream(context.Background())
 	require.NoError(t, err)
 
-	for _, group := range state.Groups {
-		for _, node := range group.Members {
-			if node.Leader {
-				require.Equal(t, resp.LeaderAlphas[node.GroupId], node.GrpcAddr)
-			}
-		}
-	}
+	fmt.Println("resp------------------>", resp.Groups)
 
 	_, err = gc.Query("schema{}")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "the server is in draining mode")
 
-	// get public port of alpha because we are using docker here
-	pub, err := c.GetAlphaGrpcPublicPort()
+	err = importClient.StreamSnapshot(context.Background(), "/home/shiva/workspace/dgraph-work/benchmarks/data/out", resp.Groups)
 	require.NoError(t, err)
 
-	url := dgraphtest.GetLocalHostUrl(pub, "")
-
-	resp.LeaderAlphas[1] = url
-
-	// start streaming sp directory
-	err = importClient.StreamSnapshot(context.Background(), "/home/shiva/workspace/dgraph-work/benchmarks/data/out", resp.LeaderAlphas)
+	stateResp, err := hc.GetAlphaState()
 	require.NoError(t, err)
+	fmt.Println("talt are---------------->", stateResp)
 
-	// require.NoError(t, c.StopAlpha(0))
-	// require.NoError(t, c.StartAlpha(0))
-	// require.NoError(t, c.HealthCheck(false))
+	for _, group := range stateResp.Groups {
+		for _, tablet := range group.Tablets {
+			fmt.Println("talt are---------------->", tablet.Predicate)
+		}
+	}
 
-	gc, cleanup, err = c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	schemaresp, err = gc.Query("schema{}")
-	require.NoError(t, err)
-
-	fmt.Println("after streaming==========>", string(schemaresp.Json))
 }

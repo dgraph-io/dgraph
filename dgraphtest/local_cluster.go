@@ -1178,8 +1178,8 @@ func (c *LocalCluster) GetAlphaGrpcPublicPort() (string, error) {
 	return publicPort(c.dcli, c.alphas[0], alphaGrpcPort)
 }
 
-func (c *LocalCluster) GetAlphaHttpPublicPort() (string, error) {
-	return publicPort(c.dcli, c.alphas[0], alphaHttpPort)
+func (c *LocalCluster) GetAlphaHttpPublicPort(id int) (string, error) {
+	return publicPort(c.dcli, c.alphas[id], alphaHttpPort)
 }
 
 func (c *LocalCluster) GetZeroGrpcPublicPort() (string, error) {

@@ -327,6 +327,11 @@ message Proposal {
   // Skipping 15 as it is used for uint64 key in master and might be needed later here.
   uint64 start_ts = 16;
   Drainmode drainmode =17;
+  ReqPStream reqpstream = 18;
+}
+
+message ReqPStream {
+  string addr=2 ;
 }
 
 message CDCState {
@@ -606,6 +611,17 @@ service Worker {
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
   rpc ApplyDrainmode(Drainmode) returns (Status) {}
+  rpc StreamPt(stream PKVS) returns (ReceiveSnapshotKVRequest) {}
+  rpc StreamInGroup(stream PKVS) returns (stream PKVS) {}
+}
+
+message ReceiveSnapshotKVRequest {
+    bool done = 1;
+}
+
+message PKVS {
+  bytes data = 5;
+  bool done = 2;
 }
 
 message Drainmode {
