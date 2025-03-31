@@ -24,7 +24,7 @@ import (
 
 const (
 	TraceDefaults     = `ratio=0.01; jaeger=; datadog=;`
-	TelemetryDefaults = `reports=true;`
+	TelemetryDefaults = `reports=true;sentry=false;`
 )
 
 // FillCommonFlags stores flags common to Alpha and Zero.
