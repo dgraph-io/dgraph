@@ -27,7 +27,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/filestore"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok"
-	"github.com/hypermodeinc/dgraph/v24/worker"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
@@ -195,12 +194,7 @@ func run() {
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{opt.ZeroAddr}
 		x.WorkerConfig.TLSClientConfig = tlsConf
-		if !worker.EnterpriseEnabled() {
-			// Crash since the enterprise license is not enabled..
-			log.Fatal("Enterprise License needed for the Encryption feature.")
-		} else {
-			log.Printf("Encryption feature enabled.")
-		}
+		log.Printf("Encryption feature enabled.")
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
 

@@ -238,7 +238,7 @@ func (s *Server) zeroHealth(ctx context.Context) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, errors.Wrap(ctx.Err(), "http request context error")
 	}
-	health := pb.HealthInfo{
+	health := &pb.HealthInfo{
 		Instance: "zero",
 		Address:  x.WorkerConfig.MyAddr,
 		Status:   "healthy",

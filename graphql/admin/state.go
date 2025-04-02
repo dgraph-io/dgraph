@@ -29,7 +29,6 @@ type membershipState struct {
 	MaxRaftId  uint64         `json:"maxRaftId,omitempty"`
 	Removed    []*pb.Member   `json:"removed,omitempty"`
 	Cid        string         `json:"cid,omitempty"`
-	License    *pb.License    `json:"license,omitempty"`
 	Namespaces []uint64       `json:"namespaces,omitempty"`
 }
 
@@ -117,7 +116,6 @@ func convertToGraphQLResp(ms pb.MembershipState, listNs bool) membershipState {
 	state.MaxRaftId = ms.MaxRaftId
 	state.Removed = ms.Removed
 	state.Cid = ms.Cid
-	state.License = ms.License
 
 	state.Namespaces = []uint64{}
 	for ns := range namespaces {

@@ -337,7 +337,7 @@ func (cdc *CDC) processCDCEvents() {
 		case <-cdc.closer.HasBeenClosed():
 			return
 		case <-jobTick.C:
-			if groups().Node.AmLeader() && EnterpriseEnabled() {
+			if groups().Node.AmLeader() {
 				if err := sendEvents(); err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
@@ -346,7 +346,7 @@ func (cdc *CDC) processCDCEvents() {
 			// The leader would propose the max sentTs over to the group.
 			// So, in case of a crash or a leadership change, the new leader
 			// would know where to send the cdc events from the Raft logs.
-			if groups().Node.AmLeader() && EnterpriseEnabled() {
+			if groups().Node.AmLeader() {
 				sentTs := atomic.LoadUint64(&cdc.sentTs)
 				if lastSent == sentTs {
 					// No need to propose anything.

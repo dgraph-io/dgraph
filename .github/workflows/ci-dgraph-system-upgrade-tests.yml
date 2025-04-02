@@ -51,7 +51,6 @@ jobs:
           go test -v -timeout=120m -failfast -tags=upgrade \
             github.com/hypermodeinc/dgraph/v24/systest/mutations-and-queries \
             github.com/hypermodeinc/dgraph/v24/systest/plugin \
-            github.com/hypermodeinc/dgraph/v24/systest/license \
             github.com/hypermodeinc/dgraph/v24/systest/multi-tenancy
           # clean up docker containers after test execution
           go clean -testcache

@@ -22,7 +22,6 @@ import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/raftwal"
 	"github.com/hypermodeinc/dgraph/v24/schema"
@@ -298,13 +297,6 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 	// last update. For leader changes at zero since we don't propose, state can get
 	// updated at same counter value. So ignore only if counter is less.
 	if g.state != nil && g.state.Counter > state.Counter {
-		return
-	}
-
-	invalid := state.License != nil && !state.License.Enabled
-	if g.Node != nil && g.Node.RaftContext.IsLearner && invalid {
-		glog.Errorf("ENTERPRISE_ONLY_LEARNER: License Expired. Cannot run learner nodes.")
-		x.ServerCloser.Signal()
 		return
 	}
 
@@ -1102,9 +1094,6 @@ func (g *groupi) processOracleDeltaStream() {
 
 // GetEEFeaturesList returns a list of Enterprise Features that are available.
 func GetEEFeaturesList() []string {
-	if !EnterpriseEnabled() {
-		return nil
-	}
 	var ee []string
 	if Config.AclSecretKey != nil {
 		ee = append(ee, "acl")
@@ -1122,54 +1111,6 @@ func GetEEFeaturesList() []string {
 		ee = append(ee, "cdc")
 	}
 	return ee
-}
-
-// EnterpriseEnabled returns whether enterprise features can be used or not.
-func EnterpriseEnabled() bool {
-	if !enc.EeBuild {
-		return false
-	}
-	state := GetMembershipState()
-	if state == nil {
-		return groups().askZeroForEE()
-	}
-	return state.GetLicense().GetEnabled()
-}
-
-func (g *groupi) askZeroForEE() bool {
-	var err error
-	var connState *pb.ConnectionState
-
-	createConn := func() bool {
-		pl := g.connToZeroLeader()
-		if pl == nil {
-			return false
-		}
-		zc := pb.NewZeroClient(pl.Get())
-
-		ctx, cancel := context.WithTimeout(g.Ctx(), 10*time.Second)
-		defer cancel()
-
-		connState, err = zc.Connect(ctx, &pb.Member{ClusterInfoOnly: true})
-		if connState == nil ||
-			connState.GetState() == nil ||
-			connState.GetState().GetLicense() == nil {
-			glog.Info("Retry Zero Connection")
-			return false
-		}
-		if err == nil || x.ShouldCrash(err) {
-			return true
-		}
-		return false
-	}
-
-	for !g.IsClosed() {
-		if createConn() {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	return connState.GetState().GetLicense().GetEnabled()
 }
 
 // SubscribeForUpdates will listen for updates for the given group.

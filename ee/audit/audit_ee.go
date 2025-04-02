@@ -12,7 +12,6 @@ import (
 	"math"
 	"os"
 	"sync/atomic"
-	"time"
 
 	"github.com/golang/glog"
 
@@ -54,9 +53,7 @@ const (
 var auditor = &auditLogger{}
 
 type auditLogger struct {
-	log    *x.Logger
-	tick   *time.Ticker
-	closer *z.Closer
+	log *x.Logger
 }
 
 func GetAuditConf(conf string) *x.LoggerConf {
@@ -96,17 +93,11 @@ func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 // InitAuditorIfNecessary accepts conf and enterprise edition check function.
 // This method keep tracks whether cluster is part of enterprise edition or not.
 // It pools eeEnabled function every five minutes to check if the license is still valid or not.
-func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
+func InitAuditorIfNecessary(conf *x.LoggerConf) error {
 	if conf == nil {
 		return nil
 	}
-	if err := InitAuditor(conf, uint64(worker.GroupId()), worker.NodeId()); err != nil {
-		return err
-	}
-	auditor.tick = time.NewTicker(time.Minute * 5)
-	auditor.closer = z.NewCloser(1)
-	go trackIfEEValid(conf, eeEnabled)
-	return nil
+	return InitAuditor(conf, uint64(worker.GroupId()), worker.NodeId())
 }
 
 // InitAuditor initializes the auditor.
@@ -118,44 +109,13 @@ func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
 		ntype = NodeTypeZero
 	}
 	var err error
-	if auditor.log, err = x.InitLogger(conf,
-		fmt.Sprintf(defaultAuditFilenameF, ntype, gId, nId)); err != nil {
+	filename := fmt.Sprintf(defaultAuditFilenameF, ntype, gId, nId)
+	if auditor.log, err = x.InitLogger(conf, filename); err != nil {
 		return err
 	}
 	atomic.StoreUint32(&auditEnabled, 1)
 	glog.Infoln("audit logs are enabled")
 	return nil
-}
-
-// trackIfEEValid tracks enterprise license of the cluster.
-// Right now alpha doesn't know about the enterprise/licence.
-// That's why we needed to track if the current node is part of enterprise edition cluster
-func trackIfEEValid(conf *x.LoggerConf, eeEnabledFunc func() bool) {
-	defer auditor.closer.Done()
-	var err error
-	for {
-		select {
-		case <-auditor.tick.C:
-			if !eeEnabledFunc() && atomic.CompareAndSwapUint32(&auditEnabled, 1, 0) {
-				glog.Infof("audit logs are disabled")
-				auditor.log.Sync()
-				auditor.log = nil
-				continue
-			}
-
-			if atomic.LoadUint32(&auditEnabled) != 1 {
-				if auditor.log, err = x.InitLogger(conf,
-					fmt.Sprintf(defaultAuditFilenameF, NodeTypeAlpha, worker.GroupId(),
-						worker.NodeId())); err != nil {
-					continue
-				}
-				atomic.StoreUint32(&auditEnabled, 1)
-				glog.Infof("audit logs are enabled")
-			}
-		case <-auditor.closer.HasBeenClosed():
-			return
-		}
-	}
 }
 
 // Close stops the ticker and sync the pending logs in buffer.
@@ -164,12 +124,6 @@ func trackIfEEValid(conf *x.LoggerConf, eeEnabledFunc func() bool) {
 func Close() {
 	if atomic.LoadUint32(&auditEnabled) == 0 {
 		return
-	}
-	if auditor.tick != nil {
-		auditor.tick.Stop()
-	}
-	if auditor.closer != nil {
-		auditor.closer.SignalAndWait()
 	}
 	auditor.log.Sync()
 	auditor.log = nil

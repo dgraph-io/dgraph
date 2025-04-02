@@ -282,6 +282,13 @@ func run() {
 	if nodeId == 0 {
 		log.Fatalf("ERROR: raft.idx flag cannot be 0. Please set idx to a unique positive integer.")
 	}
+
+	if opts.audit != nil {
+		if err := audit.InitAuditor(opts.audit, 0, nodeId); err != nil {
+			glog.Errorf("error while initializing audit logs %+v", err)
+		}
+	}
+
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
@@ -311,7 +318,6 @@ func run() {
 		baseMux.HandleFunc("/removeNode", st.removeNode)
 		baseMux.HandleFunc("/moveTablet", st.moveTablet)
 		baseMux.HandleFunc("/assign", st.assign)
-		baseMux.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
 	}
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	zpages.Handle(baseMux, "/debug/z")

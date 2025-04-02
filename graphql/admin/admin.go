@@ -38,13 +38,13 @@ const (
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
 	"""
-	The Int64 scalar type represents a signed 64‐bit numeric non‐fractional value.
+	The Int64 scalar type represents a signed 64-bit numeric non-fractional value.
 	Int64 can represent values in range [-(2^63),(2^63 - 1)].
 	"""
 	scalar Int64
 
     """
-	The UInt64 scalar type represents an unsigned 64‐bit numeric non‐fractional value.
+	The UInt64 scalar type represents an unsigned 64-bit numeric non-fractional value.
 	UInt64 can represent values in range [0,(2^64 - 1)].
 	"""
     scalar UInt64
@@ -140,7 +140,6 @@ const (
 		maxRaftId: UInt64
 		removed: [Member]
 		cid: String
-		license: License
 		"""
 		Contains list of namespaces. Note that this is not stored in proto's MembershipState and
 		computed at the time of query.
@@ -175,13 +174,6 @@ const (
 		remove: Boolean
 		readOnly: Boolean
 		moveTs: UInt64
-	}
-
-	type License {
-		user: String
-		maxNodes: UInt64
-		expiryTs: Int64
-		enabled: Boolean
 	}
 
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
@@ -505,21 +497,20 @@ var (
 		"getGroup":       minimalAdminQryMWs,
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":            gogMutMWs,
-		"config":            gogMutMWs,
-		"draining":          gogMutMWs,
-		"export":            stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
-		"login":             minimalAdminMutMWs,
-		"restore":           gogMutMWs,
-		"shutdown":          gogMutMWs,
-		"removeNode":        gogMutMWs,
-		"moveTablet":        gogMutMWs,
-		"assign":            gogMutMWs,
-		"enterpriseLicense": gogMutMWs,
-		"updateGQLSchema":   stdAdminMutMWs,
-		"addNamespace":      gogAclMutMWs,
-		"deleteNamespace":   gogAclMutMWs,
-		"resetPassword":     gogAclMutMWs,
+		"backup":          gogMutMWs,
+		"config":          gogMutMWs,
+		"draining":        gogMutMWs,
+		"export":          stdAdminMutMWs, // dgraph handles the export for other namespaces by guardian of galaxy
+		"login":           minimalAdminMutMWs,
+		"restore":         gogMutMWs,
+		"shutdown":        gogMutMWs,
+		"removeNode":      gogMutMWs,
+		"moveTablet":      gogMutMWs,
+		"assign":          gogMutMWs,
+		"updateGQLSchema": stdAdminMutMWs,
+		"addNamespace":    gogAclMutMWs,
+		"deleteNamespace": gogAclMutMWs,
+		"resetPassword":   gogAclMutMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     minimalAdminMutMWs,
@@ -737,21 +728,20 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"addNamespace":      resolveAddNamespace,
-		"backup":            resolveBackup,
-		"config":            resolveUpdateConfig,
-		"deleteNamespace":   resolveDeleteNamespace,
-		"draining":          resolveDraining,
-		"export":            resolveExport,
-		"login":             resolveLogin,
-		"resetPassword":     resolveResetPassword,
-		"restore":           resolveRestore,
-		"shutdown":          resolveShutdown,
-		"removeNode":        resolveRemoveNode,
-		"moveTablet":        resolveMoveTablet,
-		"assign":            resolveAssign,
-		"enterpriseLicense": resolveEnterpriseLicense,
-		"restoreTenant":     resolveTenantRestore,
+		"addNamespace":    resolveAddNamespace,
+		"backup":          resolveBackup,
+		"config":          resolveUpdateConfig,
+		"deleteNamespace": resolveDeleteNamespace,
+		"draining":        resolveDraining,
+		"export":          resolveExport,
+		"login":           resolveLogin,
+		"resetPassword":   resolveResetPassword,
+		"restore":         resolveRestore,
+		"shutdown":        resolveShutdown,
+		"removeNode":      resolveRemoveNode,
+		"moveTablet":      resolveMoveTablet,
+		"assign":          resolveAssign,
+		"restoreTenant":   resolveTenantRestore,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).

@@ -459,17 +459,6 @@ const adminTypes = `
 		message: String
 		namespace: UInt64
 	}
-
-	input EnterpriseLicenseInput {
-		"""
-		The contents of license file as a String.
-		"""
-		license: String!
-	}
-
-	type EnterpriseLicensePayload {
-		response: Response
-	}
 	`
 
 const adminMutations = `
@@ -542,11 +531,6 @@ const adminMutations = `
 	any user in any namespace.
 	"""
 	resetPassword(input: ResetPasswordInput!): ResetPasswordPayload
-
-	"""
-	Apply enterprise license.
-	"""
-	enterpriseLicense(input: EnterpriseLicenseInput!): EnterpriseLicensePayload
 	`
 
 const adminQueries = `

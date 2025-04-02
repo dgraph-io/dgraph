@@ -52,11 +52,6 @@ func (s *Server) Login(ctx context.Context,
 		return nil, err
 	}
 
-	if !worker.EnterpriseEnabled() {
-		return nil, errors.New("Enterprise features are disabled. You can enable them by " +
-			"supplying the appropriate license file to Dgraph Zero using the HTTP endpoint.")
-	}
-
 	ctx, span := otrace.StartSpan(ctx, "server.Login")
 	defer span.End()
 
