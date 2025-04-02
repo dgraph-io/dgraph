@@ -124,14 +124,13 @@ type UriHandler interface {
 // Examples:
 //
 //	s3://dgraph.s3.amazonaws.com/dgraph/backups?secure=true
-//	minio://localhost:9000/dgraph?secure=true
 //	file:///tmp/dgraph/backups
 //	/tmp/dgraph/backups?compress=gzip
 func NewUriHandler(uri *url.URL, creds *x.MinioCredentials) (UriHandler, error) {
 	switch uri.Scheme {
 	case "file", "":
 		return NewFileHandler(uri), nil
-	case "minio", "s3":
+	case "s3":
 		return NewS3Handler(uri, creds)
 	}
 	return nil, errors.Errorf("Unable to handle url: %s", uri)
