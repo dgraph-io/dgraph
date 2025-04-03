@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/dql"
@@ -131,6 +132,50 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	}
 
 	return durationValue, nil
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	if commonHandler(w, r) {
+		return
+	}
+
+	// Pass in PoorMan's auth, IP information if present.
+	ctx := x.AttachRemoteIP(context.Background(), r)
+	ctx = x.AttachAuthToken(ctx, r)
+
+	body := readRequest(w, r)
+	loginReq := api.LoginRequest{}
+	if err := json.Unmarshal(body, &loginReq); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+
+	resp, err := (&edgraph.Server{}).Login(ctx, &loginReq)
+	if err != nil {
+		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+
+	jwt := &api.Jwt{}
+	if err := proto.Unmarshal(resp.Json, jwt); err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+	}
+
+	response := map[string]interface{}{}
+	mp := make(map[string]string)
+	mp["accessJWT"] = jwt.AccessJwt
+	mp["refreshJWT"] = jwt.RefreshJwt
+	response["data"] = mp
+
+	js, err := json.Marshal(response)
+	if err != nil {
+		x.SetStatusWithData(w, x.Error, err.Error())
+		return
+	}
+
+	if _, err := x.WriteResponse(w, r, js); err != nil {
+		glog.Errorf("Error while writing response: %v", err)
+	}
 }
 
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
