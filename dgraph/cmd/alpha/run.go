@@ -500,6 +500,7 @@ func setupServer(closer *z.Closer) {
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
+	http.HandleFunc("/login", loginHandler)
 	baseMux.HandleFunc("/query", queryHandler)
 	baseMux.HandleFunc("/query/", queryHandler)
 	baseMux.HandleFunc("/mutate", mutationHandler)

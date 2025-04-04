@@ -30,10 +30,6 @@ dgraph:
 dgraph-coverage:
 	$(MAKE) -w -C dgraph test-coverage-binary
 
-.PHONY: oss
-oss:
-	$(MAKE) BUILD_TAGS=oss
-
 .PHONY: version
 version:
 	@echo Dgraph: ${BUILD_VERSION}
@@ -47,10 +43,6 @@ version:
 install:
 	@echo "Installing Dgraph..."; \
 		$(MAKE) -C dgraph install; \
-
-.PHONY: install_oss oss_install
-install_oss oss_install:
-	$(MAKE) BUILD_TAGS=oss,jemalloc install
 
 .PHONY: uninstall
 uninstall:
@@ -105,7 +97,6 @@ help:
 	@echo
 	@echo Build commands:
 	@echo "  make [all]     - Build all targets [EE]"
-	@echo "  make oss       - Build all targets [OSS]"
 	@echo "  make dgraph    - Build dgraph binary"
 	@echo "  make install   - Install all targets"
 	@echo "  make uninstall - Uninstall known targets"
