@@ -25,7 +25,7 @@ func TestDropAllInNs(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
@@ -55,7 +55,7 @@ func TestDropAllInNs(t *testing.T) {
 	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
 
 	// namespace 2
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.SetSchema(ctx, "ns2", `name: string @index(exact) .`))
 	require.NoError(t, client.LoginIntoNamespace(context.Background(),
@@ -70,7 +70,7 @@ func TestDropAllInNs(t *testing.T) {
 	require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetJson()))
 
 	// Drop everything in namespace 1
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.Dgraph.DropAll(context.Background(), "ns1"))
 
@@ -95,13 +95,13 @@ func TestDropAll(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
 	// Create two namespaces
 	ctx := context.Background()
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.CreateNamespace(ctx, "ns1"))
 	require.NoError(t, client.CreateNamespace(ctx, "ns2"))
@@ -127,7 +127,7 @@ func TestDropAll(t *testing.T) {
 	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
 
 	// namespace 2
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.SetSchema(ctx, "ns2", `name: string @index(exact) .`))
 	require.NoError(t, client.LoginIntoNamespace(context.Background(),
@@ -142,7 +142,7 @@ func TestDropAll(t *testing.T) {
 	require.JSONEq(t, `{"q":[{"name":"Bob"}]}`, string(resp.GetJson()))
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
@@ -162,13 +162,13 @@ func TestDropData(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
 	// Create two namespaces
 	ctx := context.Background()
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.CreateNamespace(ctx, "ns1"))
 	require.NoError(t, client.CreateNamespace(ctx, "ns2"))
@@ -193,7 +193,7 @@ func TestDropData(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
 
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropData(context.Background(), "ns1"))
 
@@ -215,13 +215,13 @@ func TestDropPredicate(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
 	// Create two namespaces
 	ctx := context.Background()
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.CreateNamespace(ctx, "ns1"))
 	require.NoError(t, client.CreateNamespace(ctx, "ns2"))
@@ -246,7 +246,7 @@ func TestDropPredicate(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"q":[{"name":"Alice"}]}`, string(resp.GetJson()))
 
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.Dgraph.DropPredicate(context.Background(), "ns1", "name"))
 
@@ -268,13 +268,13 @@ func TestDropType(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAllNamespaces(context.Background()))
 
 	// Create two namespaces
 	ctx := context.Background()
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.CreateNamespace(ctx, "ns1"))
 	require.NoError(t, client.CreateNamespace(ctx, "ns2"))
@@ -303,7 +303,7 @@ func TestDropType(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(resp.GetJson()), `"name":"name"`)
 
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropType(context.Background(), "ns1", "Person"))
 	resp, err = client.Query(`schema{}`)

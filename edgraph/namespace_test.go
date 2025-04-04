@@ -26,7 +26,7 @@ func TestNamespaces(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
@@ -91,7 +91,7 @@ func TestNamespacesPreV25(t *testing.T) {
 		dgraphapi.DefaultPassword, x.GalaxyNamespace))
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
@@ -158,7 +158,7 @@ func TestCreateNamespaceErr(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
@@ -200,7 +200,7 @@ func TestDropNamespaceErr(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
@@ -250,7 +250,7 @@ func TestRenameNamespaceErr(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
@@ -294,7 +294,7 @@ func TestListNamespacesErr(t *testing.T) {
 	defer cleanup()
 
 	// Drop all data
-	require.NoError(t, client.SignInUser(context.Background(),
+	require.NoError(t, client.Login(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
