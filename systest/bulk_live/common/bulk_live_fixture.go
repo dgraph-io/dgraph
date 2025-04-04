@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/minio/minio-go/v6"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -34,7 +33,6 @@ type suiteOpts struct {
 	rdfs      string
 	bulkSuite bool
 	bulkOpts  bulkOpts
-	remote    bool
 }
 
 type bulkOpts struct {
@@ -59,33 +57,8 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *bsuite {
 	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
 	require.NoError(s.t, os.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
 
-	var schemaPath, dataPath, gqlSchemaPath string = "schema.txt", "rdfs.rdf", "gql_schema.txt"
-
-	if opts.remote {
-		schemaPath = minioPath(schemaPath)
-		dataPath = minioPath(dataPath)
-		gqlSchemaPath = minioPath(gqlSchemaPath)
-
-		mc, err := testutil.NewMinioClient()
-		require.NoError(t, err)
-		if ok, err := mc.BucketExists(rootBucket); !ok {
-			require.NoError(t, err)
-			require.NoError(t, mc.MakeBucket(rootBucket, ""))
-		}
-		_, err = mc.FPutObject(rootBucket, "rdfs.rdf", rdfFile, minio.PutObjectOptions{})
-		require.NoError(t, err)
-		_, err = mc.FPutObject(rootBucket, "schema.txt", schemaFile, minio.PutObjectOptions{})
-		require.NoError(t, err)
-		_, err = mc.FPutObject(rootBucket, "gql_schema.txt", gqlSchemaFile, minio.PutObjectOptions{})
-		require.NoError(t, err)
-	}
-
-	s.setup(t, schemaPath, dataPath, gqlSchemaPath)
+	s.setup(t, schemaFile, rdfFile, gqlSchemaFile)
 	return s
-}
-
-func minioPath(path string) string {
-	return "minio://" + testutil.ContainerAddr("minio", 9001) + "/data/" + path + "?secure=false"
 }
 
 func newLiveOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *bsuite {
@@ -121,10 +94,6 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 
 func (s *bsuite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	var env []string
-	if s.opts.remote {
-		env = append(env, "MINIO_ACCESS_KEY=accesskey", "MINIO_SECRET_KEY=secretkey")
-	}
-
 	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))
 	if s.opts.bulkSuite {
 		err := testutil.BulkLoad(testutil.BulkOpts{

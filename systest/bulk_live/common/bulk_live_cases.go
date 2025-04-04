@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -34,11 +33,6 @@ import (
 // run this in sequential order. cleanup is necessary for bulk loader to work
 func RunBulkCases(t *testing.T) {
 	hsuite := helloWorldSetup(t, true)
-	testHelloWorld(t)
-	hsuite.cleanup(t)
-
-	// remote hello world only differs from hello world in setup
-	hsuite = remoteHelloWorldSetup(t, true)
 	testHelloWorld(t)
 	hsuite.cleanup(t)
 
@@ -96,11 +90,6 @@ func RunLiveCases(t *testing.T) {
 	testHelloWorld(t)
 	hsuite.cleanup(t)
 
-	// remote hello world only differs from hello world in setup
-	hsuite = remoteHelloWorldSetup(t, false)
-	testHelloWorld(t)
-	hsuite.cleanup(t)
-
 	hsuite = facetsSetup(t, false)
 	testFacets(t)
 	hsuite.cleanup(t)
@@ -134,17 +123,6 @@ func helloWorldSetup(t *testing.T, isBulkLoader bool) *bsuite {
 
 	s := newLiveOnlySuite(t, helloWorldSchema, helloWorldData, "")
 	return s
-}
-
-func remoteHelloWorldSetup(t *testing.T, isBulkLoader bool) *bsuite {
-	return newSuiteInternal(t, suiteOpts{
-		schema:    helloWorldSchema,
-		gqlSchema: "",
-		rdfs:      helloWorldData,
-		bulkSuite: isBulkLoader,
-		remote:    true,
-		bulkOpts:  bulkOpts{alpha: "../bulk/alpha.yml", forceNs: math.MaxUint64},
-	})
 }
 
 func testHelloWorld(t *testing.T) {
