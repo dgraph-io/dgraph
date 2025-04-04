@@ -157,9 +157,7 @@ func ShouldCrash(err error) bool {
 	errStr := status.Convert(err).Message()
 	return strings.Contains(errStr, "REUSE_RAFTID") ||
 		strings.Contains(errStr, "REUSE_ADDR") ||
-		strings.Contains(errStr, "NO_ADDR") ||
-		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED") ||
-		strings.Contains(errStr, "ENTERPRISE_ONLY_LEARNER")
+		strings.Contains(errStr, "NO_ADDR")
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.

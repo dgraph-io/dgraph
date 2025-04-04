@@ -25,11 +25,6 @@ type backupInput struct {
 
 func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got backup request")
-	if !worker.EnterpriseEnabled() {
-		err := fmt.Errorf("you must enable enterprise features first. " +
-			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint")
-		return resolve.EmptyResult(m, err), false
-	}
 
 	input, err := getBackupInput(m)
 	if err != nil {

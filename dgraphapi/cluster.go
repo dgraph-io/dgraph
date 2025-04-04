@@ -59,7 +59,6 @@ type HTTPClient struct {
 	*HttpToken
 	adminURL     string
 	graphqlURL   string
-	licenseURL   string
 	stateURL     string
 	dqlURL       string
 	dqlMutateUrl string
@@ -625,37 +624,6 @@ func (hc *HTTPClient) PostPersistentQuery(query, sha string) ([]byte, error) {
 	return hc.RunGraphqlQuery(params, false)
 }
 
-// Apply license using http endpoint
-func (hc *HTTPClient) ApplyLicenseHTTP(licenseKey []byte) (*LicenseResponse, error) {
-	respBody, err := hc.doPost(licenseKey, hc.licenseURL, "application/text")
-	if err != nil {
-		return nil, errors.Wrap(err, "error applying license")
-	}
-	var enterpriseResponse LicenseResponse
-	if err = json.Unmarshal(respBody, &enterpriseResponse); err != nil {
-		return nil, errors.Wrap(err, "error unmarshaling the license response")
-	}
-
-	return &enterpriseResponse, nil
-}
-
-// Apply license using graphql endpoint
-func (hc *HTTPClient) ApplyLicenseGraphQL(license []byte) ([]byte, error) {
-	params := GraphQLParams{
-		Query: `mutation ($license: String!) {
-			enterpriseLicense(input: {license: $license}) {
-				response {
-					code
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{
-			"license": string(license),
-		},
-	}
-	return hc.RunGraphqlQuery(params, true)
-}
-
 func (hc *HTTPClient) GetZeroState() (*LicenseResponse, error) {
 	response, err := http.Get(hc.stateURL)
 	if err != nil {
@@ -791,14 +759,12 @@ func IsHigherVersion(higher, lower, repoDir string) (bool, error) {
 func GetHttpClient(alphaUrl, zeroUrl string) (*HTTPClient, error) {
 	adminUrl := "http://" + alphaUrl + "/admin"
 	graphQLUrl := "http://" + alphaUrl + "/graphql"
-	licenseUrl := "http://" + zeroUrl + "/enterpriseLicense"
 	stateUrl := "http://" + zeroUrl + "/state"
 	dqlUrl := "http://" + alphaUrl + "/query"
 	dqlMutateUrl := "http://" + alphaUrl + "/mutate"
 	return &HTTPClient{
 		adminURL:     adminUrl,
 		graphqlURL:   graphQLUrl,
-		licenseURL:   licenseUrl,
 		stateURL:     stateUrl,
 		dqlURL:       dqlUrl,
 		dqlMutateUrl: dqlMutateUrl,

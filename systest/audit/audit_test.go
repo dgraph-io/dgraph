@@ -46,6 +46,7 @@ func TestZeroAudit(t *testing.T) {
 
 	testaudit.VerifyLogs(t, fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId), msgs)
 }
+
 func TestAlphaAudit(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)

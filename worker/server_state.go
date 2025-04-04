@@ -96,14 +96,7 @@ func (s *ServerState) InitStorage() {
 	var err error
 
 	if x.WorkerConfig.EncryptionKey != nil {
-		// non-nil key file
-		if !EnterpriseEnabled() {
-			// not licensed --> crash.
-			glog.Fatal("Valid Enterprise License needed for the Encryption feature.")
-		} else {
-			// licensed --> OK.
-			glog.Infof("Encryption feature enabled.")
-		}
+		glog.Infof("Encryption feature enabled.")
 	}
 
 	{

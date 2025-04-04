@@ -17,7 +17,7 @@ func GetAuditConf(conf string) *x.LoggerConf {
 	return nil
 }
 
-func InitAuditorIfNecessary(conf *x.LoggerConf, eeEnabled func() bool) error {
+func InitAuditorIfNecessary(conf *x.LoggerConf) error {
 	return nil
 }
 

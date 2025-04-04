@@ -13,16 +13,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hypermodeinc/dgraph/v24/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func VerifyLogs(t *testing.T, path string, cmds []string) {
+	// to make sure that the audit log is flushed
+	time.Sleep(time.Second * 5)
+
 	abs, err := filepath.Abs(path)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	f, err := os.Open(abs)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	type log struct {
 		Msg string `json:"endpoint"`
@@ -33,7 +37,7 @@ func VerifyLogs(t *testing.T, path string, cmds []string) {
 	for fileScanner.Scan() {
 		bytes := fileScanner.Bytes()
 		l := new(log)
-		_ = json.Unmarshal(bytes, l)
+		require.NoError(t, json.Unmarshal(bytes, l))
 		logMap[l.Msg] = true
 	}
 	for _, m := range cmds {

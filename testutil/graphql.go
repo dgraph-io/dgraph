@@ -170,22 +170,6 @@ func AssertMoveTablet(t *testing.T, tablet string, groupId uint32) {
 	CompareJSON(t, `{"moveTablet":{"response":{"code":"Success"}}}`, string(resp.Data))
 }
 
-func EnterpriseLicense(t *testing.T, license string) *GraphQLResponse {
-	params := &GraphQLParams{
-		Query: `mutation ($license: String!) {
-		  enterpriseLicense(input: {license: $license}) {
-			response {
-				code
-			}
-		  }
-		}`,
-		Variables: map[string]interface{}{
-			"license": license,
-		},
-	}
-	return MakeGQLRequest(t, params)
-}
-
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}

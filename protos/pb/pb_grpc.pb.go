@@ -306,7 +306,6 @@ const (
 	Zero_DeleteNamespace_FullMethodName  = "/pb.Zero/DeleteNamespace"
 	Zero_RemoveNode_FullMethodName       = "/pb.Zero/RemoveNode"
 	Zero_MoveTablet_FullMethodName       = "/pb.Zero/MoveTablet"
-	Zero_ApplyLicense_FullMethodName     = "/pb.Zero/ApplyLicense"
 )
 
 // ZeroClient is the client API for Zero service.
@@ -327,7 +326,6 @@ type ZeroClient interface {
 	DeleteNamespace(ctx context.Context, in *DeleteNsRequest, opts ...grpc.CallOption) (*Status, error)
 	RemoveNode(ctx context.Context, in *RemoveNodeRequest, opts ...grpc.CallOption) (*Status, error)
 	MoveTablet(ctx context.Context, in *MoveTabletRequest, opts ...grpc.CallOption) (*Status, error)
-	ApplyLicense(ctx context.Context, in *ApplyLicenseRequest, opts ...grpc.CallOption) (*Status, error)
 }
 
 type zeroClient struct {
@@ -501,15 +499,6 @@ func (c *zeroClient) MoveTablet(ctx context.Context, in *MoveTabletRequest, opts
 	return out, nil
 }
 
-func (c *zeroClient) ApplyLicense(ctx context.Context, in *ApplyLicenseRequest, opts ...grpc.CallOption) (*Status, error) {
-	out := new(Status)
-	err := c.cc.Invoke(ctx, Zero_ApplyLicense_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // ZeroServer is the server API for Zero service.
 // All implementations must embed UnimplementedZeroServer
 // for forward compatibility
@@ -528,7 +517,6 @@ type ZeroServer interface {
 	DeleteNamespace(context.Context, *DeleteNsRequest) (*Status, error)
 	RemoveNode(context.Context, *RemoveNodeRequest) (*Status, error)
 	MoveTablet(context.Context, *MoveTabletRequest) (*Status, error)
-	ApplyLicense(context.Context, *ApplyLicenseRequest) (*Status, error)
 	mustEmbedUnimplementedZeroServer()
 }
 
@@ -574,9 +562,6 @@ func (UnimplementedZeroServer) RemoveNode(context.Context, *RemoveNodeRequest) (
 }
 func (UnimplementedZeroServer) MoveTablet(context.Context, *MoveTabletRequest) (*Status, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MoveTablet not implemented")
-}
-func (UnimplementedZeroServer) ApplyLicense(context.Context, *ApplyLicenseRequest) (*Status, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ApplyLicense not implemented")
 }
 func (UnimplementedZeroServer) mustEmbedUnimplementedZeroServer() {}
 
@@ -831,24 +816,6 @@ func _Zero_MoveTablet_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Zero_ApplyLicense_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApplyLicenseRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZeroServer).ApplyLicense(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Zero_ApplyLicense_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZeroServer).ApplyLicense(ctx, req.(*ApplyLicenseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Zero_ServiceDesc is the grpc.ServiceDesc for Zero service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -899,10 +866,6 @@ var Zero_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveTablet",
 			Handler:    _Zero_MoveTablet_Handler,
-		},
-		{
-			MethodName: "ApplyLicense",
-			Handler:    _Zero_ApplyLicense_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

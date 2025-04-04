@@ -261,22 +261,6 @@ func (asuite *AclTestSuite) TestGuardianOnlyAccessForAdminEndpoints() {
 			guardianData:       `{"assign": null}`,
 		},
 		{
-			name: "enterpriseLicense has guardian auth",
-			query: `
-					mutation {
-					  enterpriseLicense(input: {license: ""}) {
-						response {
-							code
-						}
-					  }
-					}`,
-			queryName:          "enterpriseLicense",
-			testGuardianAccess: true,
-			guardianErr: "while extracting enterprise details from the license: while decoding" +
-				" license file: EOF",
-			guardianData: `{"enterpriseLicense": null}`,
-		},
-		{
 			name: "getGQLSchema has guardian auth",
 			query: `
 					query {

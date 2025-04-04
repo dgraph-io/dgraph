@@ -605,7 +605,7 @@ func setupServer(closer *z.Closer) {
 	for {
 		if x.HealthCheck() == nil {
 			// Audit is enterprise feature.
-			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit, worker.EnterpriseEnabled))
+			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit))
 			break
 		}
 		time.Sleep(500 * time.Millisecond)

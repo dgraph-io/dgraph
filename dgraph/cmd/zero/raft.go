@@ -30,7 +30,6 @@ import (
 
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/ee/audit"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
@@ -450,26 +449,6 @@ func (n *node) applyProposal(e raftpb.Entry) (uint64, error) {
 		}
 	}
 
-	if p.License != nil {
-		// Check that the number of nodes in the cluster should be less than MaxNodes, otherwise
-		// reject the proposal.
-		numNodes := len(state.GetZeros())
-		for _, group := range state.GetGroups() {
-			numNodes += len(group.GetMembers())
-		}
-		if uint64(numNodes) > p.GetLicense().GetMaxNodes() {
-			return key, errInvalidProposal
-		}
-		state.License = p.License
-		// Check expiry and set enabled accordingly.
-		expiry := time.Unix(state.License.ExpiryTs, 0).UTC()
-		state.License.Enabled = time.Now().UTC().Before(expiry)
-		if state.License.Enabled && opts.audit != nil {
-			if err := audit.InitAuditor(opts.audit, 0, n.Id); err != nil {
-				glog.Errorf("error while initializing audit logs %+v", err)
-			}
-		}
-	}
 	if p.Snapshot != nil {
 		if err := n.applySnapshot(p.Snapshot); err != nil {
 			glog.Errorf("While applying snapshot: %v\n", err)
@@ -580,13 +559,6 @@ func (n *node) proposeNewCID() {
 		}
 		glog.Errorf("While proposing CID: %v. Retrying...", err)
 		time.Sleep(3 * time.Second)
-	}
-
-	// Apply trial license only if not already licensed and no enterprise license provided.
-	if n.server.license() == nil && Zero.Conf.GetString("enterprise_license") == "" {
-		if err := n.proposeTrialLicense(); err != nil {
-			glog.Errorf("while proposing trial license to cluster: %v", err)
-		}
 	}
 }
 
@@ -899,7 +871,6 @@ func (n *node) Run() {
 	lastLead := uint64(math.MaxUint64)
 
 	var leader bool
-	licenseApplied := false
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
@@ -914,7 +885,6 @@ func (n *node) Run() {
 	}()
 
 	go n.snapshotPeriodically(closer)
-	go n.updateEnterpriseState(closer)
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
@@ -1048,17 +1018,6 @@ func (n *node) Run() {
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. Num committed entries: %d. MustSync: %v",
 					timer.String(), len(rd.Entries), len(rd.CommittedEntries), rd.MustSync)
-			}
-
-			// Apply license when I am the leader.
-			if !licenseApplied && n.AmLeader() {
-				licenseApplied = true
-				// Apply the EE License given on CLI which may over-ride previous
-				// license, if present. That is an intended behavior to allow customers
-				// to apply new/renewed licenses.
-				if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
-					go n.server.applyLicenseFile(license)
-				}
 			}
 		}
 	}

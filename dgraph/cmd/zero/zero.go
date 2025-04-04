@@ -6,11 +6,9 @@
 package zero
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"math"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,12 +29,6 @@ var (
 	emptyConnectionState pb.ConnectionState
 	errServerShutDown    = errors.New("Server is being shut down")
 )
-
-type license struct {
-	User     string    `json:"user"`
-	MaxNodes uint64    `json:"max_nodes"`
-	Expiry   time.Time `json:"expiry"`
-}
 
 // Server implements the zero server.
 type Server struct {
@@ -511,12 +503,6 @@ func (s *Server) Connect(ctx context.Context,
 		return nil, err
 	}
 
-	if m.Learner && !ms.License.GetEnabled() {
-		// Update the "ShouldCrash" function in x/x.go if you change the error message here.
-		return nil, errors.New("ENTERPRISE_ONLY_LEARNER - Missing or expired Enterpise License. " +
-			"Cannot add Learner Node.")
-	}
-
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
@@ -649,12 +635,6 @@ func (s *Server) Connect(ctx context.Context,
 		return &pb.ConnectionState{
 			State: ms, Member: m,
 		}, nil
-	}
-
-	maxNodes := s.state.GetLicense().GetMaxNodes()
-	if s.state.GetLicense().GetEnabled() && uint64(numberOfNodes) >= maxNodes {
-		return nil, errors.Errorf("ENTERPRISE_LIMIT_REACHED: You are already using the maximum "+
-			"number of nodes: [%v] permitted for your enterprise license.", maxNodes)
 	}
 
 	if err := s.Node.proposeAndWait(ctx, proposal); err != nil {
@@ -869,37 +849,4 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 		return &pb.MembershipState{}, nil
 	}
 	return ms, nil
-}
-
-func (s *Server) ApplyLicense(ctx context.Context, req *pb.ApplyLicenseRequest) (*pb.Status,
-	error) {
-	var l license
-	signedData := bytes.NewReader(req.License)
-	if err := verifySignature(signedData, strings.NewReader(publicKey), &l); err != nil {
-		return nil, errors.Wrapf(err, "while extracting enterprise details from the license")
-	}
-
-	numNodes := len(s.state.GetZeros())
-	for _, group := range s.state.GetGroups() {
-		numNodes += len(group.GetMembers())
-	}
-	if uint64(numNodes) > l.MaxNodes {
-		return nil, errors.Errorf("Your license only allows [%v] (Alpha + Zero) nodes. "+
-			"You have: [%v].", l.MaxNodes, numNodes)
-	}
-
-	proposal := &pb.ZeroProposal{
-		License: &pb.License{
-			User:     l.User,
-			MaxNodes: l.MaxNodes,
-			ExpiryTs: l.Expiry.Unix(),
-		},
-	}
-
-	err := s.Node.proposeAndWait(ctx, proposal)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while proposing enterprise license state to cluster")
-	}
-	glog.Infof("Enterprise license proposed to the cluster %+v", proposal)
-	return &pb.Status{}, nil
 }
