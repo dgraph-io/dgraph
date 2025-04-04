@@ -21,7 +21,6 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/types"
@@ -35,12 +34,12 @@ func openDgraph(pdir string) (*badger.DB, error) {
 	// Get key.
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	ee.RegisterEncFlag(flags)
+	x.RegisterEncFlag(flags)
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, err
 	}
-	config.Set("encryption", ee.BuildEncFlag(KeyFile))
-	keys, err := ee.GetKeys(config)
+	config.Set("encryption", x.BuildEncFlag(KeyFile))
+	keys, err := x.GetEncAclKeys(config)
 	if err != nil {
 		return nil, err
 	}

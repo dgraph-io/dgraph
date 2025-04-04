@@ -101,7 +101,7 @@ type WorkerOptions struct {
 	WhiteListedIPRanges []IPRange
 	// StrictMutations will cause mutations to unknown predicates to fail if set to true.
 	StrictMutations bool
-	// AclEnabled indicates whether the enterprise ACL feature is turned on.
+	// AclEnabled indicates whether the ACL feature is turned on.
 	AclEnabled bool
 	// AclJwtAlg stores the JWT signing algorithm.
 	AclJwtAlg jwt.SigningMethod
@@ -122,7 +122,7 @@ type WorkerOptions struct {
 	// whitelist string - comma separated IP addresses
 	// token string - if set, all Admin requests to Dgraph will have this token.
 	Security *z.SuperFlag
-	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
+	// EncryptionKey is the key used for encryption at rest, backups, exports.
 	EncryptionKey Sensitive
 	// LogDQLRequest indicates whether alpha should log all query/mutation requests coming to it.
 	// Ideally LogDQLRequest should be a bool value. But we are reading it using atomics across

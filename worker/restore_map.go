@@ -35,8 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/codec"
-	"github.com/hypermodeinc/dgraph/v24/ee"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/enc"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/schema"
@@ -762,7 +761,7 @@ func RunMapper(req *pb.RestoreRequest, mapDir string) (*mapResult, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to get encryption config")
 	}
-	keys, err := ee.GetKeys(cfg)
+	keys, err := x.GetEncAclKeys(cfg)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to get encryption keys")
 	}

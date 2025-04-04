@@ -26,7 +26,7 @@ const defaultGroupList = "dgraph-unused-group"
 func init() {
 	CmdAcl.Cmd = &cobra.Command{
 		Use:         "acl",
-		Short:       "Run the Dgraph Enterprise Edition ACL tool",
+		Short:       "Run the Dgraph ACL tool",
 		Annotations: map[string]string{"group": "security"},
 	}
 	CmdAcl.Cmd.SetHelpTemplate(x.NonRootTemplate)

@@ -662,7 +662,7 @@ func getPackages() []task {
 		return false
 	}
 
-	slowPkgs := []string{"systest", "ee/acl", "cmd/alpha", "worker", "e2e"}
+	slowPkgs := []string{"systest", "acl", "cmd/alpha", "worker", "e2e"}
 	skipPkgs := strings.Split(*skip, ",")
 	runPkgs := strings.Split(*runPkg, ",")
 

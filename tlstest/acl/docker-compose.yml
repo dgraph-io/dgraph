@@ -14,7 +14,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../../ee/acl/hmac-secret
+        source: ../../acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
       - type: bind

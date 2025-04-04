@@ -27,11 +27,11 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../../ee/acl/hmac-secret
+        source: ../../acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
       - type: bind
-        source: ../../ee/enc/test-fixtures/enc-key
+        source: ../../enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     ports:

@@ -1,5 +1,5 @@
-//go:build (!oss && integration) || upgrade
-// +build !oss,integration upgrade
+//go:build integration || upgrade
+// +build integration upgrade
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
@@ -462,34 +462,6 @@ const (
   }`
 )
 
-func checkUserCount(t *testing.T, resp []byte, expected int) {
-	type Response struct {
-		AddUser struct {
-			User []struct {
-				Name string
-			}
-		}
-	}
-
-	var r Response
-	require.NoError(t, json.Unmarshal(resp, &r))
-	require.Equal(t, expected, len(r.AddUser.User))
-}
-
-func checkGroupCount(t *testing.T, resp []byte, expected int) {
-	type Response struct {
-		AddGroup struct {
-			Group []struct {
-				Name string
-			}
-		}
-	}
-
-	var r Response
-	require.NoError(t, json.Unmarshal(resp, &r))
-	require.Equal(t, expected, len(r.AddGroup.Group))
-}
-
 func (asuite *AclTestSuite) TestGetCurrentUser() {
 	t := asuite.T()
 
@@ -835,16 +807,6 @@ func createAccountAndData(t *testing.T, gc *dgraphapi.GrpcClient, hc *dgraphapi.
 	mu := &api.Mutation{SetNquads: []byte(fmt.Sprintf("_:a <%s> \"SF\" .", predicateToRead)), CommitNow: true}
 	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
-}
-
-type rule struct {
-	Predicate  string `json:"predicate"`
-	Permission int32  `json:"permission"`
-}
-
-type group struct {
-	Name  string `json:"name"`
-	Rules []rule `json:"rules"`
 }
 
 func createGroupAndAcls(t *testing.T, group string, addUserToGroup bool, hc *dgraphapi.HTTPClient) {

@@ -24,7 +24,6 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/worker"
@@ -62,9 +61,9 @@ func init() {
 func initRestore() {
 	Restore.Cmd = &cobra.Command{
 		Use:   "restore",
-		Short: "Restore backup from Dgraph Enterprise Edition",
+		Short: "Restore backup from Dgraph",
 		Long: `
-Restore loads objects created with the backup feature in Dgraph Enterprise Edition (EE).
+Restore loads objects created with the backup.
 Backups are originated from HTTP at /admin/backup, then can be restored using CLI restore
 command. Restore is intended to be used with new Dgraph clusters in offline state.
 The --location flag indicates a source URI with Dgraph backup objects. This URI supports all
@@ -135,7 +134,7 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
 	x.RegisterClientTLSFlags(flag)
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -164,7 +163,7 @@ func initBackupLs() {
 }
 
 func runRestoreCmd() error {
-	keys, err := ee.GetKeys(Restore.Conf)
+	keys, err := x.GetEncAclKeys(Restore.Conf)
 	if err != nil {
 		return err
 	}
@@ -324,7 +323,7 @@ func initExportBackup() {
 		`If true, retrieve the CORS from DB and append at the end of GraphQL schema.
 		It also deletes the deprecated types and predicates.
 		Use this option when exporting a backup of 20.11 for loading onto 21.03.`)
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 }
 
 type bufWriter struct {
@@ -388,7 +387,7 @@ func (bw *bufWriter) Write(buf *z.Buffer) error {
 }
 
 func runExportBackup() error {
-	keys, err := ee.GetKeys(ExportBackup.Conf)
+	keys, err := x.GetEncAclKeys(ExportBackup.Conf)
 	if err != nil {
 		return err
 	}

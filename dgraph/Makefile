@@ -37,9 +37,6 @@ BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
 	BUILD_FLAGS += -tags '$(BUILD_TAGS)'
-	ifneq (,$(findstring oss,$(BUILD_TAGS)))
-		BUILD_VERSION := $(BUILD_VERSION)-oss
-	endif
 endif
 
 # Build with compiler optimizations disabled, which will help debugging with dlv.

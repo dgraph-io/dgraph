@@ -504,7 +504,7 @@ func chMod(conf *viper.Viper) error {
 	if !ok {
 		return errors.New("Malformed output of groupUIDCount")
 	} else if uidCount == 0 {
-		// We already have a check for multiple groups with same name at dgraph/ee/acl/utils.go:142
+		// We already have a check for multiple groups with same name at dgraph/acl/utils.go:142
 		return errors.Errorf("Group <%s> doesn't exist", groupName)
 	}
 	return nil

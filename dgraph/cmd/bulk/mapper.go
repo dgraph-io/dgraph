@@ -25,9 +25,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/acl"
 	"github.com/hypermodeinc/dgraph/v24/chunker"
 	"github.com/hypermodeinc/dgraph/v24/dql"
-	"github.com/hypermodeinc/dgraph/v24/ee/acl"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok"

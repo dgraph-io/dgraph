@@ -32,17 +32,13 @@ area/testing/jepsen:
   - changed-files:
       - any-glob-to-any-file: contrib/jepsen/**
 
-area/enterprise:
+area/backup:
   - changed-files:
-      - any-glob-to-any-file: ee/**
+      - any-glob-to-any-file: backup/**
 
-area/enterprise/backup:
+area/acl:
   - changed-files:
-      - any-glob-to-any-file: ee/backup/**
-
-area/enterprise/acl:
-  - changed-files:
-      - any-glob-to-any-file: ee/acl/**
+      - any-glob-to-any-file: acl/**
 
 area/schema:
   - changed-files:

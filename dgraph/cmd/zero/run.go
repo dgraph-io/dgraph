@@ -28,9 +28,8 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/audit"
 	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/ee/audit"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/raftwal"
 	"github.com/hypermodeinc/dgraph/v24/worker"
@@ -87,7 +86,7 @@ instances to achieve high-availability.
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
-	flag.String("enterprise_license", "", "Path to the enterprise license file.")
+	flag.String("enterprise_license", "", "(deprecated) Path to the enterprise license file.")
 	flag.String("cid", "", "Cluster ID")
 
 	flag.String("limit", worker.ZeroLimitsDefaults, z.NewSuperFlagHelp(worker.ZeroLimitsDefaults).
@@ -235,10 +234,6 @@ func run() {
 	}
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
-
-	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
-		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
-	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",

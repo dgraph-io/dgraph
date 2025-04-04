@@ -56,8 +56,6 @@ import (
 
 // Error constants representing different types of errors.
 var (
-	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
-	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	// ErrNoJwt is returned when JWT is not present in the context.
 	ErrNoJwt = errors.New("no accessJwt available")
 	// ErrorInvalidLogin is returned when username or password is incorrect in login

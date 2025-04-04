@@ -1112,7 +1112,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		LastEcho:    time.Now().Unix(),
 		Ongoing:     worker.GetOngoingTasks(),
 		Indexing:    schema.GetIndexingPredicates(),
-		EeFeatures:  worker.GetEEFeaturesList(),
+		EeFeatures:  worker.GetFeaturesList(),
 		MaxAssigned: posting.Oracle().MaxAssigned(),
 	})
 

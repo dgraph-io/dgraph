@@ -39,7 +39,7 @@ func getHttpToken(t *testing.T, user, password string, ns uint64) *testutil.Http
 		Groups: []string{"guardians"},
 		Ns:     ns,
 		Exp:    time.Hour,
-		Secret: readFile(t, "../../ee/acl/hmac-secret"),
+		Secret: readFile(t, "../../acl/hmac-secret"),
 	})
 
 	return &testutil.HttpToken{

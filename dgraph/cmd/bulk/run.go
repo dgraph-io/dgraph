@@ -23,7 +23,6 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/filestore"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/tok"
@@ -121,7 +120,7 @@ func init() {
 
 	x.RegisterClientTLSFlags(flag)
 	// Encryption and Vault options
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 }
 
 func run() {
@@ -131,7 +130,7 @@ func run() {
 
 	bopts := badger.DefaultOptions("").FromSuperFlag(BulkBadgerDefaults + cacheDefaults).
 		FromSuperFlag(Bulk.Conf.GetString("badger"))
-	keys, err := ee.GetKeys(Bulk.Conf)
+	keys, err := x.GetEncAclKeys(Bulk.Conf)
 	x.Check(err)
 
 	opt := options{

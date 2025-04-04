@@ -88,9 +88,7 @@ func readAuditEncKey(conf *z.SuperFlag) ([]byte, error) {
 	return encKey, nil
 }
 
-// InitAuditorIfNecessary accepts conf and enterprise edition check function.
-// This method keep tracks whether cluster is part of enterprise edition or not.
-// It pools eeEnabled function every five minutes to check if the license is still valid or not.
+// InitAuditorIfNecessary accepts conf and initialized auditor.
 func InitAuditorIfNecessary(conf *x.LoggerConf) error {
 	if conf == nil {
 		return nil
@@ -99,8 +97,6 @@ func InitAuditorIfNecessary(conf *x.LoggerConf) error {
 }
 
 // InitAuditor initializes the auditor.
-// This method doesnt keep track of whether cluster is part of enterprise edition or not.
-// Client has to keep track of that.
 func InitAuditor(conf *x.LoggerConf, gId, nId uint64) error {
 	ntype := NodeTypeAlpha
 	if gId == 0 {

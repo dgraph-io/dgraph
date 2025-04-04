@@ -14,8 +14,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 
-	"github.com/hypermodeinc/dgraph/v24/ee"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/enc"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
@@ -43,10 +42,10 @@ func init() {
 	flag := Decrypt.Cmd.Flags()
 	flag.StringP("file", "f", "", "Path to file to decrypt.")
 	flag.StringP("out", "o", "", "Path to the decrypted file.")
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 }
 func run() {
-	keys, err := ee.GetKeys(Decrypt.Conf)
+	keys, err := x.GetEncAclKeys(Decrypt.Conf)
 	x.Check(err)
 	if len(keys.EncKey) == 0 {
 		glog.Fatal("Error while reading encryption key: Key is empty")

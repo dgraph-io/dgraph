@@ -1,5 +1,5 @@
-//go:build !oss && integration
-// +build !oss,integration
+//go:build integration
+// +build integration
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>

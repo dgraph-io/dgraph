@@ -3,23 +3,54 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package ee
+package x
 
 import (
 	"encoding/base64"
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
-func vaultGetKeys(config *viper.Viper) (aclKey, encKey x.Sensitive) {
+const (
+	flagAcl           = "acl"
+	flagAclAccessTtl  = "access-ttl"
+	flagAclRefreshTtl = "refresh-ttl"
+	flagAclJwtAlg     = "jwt-alg"
+	flagAclKeyFile    = "secret-file"
+
+	flagEnc        = "encryption"
+	flagEncKeyFile = "key-file"
+
+	flagVault             = "vault"
+	flagVaultAddr         = "addr"
+	flagVaultRoleIdFile   = "role-id-file"
+	flagVaultSecretIdFile = "secret-id-file"
+	flagVaultPath         = "path"
+	flagVaultAclField     = "acl-field"
+	flagVaultAclFormat    = "acl-format"
+	flagVaultEncField     = "enc-field"
+	flagVaultEncFormat    = "enc-format"
+)
+
+var (
+	AclDefaults = fmt.Sprintf("%s=%s; %s=%s; %s=%s; %s=%s",
+		flagAclAccessTtl, "6h",
+		flagAclRefreshTtl, "30d",
+		flagAclJwtAlg, "HS256",
+		flagAclKeyFile, "")
+	EncDefaults = fmt.Sprintf("%s=%s", flagEncKeyFile, "")
+)
+
+func vaultGetKeys(config *viper.Viper) (aclKey, encKey Sensitive) {
 	// Avoid querying Vault unless the flag has been explicitly set.
 	if !config.IsSet(flagVault) {
 		return
@@ -86,7 +117,7 @@ func vaultGetKvStore(client *api.Client, path string) (vaultKvStore, error) {
 }
 
 // getSensitiveBytes retrieves a value from a kvStore, decoding it if necessary.
-func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, error) {
+func (kv vaultKvStore) getSensitiveBytes(field, format string) (Sensitive, error) {
 	value, ok := kv[field]
 	if !ok {
 		return nil, fmt.Errorf("vault: key '%s' not found", field)
@@ -98,7 +129,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, err
 	}
 
 	// Decode value if necessary.
-	var valueBytes x.Sensitive
+	var valueBytes Sensitive
 	var err error
 	if format == "base64" {
 		valueBytes, err = base64.StdEncoding.DecodeString(valueString)
@@ -107,7 +138,7 @@ func (kv vaultKvStore) getSensitiveBytes(field, format string) (x.Sensitive, err
 				"vault: key '%s' could not be decoded as a base64 string: %s", field, err)
 		}
 	} else {
-		valueBytes = x.Sensitive(valueString)
+		valueBytes = Sensitive(valueString)
 	}
 
 	return valueBytes, nil
@@ -218,4 +249,52 @@ func vaultParseFlag(flag *z.SuperFlag) (*vaultConfig, error) {
 		encFormat:    encFormat,
 	}
 	return config, nil
+}
+
+func vaultDefaults(aclEnabled, encEnabled bool) string {
+	var configBuilder strings.Builder
+	fmt.Fprintf(&configBuilder, "%s=%s; %s=%s; %s=%s; %s=%s",
+		flagVaultAddr, "http://localhost:8200",
+		flagVaultRoleIdFile, "",
+		flagVaultSecretIdFile, "",
+		flagVaultPath, "secret/data/dgraph")
+	if aclEnabled {
+		fmt.Fprintf(&configBuilder, "; %s=%s; %s=%s",
+			flagVaultAclField, "",
+			flagVaultAclFormat, "base64")
+	}
+	if encEnabled {
+		fmt.Fprintf(&configBuilder, "; %s=%s; %s=%s",
+			flagVaultEncField, "",
+			flagVaultEncFormat, "base64")
+	}
+	return configBuilder.String()
+}
+
+func registerVaultFlag(flag *pflag.FlagSet, aclEnabled, encEnabled bool) {
+	// Generate default configuration.
+	config := vaultDefaults(aclEnabled, encEnabled)
+
+	// Generate help text.
+	helpBuilder := z.NewSuperFlagHelp(config).
+		Head("Vault options").
+		Flag(flagVaultAddr, "Vault server address (format: http://ip:port).").
+		Flag(flagVaultRoleIdFile, "Vault RoleID file, used for AppRole authentication.").
+		Flag(flagVaultSecretIdFile, "Vault SecretID file, used for AppRole authentication.").
+		Flag(flagVaultPath, "Vault KV store path (e.g. 'secret/data/dgraph' for KV V2, "+
+			"'kv/dgraph' for KV V1).")
+	if aclEnabled {
+		helpBuilder = helpBuilder.
+			Flag(flagVaultAclField, "Vault field containing ACL key.").
+			Flag(flagVaultAclFormat, "ACL key format, can be 'raw' or 'base64'.")
+	}
+	if encEnabled {
+		helpBuilder = helpBuilder.
+			Flag(flagVaultEncField, "Vault field containing encryption key.").
+			Flag(flagVaultEncFormat, "Encryption key format, can be 'raw' or 'base64'.")
+	}
+	helpText := helpBuilder.String()
+
+	// Register flag.
+	flag.String(flagVault, config, helpText)
 }

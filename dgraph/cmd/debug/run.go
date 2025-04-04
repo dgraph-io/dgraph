@@ -30,7 +30,6 @@ import (
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/codec"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/raftwal"
@@ -106,7 +105,7 @@ func init() {
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
 	flag.StringVar(&opt.parseKey, "parse_key", "", "Parse hex key.")
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 }
 
 func toInt(o *pb.Posting) int {
@@ -986,7 +985,7 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	keys, err := ee.GetKeys(Debug.Conf)
+	keys, err := x.GetEncAclKeys(Debug.Conf)
 	x.Check(err)
 	opt.key = keys.EncKey
 
