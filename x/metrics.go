@@ -440,7 +440,7 @@ var (
 	}
 )
 
-func startTracing() (*traceTel.TracerProvider, error) {
+func startTracing() {
 	headers := map[string]string{
 		"content-type": "application/json",
 	}
@@ -454,7 +454,7 @@ func startTracing() (*traceTel.TracerProvider, error) {
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating new exporter: %w", err)
+		glog.Errorf("creating new exporter: %v", err)
 	}
 
 	tracerprovider := traceTel.NewTracerProvider(
@@ -473,8 +473,6 @@ func startTracing() (*traceTel.TracerProvider, error) {
 	)
 
 	otel.SetTracerProvider(tracerprovider)
-
-	return tracerprovider, nil
 }
 
 func init() {

@@ -443,7 +443,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	}
 
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", proposal, err))
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return nil, err
 	}
 
@@ -698,7 +698,7 @@ func (s *Server) ShouldServe(
 	}
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", proposal, err))
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
