@@ -18,7 +18,7 @@ services:
         target: /posting
         read_only: false
       - type: bind
-        source: ../../../ee/acl/hmac-secret
+        source: ../../../acl/hmac-secret
         target: /dgraph-acl/hmac-secret
         read_only: true
     command:

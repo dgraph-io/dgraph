@@ -21,8 +21,8 @@ import (
 	"go.opencensus.io/trace"
 
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
+	"github.com/hypermodeinc/dgraph/v24/audit"
 	"github.com/hypermodeinc/dgraph/v24/edgraph"
-	"github.com/hypermodeinc/dgraph/v24/ee/audit"
 	"github.com/hypermodeinc/dgraph/v24/graphql/api"
 	"github.com/hypermodeinc/dgraph/v24/graphql/resolve"
 	"github.com/hypermodeinc/dgraph/v24/graphql/schema"

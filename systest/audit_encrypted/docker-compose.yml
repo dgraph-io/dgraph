@@ -15,7 +15,7 @@ services:
         source: ./audit_dir/aa
         target: /audit_dir
       - type: bind
-        source: ../../ee/enc/test-fixtures/enc-key
+        source: ../../enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     command:
@@ -40,7 +40,7 @@ services:
         source: ./audit_dir/za
         target: /audit_dir
       - type: bind
-        source: ../../ee/enc/test-fixtures/enc-key
+        source: ../../enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     command:

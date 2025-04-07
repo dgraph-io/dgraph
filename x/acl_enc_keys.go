@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package ee
+package x
 
 import (
 	"crypto"
@@ -12,19 +12,30 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
-// GetKeys returns the ACL and encryption keys as configured by the user
-// through the --acl, --encryption, and --vault flags. On OSS builds,
-// this function always returns an error.
-func GetKeys(config *viper.Viper) (*Keys, error) {
+// Keys holds the configuration for ACL and encryption.
+type Keys struct {
+	AclJwtAlg         jwt.SigningMethod
+	AclSecretKey      interface{}
+	AclPublicKey      interface{}
+	AclSecretKeyBytes Sensitive // we need this to compute hash for auth
+	AclAccessTtl      time.Duration
+	AclRefreshTtl     time.Duration
+	EncKey            Sensitive
+}
+
+// GetEncAclKeys returns the ACL and encryption keys as configured by the user
+// through the --acl, --encryption, and --vault flags.
+func GetEncAclKeys(config *viper.Viper) (*Keys, error) {
 	aclSuperFlag := z.NewSuperFlag(config.GetString("acl")).MergeAndCheckDefault(AclDefaults)
 	encSuperFlag := z.NewSuperFlag(config.GetString("encryption")).MergeAndCheckDefault(EncDefaults)
 
@@ -85,7 +96,7 @@ func GetKeys(config *viper.Viper) (*Keys, error) {
 	return keys, nil
 }
 
-func parseJWTKey(alg jwt.SigningMethod, key x.Sensitive) (interface{}, interface{}, error) {
+func parseJWTKey(alg jwt.SigningMethod, key Sensitive) (interface{}, interface{}, error) {
 	switch {
 	case strings.HasPrefix(alg.Alg(), "HS"):
 		return key, key, nil
@@ -116,7 +127,7 @@ func parseJWTKey(alg jwt.SigningMethod, key x.Sensitive) (interface{}, interface
 	}
 }
 
-func checkAclKeyLength(alg jwt.SigningMethod, key x.Sensitive) error {
+func checkAclKeyLength(alg jwt.SigningMethod, key Sensitive) error {
 	if !strings.HasPrefix(alg.Alg(), "HS") {
 		return nil
 	}
@@ -131,4 +142,42 @@ func checkAclKeyLength(alg jwt.SigningMethod, key x.Sensitive) error {
 		return errors.Errorf("ACL key length [%v <= %v] bits for JWT algorithm [%v]", sl, len(key)*8, alg.Alg())
 	}
 	return nil
+}
+
+func RegisterAclAndEncFlags(flag *pflag.FlagSet) {
+	registerAclFlag(flag)
+	registerEncFlag(flag)
+	registerVaultFlag(flag, true, true)
+}
+
+func RegisterEncFlag(flag *pflag.FlagSet) {
+	registerEncFlag(flag)
+	registerVaultFlag(flag, false, true)
+}
+
+func registerAclFlag(flag *pflag.FlagSet) {
+	helpText := z.NewSuperFlagHelp(AclDefaults).
+		Head("ACL options").
+		Flag("jwt-alg", "JWT signing algorithm, default HS256").
+		Flag("secret-file",
+			"The file that stores secret key or private key, which is used to sign the ACL JWT.").
+		Flag("access-ttl",
+			"The TTL for the access JWT.").
+		Flag("refresh-ttl",
+			"The TTL for the refresh JWT.").
+		String()
+	flag.String(flagAcl, AclDefaults, helpText)
+}
+
+func registerEncFlag(flag *pflag.FlagSet) {
+	helpText := z.NewSuperFlagHelp(EncDefaults).
+		Head("Encryption At Rest options").
+		Flag("key-file", "The file that stores the symmetric key of length 16, 24, or 32 bytes."+
+			"The key size determines the chosen AES cipher (AES-128, AES-192, and AES-256 respectively).").
+		String()
+	flag.String(flagEnc, EncDefaults, helpText)
+}
+
+func BuildEncFlag(filename string) string {
+	return fmt.Sprintf("key-file=%s;", filename)
 }

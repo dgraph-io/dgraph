@@ -1092,8 +1092,8 @@ func (g *groupi) processOracleDeltaStream() {
 	}
 }
 
-// GetEEFeaturesList returns a list of Enterprise Features that are available.
-func GetEEFeaturesList() []string {
+// GetFeaturesList returns a list of Dgraph features that are available.
+func GetFeaturesList() []string {
 	var ee []string
 	if Config.AclSecretKey != nil {
 		ee = append(ee, "acl")

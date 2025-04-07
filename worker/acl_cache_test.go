@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v24/ee/acl"
+	"github.com/hypermodeinc/dgraph/v24/acl"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 

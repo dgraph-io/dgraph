@@ -159,6 +159,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	jwt := &api.Jwt{}
 	if err := proto.Unmarshal(resp.Json, jwt); err != nil {
 		x.SetStatusWithData(w, x.Error, err.Error())
+		return
 	}
 
 	response := map[string]interface{}{}

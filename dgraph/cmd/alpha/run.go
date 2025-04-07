@@ -42,9 +42,8 @@ import (
 	apiv25 "github.com/dgraph-io/dgo/v240/protos/api.v25"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/hypermodeinc/dgraph/v24/audit"
 	"github.com/hypermodeinc/dgraph/v24/edgraph"
-	"github.com/hypermodeinc/dgraph/v24/ee"
-	"github.com/hypermodeinc/dgraph/v24/ee/audit"
 	"github.com/hypermodeinc/dgraph/v24/graphql/admin"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/schema"
@@ -95,7 +94,7 @@ they form a Raft group and provide synchronous replication.
 	// --tls SuperFlag
 	x.RegisterServerTLSFlags(flag)
 	// --encryption and --vault Superflag
-	ee.RegisterAclAndEncFlags(flag)
+	x.RegisterAclAndEncFlags(flag)
 
 	flag.StringP("postings", "p", "p", "Directory to store posting lists.")
 	flag.String("tmp", "t", "Directory to store temporary buffers.")
@@ -605,7 +604,6 @@ func setupServer(closer *z.Closer) {
 	// Therefore we wait for the cluster initialization to be done.
 	for {
 		if x.HealthCheck() == nil {
-			// Audit is enterprise feature.
 			x.Check(audit.InitAuditorIfNecessary(worker.Config.Audit))
 			break
 		}
@@ -659,7 +657,7 @@ func run() {
 		TypeFilterUidLimit: x.Config.Limit.GetUint64("type-filter-uid-limit"),
 	}
 
-	keys, err := ee.GetKeys(Alpha.Conf)
+	keys, err := x.GetEncAclKeys(Alpha.Conf)
 	x.Check(err)
 
 	if keys.AclSecretKey != nil {

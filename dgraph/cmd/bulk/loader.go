@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/hypermodeinc/dgraph/v24/chunker"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/enc"
 	"github.com/hypermodeinc/dgraph/v24/filestore"
 	gqlSchema "github.com/hypermodeinc/dgraph/v24/graphql/schema"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
@@ -71,7 +71,7 @@ type options struct {
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
-	// EncryptionKey is the key used for encryption. Enterprise only feature.
+	// EncryptionKey is the key used for encryption.
 	EncryptionKey x.Sensitive
 	// Badger options.
 	Badger badger.Options

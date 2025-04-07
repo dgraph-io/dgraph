@@ -125,7 +125,7 @@ const (
 		indexing: [String]
 
 		"""
-		List of Enterprise Features that are enabled.
+		List of Features that are enabled.
 		"""
 		ee_features: [String]
 	}

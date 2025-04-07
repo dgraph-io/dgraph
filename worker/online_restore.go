@@ -24,7 +24,6 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/posting"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/schema"
@@ -467,13 +466,13 @@ func bumpLease(ctx context.Context, mr *mapResult) error {
 func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
-	ee.RegisterEncFlag(flags)
+	x.RegisterEncFlag(flags)
 	if err := config.BindPFlags(flags); err != nil {
 		return nil, errors.Wrapf(err, "bad config bind")
 	}
 
 	// Copy from the request.
-	config.Set("encryption", ee.BuildEncFlag(req.EncryptionKeyFile))
+	config.Set("encryption", x.BuildEncFlag(req.EncryptionKeyFile))
 
 	vaultBuilder := new(strings.Builder)
 	if req.VaultRoleidFile != "" {

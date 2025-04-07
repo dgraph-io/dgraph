@@ -48,7 +48,7 @@ func TestZeroAuditEncrypted(t *testing.T) {
 
 	var args []string
 	args = append(args, "audit", "decrypt",
-		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--encryption_key_file=../../enc/test-fixtures/enc-key",
 		"--in", fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log.enc", nId),
 		"--out", fmt.Sprintf("audit_dir/za/zero_audit_0_%s.log", nId))
 
@@ -128,7 +128,7 @@ input: {destination: \"/Users/sankalanparajuli/work/backup\"}) {\n    response {
 
 	var args []string
 	args = append(args, "audit", "decrypt",
-		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--encryption_key_file=../../enc/test-fixtures/enc-key",
 		"--in", fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log.enc", nId),
 		"--out", fmt.Sprintf("audit_dir/aa/alpha_audit_1_%s.log", nId))
 
@@ -164,7 +164,7 @@ func TestZeroAuditDecryptDeprecated(t *testing.T) {
 
 	var args []string
 	args = append(args, "audit", "decrypt",
-		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--encryption_key_file=../../enc/test-fixtures/enc-key",
 		"--in", "audit_dir_deprecated/za/zero_audit_0_1.log.enc",
 		"--out", "audit_dir_deprecated/za/zero_audit_0_1.log")
 
@@ -203,7 +203,7 @@ func TestAlphaAuditDecryptDeprecated(t *testing.T) {
 
 	var args []string
 	args = append(args, "audit", "decrypt",
-		"--encryption_key_file=../../ee/enc/test-fixtures/enc-key",
+		"--encryption_key_file=../../enc/test-fixtures/enc-key",
 		"--in", "audit_dir_deprecated/aa/alpha_audit_1_1.log.enc",
 		"--out", "audit_dir_deprecated/aa/alpha_audit_1_1.log")
 

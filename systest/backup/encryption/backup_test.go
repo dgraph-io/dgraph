@@ -309,7 +309,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
+	testutil.KeyFile = "../../../enc/test-fixtures/enc-key"
 	result := worker.RunOfflineRestore(restoreDir, localBackupDst, lastDir,
 		testutil.KeyFile, nil, options.Snappy, 0)
 	require.NoError(t, result.Err)
@@ -346,7 +346,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
-	keyFile := "../../../ee/enc/test-fixtures/enc-key"
+	keyFile := "../../../enc/test-fixtures/enc-key"
 
 	result := worker.RunOfflineRestore(restoreDir, backupLocation, lastDir, keyFile, nil,
 		options.Snappy, 0)

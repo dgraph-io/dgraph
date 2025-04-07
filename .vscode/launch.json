@@ -41,7 +41,7 @@
         "--security",
         "whitelist=0.0.0.0/0;",
         "--acl",
-        "secret-file=../ee/acl/hmac-secret; access-ttl=300000s;"
+        "secret-file=../acl/hmac-secret; access-ttl=300000s;"
       ],
       "showLog": true
     }

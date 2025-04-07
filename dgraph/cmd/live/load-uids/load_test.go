@@ -24,7 +24,6 @@ import (
 
 	"github.com/dgraph-io/dgo/v240"
 	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/hypermodeinc/dgraph/v24/ee"
 	"github.com/hypermodeinc/dgraph/v24/testutil"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
@@ -276,7 +275,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
 			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
 			"--encryption",
-			ee.BuildEncFlag(testDataDir + "/../../../../ee/enc/test-fixtures/enc-key"),
+			x.BuildEncFlag(testDataDir + "/../../../../enc/test-fixtures/enc-key"),
 			"--alpha", alphaService, "--zero", zeroService,
 			"--creds", "user=groot;password=password;"},
 	}

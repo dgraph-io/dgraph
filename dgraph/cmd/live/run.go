@@ -37,8 +37,7 @@ import (
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v24/chunker"
-	"github.com/hypermodeinc/dgraph/v24/ee"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/enc"
 	"github.com/hypermodeinc/dgraph/v24/filestore"
 	schemapkg "github.com/hypermodeinc/dgraph/v24/schema"
 	"github.com/hypermodeinc/dgraph/v24/types"
@@ -129,7 +128,7 @@ func init() {
 
 	flag := Live.Cmd.Flags()
 	// --vault SuperFlag and encryption flags
-	ee.RegisterEncFlag(flag)
+	x.RegisterEncFlag(flag)
 	// --tls SuperFlag
 	x.RegisterClientTLSFlags(flag)
 
@@ -695,7 +694,7 @@ func run() error {
 	}
 
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
-	keys, err := ee.GetKeys(Live.Conf)
+	keys, err := x.GetEncAclKeys(Live.Conf)
 	if err != nil {
 		return err
 	}

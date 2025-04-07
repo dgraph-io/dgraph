@@ -1,4 +1,4 @@
-//go:build (!oss && integration) || upgrade
+//go:build integration || upgrade
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/hypermodeinc/dgraph/v24/acl"
 	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v24/ee/acl"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 

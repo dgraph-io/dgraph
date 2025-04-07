@@ -191,7 +191,6 @@ type params struct {
 	// Shortest is true when the subgraph holds the results of a shortest paths query.
 	Shortest bool
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
-	// For OSS this should remain nil.
 	AllowedPreds []string
 }
 
@@ -1967,7 +1966,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(namespace, typeNames)
-			// We check if enterprise is enabled and only
 			// restrict preds to allowed preds if ACL is turned on.
 			if sg.Params.AllowedPreds != nil {
 				// Take intersection of both the predicate lists

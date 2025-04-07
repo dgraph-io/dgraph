@@ -12,7 +12,6 @@ import (
 	"os"
 	"regexp"
 	"runtime"
-	"strings"
 
 	"github.com/golang/glog"
 
@@ -38,11 +37,6 @@ func init() {
 // BuildDetails returns a string containing details about the Dgraph binary.
 func BuildDetails() string {
 	licenseInfo := `Licensed under the Apache Public License 2.0`
-	if !strings.HasSuffix(dgraphVersion, "-oss") {
-		licenseInfo = "Licensed variously under the Apache Public License 2.0 and Dgraph " +
-			"Community License"
-	}
-
 	buf := z.CallocNoRef(1, "X.BuildDetails")
 	jem := len(buf) > 0
 	z.Free(buf)

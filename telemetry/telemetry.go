@@ -76,7 +76,7 @@ func NewAlpha(ms *pb.MembershipState) *Telemetry {
 		Version:        x.Version(),
 		OS:             runtime.GOOS,
 		Arch:           runtime.GOARCH,
-		EEFeaturesList: worker.GetEEFeaturesList(),
+		EEFeaturesList: worker.GetFeaturesList(),
 		Codename:       x.Codename(),
 	}
 }

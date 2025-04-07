@@ -24,7 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v24/ee/enc"
+	"github.com/hypermodeinc/dgraph/v24/enc"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 

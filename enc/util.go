@@ -16,9 +16,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
 
-// EeBuild indicates if this is a Enterprise build.
-var EeBuild = true
-
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
 func GetWriter(key x.Sensitive, w io.Writer) (io.Writer, error) {
 	// No encryption, return the input writer as is.

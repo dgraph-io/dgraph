@@ -21,6 +21,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/hypermodeinc/dgraph/v24/acl"
+	"github.com/hypermodeinc/dgraph/v24/audit"
+	"github.com/hypermodeinc/dgraph/v24/backup"
 	checkupgrade "github.com/hypermodeinc/dgraph/v24/check_upgrade"
 	"github.com/hypermodeinc/dgraph/v24/dgraph/cmd/alpha"
 	"github.com/hypermodeinc/dgraph/v24/dgraph/cmd/bulk"
@@ -34,9 +37,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v24/dgraph/cmd/migrate"
 	"github.com/hypermodeinc/dgraph/v24/dgraph/cmd/version"
 	"github.com/hypermodeinc/dgraph/v24/dgraph/cmd/zero"
-	"github.com/hypermodeinc/dgraph/v24/ee/acl"
-	"github.com/hypermodeinc/dgraph/v24/ee/audit"
-	"github.com/hypermodeinc/dgraph/v24/ee/backup"
 	"github.com/hypermodeinc/dgraph/v24/upgrade"
 	"github.com/hypermodeinc/dgraph/v24/x"
 )
