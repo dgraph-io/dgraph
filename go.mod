@@ -1,8 +1,6 @@
 module github.com/hypermodeinc/dgraph/v24
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.23.6
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2

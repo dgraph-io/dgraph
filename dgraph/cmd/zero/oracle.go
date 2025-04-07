@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText:  Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -505,8 +505,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 	num.Type = pb.Num_TXN_TS
 	reply, err := s.lease(ctx, num)
-	span.SetAttributes(attribute.String("response", fmt.Sprintf("%+v", reply)))
-	span.SetAttributes(attribute.String("error", fmt.Sprintf("%v", err)))
+	span.AddEvent(fmt.Sprintf("Response: %+v, Error: %+v", reply, err))
 
 	switch err {
 	case nil:

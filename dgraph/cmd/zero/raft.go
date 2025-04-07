@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText:  Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1013,8 +1013,6 @@ func (n *node) Run() {
 			span.AddEvent("Advanced Raft")
 			timer.Record("advance")
 
-			span.SetAttributes(attribute.String("Zero.RunLoop", "Running"))
-			span.SetAttributes(attribute.String("Zero.RunLoop", "Done"))
 			span.End()
 			if timer.Total() > 5*tickDur {
 				glog.Warningf(

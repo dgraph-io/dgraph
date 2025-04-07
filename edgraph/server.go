@@ -1440,15 +1440,13 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
 	// then we use the max known transaction ts value (from ProcessDelta) for a read-only query.
 	// If we haven't processed any updates yet then fall back to getting TS from Zero.
-	if qc.span.IsRecording() {
-		switch {
-		case qc.req.BestEffort:
-			qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("be", true)))
-		case qc.req.ReadOnly:
-			qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("ro", true)))
-		default:
-			qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("no", true)))
-		}
+	switch {
+	case qc.req.BestEffort:
+		qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("be", true)))
+	case qc.req.ReadOnly:
+		qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("ro", true)))
+	default:
+		qc.span.AddEvent("", trace.WithAttributes(attribute.Bool("no", true)))
 	}
 
 	if qc.req.BestEffort {
