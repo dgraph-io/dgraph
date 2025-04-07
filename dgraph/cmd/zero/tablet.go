@@ -170,7 +170,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		DestGid:   dstGroup,
 		TxnTs:     ids.StartId,
 	}
-	span.SetAttributes(attribute.String("move_predicate_payload", fmt.Sprintf("%+v", in)))
+	span.AddEvent(fmt.Sprintf("Move Predicate payload: %+v", in))
 	glog.Infof("Starting move: %+v", in)
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		return errors.Wrapf(err, "while calling MovePredicate")
@@ -186,14 +186,14 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 		MoveTs:            in.TxnTs,
 	}
 	msg = fmt.Sprintf("Move at Alpha done. Now proposing: %+v", p)
-	span.SetAttributes(attribute.String("zero_proposal", fmt.Sprintf("%+v", p)))
+	span.AddEvent(fmt.Sprintf("Zero proposal: %+v", p))
 	glog.Info(msg)
 	if err := s.Node.proposeAndWait(ctx, p); err != nil {
 		return errors.Wrapf(err, "while proposing tablet reassignment. Proposal: %+v", p)
 	}
 	msg = fmt.Sprintf("Predicate move done for: [%v] from group %d to %d\n",
 		predicate, srcGroup, dstGroup)
-	span.SetAttributes(attribute.String("predicate_move_done", msg))
+	span.AddEvent(msg)
 	glog.Info(msg)
 
 	// Now that the move has happened, we can delete the predicate from the source group. But before
@@ -207,11 +207,11 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if _, err := wc.MovePredicate(ctx, in); err != nil {
 		msg = fmt.Sprintf("While deleting predicate [%v] in group %d. Error: %v",
 			in.Predicate, in.SourceGid, err)
-		span.SetAttributes(attribute.String("predicate_delete_error", msg))
+		span.AddEvent(msg)
 		glog.Warningf(msg)
 	} else {
 		msg = fmt.Sprintf("Deleted predicate %v in group %d", in.Predicate, in.SourceGid)
-		span.SetAttributes(attribute.String("predicate_deleted", msg))
+		span.AddEvent(msg)
 		glog.V(1).Infof(msg)
 	}
 	return nil

@@ -8,6 +8,7 @@ package worker
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -533,9 +534,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 		// wait for other goroutine to get cancelled
 		<-resCh
 	} else {
-		span.SetAttributes(
-			attribute.String("processSortError", r.err.Error()),
-		)
+		span.AddEvent(fmt.Sprintf("Error processing sort: %+v", r.err))
 		r = <-resCh
 	}
 

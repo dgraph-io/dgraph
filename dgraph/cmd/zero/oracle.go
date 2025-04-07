@@ -401,7 +401,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	defer s.orc.doneUntil.Done(src.CommitTs)
 	span.SetAttributes(attribute.Int64("commitTs", int64(src.CommitTs)))
 	span.SetAttributes(attribute.Int64("nodeId", int64(s.Node.Id)))
-	span.SetAttributes(attribute.String("txnContext", fmt.Sprintf("%+v", src)))
+	span.AddEvent(fmt.Sprintf("TXN Context: %+v", src))
 
 	if err := s.orc.commit(src); err != nil {
 		span.SetAttributes(attribute.Bool("abort", true))
@@ -505,7 +505,7 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 
 	num.Type = pb.Num_TXN_TS
 	reply, err := s.lease(ctx, num)
-	span.AddEvent(fmt.Sprintf("Response: %+v, Error: %+v", reply, err))
+	span.AddEvent(fmt.Sprintf("Response: %+v, Error: %v", reply, err))
 
 	switch err {
 	case nil:

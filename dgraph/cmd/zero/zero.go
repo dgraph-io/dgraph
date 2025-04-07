@@ -8,6 +8,7 @@ package zero
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -442,14 +443,14 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	}
 
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.SetAttributes(attribute.String("error", err.Error()))
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", proposal, err))
 		return nil, err
 	}
 
 	for _, t := range unknownTablets {
 		tab := s.ServingTablet(t.Predicate)
 		x.AssertTrue(tab != nil)
-		span.SetAttributes(attribute.String("tablet_predicate_served", t.Predicate))
+		span.AddEvent(fmt.Sprintf("Tablet served: %+v", tab))
 		tablets = append(tablets, tab)
 	}
 
@@ -697,7 +698,7 @@ func (s *Server) ShouldServe(
 	}
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.SetAttributes(attribute.String("error", err.Error()))
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", proposal, err))
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
