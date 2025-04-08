@@ -8,13 +8,15 @@ package zero
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v240/protos/api"
@@ -393,7 +395,7 @@ func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
 }
 
 func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletResponse, error) {
-	ctx, span := otrace.StartSpan(ctx, "Zero.Inform")
+	ctx, span := otel.Tracer("").Start(ctx, "Zero.Inform")
 	defer span.End()
 	if req == nil || len(req.Tablets) == 0 {
 		return nil, errors.Errorf("Tablets are empty in %+v", req)
@@ -407,7 +409,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	unknownTablets := make([]*pb.Tablet, 0)
 	for _, t := range req.Tablets {
 		tab := s.ServingTablet(t.Predicate)
-		span.Annotatef(nil, "Tablet for %s: %+v", t.Predicate, tab)
+		span.SetAttributes(attribute.String("tablet_predicate", t.Predicate))
 		switch {
 		case tab != nil && !t.Force:
 			tablets = append(tablets, t)
@@ -441,14 +443,14 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	}
 
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.Annotatef(nil, "While proposing tablet: %v", err)
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return nil, err
 	}
 
 	for _, t := range unknownTablets {
 		tab := s.ServingTablet(t.Predicate)
 		x.AssertTrue(tab != nil)
-		span.Annotatef(nil, "Now serving tablet for %s: %+v", t.Predicate, tab)
+		span.AddEvent(fmt.Sprintf("Tablet served: %+v", tab))
 		tablets = append(tablets, tab)
 	}
 
@@ -656,7 +658,7 @@ func (s *Server) DeleteNamespace(ctx context.Context, in *pb.DeleteNsRequest) (*
 // ShouldServe returns the tablet serving the predicate passed in the request.
 func (s *Server) ShouldServe(
 	ctx context.Context, tablet *pb.Tablet) (resp *pb.Tablet, err error) {
-	ctx, span := otrace.StartSpan(ctx, "Zero.ShouldServe")
+	ctx, span := otel.Tracer("").Start(ctx, "Zero.ShouldServe")
 	defer span.End()
 
 	if tablet.Predicate == "" {
@@ -668,7 +670,7 @@ func (s *Server) ShouldServe(
 
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
-	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
+	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
@@ -696,12 +698,12 @@ func (s *Server) ShouldServe(
 	}
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
-		span.Annotatef(nil, "While proposing tablet: %v", err)
+		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return tablet, err
 	}
 	tab = s.ServingTablet(tablet.Predicate)
 	x.AssertTrue(tab != nil)
-	span.Annotatef(nil, "Now serving tablet for %s: %+v", tablet.Predicate, tab)
+	span.SetAttributes(attribute.String("tablet_predicate_served", tablet.Predicate))
 	return tab, nil
 }
 
