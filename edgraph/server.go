@@ -542,15 +542,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 }
 
 func annotateNamespace(span trace.Span, ns uint64) {
-	if span.IsRecording() {
-		span.SetAttributes(attribute.String("ns", fmt.Sprintf("%d", ns)))
-	}
+	span.SetAttributes(attribute.String("ns", fmt.Sprintf("%d", ns)))
 }
 
 func annotateStartTs(span trace.Span, ts uint64) {
-	if span.IsRecording() {
-		span.SetAttributes(attribute.String("startTs", fmt.Sprintf("%d", ts)))
-	}
+	span.SetAttributes(attribute.String("startTs", fmt.Sprintf("%d", ts)))
 }
 
 func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Response) error {
@@ -1513,10 +1509,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if err != nil && (qc.gqlField == nil || !x.IsGqlErrorList(err)) {
 		return resp, err
 	}
-	if qc.span.IsRecording() {
-		qc.span.AddEvent("Response",
-			trace.WithAttributes(attribute.String("response", string(resp.Json))))
-	}
+	qc.span.AddEvent("Response",
+		trace.WithAttributes(attribute.String("response", string(resp.Json))))
 
 	// varToUID contains a map of variable name to the uids corresponding to it.
 	// It is used later for constructing set and delete mutations by replacing

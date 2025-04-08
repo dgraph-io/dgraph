@@ -440,41 +440,6 @@ var (
 	}
 )
 
-func startTracing() {
-	headers := map[string]string{
-		"content-type": "application/json",
-	}
-
-	exporter, err := otlptrace.New(
-		context.Background(),
-		otlptracehttp.NewClient(
-			otlptracehttp.WithEndpoint("localhost:4318"),
-			otlptracehttp.WithHeaders(headers),
-			otlptracehttp.WithInsecure(),
-		),
-	)
-	if err != nil {
-		glog.Errorf("creating new exporter: %v", err)
-	}
-
-	tracerprovider := traceTel.NewTracerProvider(
-		traceTel.WithBatcher(
-			exporter,
-			traceTel.WithMaxExportBatchSize(traceTel.DefaultMaxExportBatchSize),
-			traceTel.WithBatchTimeout(traceTel.DefaultScheduleDelay*time.Millisecond),
-			traceTel.WithMaxExportBatchSize(traceTel.DefaultMaxExportBatchSize),
-		),
-		traceTel.WithResource(
-			resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String("dgraph.alpha"),
-			),
-		),
-	)
-
-	otel.SetTracerProvider(tracerprovider)
-}
-
 func init() {
 	Conf = expvar.NewMap("dgraph_config")
 
@@ -502,8 +467,6 @@ func init() {
 	promRegistry.MustRegister(collectors.NewGoCollector(collectors.WithGoCollectorRuntimeMetrics(
 		collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile("/.*")})))
 	promRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-
-	startTracing()
 
 	pe, err := oc_prom.NewExporter(oc_prom.Options{
 		// includes a process_* metrics, a GoCollector for go_* metrics, and the badger_* metrics.
@@ -658,10 +621,18 @@ func RegisterExporters(conf *viper.Viper, service string) {
 			traceTel.WithBatchTimeout(traceTel.DefaultScheduleDelay * time.Millisecond),
 		}
 
+		traceSampler := traceTel.AlwaysSample()
+		if ratio := t.GetString("ratio"); len(ratio) > 0 {
+			f, err := strconv.ParseFloat(ratio, 64)
+			if err != nil {
+				log.Fatalf("Trace sampler ratio not a float: %s", ratio)
+			}
+			traceSampler = traceTel.TraceIDRatioBased(f)
+		}
+
 		// Set up Jaeger exporter if configured
 		if collector := t.GetString("jaeger"); len(collector) > 0 {
 			// Create Jaeger exporter using OpenTelemetry OTLP
-			fmt.Println(collector)
 			jaegerExp, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
@@ -677,7 +648,7 @@ func RegisterExporters(conf *viper.Viper, service string) {
 			tp := traceTel.NewTracerProvider(
 				traceTel.WithBatcher(jaegerExp, batchOpts...),
 				traceTel.WithResource(res),
-				traceTel.WithSampler(traceTel.AlwaysSample()),
+				traceTel.WithSampler(traceSampler),
 			)
 
 			// Set the trace provider

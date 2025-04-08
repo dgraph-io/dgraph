@@ -41,11 +41,9 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 	tctx, err := worker.MutateOverNetwork(ctx, m)
 	if err != nil {
 		span := trace.SpanFromContext(ctx)
-		if span.IsRecording() {
-			span.AddEvent("MutateOverNetwork Error", trace.WithAttributes(
-				attribute.String("error", err.Error()),
-				attribute.String("mutation", m.String())))
-		}
+		span.AddEvent("MutateOverNetwork Error", trace.WithAttributes(
+			attribute.String("error", err.Error()),
+			attribute.String("mutation", m.String())))
 	}
 	return tctx, err
 }

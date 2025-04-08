@@ -342,10 +342,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 		}
 		return out.Send(kvs)
 	}
-	if span.IsRecording() {
-		span.AddEvent("Starting stream list orchestrate", trace.WithAttributes(
-			attribute.String("predicate", in.Predicate)))
-	}
+	span.AddEvent("Starting stream list orchestrate", trace.WithAttributes(
+		attribute.String("predicate", in.Predicate)))
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
@@ -360,10 +358,8 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	}
 
 	msg := fmt.Sprintf("Receiver %s says it got %d keys.\n", pl.Addr, recvCount)
-	if span.IsRecording() {
-		span.AddEvent("Moving predicate", trace.WithAttributes(
-			attribute.String("predicate", in.Predicate)))
-	}
+	span.AddEvent("Moving predicate", trace.WithAttributes(
+		attribute.String("predicate", in.Predicate)))
 	glog.Infof(msg)
 	return nil
 }

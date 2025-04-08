@@ -107,11 +107,9 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	plist, err := getFn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
 		span := trace.SpanFromContext(ctx)
-		if span.IsRecording() {
-			span.AddEvent("Slow GetLru", trace.WithAttributes(
-				attribute.Bool("slow-get", true),
-				attribute.String("duration", dur.String())))
-		}
+		span.AddEvent("Slow GetLru", trace.WithAttributes(
+			attribute.Bool("slow-get", true),
+			attribute.String("duration", dur.String())))
 	}
 	if err != nil {
 		return err
@@ -764,12 +762,10 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			if span.IsRecording() {
-				span.AddEvent("State information", trace.WithAttributes(
-					attribute.String("state", groups().state.String())))
-				span.AddEvent("Group id zero for mutation", trace.WithAttributes(
-					attribute.String("mutation", mu.String())))
-			}
+			span.AddEvent("State information", trace.WithAttributes(
+				attribute.String("state", groups().state.String())))
+			span.AddEvent("Group id zero for mutation", trace.WithAttributes(
+				attribute.String("mutation", mu.String())))
 			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
@@ -906,17 +902,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 
 	if err != nil {
-		if span.IsRecording() {
-			span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
-				attribute.String("error", err.Error())))
-		}
+		span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
+			attribute.String("error", err.Error())))
 		return 0, err
 	}
-	if span.IsRecording() {
-		span.AddEvent("Commit status", trace.WithAttributes(
-			attribute.Int64("commitTs", int64(tctx.CommitTs)),
-			attribute.Bool("committed", tctx.CommitTs > 0)))
-	}
+	span.AddEvent("Commit status", trace.WithAttributes(
+		attribute.Int64("commitTs", int64(tctx.CommitTs)),
+		attribute.Bool("committed", tctx.CommitTs > 0)))
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
 		if !clientDiscard {

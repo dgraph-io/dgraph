@@ -434,9 +434,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// by detectPendingTxns below.
 		startTs := posting.Oracle().MaxAssigned()
 
-		if span.IsRecording() {
-			span.AddEvent("Applying schema and types")
-		}
+		span.AddEvent("Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
@@ -476,14 +474,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			// We should only drop the predicate if there is no pending
 			// transaction.
 			if err := detectPendingTxns(edge.Attr); err != nil {
-				if span.IsRecording() {
-					span.AddEvent("Found pending transactions. Retry later.")
-				}
+				span.AddEvent("Found pending transactions. Retry later.")
 				return err
 			}
-			if span.IsRecording() {
-				span.AddEvent("Deleting predicate")
-			}
+			span.AddEvent("Deleting predicate")
 			return posting.DeletePredicate(ctx, edge.Attr, proposal.StartTs)
 		}
 		// Don't derive schema when doing deletion.
@@ -536,11 +530,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
-		if span.IsRecording() {
-			span.AddEvent("Txn should abort.", trace.WithAttributes(
-				attribute.Int64("start_ts", int64(m.StartTs)),
-			))
-		}
+		span.AddEvent("Txn should abort.", trace.WithAttributes(
+			attribute.Int64("start_ts", int64(m.StartTs)),
+		))
 		return x.ErrConflict
 	}
 	// Discard the posting lists from cache to release memory at the end.
@@ -633,12 +625,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 	ctx := n.Ctx(key)
 	span := trace.SpanFromContext(ctx)
-	if span.IsRecording() {
-		span.AddEvent("Node.applyCommited", trace.WithAttributes(
-			attribute.Int64("node id", int64(n.Id)),
-			attribute.Int64("Group Id", int64(n.gid)),
-			attribute.Int64("proposal key", int64(key))))
-	}
+	span.AddEvent("Node.applyCommited", trace.WithAttributes(
+		attribute.Int64("node id", int64(n.Id)),
+		attribute.Int64("Group Id", int64(n.gid)),
+		attribute.Int64("proposal key", int64(key))))
 
 	if proposal.Mutations != nil {
 		// syncmarks for this shouldn't be marked done until it's committed.
@@ -857,17 +847,16 @@ func (n *node) processApplyCh() {
 					p := &P{err: perr, size: psz, seen: time.Now()}
 					previous[key] = p
 				}
+				span := trace.SpanFromContext(n.ctx)
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
+					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, proposal))
 				}
-				span := trace.SpanFromContext(n.ctx)
-				if span.IsRecording() {
-					span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
-						trace.WithAttributes(
-							attribute.Int64("key", int64(key)),
-							attribute.Int64("index", int64(proposal.Index)),
-							attribute.String("error", perr.Error())))
-				}
+				span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
+					trace.WithAttributes(
+						attribute.Int64("key", int64(key)),
+						attribute.Int64("index", int64(proposal.Index)),
+					))
 
 				var tags []tag.Mutator
 				switch {
@@ -1428,13 +1417,10 @@ func (n *node) Run() {
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
-			if span != nil {
-				span.AddEvent("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
-					trace.WithAttributes(
-						attribute.Int("entries", len(rd.Entries)),
-						attribute.Bool("snapshotEmpty", raft.IsEmptySnap(rd.Snapshot)),
-						attribute.Bool("hardStateEmpty", raft.IsEmptyHardState(rd.HardState))))
-			}
+			span.AddEvent(fmt.Sprintf("Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+				len(rd.Entries),
+				raft.IsEmptySnap(rd.Snapshot),
+				raft.IsEmptyHardState(rd.HardState)))
 
 			for x.WorkerConfig.HardSync && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {

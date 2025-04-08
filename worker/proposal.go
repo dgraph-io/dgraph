@@ -229,11 +229,9 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%x]", key)
 		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
 
-		if span.IsRecording() {
-			span.AddEvent("Proposing", trace.WithAttributes(
-				attribute.Int64("key", int64(key)),
-				attribute.String("timeout", timeout.String())))
-		}
+		span.AddEvent("Proposing", trace.WithAttributes(
+			attribute.Int64("key", int64(key)),
+			attribute.String("timeout", timeout.String())))
 
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
@@ -254,10 +252,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				if atomic.LoadUint32(&pctx.Found) > 0 {
 					// We found the proposal in CommittedEntries. No need to retry.
 				} else {
-					if span.IsRecording() {
-						span.AddEvent("Timeout reached", trace.WithAttributes(
-							attribute.String("timeout", timeout.String())))
-					}
+					span.AddEvent("Timeout reached", trace.WithAttributes(
+						attribute.String("timeout", timeout.String())))
 					cancel()
 				}
 			case <-cctx.Done():
@@ -295,10 +291,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			// below. We should always propose it irrespective of how many pending proposals there
 			// might be.
 		default:
-			if span.IsRecording() {
-				span.AddEvent("Incrementing limiter", trace.WithAttributes(
-					attribute.Int64("retry", int64(i))))
-			}
+			span.AddEvent("Incrementing limiter", trace.WithAttributes(
+				attribute.Int64("retry", int64(i))))
 			if err := limiter.incr(ctx, i); err != nil {
 				return err
 			}
