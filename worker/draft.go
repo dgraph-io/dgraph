@@ -849,8 +849,8 @@ func (n *node) processApplyCh() {
 				}
 				span := trace.SpanFromContext(n.ctx)
 				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, proposal)
-					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, proposal))
+					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
+					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
 				}
 				span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
 					trace.WithAttributes(
