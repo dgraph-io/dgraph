@@ -112,6 +112,7 @@ func sendWebhookEvent(ctx context.Context, m schema.Mutation, commitTs uint64, r
 	// just log the response errors, if any.
 	if err != nil {
 		glog.V(3).Info(errors.Wrap(err, "unable to send webhook event"))
+		return
 	}
 
 	defer func() {
