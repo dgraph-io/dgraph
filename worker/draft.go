@@ -87,7 +87,7 @@ func (id op) String() string {
 	case opPredMove:
 		return "opPredMove"
 	case opStreamPDirs:
-		return "opPredMove"
+		return "opStreamPDir"
 	default:
 		return "opUnknown"
 	}
@@ -147,6 +147,17 @@ func (n *node) startTaskAtTs(id op, ts uint64) (*z.Closer, error) {
 		// only one restore operation should be active any given moment.
 		for otherId, otherOp := range n.ops {
 			if otherId == opRestore {
+				return nil, errors.Errorf("another restore operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherOp.SignalAndWait()
+		}
+	case opStreamPDirs:
+		// Restores cancel all other operations, except for other restores since
+		// only one restore operation should be active any given moment.
+		for otherId, otherOp := range n.ops {
+			if otherId == opStreamPDirs {
 				return nil, errors.Errorf("another restore operation is already running")
 			}
 			// Remove from map and signal the closer to cancel the operation.
@@ -683,6 +694,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 	case proposal.Drainmode != nil:
 		fmt.Println("aplpling drainmoder!!!!!!!!!!!!!!!!!!!!!!!!!!!!!>")
+		var err error
+
+		var closer *z.Closer
+		closer, err = n.startTask(opStreamPDirs)
+		if err != nil {
+			return errors.Wrapf(err, "cannot start stream p dir task")
+		}
+		defer closer.Done()
 		x.UpdateDrainingMode(proposal.Drainmode.State)
 		return nil
 
@@ -699,6 +718,8 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 			return errors.Wrapf(err, "cannot start stream p dir task")
 		}
 		defer closer.Done()
+
+		// time.Sleep(time.Minute * 3)
 
 		pl, err := conn.GetPools().Get(proposal.Reqpstream.Addr)
 		if err != nil {
@@ -807,6 +828,18 @@ func (n *node) processTabletSizes() {
 
 // this funtion will flush all cvs
 func fulshKv3(stream pb.Worker_StreamInGroupClient) error {
+	n := groups().Node
+	if n == nil || n.Raft() == nil {
+		return conn.ErrNoNode
+	}
+
+	closer, err := n.startTask(opStreamPDirs)
+	if err != nil {
+		return errors.Wrapf(err, "cannot start stream p dir task")
+	}
+	defer closer.Done()
+
+	// time.Sleep(time.Minute * 3)
 	var writer badgerWriter
 	sw := pstore.NewStreamWriter()
 	defer sw.Cancel()

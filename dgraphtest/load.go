@@ -33,6 +33,11 @@ const (
 	groupOneRdfGzFile = "g01.rdf.gz"
 )
 
+var datafiles = map[string]string{
+	"1million.schema": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
+	"1million.rdf.gz": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
+}
+
 // LiveOpts are options that are used for running live loader.
 type LiveOpts struct {
 	DataFiles      []string
@@ -451,6 +456,7 @@ type BulkOpts struct {
 	DataFiles      []string
 	SchemaFiles    []string
 	GQLSchemaFiles []string
+	OutDir         string
 }
 
 func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
@@ -458,14 +464,19 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 	if err != nil {
 		return errors.Wrap(err, "error finding URL of first zero")
 	}
-
+	var outDir string
+	if opts.OutDir != "" {
+		outDir = opts.OutDir
+	} else {
+		outDir = c.conf.bulkOutDir
+	}
 	shards := c.conf.numAlphas / c.conf.replicas
 	args := []string{"bulk",
 		"--store_xids=true",
 		"--zero", zeroURL,
 		"--reduce_shards", strconv.Itoa(shards),
 		"--map_shards", strconv.Itoa(shards),
-		"--out", c.conf.bulkOutDir,
+		"--out", outDir,
 		// we had to create the dir for setting up docker, hence, replacing it here.
 		"--replace_out",
 	}
@@ -503,4 +514,29 @@ func AddData(gc *dgraphapi.GrpcClient, pred string, start, end int) error {
 	}
 	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdf), CommitNow: true})
 	return err
+}
+
+func DownloadDataFiles() (string, error) {
+	fmt.Println("Downloading Data files------------>")
+	for fname, link := range datafiles {
+		isFileThere, err := fileExists(filepath.Join(dataPath, fname))
+
+		if err != nil {
+			return "", err
+		}
+		if !isFileThere {
+			fmt.Println("files not ehre downloading----------->")
+
+			cmd := exec.Command("wget", "-O", fname, link)
+			cmd.Dir = dataPath
+
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fmt.Printf("Error %v\n", err)
+				return "", fmt.Errorf("error downloading a file: %s", string(out))
+			}
+		}
+		fmt.Println("files already there------------>")
+
+	}
+	return dataPath, nil
 }

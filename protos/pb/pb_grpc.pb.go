@@ -1215,6 +1215,7 @@ func (c *workerClient) ApplyDrainmode(ctx context.Context, in *Drainmode, opts .
 }
 
 func (c *workerClient) StreamPt(ctx context.Context, opts ...grpc.CallOption) (Worker_StreamPtClient, error) {
+	// add task detail her
 	stream, err := c.cc.NewStream(ctx, &Worker_ServiceDesc.Streams[3], Worker_StreamPt_FullMethodName, opts...)
 	if err != nil {
 		return nil, err

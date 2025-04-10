@@ -36,9 +36,6 @@ type badgerWriter interface {
 	Flush() error
 }
 
-type Stream interface {
-}
-
 // DoStreamPDir handles streaming of snapshots to a target group. It first checks the group
 // associated with the incoming stream and, if it's the same as the current node's group, it
 // flushes the data using FlushKvs1. If the group is different, it establishes a connection
@@ -46,6 +43,19 @@ type Stream interface {
 // there are any issues in the process, such as a broken connection or failure to establish
 // a stream with the leader.
 func DoStreamPDir(stream api_v25.Dgraph_StreamSnapshotServer) error {
+	n := groups().Node
+	if n == nil || n.Raft() == nil {
+		return conn.ErrNoNode
+	}
+
+	closer, err := n.startTask(opStreamPDirs)
+	if err != nil {
+		return errors.Wrapf(err, "cannot start stream p dir task")
+	}
+	defer closer.Done()
+
+	// time.Sleep(time.Minute * 3)
+
 	groupId, err := checkGroup(stream)
 	if err != nil {
 		return err
@@ -67,6 +77,7 @@ func DoStreamPDir(stream api_v25.Dgraph_StreamSnapshotServer) error {
 		return fmt.Errorf("failed to establish stream with leader: %v", err)
 	}
 
+	// time.Sleep(time.Minute * 3)
 	return streamToAnotherGroup(stream, out)
 }
 

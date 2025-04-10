@@ -522,13 +522,14 @@ loop:
 		time.Sleep(waitDurBeforeRetry)
 
 		resp, err := c.AlphasHealth()
+		fmt.Println("resp is -------------------->", resp)
 		if err != nil && strings.Contains(err.Error(), "the server is in draining mode") {
 			continue loop
 		} else if err != nil {
 			return err
 		}
 		for _, hr := range resp {
-			if strings.Contains(hr, "opRestore") {
+			if strings.Contains(hr, "opStreamPDir") {
 				continue loop
 			}
 		}
@@ -682,32 +683,50 @@ func (hc *HTTPClient) GetLicenseInfo() (*LicenseResponse, error) {
 	return &stateResponse, nil
 }
 
-func (hc *HTTPClient) GetAlphaState() (*pb.MembershipState, error) {
-	req, err := http.NewRequest(http.MethodGet, hc.alphaStateURL, nil)
+func (hc *HTTPClient) GetAlphaState(url string) (*pb.MembershipState, error) {
+	if url == "" {
+		url = hc.alphaStateURL
+	}
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
-	if hc.HttpToken != nil {
-		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
-	}
 
-	resp, err := DoReq(req)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error reading zero state response body")
 	}
-	fmt.Println("resp is", string(resp))
-
+	fmt.Println("Raw Response Body:", string(body)) // Log the raw response
 	var state pb.MembershipState
-
-	unmarshaler := protojson.UnmarshalOptions{
-		AllowPartial: true, // Ignores unknown fields but still processes valid ones
-	}
-	if err := unmarshaler.Unmarshal(resp, &state); err != nil {
+	if err := protojson.Unmarshal(body, &state); err != nil {
 		return nil, err
 	}
 
 	return &state, err
 }
+
+// func (hc *HTTPClient) GetgroupTablets() (*pb.MembershipState, error) {
+// 	req, err := http.NewRequest(http.MethodGet, hc.alphaStateURL, nil)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if hc.HttpToken != nil {
+// 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+// 	}
+
+// 	resp, err := DoReq(req)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	fmt.Println("resp is", string(resp))
+
+// 	var state pb.Member
+// 	if err := protojson.Unmarshal(resp, &state); err != nil {
+// 		return nil, err
+// 	}
+
+// 	return &state, err
+// }
 
 func (hc *HTTPClient) PostDqlQuery(query string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodPost, hc.dqlURL, bytes.NewBufferString(query))

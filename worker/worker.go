@@ -106,6 +106,18 @@ func (w *grpcWorker) ApplyDrainmode(ctx context.Context, req *pb.Drainmode) (*pb
 // It writes the data to BadgerDB, sends an acknowledgment once all data is received,
 // and proposes to accept the newly added data to other group nodes.
 func (w *grpcWorker) StreamPt(stream pb.Worker_StreamPtServer) error {
+	n := groups().Node
+	if n == nil || n.Raft() == nil {
+		return conn.ErrNoNode
+	}
+
+	closer, err := n.startTask(opStreamPDirs)
+	if err != nil {
+	}
+	defer closer.Done()
+
+	// time.Sleep(time.Minute * 3)
+
 	var writer badgerWriter
 	sw := pstore.NewStreamWriter()
 	defer sw.Cancel()
@@ -159,7 +171,7 @@ func (w *grpcWorker) StreamPt(stream pb.Worker_StreamPtServer) error {
 	// Propose a stream operation to the raft node.
 	currentNode := groups().Node
 	streamProposal := &pb.ReqPStream{Addr: currentNode.MyAddr}
-	err := currentNode.proposeAndWait(stream.Context(), &pb.Proposal{Reqpstream: streamProposal})
+	err = currentNode.proposeAndWait(stream.Context(), &pb.Proposal{Reqpstream: streamProposal})
 	if err != nil {
 		return err
 	}

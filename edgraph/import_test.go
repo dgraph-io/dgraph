@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -122,7 +123,7 @@ func TestInitiateSnapshotStreamForHA(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	state, err := hc.GetAlphaState()
+	state, err := hc.GetAlphaState("")
 	require.NoError(t, err)
 
 	pubPort, err := c.GetAlphaGrpcPublicPort()
@@ -160,7 +161,7 @@ func TestInitiateSnapshotStreamForHASharded(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	state, err := hc.GetAlphaState()
+	state, err := hc.GetAlphaState("")
 	require.NoError(t, err)
 	pubPort, err := c.GetAlphaGrpcPublicPort()
 	require.NoError(t, err)
@@ -189,14 +190,37 @@ func TestInitiateSnapshotStreamForHASharded(t *testing.T) {
 }
 
 func TestImportApis(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(2).WithNumZeros(1).WithReplicas(1)
+	bulkConf := dgraphtest.NewClusterConfig().WithNumAlphas(6).WithNumZeros(1).WithReplicas(3).
+		WithBulkLoadOutDir(t.TempDir())
+	c1, err := dgraphtest.NewLocalCluster(bulkConf)
+	require.NoError(t, err)
+	baseDir := t.TempDir()
+
+	dataPath, err := dgraphtest.DownloadDataFiles()
+	require.NoError(t, err)
+	fmt.Println("base dir is ------------>", dataPath)
+	require.NoError(t, c1.StartZero(0))
+	// bulk load data
+	schemaFile := filepath.Join(dataPath, "1million.schema")
+	rdfFile := filepath.Join(dataPath, "1million.rdf.gz")
+	opts := dgraphtest.BulkOpts{
+		DataFiles:   []string{rdfFile},
+		SchemaFiles: []string{schemaFile},
+		OutDir:      filepath.Join(baseDir, "out"),
+	}
+	require.NoError(t, c1.BulkLoad(opts))
+
+	defer func() { c1.Cleanup(t.Failed()) }()
+
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(6).WithNumZeros(1).WithReplicas(3)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
 	// defer func() { c.Cleanup(t.Failed()) }()
+
 	require.NoError(t, c.Start())
 
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
+	// hc, err := c.HTTPClient()
+	// require.NoError(t, err)
 	// check current leader of cluster
 
 	gc, cleanup, err := c.Client()
@@ -215,6 +239,7 @@ func TestImportApis(t *testing.T) {
 	importClient, err := NewImportClient(dgraphtest.GetLocalHostUrl(pubPort, ""),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
+	// time.Sleep(time.Minute * 3)
 
 	// initiating snapshot
 	resp, err := importClient.InitiateSnapshotStream(context.Background())
@@ -226,17 +251,29 @@ func TestImportApis(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "the server is in draining mode")
 
-	err = importClient.StreamSnapshot(context.Background(), "/home/shiva/workspace/dgraph-work/benchmarks/data/out", resp.Groups)
+	outDir := filepath.Join(baseDir, "/out")
+	err = importClient.StreamSnapshot(context.Background(), outDir, resp.Groups)
 	require.NoError(t, err)
 
-	stateResp, err := hc.GetAlphaState()
-	require.NoError(t, err)
-	fmt.Println("talt are---------------->", stateResp)
+	dgraphapi.WaitForRestore(c)
 
-	for _, group := range stateResp.Groups {
-		for _, tablet := range group.Tablets {
-			fmt.Println("talt are---------------->", tablet.Predicate)
-		}
-	}
+	// time.Sleep(time.Minute * 2)
+	// alphaHttpPort, err := c.GetAlphaHttpPublicPort(0)
+	// require.NoError(t, err)
+	// url := dgraphtest.GetLocalHttpHostUrl(alphaHttpPort, "/state")
+	// stateResp, err := hc.GetAlphaState(url)
+	// require.NoError(t, err)
+	// // fmt.Println("fulll resp is--------------->", stateResp)
+	// fmt.Println("rsp ------------alpha-0-group1 are---------------->", stateResp.Groups[1].Tablets)
+	// fmt.Println("rsp ------------alpha-0-group2 are---------------->", stateResp.Groups[2].Tablets)
 
+	// alphaHttpPort, err = c.GetAlphaHttpPublicPort(1)
+	// require.NoError(t, err)
+	// url = dgraphtest.GetLocalHttpHostUrl(alphaHttpPort, "/state")
+	// stateResp, err = hc.GetAlphaState(url)
+	// require.NoError(t, err)
+	// // fmt.Println("fulll 2 resp is--------------->", stateResp)
+
+	// fmt.Println("rsp ------------alpha-2-group1  are---------------->", stateResp.Groups[1].Tablets)
+	// fmt.Println("rsp ------------alpha-2-group2 a are---------------->", stateResp.Groups[2].Tablets)
 }

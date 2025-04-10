@@ -1905,7 +1905,6 @@ func (s *ServerV25) InitiateSnapshotStream(ctx context.Context,
 }
 
 func (s *ServerV25) StreamSnapshot(stream apiv25.Dgraph_StreamSnapshotServer) error {
-
 	if err := worker.DoStreamPDir(stream); err != nil {
 		return err
 	}

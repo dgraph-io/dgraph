@@ -124,6 +124,10 @@ func (c *LocalCluster) init() error {
 		return errors.Wrap(err, "error while making binariesPath")
 	}
 
+	if err := os.Mkdir(dataPath, os.ModePerm); err != nil && !os.IsExist(err) {
+		return errors.Wrap(err, "error while making datapath")
+	}
+
 	for _, vol := range c.conf.volumes {
 		if err := c.createVolume(vol); err != nil {
 			return err
@@ -1175,7 +1179,7 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 }
 
 func (c *LocalCluster) GetAlphaGrpcPublicPort() (string, error) {
-	return publicPort(c.dcli, c.alphas[0], alphaGrpcPort)
+	return publicPort(c.dcli, c.alphas[1], alphaGrpcPort)
 }
 
 func (c *LocalCluster) GetAlphaHttpPublicPort(id int) (string, error) {
@@ -1192,4 +1196,8 @@ func (c *LocalCluster) GetTempDir() string {
 
 func GetLocalHostUrl(pubPort, endpoint string) string {
 	return "0.0.0.0:" + pubPort + endpoint
+}
+
+func GetLocalHttpHostUrl(pubPort, endpoint string) string {
+	return "http://0.0.0.0:" + pubPort + endpoint
 }
