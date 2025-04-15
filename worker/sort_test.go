@@ -394,7 +394,67 @@ func TestScalarPredicateCount(t *testing.T) {
 	l.RUnlock()
 }
 
-func TestSingleUid(t *testing.T) {
+func TestSingleUidReplacement(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	x.Check(err)
+	pstore = ps
+	posting.Init(ps, 0, false)
+	Init(ps)
+	err = schema.ParseBytes([]byte("singleUidReplaceTest: uid ."), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	txn := posting.Oracle().RegisterStartTs(5)
+	attr := x.GalaxyAttr("singleUidReplaceTest")
+
+	// Txn 1. Set 1 -> 2
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		ValueId: 2,
+		Attr:    attr,
+		Entity:  1,
+		Op:      pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer := posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 7))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(7)
+
+	// Txn 2. Set 1 -> 3
+	txn = posting.Oracle().RegisterStartTs(9)
+
+	x.Check(runMutation(ctx, &pb.DirectedEdge{
+		ValueId: 3,
+		Attr:    attr,
+		Entity:  1,
+		Op:      pb.DirectedEdge_SET,
+	}, txn))
+
+	txn.Update()
+	writer = posting.NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 11))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(11)
+
+	key := x.DataKey(attr, 1)
+
+	// Reading the david index, we should see 2 inserted, 1 deleted
+	txn = posting.Oracle().RegisterStartTs(15)
+	l, err := txn.Get(key)
+	require.NoError(t, err)
+
+	uids, err := l.Uids(posting.ListOptions{ReadTs: 15})
+	require.NoError(t, err)
+	require.Equal(t, uids.Uids, []uint64{3})
+}
+
+func TestSingleString(t *testing.T) {
 	dir, err := os.MkdirTemp("", "storetest_")
 	x.Check(err)
 	defer os.RemoveAll(dir)
