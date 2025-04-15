@@ -737,6 +737,14 @@ func NewPosting(t *pb.DirectedEdge) *pb.Posting {
 	return p
 }
 
+func createDeleteAllPosting() *pb.Posting {
+	return &pb.Posting{
+		Op:    Del,
+		Value: []byte(x.Star),
+		Uid:   math.MaxUint64,
+	}
+}
+
 func hasDeleteAll(mpost *pb.Posting) bool {
 	return mpost.Op == Del && bytes.Equal(mpost.Value, []byte(x.Star)) && len(mpost.LangTag) == 0
 }
@@ -768,30 +776,11 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate, hasCountI
 		// be done because the fingerprint for the value is not math.MaxUint64 as is
 		// the case with the rest of the scalar predicates.
 		newPlist := &pb.PostingList{}
-		newPlist.Postings = append(newPlist.Postings, mpost)
-
-		// Add the deletions in the existing plist because those postings are not picked
-		// up by iterating. Not doing so would result in delete operations that are not
-		// applied when the transaction is committed.
-		l.mutationMap.currentEntries = &pb.PostingList{}
-		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
-			// Ignore values which have the same uid as they will get replaced
-			// by the current value.
-			if obj.Uid == mpost.Uid {
-				return nil
-			}
-
-			// Mark all other values as deleted. By the end of the iteration, the
-			// list of postings will contain deleted operations and only one set
-			// for the mutation stored in mpost.
-			objCopy := proto.Clone(obj).(*pb.Posting)
-			objCopy.Op = Del
-			newPlist.Postings = append(newPlist.Postings, objCopy)
-			return nil
-		})
-		if err != nil {
-			return err
+		if mpost.Op != Del {
+			// If we are setting a new value then we can just delete all the older values.
+			newPlist.Postings = append(newPlist.Postings, createDeleteAllPosting())
 		}
+		newPlist.Postings = append(newPlist.Postings, mpost)
 		l.mutationMap.setCurrentEntries(mpost.StartTs, newPlist)
 		return nil
 	}
