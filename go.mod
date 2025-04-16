@@ -4,8 +4,6 @@ go 1.23.8
 
 toolchain go1.24.1
 
-replace github.com/dgraph-io/dgo/v240 => /home/harshil/Projects/dgo
-
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
