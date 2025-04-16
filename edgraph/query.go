@@ -36,7 +36,7 @@ func (s *ServerV25) RunDQL(ctx context.Context, req *apiv25.RunDQLRequest) (*api
 
 	nsID, err := getNamespaceIDFromName(x.AttachJWTNamespace(ctx), req.NsName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error retrieving namespace ID: %w", err)
 	}
 
 	apiReq, err := dql.ParseDQL(req.DqlQuery)
