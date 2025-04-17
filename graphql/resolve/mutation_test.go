@@ -17,11 +17,11 @@ import (
 	"gopkg.in/yaml.v3"
 
 	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"
-	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v24/graphql/test"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/dgraph"
+	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/graphql/test"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // Tests showing that GraphQL mutations -> Dgraph mutations

@@ -8,7 +8,7 @@ package hnsw
 import (
 	"container/heap"
 
-	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
 )
 
 const notAUid uint64 = 0

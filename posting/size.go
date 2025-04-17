@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
 )
 
 const sizeOfBucket = 144

@@ -26,11 +26,11 @@ endif
 GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
-dgraphVersion   = github.com/hypermodeinc/dgraph/v24/x.dgraphVersion
-dgraphCodename  = github.com/hypermodeinc/dgraph/v24/x.dgraphCodename
-gitBranch       = github.com/hypermodeinc/dgraph/v24/x.gitBranch
-lastCommitSHA   = github.com/hypermodeinc/dgraph/v24/x.lastCommitSHA
-lastCommitTime  = github.com/hypermodeinc/dgraph/v24/x.lastCommitTime
+dgraphVersion   = github.com/hypermodeinc/dgraph/v25/x.dgraphVersion
+dgraphCodename  = github.com/hypermodeinc/dgraph/v25/x.dgraphCodename
+gitBranch       = github.com/hypermodeinc/dgraph/v25/x.gitBranch
+lastCommitSHA   = github.com/hypermodeinc/dgraph/v25/x.lastCommitSHA
+lastCommitTime  = github.com/hypermodeinc/dgraph/v25/x.lastCommitTime
 
 BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
 

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
 	"github.com/stretchr/testify/require"
 )
 

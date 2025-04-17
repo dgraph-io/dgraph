@@ -15,8 +15,8 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/xy"
 
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // QueryType indicates the type of geo query.

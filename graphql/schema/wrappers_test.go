@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {

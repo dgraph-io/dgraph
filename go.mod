@@ -1,4 +1,4 @@
-module github.com/hypermodeinc/dgraph/v24
+module github.com/hypermodeinc/dgraph/v25
 
 go 1.23.8
 
@@ -162,5 +162,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )
-
-retract v24.0.3 // should have been a minor release instead of a patch

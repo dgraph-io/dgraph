@@ -8,7 +8,7 @@ package chunker
 import (
 	"strconv"
 
-	"github.com/hypermodeinc/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v25/lex"
 )
 
 // The constants represent different types of lexed Items possible for an rdf N-Quad.

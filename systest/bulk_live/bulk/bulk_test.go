@@ -10,7 +10,7 @@ package main
 import (
 	"testing"
 
-	"github.com/hypermodeinc/dgraph/v24/systest/bulk_live/common"
+	"github.com/hypermodeinc/dgraph/v25/systest/bulk_live/common"
 )
 
 func TestBulkCases(t *testing.T) {

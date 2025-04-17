@@ -8,7 +8,7 @@ package bulk
 import (
 	"sync"
 
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type shardMap struct {

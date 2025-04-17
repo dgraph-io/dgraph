@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v24/acl"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/acl"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func TestAclCache(t *testing.T) {

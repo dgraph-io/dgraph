@@ -11,11 +11,11 @@ import (
 	cindex "github.com/google/codesearch/index"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/hypermodeinc/dgraph/v24/algo"
-	"github.com/hypermodeinc/dgraph/v24/posting"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/tok"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/algo"
+	"github.com/hypermodeinc/dgraph/v25/posting"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/tok"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var errRegexTooWide = errors.New(

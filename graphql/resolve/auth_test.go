@@ -21,13 +21,13 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/hypermodeinc/dgraph/v24/dql"
-	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"
-	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"
-	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v24/graphql/test"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/dql"
+	"github.com/hypermodeinc/dgraph/v25/graphql/authorization"
+	"github.com/hypermodeinc/dgraph/v25/graphql/dgraph"
+	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/graphql/test"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type AuthQueryRewritingCase struct {

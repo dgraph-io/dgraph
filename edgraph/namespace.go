@@ -21,8 +21,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
-	"github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (

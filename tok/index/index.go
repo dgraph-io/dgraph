@@ -8,8 +8,8 @@ package index
 import (
 	"context"
 
-	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
-	opts "github.com/hypermodeinc/dgraph/v24/tok/options"
+	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
+	opts "github.com/hypermodeinc/dgraph/v25/tok/options"
 )
 
 // IndexFactory is responsible for being able to create, find, and remove

@@ -18,8 +18,8 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/authorization"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of

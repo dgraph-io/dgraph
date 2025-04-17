@@ -7,7 +7,7 @@
 package dql
 
 import (
-	"github.com/hypermodeinc/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v25/lex"
 )
 
 const (
