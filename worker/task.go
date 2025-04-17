@@ -1819,9 +1819,9 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
-func checkUidEmpty(uids []uint64) bool {
-	for _, i := range uids {
-		if i == 0 {
+func checkUidZero(uids []uint64) bool {
+	for _, uid := range uids {
+		if uid == 0 {
 			return true
 		}
 	}
@@ -1829,7 +1829,7 @@ func checkUidEmpty(uids []uint64) bool {
 }
 
 func planForEqFilter(fc *functionContext, pred string, uidlist []uint64) {
-	if checkUidEmpty(uidlist) {
+	if checkUidZero(uidlist) {
 		// We have a uid which has 0 in it. Mostly it would happen when there is only 0. But any one item
 		// being 0 could cause the query planner to fail. In case of 0 being present, we neeed to query the
 		// index itself.
@@ -1913,8 +1913,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 
 		generateIneqTokens := true
-		if fc.fname != eq && uint64(len(q.UidList.Uids)) < Config.TypeFilterUidLimit {
-			if !checkUidEmpty(q.UidList.Uids) {
+		if fc.fname != eq && q.UidList != nil && uint64(len(q.UidList.Uids)) < Config.TypeFilterUidLimit {
+			if !checkUidZero(q.UidList.Uids) {
 				fc.n = len(q.UidList.Uids)
 				generateIneqTokens = false
 			}
