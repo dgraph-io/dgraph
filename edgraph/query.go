@@ -34,22 +34,25 @@ func (s *ServerV25) RunDQL(ctx context.Context, req *apiv25.RunDQLRequest) (*api
 			"v25.RunDQL can only be called by the guardian of the galaxy. "+s.Message())
 	}
 
+	nsID, err := getNamespaceIDFromName(x.AttachJWTNamespace(ctx), req.NsName)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving namespace ID: %w", err)
+	}
+
 	apiReq, err := dql.ParseDQL(req.DqlQuery)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing DQL query: %w", err)
 	}
 
-	nsID, err := getNamespaceIDFromName(x.AttachJWTNamespace(ctx), req.NsName)
-	if err != nil {
-		return nil, err
+	apiReq.Vars = req.Vars
+	apiReq.ReadOnly = req.ReadOnly
+	apiReq.BestEffort = req.BestEffort
+	apiReq.RespFormat = api.Request_JSON
+	if req.RespFormat == apiv25.RespFormat_RDF {
+		apiReq.RespFormat = api.Request_RDF
 	}
-
 	if len(apiReq.Mutations) > 0 {
 		apiReq.CommitNow = true
-		apiReq.Vars = req.Vars
-		apiReq.ReadOnly = req.ReadOnly
-		apiReq.BestEffort = req.BestEffort
-		apiReq.RespFormat = api.Request_RespFormat(req.RespFormat)
 	}
 
 	apiResp, err := (&Server{}).doQuery(x.AttachNamespace(ctx, nsID),
