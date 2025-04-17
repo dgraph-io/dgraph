@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
 	"github.com/hypermodeinc/dgraph/v24/graphql/test"
 	"github.com/hypermodeinc/dgraph/v24/x"

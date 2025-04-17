@@ -5,7 +5,7 @@
 
 # Update BADGER_PB_VERSION when upgrading Badger major versions
 BADGER_PB_VERSION = 4
-DGO_PB_VERSION = 240
+DGO_PB_VERSION = 250
 
 DGO_PATH    := github.com/dgraph-io/dgo/v${DGO_PB_VERSION}
 BADGER_PATH := github.com/dgraph-io/badger/v${BADGER_PB_VERSION}
@@ -57,6 +57,6 @@ regenerate: tidy-deps copy-protos check clean
 		--go-grpc_opt=paths=source_relative \
 		--go_opt=M{DGO_PATH}/protos/api.proto={DGO_PATH}/protos/api \
 		pb.proto
-	@$(MAKE) patch-pb  
+	@$(MAKE) patch-pb
 	@rm -rf ${TMPDIR}
 	@echo Done.

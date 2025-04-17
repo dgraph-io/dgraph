@@ -23,8 +23,8 @@ import (
 	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v3"
 
-	"github.com/dgraph-io/dgo/v240"
-	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgo/v250"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	admin2 "github.com/hypermodeinc/dgraph/v24/graphql/admin"
 	"github.com/hypermodeinc/dgraph/v24/graphql/resolve"
 	"github.com/hypermodeinc/dgraph/v24/graphql/schema"

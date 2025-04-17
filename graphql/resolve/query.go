@@ -14,7 +14,7 @@ import (
 	"github.com/golang/glog"
 	"go.opentelemetry.io/otel/trace"
 
-	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/dql"
 	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"
 	"github.com/hypermodeinc/dgraph/v24/graphql/schema"

@@ -18,7 +18,7 @@ package pb
 import (
 	context "context"
 	pb "github.com/dgraph-io/badger/v4/pb"
-	api "github.com/dgraph-io/dgo/v240/protos/api"
+	api "github.com/dgraph-io/dgo/v250/protos/api"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
