@@ -168,12 +168,12 @@ func (l *loader) mutate(req *request) error {
 		Mutations: []*api.Mutation{req.Mutation},
 	}
 	_, err := txn.Do(l.opts.Ctx, request)
-	atomic.AddInt32(&l.inflight, -1)
 	return err
 }
 
 func (l *loader) request(req *request) {
 	atomic.AddUint64(&l.reqNum, 1)
+	defer atomic.AddInt32(&l.inflight, -1)
 	err := l.mutate(req)
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
@@ -421,12 +421,12 @@ func (l *loader) makeRequests() {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 
-outer:
+loop:
 	for {
 		select {
 		case req, ok := <-l.reqs:
 			if !ok {
-				break outer
+				break loop
 			}
 			req.conflicts = l.conflictKeysForReq(req)
 			if l.addConflictKeys(req) {
