@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 
-	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/edgraph"
 	"github.com/hypermodeinc/dgraph/v24/graphql/api"
 	"github.com/hypermodeinc/dgraph/v24/graphql/dgraph"

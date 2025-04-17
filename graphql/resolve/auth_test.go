@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v3"
 
-	dgoapi "github.com/dgraph-io/dgo/v240/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/hypermodeinc/dgraph/v24/dql"
 	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"

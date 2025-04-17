@@ -21,7 +21,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v24/testutil"

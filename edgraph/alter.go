@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgo/v240/protos/api"
-	apiv25 "github.com/dgraph-io/dgo/v240/protos/api.v25"
+	"github.com/dgraph-io/dgo/v250/protos/api"
+	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
 	"github.com/hypermodeinc/dgraph/v24/dql"
 	"github.com/hypermodeinc/dgraph/v24/protos/pb"
 	"github.com/hypermodeinc/dgraph/v24/query"
