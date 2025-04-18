@@ -17,9 +17,9 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func (asuite *AclTestSuite) TestCurlAuthorization() {

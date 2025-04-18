@@ -150,7 +150,7 @@ delivery process.
 
 Non-integration unit tests exist for many core packages that can be exercised without invoking the
 testing framework. For instance, to unit test the core DQL parsing package:
-`go test github.com/hypermodeinc/dgraph/v24/dql`.
+`go test github.com/hypermodeinc/dgraph/v25/dql`.
 
 ## Contributing
 

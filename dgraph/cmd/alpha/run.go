@@ -41,14 +41,14 @@ import (
 	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/audit"
-	"github.com/hypermodeinc/dgraph/v24/edgraph"
-	"github.com/hypermodeinc/dgraph/v24/graphql/admin"
-	"github.com/hypermodeinc/dgraph/v24/posting"
-	"github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/tok"
-	"github.com/hypermodeinc/dgraph/v24/worker"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/audit"
+	"github.com/hypermodeinc/dgraph/v25/edgraph"
+	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
+	"github.com/hypermodeinc/dgraph/v25/posting"
+	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/tok"
+	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (

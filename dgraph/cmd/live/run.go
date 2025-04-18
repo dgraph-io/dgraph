@@ -36,13 +36,13 @@ import (
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/chunker"
-	"github.com/hypermodeinc/dgraph/v24/enc"
-	"github.com/hypermodeinc/dgraph/v24/filestore"
-	schemapkg "github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/types"
-	"github.com/hypermodeinc/dgraph/v24/x"
-	"github.com/hypermodeinc/dgraph/v24/xidmap"
+	"github.com/hypermodeinc/dgraph/v25/chunker"
+	"github.com/hypermodeinc/dgraph/v25/enc"
+	"github.com/hypermodeinc/dgraph/v25/filestore"
+	schemapkg "github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/hypermodeinc/dgraph/v25/xidmap"
 )
 
 type options struct {

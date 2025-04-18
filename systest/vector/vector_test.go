@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v24/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v24/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
+	"github.com/hypermodeinc/dgraph/v25/x"
 	"github.com/stretchr/testify/require"
 )
 

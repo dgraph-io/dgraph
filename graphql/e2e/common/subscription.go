@@ -15,7 +15,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
 )
 
 // Reference: https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md

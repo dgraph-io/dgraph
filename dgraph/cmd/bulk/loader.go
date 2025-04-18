@@ -28,14 +28,14 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/hypermodeinc/dgraph/v24/chunker"
-	"github.com/hypermodeinc/dgraph/v24/enc"
-	"github.com/hypermodeinc/dgraph/v24/filestore"
-	gqlSchema "github.com/hypermodeinc/dgraph/v24/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/x"
-	"github.com/hypermodeinc/dgraph/v24/xidmap"
+	"github.com/hypermodeinc/dgraph/v25/chunker"
+	"github.com/hypermodeinc/dgraph/v25/enc"
+	"github.com/hypermodeinc/dgraph/v25/filestore"
+	gqlSchema "github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/hypermodeinc/dgraph/v25/xidmap"
 )
 
 type options struct {

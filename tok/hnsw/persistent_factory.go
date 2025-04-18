@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"sync"
 
-	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
-	"github.com/hypermodeinc/dgraph/v24/tok/index"
-	opt "github.com/hypermodeinc/dgraph/v24/tok/options"
+	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
+	"github.com/hypermodeinc/dgraph/v25/tok/index"
+	opt "github.com/hypermodeinc/dgraph/v25/tok/options"
 	"github.com/pkg/errors"
 )
 

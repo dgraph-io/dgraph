@@ -20,14 +20,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/hypermodeinc/dgraph/v24/algo"
-	"github.com/hypermodeinc/dgraph/v24/dql"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/schema"
-	"github.com/hypermodeinc/dgraph/v24/types"
-	"github.com/hypermodeinc/dgraph/v24/types/facets"
-	"github.com/hypermodeinc/dgraph/v24/worker"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/algo"
+	"github.com/hypermodeinc/dgraph/v25/dql"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/hypermodeinc/dgraph/v25/types/facets"
+	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 /*

@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hypermodeinc/dgraph/v24/graphql/admin"
-	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v24/worker"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
+	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type allowedMethods map[string]bool

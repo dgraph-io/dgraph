@@ -9,8 +9,8 @@ import (
 	"container/heap"
 	"sort"
 
-	"github.com/hypermodeinc/dgraph/v24/codec"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/codec"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
 )
 
 // ApplyFilterPacked applies the filter to a list of packed uids.

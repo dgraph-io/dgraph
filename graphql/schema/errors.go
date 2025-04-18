@@ -10,7 +10,7 @@ import (
 
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // AsGQLErrors formats an error as a list of GraphQL errors.

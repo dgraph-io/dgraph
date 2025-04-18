@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/hypermodeinc/dgraph/v25/conn"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
 )
 
 func TestRemoveNode(t *testing.T) {

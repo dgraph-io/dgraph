@@ -11,9 +11,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v24/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v24/graphql/test"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/hypermodeinc/dgraph/v25/graphql/test"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func TestErrorOnIncorrectValueType(t *testing.T) {

@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/hypermodeinc/dgraph/v24/graphql/authorization"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/authorization"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (

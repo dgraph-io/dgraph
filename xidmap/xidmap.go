@@ -24,8 +24,8 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var maxLeaseRegex = regexp.MustCompile(`currMax:([0-9]+)`)

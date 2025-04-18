@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func parentCoverTokens(parents s2.CellUnion, cover s2.CellUnion) []string {

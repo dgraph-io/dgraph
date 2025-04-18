@@ -21,9 +21,9 @@ package worker
 // "github.com/stretchr/testify/require"
 // "google.golang.org/grpc"
 
-// "github.com/hypermodeinc/dgraph/v24/posting"
-// "github.com/hypermodeinc/dgraph/v24/protos/pb"
-// "github.com/hypermodeinc/dgraph/v24/x"
+// "github.com/hypermodeinc/dgraph/v25/posting"
+// "github.com/hypermodeinc/dgraph/v25/protos/pb"
+// "github.com/hypermodeinc/dgraph/v25/x"
 // )
 
 // func checkShard(ps *badger.DB) (int, []byte) {

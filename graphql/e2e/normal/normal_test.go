@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/graphql/e2e/common"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/graphql/e2e/common"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func TestRunAll_Normal(t *testing.T) {
