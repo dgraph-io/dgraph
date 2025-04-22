@@ -405,7 +405,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				hop:  item.hop + 1,
 				path: route{route: curPath},
 			}
-			if pq.Len() > sg.Params.MaxHeapSize {
+			if int64(pq.Len()) > sg.Params.MaxFrontierSize {
 				pq.Pop()
 			}
 			heap.Push(&pq, node)
@@ -561,7 +561,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					cost: nodeCost,
 					hop:  item.hop + 1,
 				}
-				if pq.Len() > sg.Params.MaxHeapSize {
+				if int64(pq.Len()) > sg.Params.MaxFrontierSize {
 					pq.Pop()
 				}
 				heap.Push(&pq, node)
