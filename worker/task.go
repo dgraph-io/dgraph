@@ -1969,6 +1969,10 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			fc.tokens = append(fc.tokens, tokens...)
 		}
 
+		if !generateIneqTokens {
+			return fc, nil
+		}
+
 		// In case of non-indexed predicate, there won't be any tokens. We will fetch value
 		// from data keys.
 		// If number of index keys is more than no. of uids to filter, so its better to fetch values
