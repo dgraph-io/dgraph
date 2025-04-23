@@ -17,8 +17,8 @@ import (
 	attribute "go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var emptyAssignedIds pb.AssignedIds

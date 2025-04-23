@@ -24,8 +24,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v240/protos/api"
-	"github.com/hypermodeinc/dgraph/v24/testutil"
+	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/hypermodeinc/dgraph/v25/testutil"
 )
 
 // TODO: This test was used just to make sure some really basic examples work.
@@ -722,8 +722,8 @@ func TestGoldenData(t *testing.T) {
 	}
 
 	s := newSuiteFromFile(t,
-		os.ExpandEnv("$GOPATH/src/github.com/hypermodeinc/dgraph/v24/systest/data/goldendata.schema"),
-		os.ExpandEnv("$GOPATH/src/github.com/hypermodeinc/dgraph/v24/systest/data/goldendata.rdf.gz"),
+		os.ExpandEnv("$GOPATH/src/github.com/hypermodeinc/dgraph/v25/systest/data/goldendata.schema"),
+		os.ExpandEnv("$GOPATH/src/github.com/hypermodeinc/dgraph/v25/systest/data/goldendata.rdf.gz"),
 		"",
 	)
 	defer s.cleanup(t)

@@ -12,7 +12,7 @@ syntax = "proto3";
 
 package pb;
 
-import "github.com/dgraph-io/dgo/v240/protos/api.proto";
+import "github.com/dgraph-io/dgo/v250/protos/api.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
 import "google/protobuf/descriptor.proto";
 

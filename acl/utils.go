@@ -7,15 +7,15 @@ package acl
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	"github.com/dgraph-io/dgo/v240"
-	"github.com/dgraph-io/dgo/v240/protos/api"
+	"github.com/dgraph-io/dgo/v250"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // GetGroupIDs returns a slice containing the group ids of all the given groups.
@@ -86,7 +86,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 
 	err = json.Unmarshal(resp.GetJson(), &m)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to unmarshal the query user response")
+		return nil, fmt.Errorf("unable to unmarshal the query user response: %w", err)
 	}
 	users := m[userKey]
 	if len(users) == 0 {
@@ -94,7 +94,7 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 		return nil, nil
 	}
 	if len(users) > 1 {
-		return nil, errors.Errorf("Found multiple users: %s", resp.GetJson())
+		return nil, fmt.Errorf("found multiple users: %s", resp.GetJson())
 	}
 	return &users[0], nil
 }
@@ -136,7 +136,7 @@ func UnmarshalGroup(input []byte, groupKey string) (group *Group, err error) {
 		return nil, nil
 	}
 	if len(groups) > 1 {
-		return nil, errors.Errorf("found multiple groups: %s", input)
+		return nil, fmt.Errorf("found multiple groups: %s", input)
 	}
 
 	return &groups[0], nil

@@ -15,10 +15,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v24/lex"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/types"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/lex"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (
@@ -2691,7 +2691,7 @@ func validKeyAtRoot(k string) bool {
 	switch k {
 	case "func", "orderasc", "orderdesc", "first", "offset", "after":
 		return true
-	case "from", "to", "numpaths", "minweight", "maxweight":
+	case "from", "to", "numpaths", "minweight", "maxweight", "maxfrontiersize":
 		// Specific to shortest path
 		return true
 	case "depth":

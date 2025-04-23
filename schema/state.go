@@ -6,7 +6,7 @@
 package schema
 
 import (
-	"github.com/hypermodeinc/dgraph/v24/lex"
+	"github.com/hypermodeinc/dgraph/v25/lex"
 )
 
 // Constants representing type of different graphql lexed items.

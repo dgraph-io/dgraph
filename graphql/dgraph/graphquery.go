@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hypermodeinc/dgraph/v24/dql"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/dql"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // AsString writes query as an indented dql query string.  AsString doesn't

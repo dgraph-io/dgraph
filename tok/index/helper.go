@@ -12,7 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/golang/glog"
-	c "github.com/hypermodeinc/dgraph/v24/tok/constraints"
+	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
 )
 
 // BytesAsFloatArray[T c.Float](encoded) converts encoded into a []T,

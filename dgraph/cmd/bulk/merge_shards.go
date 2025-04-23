@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (

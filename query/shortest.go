@@ -13,11 +13,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v24/algo"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/types"
-	"github.com/hypermodeinc/dgraph/v24/types/facets"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/algo"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/hypermodeinc/dgraph/v25/types/facets"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type pathInfo struct {
@@ -405,6 +405,9 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				hop:  item.hop + 1,
 				path: route{route: curPath},
 			}
+			if int64(pq.Len()) > sg.Params.MaxFrontierSize {
+				pq.Pop()
+			}
 			heap.Push(&pq, node)
 		}
 		// Return the popped nodes path to pool.
@@ -557,6 +560,9 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					uid:  toUID,
 					cost: nodeCost,
 					hop:  item.hop + 1,
+				}
+				if int64(pq.Len()) > sg.Params.MaxFrontierSize {
+					pq.Pop()
 				}
 				heap.Push(&pq, node)
 			} else {

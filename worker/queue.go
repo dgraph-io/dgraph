@@ -19,10 +19,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v24/conn"
-	"github.com/hypermodeinc/dgraph/v24/protos/pb"
-	"github.com/hypermodeinc/dgraph/v24/raftwal"
-	"github.com/hypermodeinc/dgraph/v24/x"
+	"github.com/hypermodeinc/dgraph/v25/conn"
+	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/raftwal"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // TaskStatusOverNetwork fetches the status of a task over the network. Alphas only know about the

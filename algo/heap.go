@@ -6,7 +6,7 @@
 package algo
 
 import (
-	"github.com/hypermodeinc/dgraph/v24/codec"
+	"github.com/hypermodeinc/dgraph/v25/codec"
 )
 
 type elem struct {
