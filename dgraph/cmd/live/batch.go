@@ -77,7 +77,6 @@ type loader struct {
 	conflicts map[uint64]struct{}
 	uidsLock  sync.RWMutex
 
-	reqNum     uint64
 	reqs       chan *request
 	zeroconn   *grpc.ClientConn
 	schema     *Schema
@@ -161,6 +160,7 @@ func (l *loader) infinitelyRetry(req *request) {
 
 func (l *loader) mutate(req *request) error {
 	atomic.AddInt32(&l.inflight, 1)
+	defer atomic.AddInt32(&l.inflight, -1)
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
 	request := &api.Request{
@@ -172,8 +172,6 @@ func (l *loader) mutate(req *request) error {
 }
 
 func (l *loader) request(req *request) {
-	atomic.AddUint64(&l.reqNum, 1)
-	defer atomic.AddInt32(&l.inflight, -1)
 	err := l.mutate(req)
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
