@@ -165,6 +165,10 @@ type params struct {
 	MaxWeight float64
 	// MinWeight is the min weight allowed in a path returned by the shortest path algorithm.
 	MinWeight float64
+	// MaxFrontierSize limits the number of candidate paths stored in the priority queue.
+	// During shortest path computation. This prevents out-of-memory errors on large graphs
+	// but may affect solution optimality if set too low.
+	MaxFrontierSize int64
 
 	// ExploreDepth is used by recurse and shortest path queries to specify the maximum graph
 	// depth to explore.
@@ -712,6 +716,16 @@ func (args *params) fill(gq *dql.GraphQuery) error {
 			args.MinWeight = minWeight
 		} else if !ok {
 			args.MinWeight = -math.MaxFloat64
+		}
+
+		if v, ok := gq.Args["maxfrontiersize"]; ok {
+			maxfrontiersize, err := strconv.ParseInt(v, 0, 64)
+			if err != nil {
+				return err
+			}
+			args.MaxFrontierSize = maxfrontiersize
+		} else if !ok {
+			args.MaxFrontierSize = math.MaxInt64
 		}
 
 		if gq.ShortestPathArgs.From == nil || gq.ShortestPathArgs.To == nil {
@@ -2640,7 +2654,7 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 func isValidArg(a string) bool {
 	switch a {
 	case "numpaths", "from", "to", "orderasc", "orderdesc", "first", "offset", "after", "depth",
-		"minweight", "maxweight":
+		"minweight", "maxweight", "maxfrontiersize":
 		return true
 	}
 	return false
