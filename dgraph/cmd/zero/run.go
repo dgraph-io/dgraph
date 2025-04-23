@@ -199,7 +199,6 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	// keeping this flag for backward compatibility
 	telemetry := z.NewSuperFlag(Zero.Conf.GetString("telemetry")).
 		MergeAndCheckDefault(x.TelemetryDefaults)
 

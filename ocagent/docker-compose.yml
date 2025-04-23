@@ -15,8 +15,8 @@ services:
         target: /gobin
         read_only: true
     command:
-      /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false;" -o 100 --my=alpha1:7180
-      --zero=zero1:5180 --logtostderr -v=2 --trace "jaeger=http://ocagent:14268;"
+      /gobin/dgraph  ${COVERAGE_OUTPUT} alpha -o 100 --my=alpha1:7180 --zero=zero1:5180
+      --logtostderr -v=2 --trace "jaeger=http://ocagent:14268;"
   zero1:
     image: dgraph/dgraph:local
     container_name: zero1

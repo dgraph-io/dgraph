@@ -10,6 +10,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math"
+	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -23,7 +25,6 @@ import (
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/conn"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/telemetry"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
@@ -98,34 +99,39 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	glog.V(2).Infof("Starting telemetry data collection for zero...")
-	start := time.Now()
+	// sleep so that a leader is elected by this time
+	time.Sleep(time.Minute)
 
-	ticker := time.NewTicker(time.Minute * 10)
-	defer ticker.Stop()
+	glog.Infof("Starting telemetry data collection for zero...")
 
 	var lastPostedAt time.Time
-	for range ticker.C {
+	for ; true; <-time.Tick(time.Hour * 6) {
 		if !s.Node.AmLeader() {
 			continue
 		}
-		if time.Since(lastPostedAt) < time.Hour {
-			continue
-		}
-		ms := s.membershipState()
-		t := telemetry.NewZero(ms)
-		if t == nil {
-			continue
-		}
-		t.SinceHours = int(time.Since(start).Hours())
-		glog.V(2).Infof("Posting Telemetry data: %+v", t)
 
-		err := t.Post()
-		if err == nil {
-			lastPostedAt = time.Now()
-		} else {
-			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
+		if time.Since(lastPostedAt) < time.Hour*24 {
+			continue
 		}
+
+		ms := s.membershipState()
+		var numAlphas, numTablets int
+		for _, g := range ms.GetGroups() {
+			numAlphas += len(g.GetMembers())
+			numTablets += len(g.GetTablets())
+		}
+
+		url := fmt.Sprintf("https://dgraph.gateway.scarf.sh/%v/%v/%v/%v/%v",
+			x.Version(), runtime.GOOS, numAlphas, len(ms.GetZeros()), numTablets)
+		glog.Infof("Posting Telemetry data to [%v]", url)
+
+		resp, err := http.Get(url)
+		if err != nil {
+			glog.Infof("Telemetry couldn't be posted. Error: %v", err)
+			continue
+		}
+		_ = resp.Body.Close()
+		lastPostedAt = time.Now()
 	}
 }
 
