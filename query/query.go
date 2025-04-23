@@ -165,7 +165,9 @@ type params struct {
 	MaxWeight float64
 	// MinWeight is the min weight allowed in a path returned by the shortest path algorithm.
 	MinWeight float64
-	// MaxFrontierSize is the maximum size of the frontier that can be made while querying shortest path
+	// MaxFrontierSize limits the number of candidate paths stored in the priority queue.
+	// During shortest path computation. This prevents out-of-memory errors on large graphs
+	// but may affect solution optimality if set too low.
 	MaxFrontierSize int64
 
 	// ExploreDepth is used by recurse and shortest path queries to specify the maximum graph

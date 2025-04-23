@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration2
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
@@ -15,6 +15,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v25/x"
+
 	"github.com/stretchr/testify/require"
 )
 
