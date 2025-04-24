@@ -878,7 +878,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	}
 
 	if errMsg := isInverse(sch, typ.Name, field.Name, invTypeName, invField); errMsg != "" {
-		errs = append(errs, gqlerror.ErrorPosf(dir.Position, errMsg))
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position, "%v", errMsg))
 		return errs
 	}
 

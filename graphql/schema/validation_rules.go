@@ -127,9 +127,9 @@ func directiveArgumentsCheck(observers *validator.Events, addError validator.Add
 						" You can only use fields in cascade which are in type `%s`", value, typName, typName)
 					if isVariable {
 						validatorPath = append(validatorPath, ast.PathName(v))
-						err = gqlerror.ErrorPathf(validatorPath, err).Error()
+						err = gqlerror.ErrorPathf(validatorPath, "%v", err).Error()
 					}
-					addError(validator.Message(err), validator.At(directive.Position))
+					addError(validator.Message("%v", err), validator.At(directive.Position))
 					return
 				}
 
@@ -182,7 +182,7 @@ func intRangeCheck(observers *validator.Events, addError validator.AddErrFunc) {
 			if value.Kind == ast.IntValue || value.Kind == ast.StringValue {
 				_, err := strconv.ParseUint(value.Raw, 10, 64)
 				if err != nil {
-					addError(validator.Message(err.Error()), validator.At(value.Position))
+					addError(validator.Message("%v", err.Error()), validator.At(value.Position))
 				}
 				// UInt64 values parsed from query text would be propagated as strings internally
 				value.Kind = ast.StringValue

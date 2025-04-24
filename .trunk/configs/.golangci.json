@@ -13,7 +13,7 @@
     }
   },
   "run": {
-    "build-tags": ["integration"]
+    "build-tags": ["integration", "integration2", "upgrade"]
   },
   "version": "2"
 }
