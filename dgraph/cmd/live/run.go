@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
@@ -646,7 +645,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		go l.makeRequests()
 	}
 
-	rand.Seed(time.Now().Unix())
 	return l
 }
 
@@ -829,7 +827,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- errors.Wrapf(l.processFile(ctx, fs, file, opt.key), file)
+			errCh <- errors.Wrap(l.processFile(ctx, fs, file, opt.key), file)
 		}(file)
 	}
 

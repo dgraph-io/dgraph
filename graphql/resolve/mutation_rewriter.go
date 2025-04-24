@@ -1442,7 +1442,7 @@ func rewriteObject(
 								if queryAuthSelector(typ) == nil {
 									retErrors = append(retErrors, existenceError)
 								} else {
-									retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+									retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: %v", existenceError.Error()))
 								}
 
 								return nil, "", retErrors
@@ -1491,7 +1491,7 @@ func rewriteObject(
 							if queryAuthSelector(typ) == nil {
 								retErrors = append(retErrors, existenceError)
 							} else {
-								retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: "+existenceError.Error()))
+								retErrors = append(retErrors, x.GqlErrorf("GraphQL debug: %v", existenceError.Error()))
 							}
 							return nil, "", retErrors
 						}

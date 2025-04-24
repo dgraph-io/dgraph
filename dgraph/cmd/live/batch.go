@@ -116,7 +116,7 @@ func handleError(err error, isRetry bool) {
 			" Will retry after %s.\n", err, dur.Round(time.Second))
 		time.Sleep(dur)
 	case strings.Contains(s.Message(), "x509"):
-		x.Fatalf(s.Message())
+		x.Fatalf("%v", s.Message())
 	case s.Code() == codes.Aborted:
 		if !isRetry && opt.verbose {
 			fmt.Printf("Transaction aborted. Will retry in background.\n")
@@ -335,7 +335,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	}
 
 	if len(errs) > 0 {
-		return keys, fmt.Errorf(strings.Join(errs, "\n"))
+		return keys, fmt.Errorf("%v", strings.Join(errs, "\n"))
 	}
 	return keys, nil
 }

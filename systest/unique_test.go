@@ -700,7 +700,6 @@ func TestConcurrency2(t *testing.T) {
 	dg := setUpDgraph(t)
 	require.NoError(t, dg.SetupSchema(`email: string @unique @upsert  @index(exact)  .`))
 	concurrency := 100
-	rand.Seed(time.Now().UnixNano())
 	errChan := make(chan error)
 	wg := &sync.WaitGroup{}
 	for i := 0; i < concurrency; i++ {

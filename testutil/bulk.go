@@ -65,7 +65,7 @@ func LiveLoad(opts LiveOpts) error {
 	if err != nil {
 		fmt.Printf("Error %v\n", err)
 		fmt.Printf("Output %v\n", string(out))
-		return errors.Wrapf(err, string(out))
+		return errors.Wrap(err, string(out))
 	}
 	if CheckIfRace(out) {
 		return errors.New("race condition detected. check logs for more details")

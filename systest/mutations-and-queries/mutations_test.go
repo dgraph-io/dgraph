@@ -2031,7 +2031,6 @@ func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelUIDList() {
 	op.Schema = `friend: [uid] @count .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
-	rand.Seed(time.Now().Unix())
 	maxUID := 100
 	txnTotal := uint64(1000)
 	txnCur := uint64(0)
@@ -2162,7 +2161,6 @@ func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelScalarPredicate() 
 	op.Schema = `name: string @index(exact) @count .`
 	require.NoError(t, gcli.Alter(ctx, op))
 
-	rand.Seed(time.Now().Unix())
 	txnTotal := uint64(100)
 	txnCur := uint64(0)
 

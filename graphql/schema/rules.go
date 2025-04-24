@@ -431,30 +431,22 @@ func dataTypeCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 
 func nameCheck(schema *ast.Schema, defn *ast.Definition) gqlerror.List {
 	if defn.Kind != ast.Scalar && isReservedKeyWord(defn.Name) {
-		var errMesg string
-
 		if isQueryOrMutationType(defn) {
 			for _, fld := range defn.Fields {
 				// If we find any query or mutation field defined without a @custom/@lambda
 				// directive, that is an error for us.
 				if !hasCustomOrLambda(fld) {
-					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
-						"with @custom/@lambda directive. Other fields are built automatically for" +
-						" you. Found " + defn.Name + " " + fld.Name + " without @custom/@lambda."
-					break
+					return []*gqlerror.Error{gqlerror.ErrorPosf(defn.Position,
+						"GraphQL Query and Mutation types are only allowed to have fields "+
+							"with @custom/@lambda directive. Other fields are built automatically for"+
+							" you. Found %v %v without @custom/@lambda.", defn.Name, fld.Name)}
 				}
 			}
-			if errMesg == "" {
-				return nil
-			}
 		} else {
-			errMesg = fmt.Sprintf(
+			return []*gqlerror.Error{gqlerror.ErrorPosf(defn.Position,
 				"%s is a reserved word, so you can't declare a type with this name. "+
-					"Pick a different name for the type.", defn.Name,
-			)
+					"Pick a different name for the type.", defn.Name)}
 		}
-
-		return []*gqlerror.Error{gqlerror.ErrorPosf(defn.Position, errMesg)}
 	}
 
 	return nil
@@ -886,7 +878,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	}
 
 	if errMsg := isInverse(sch, typ.Name, field.Name, invTypeName, invField); errMsg != "" {
-		errs = append(errs, gqlerror.ErrorPosf(dir.Position, errMsg))
+		errs = append(errs, gqlerror.ErrorPosf(dir.Position, "%v", errMsg))
 		return errs
 	}
 

@@ -191,7 +191,6 @@ func generateDishes(rest *restaurant) []dish {
 		return nil
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	numDishes := 1 + rand.Intn(viper.GetInt(maxDishes4AnyRestaurant))
 	dishes := make([]dish, 0, numDishes)
 	// Although, costFor2 is cost for 2 people, but here we will consider it as cost of two dishes

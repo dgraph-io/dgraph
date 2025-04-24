@@ -145,7 +145,7 @@ func complete(t *testing.T, gqlSchema schema.Schema, gqlQuery, dgResponse string
 	err = schema.Unmarshal([]byte(dgResponse), &res)
 	if err != nil {
 		// TODO(abhimanyu): check if should port the test which requires this to e2e
-		resp.Errors = x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(op.Queries()[0].Location())}
+		resp.Errors = x.GqlErrorList{x.GqlErrorf("%v", err.Error()).WithLocations(op.Queries()[0].Location())}
 	}
 
 	// TODO(abhimanyu): completion can really be checked only for a single query,

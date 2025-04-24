@@ -13,7 +13,6 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
@@ -36,8 +35,6 @@ func getUids(size int) []uint64 {
 }
 
 func TestUidPack(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-
 	// Some edge case tests.
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
@@ -61,8 +58,6 @@ func TestUidPack(t *testing.T) {
 }
 
 func TestBufferUidPack(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-
 	// Some edge case tests.
 	pack := Encode([]uint64{}, 128)
 	FreePack(pack)
@@ -222,8 +217,6 @@ func TestDecoder(t *testing.T) {
 }
 
 func BenchmarkGzip(b *testing.B) {
-	rand.Seed(time.Now().UnixNano())
-
 	uids := getUids(1e6)
 	b.ResetTimer()
 	sz := uint64(len(uids)) * 8
@@ -256,8 +249,6 @@ func BenchmarkGzip(b *testing.B) {
 }
 
 func benchmarkUidPackEncode(b *testing.B, blockSize int) {
-	rand.Seed(time.Now().UnixNano())
-
 	uids := getUids(1e6)
 	sz := uint64(len(uids)) * 8
 	b.Logf("Dataset Len=%d. Size: %s", len(uids), humanize.Bytes(sz))
@@ -294,8 +285,6 @@ func BenchmarkUidPack(b *testing.B) {
 }
 
 func benchmarkUidPackDecode(b *testing.B, blockSize int) {
-	rand.Seed(time.Now().UnixNano())
-
 	uids := getUids(1e6)
 	sz := uint64(len(uids)) * 8
 	b.Logf("Dataset Len=%d. Size: %s", len(uids), humanize.Bytes(sz))
@@ -322,7 +311,6 @@ func TestEncoding(t *testing.T) {
 	bigInts[3] = 0x000f0f0000000000
 	bigInts[4] = 0x0f0f0f0f00000000
 
-	rand.Seed(time.Now().UnixNano())
 	var lengths = []int{0, 1, 2, 3, 5, 13, 18, 100, 99, 98}
 
 	for tc := range lengths {

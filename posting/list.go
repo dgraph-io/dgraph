@@ -1129,7 +1129,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	// pitr iterates through immutable postings
 	err = pitr.seek(l, afterUid, deleteBelowTs)
 	if err != nil {
-		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate "+l.print())
+		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate %v", l.print())
 	}
 
 loop:

@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -493,8 +492,6 @@ func sortUint64(nums []uint64) {
 }
 
 func fillNumsDiff(N1, N2, N3 int) ([]uint64, []uint64, []uint64) {
-	rand.Seed(time.Now().UnixNano())
-
 	commonNums := make([]uint64, N1)
 	blockNums := make([]uint64, N1+N2)
 	otherNums := make([]uint64, N1+N3)
@@ -530,8 +527,6 @@ func fillNumsDiff(N1, N2, N3 int) ([]uint64, []uint64, []uint64) {
 }
 
 func fillNums(N1, N2 int) ([]uint64, []uint64, []uint64) {
-	rand.Seed(time.Now().UnixNano())
-
 	commonNums := make([]uint64, N1)
 	blockNums := make([]uint64, N1+N2)
 	otherNums := make([]uint64, N1+N2)

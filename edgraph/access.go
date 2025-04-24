@@ -77,7 +77,7 @@ func (s *Server) Login(ctx context.Context,
 		errMsg := fmt.Sprintf("unable to get access jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		return nil, errors.Errorf("%v", errMsg)
 	}
 
 	refreshJwt, err := getRefreshJwt(user.UserID, user.Namespace)
@@ -85,7 +85,7 @@ func (s *Server) Login(ctx context.Context,
 		errMsg := fmt.Sprintf("unable to get refresh jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		return nil, errors.Errorf("%v", errMsg)
 	}
 
 	loginJwt := api.Jwt{
@@ -98,7 +98,7 @@ func (s *Server) Login(ctx context.Context,
 		errMsg := fmt.Sprintf("unable to marshal jwt (userid=%s,addr=%s):%v",
 			user.UserID, addr, err)
 		glog.Errorf(errMsg)
-		return nil, errors.Errorf(errMsg)
+		return nil, errors.Errorf("%v", errMsg)
 	}
 	resp.Json = jwtBytes
 	return resp, nil

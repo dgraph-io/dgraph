@@ -78,7 +78,7 @@ func ResetPassword(t *testing.T, token *HttpToken, userID, newPass string, nsID 
 	resp := MakeRequest(t, token, params)
 
 	if len(resp.Errors) > 0 {
-		return "", errors.Errorf(resp.Errors.Error())
+		return "", errors.Errorf("%v", resp.Errors.Error())
 	}
 
 	var result struct {
@@ -116,7 +116,7 @@ func CreateNamespaceWithRetry(t *testing.T, token *HttpToken) (uint64, error) {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			return 0, errors.Errorf(resp.Errors.Error())
+			return 0, errors.Errorf("%v", resp.Errors.Error())
 		}
 		break
 	}
@@ -150,7 +150,7 @@ func DeleteNamespace(t *testing.T, token *HttpToken, nsID uint64) error {
 	}
 	resp := MakeRequest(t, token, params)
 	if len(resp.Errors) > 0 {
-		return errors.Errorf(resp.Errors.Error())
+		return errors.Errorf("%v", resp.Errors.Error())
 	}
 	var result struct {
 		DeleteNamespace struct {
