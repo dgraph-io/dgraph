@@ -6,6 +6,7 @@
 package raftwal
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -55,16 +56,18 @@ func TestEntryReadWrite(t *testing.T) {
 func TestLogRotate(t *testing.T) {
 	dir := t.TempDir()
 	el, err := openWal(dir)
+	fmt.Println(dir)
 	require.NoError(t, err)
 
 	// Generate deterministic entries using a seed.
 	const SEED = 1
-	rand.Seed(SEED)
+	rnd := rand.New(rand.NewSource(SEED))
+
 	makeEntry := func(i int) raftpb.Entry {
 		// Be careful when changing this value, as it could easily end up filling up
 		// the entire tmpfs. Currently, this writes ~1.5GB.
-		data := make([]byte, rand.Intn(1<<16))
-		rand.Read(data)
+		data := make([]byte, rnd.Intn(1<<16))
+		rnd.Read(data)
 		return raftpb.Entry{Index: uint64(i + 1), Term: 1, Data: data}
 	}
 
@@ -85,7 +88,7 @@ func TestLogRotate(t *testing.T) {
 	require.Equal(t, totalEntries, len(entries))
 
 	// Use the previous seed to verify the written entries.
-	rand.Seed(SEED)
+	rnd = rand.New(rand.NewSource(SEED))
 	for i, gotEntry := range entries {
 		expEntry := makeEntry(i)
 		require.Equal(t, len(expEntry.Data), len(gotEntry.Data))

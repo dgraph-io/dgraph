@@ -1189,8 +1189,6 @@ func main() {
 	pflag.Parse()
 	testsuite = strings.Split(*suite, ",")
 	validateAllowed(testsuite)
-
-	rand.Seed(time.Now().UnixNano())
 	procId = rand.Intn(1000)
 
 	err := run()

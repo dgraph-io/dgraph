@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"net/http"
 	_ "net/http/pprof" // http profiler
 	"os"
@@ -646,7 +645,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 		go l.makeRequests()
 	}
 
-	rand.Seed(time.Now().Unix())
 	return l
 }
 
