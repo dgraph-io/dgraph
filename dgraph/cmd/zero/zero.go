@@ -99,6 +99,8 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
+	const scarfBaseUrlFmt = "https://hypermode.gateway.scarf.sh/dgraph-deployments/%v/%v/%v/%v/%v"
+
 	// sleep so that a leader is elected by this time
 	time.Sleep(time.Minute)
 
@@ -121,8 +123,8 @@ func (s *Server) periodicallyPostTelemetry() {
 			numTablets += len(g.GetTablets())
 		}
 
-		url := fmt.Sprintf("https://dgraph.gateway.scarf.sh/%v/%v/%v/%v/%v",
-			x.Version(), runtime.GOOS, numAlphas, len(ms.GetZeros()), numTablets)
+		url := fmt.Sprintf(scarfBaseUrlFmt, x.Version(),
+			runtime.GOOS, numAlphas, len(ms.GetZeros()), numTablets)
 		glog.Infof("Posting Telemetry data to [%v]", url)
 
 		resp, err := http.Get(url)
