@@ -87,7 +87,7 @@ func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaA
 	for !moveOk {
 		state, err := testutil.GetState()
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
+		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.RootNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}

@@ -88,7 +88,7 @@ func getOrCreate(key []byte) *posting.List {
 
 func populateGraph(t *testing.T) {
 	// Add uid edges : predicate neightbour.
-	neighbour := x.GalaxyAttr("neighbour")
+	neighbour := x.AttrInRootNamespace("neighbour")
 	edge := &pb.DirectedEdge{
 		ValueId: 23,
 		Attr:    neighbour,
@@ -116,7 +116,7 @@ func populateGraph(t *testing.T) {
 	addEdge(t, edge, getOrCreate(x.DataKey(neighbour, 12)))
 
 	// add value edges: friend : with name
-	friend := x.GalaxyAttr("friend")
+	friend := x.AttrInRootNamespace("friend")
 	edge.Attr = neighbour
 	edge.Entity = 12
 	edge.Value = []byte("photon")
@@ -513,8 +513,8 @@ func TestMain(m *testing.M) {
 
 	addTablets([]string{"name", "name2", "age", "http://www.w3.org/2000/01/rdf-schema#range", "",
 		"friend", "dgraph.type", "dgraph.graphql.xid", "dgraph.graphql.schema"},
-		1, x.GalaxyNamespace)
-	addTablets([]string{"friend_not_served"}, 2, x.GalaxyNamespace)
+		1, x.RootNamespace)
+	addTablets([]string{"friend_not_served"}, 2, x.RootNamespace)
 	addTablets([]string{"name"}, 1, 0x2)
 
 	dir, err := os.MkdirTemp("", "storetest_")

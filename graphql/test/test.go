@@ -31,7 +31,7 @@ func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
 	requireNoGQLErrors(t, gqlErr)
 
-	schema, err := schema.AsSchema(gql, x.GalaxyNamespace)
+	schema, err := schema.AsSchema(gql, x.RootNamespace)
 	requireNoGQLErrors(t, err)
 	return schema
 }

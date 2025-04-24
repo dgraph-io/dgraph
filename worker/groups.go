@@ -187,7 +187,7 @@ func (g *groupi) informZeroAboutTablets() {
 }
 
 func (g *groupi) applyInitialTypes() {
-	initialTypes := schema.InitialTypes(x.GalaxyNamespace)
+	initialTypes := schema.InitialTypes(x.RootNamespace)
 	for _, t := range initialTypes {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
@@ -203,7 +203,7 @@ func (g *groupi) applyInitialSchema() {
 	if g.groupId() != 1 {
 		return
 	}
-	initialSchema := schema.InitialSchema(x.GalaxyNamespace)
+	initialSchema := schema.InitialSchema(x.RootNamespace)
 	ctx := g.Ctx()
 
 	apply := func(s *pb.SchemaUpdate) {

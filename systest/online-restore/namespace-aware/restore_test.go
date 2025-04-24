@@ -36,7 +36,7 @@ import (
 func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalCluster) {
 	hc, err := existingCluster.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	gc, cleanup, err := existingCluster.Client()
 	defer cleanup()
@@ -54,13 +54,13 @@ func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalClu
 		require.NoError(t, dgraphtest.AddData(gc, "pred", 1, 100+int(ns)))
 	}
 
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	require.NoError(t, hc.Backup(existingCluster, false, dgraphtest.DefaultBackupDir))
 
 	restoreNamespaces := func(c *dgraphtest.LocalCluster) {
 		hc, err := c.HTTPClient()
 		require.NoError(t, err)
-		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 		for _, ns := range namespaces {
 			require.NoError(t, hc.RestoreTenant(c, dgraphtest.DefaultBackupDir, "", 0, 0, ns))
@@ -72,7 +72,7 @@ func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalClu
 
 			// Only the namespace '0' should have data
 			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 			const query = `{
 			           all(func: has(pred)) {
 			                 	count(uid)
@@ -100,7 +100,7 @@ func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalClu
 func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalCluster) {
 	hc, err := existingCluster.HTTPClient()
 	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	gc, cleanup, err := existingCluster.Client()
 	defer cleanup()
@@ -126,14 +126,14 @@ func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtes
 			require.NoError(t, dgraphtest.AddData(gc, "pred", start, end))
 		}
 
-		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 		require.NoError(t, hc.Backup(existingCluster, j == 0, dgraphtest.DefaultBackupDir))
 	}
 
 	restoreNamespaces := func(c *dgraphtest.LocalCluster) {
 		hc, err := c.HTTPClient()
 		require.NoError(t, err)
-		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 		for _, ns := range namespaces {
 			for j := 0; j < 5; j++ {
 				incrFrom := j + 1

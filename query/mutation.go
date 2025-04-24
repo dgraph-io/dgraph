@@ -54,7 +54,7 @@ func ExpandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 	if err != nil {
 		return nil, errors.Wrapf(err, "While expanding edges")
 	}
-	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
 	// Reset the namespace to the original.
 	defer func(ns uint64) {
@@ -273,7 +273,7 @@ func checkIfDeletingAclOperation(ctx context.Context, edges []*pb.DirectedEdge) 
 
 	// If the guardian or groot node is not present, then the request cannot be a delete operation
 	// on guardian or groot node.
-	guardianUid, ok := x.GuardiansUid.Load(namespace)
+	guardianUid, ok := x.SuperAdminUid.Load(namespace)
 	if !ok {
 		return nil
 	}

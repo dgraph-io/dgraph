@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -54,12 +55,12 @@ func TestVectorDropAll(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	numVectors := 100
 
@@ -110,25 +111,25 @@ func TestVectorSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, c.KillAlpha(1))
 
 	hc, err = c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	gc, cleanup, err = c.AlphaClient(0)
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
@@ -183,12 +184,12 @@ func TestVectorDropNamespace(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	numVectors := 500
 	for i := 0; i < 6; i++ {
@@ -233,12 +234,12 @@ func TestVectorIndexRebuilding(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
@@ -285,12 +286,12 @@ func TestVectorIndexOnVectorPredWithoutData(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 
@@ -312,12 +313,12 @@ func TestVectorIndexDropPredicate(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.SetupSchema(testSchema))
 	numVectors := 1000
@@ -388,7 +389,7 @@ func TestVectorIndexWithoutSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	numVectors := 1000
 
@@ -430,7 +431,7 @@ func TestVectorIndexWithoutSchemaWithoutIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	numVectors := 1000
 

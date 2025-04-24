@@ -21,33 +21,33 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
-func GalaxySchemaKey(attr string) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsSchemaKey(attr string) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.SchemaKey(attr)
 }
 
-func GalaxyTypeKey(attr string) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsTypeKey(attr string) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.TypeKey(attr)
 }
 
-func GalaxyDataKey(attr string, uid uint64) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsDataKey(attr string, uid uint64) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.DataKey(attr, uid)
 }
 
-func GalaxyReverseKey(attr string, uid uint64) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsReverseKey(attr string, uid uint64) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.ReverseKey(attr, uid)
 }
 
-func GalaxyIndexKey(attr, term string) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsIndexKey(attr, term string) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.IndexKey(attr, term)
 }
 
-func GalaxyCountKey(attr string, count uint32, reverse bool) []byte {
-	attr = x.GalaxyAttr(attr)
+func RootNsCountKey(attr string, count uint32, reverse bool) []byte {
+	attr = x.AttrInRootNamespace(attr)
 	return x.CountKey(attr, count, reverse)
 }
 

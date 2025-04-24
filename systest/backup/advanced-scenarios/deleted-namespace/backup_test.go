@@ -10,11 +10,12 @@ package main
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	e2eCommon "github.com/hypermodeinc/dgraph/v25/graphql/e2e/common"
 	utilsCommon "github.com/hypermodeinc/dgraph/v25/systest/backup/common"
 	"github.com/hypermodeinc/dgraph/v25/testutil"
 	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -42,7 +43,7 @@ func TestDeletedNamespaceID(t *testing.T) {
 	e2eCommon.DeleteNamespace(t, ns1[2], headerAlpha1Np0, "alpha1")
 	utilsCommon.TakeBackup(t, jwtTokenAlpha1Np0, backupDst, "alpha1")
 	utilsCommon.RunRestore(t, jwtTokenAlpha2Np0, restoreLocation, "alpha2")
-	dg1 := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	dg1 := testutil.DgClientWithLogin(t, "groot", "password", x.RootNamespace)
 	testutil.WaitForRestore(t, dg1, testutil.ContainerAddr("alpha2", 8080))
 	lastAddedNamespaceId := e2eCommon.CreateNamespace(t, headerAlpha2Np0, "alpha2")
 	require.Equal(t, lastAddedNamespaceId > ns1[3], true)

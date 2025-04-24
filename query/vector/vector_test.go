@@ -471,7 +471,7 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel2()
 		err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
-			dgraphapi.DefaultPassword, x.GalaxyNamespace)
+			dgraphapi.DefaultPassword, x.RootNamespace)
 		require.NoError(t, err)
 
 		err = client.Alter(context.Background(), &api.Operation{

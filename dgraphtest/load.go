@@ -128,7 +128,7 @@ func setDQLSchema(c *LocalCluster, files []string) error {
 	if c.conf.acl {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		err := gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
+		err := gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace)
 		if err != nil {
 			return errors.Wrap(err, "error login to default namespace")
 		}
@@ -223,7 +223,7 @@ func (c *LocalCluster) LiveLoad(opts LiveOpts) error {
 	}
 	if c.conf.acl {
 		args = append(args, fmt.Sprintf("--creds=user=%s;password=%s;namespace=%d",
-			dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+			dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	}
 	if c.conf.encryption {
 		args = append(args, fmt.Sprintf("--encryption=key-file=%v", c.encKeyPath))
@@ -251,7 +251,7 @@ func findGrootAndGuardians(c *LocalCluster) (string, string, error) {
 	if c.conf.acl {
 		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer cancel()
-		err = gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
+		err = gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace)
 		if err != nil {
 			return "", "", errors.Wrapf(err, "error logging in as groot")
 		}

@@ -13,12 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v25/testutil"
 	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/stretchr/testify/require"
 )
 
 var client *dgraphapi.GrpcClient
@@ -81,7 +82,7 @@ func TestCountReverseIndex(t *testing.T) {
 	x.Panic(err)
 	defer cleanup()
 	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	populateCluster(t, c)
 
@@ -95,7 +96,7 @@ func TestCountReverseIndex(t *testing.T) {
 	x.Panic(err)
 	defer cleanup()
 	x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	setSchema(schemaNonIndexed)
 	setSchema(schemaIndexed)

@@ -48,14 +48,13 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 
 	// unmarshal it back to MembershipState proto in order to map to graphql response
 	var ms pb.MembershipState
-	err = protojson.Unmarshal(resp.GetJson(), &ms)
-	if err != nil {
+	if err := protojson.Unmarshal(resp.GetJson(), &ms); err != nil {
 		return resolve.EmptyResult(q, err)
 	}
 
 	ns, _ := x.ExtractNamespace(ctx)
-	// map to graphql response structure. Only guardian of galaxy can list the namespaces.
-	state := convertToGraphQLResp(ms, ns == x.GalaxyNamespace)
+	// map to graphql response structure. Only superadmin can list the namespaces.
+	state := convertToGraphQLResp(&ms, ns == x.RootNamespace)
 	b, err := json.Marshal(state)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
@@ -79,7 +78,7 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 // values and not the keys. For pb.MembershipState.Group, the keys are the group IDs
 // and pb.Group didn't contain this ID, so we are creating a custom clusterGroup type,
 // which is same as pb.Group and also contains the ID for the group.
-func convertToGraphQLResp(ms pb.MembershipState, listNs bool) membershipState {
+func convertToGraphQLResp(ms *pb.MembershipState, listNs bool) membershipState {
 	var state membershipState
 
 	// namespaces stores set of namespaces

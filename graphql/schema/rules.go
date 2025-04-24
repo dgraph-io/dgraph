@@ -1419,7 +1419,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	secrets map[string]x.Sensitive) gqlerror.List {
 	// if the lambda url wasn't specified during alpha startup,
 	// just return that error. Don't confuse the user with errors from @custom yet.
-	if x.LambdaUrl(x.GalaxyNamespace) == "" {
+	if x.LambdaUrl(x.RootNamespace) == "" {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(dir.Position,
 			"Type %s; Field %s: has the @lambda directive, but the "+
 				`--graphql "lambda-url=...;" flag wasn't specified during alpha startup.`,
@@ -1427,7 +1427,7 @@ func lambdaDirectiveValidation(sch *ast.Schema,
 	}
 	// reuse @custom directive validation
 	errs := customDirectiveValidation(sch, typ, field, buildCustomDirectiveForLambda(typ, field,
-		dir, x.GalaxyNamespace, func(f *ast.FieldDefinition) bool { return false }), secrets)
+		dir, x.RootNamespace, func(f *ast.FieldDefinition) bool { return false }), secrets)
 	for _, err := range errs {
 		err.Message = "While building @custom for @lambda: " + err.Message
 	}
@@ -1531,7 +1531,7 @@ func lambdaOnMutateValidation(sch *ast.Schema, typ *ast.Definition) gqlerror.Lis
 	var errs []*gqlerror.Error
 
 	// lambda url must be specified during alpha startup
-	if x.LambdaUrl(x.GalaxyNamespace) == "" {
+	if x.LambdaUrl(x.RootNamespace) == "" {
 		errs = append(errs, gqlerror.ErrorPosf(dir.Position,
 			"Type %s: has the @lambdaOnMutate directive, but the "+
 				"`--graphql lambda-url` flag wasn't specified during alpha startup.", typ.Name))

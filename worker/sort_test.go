@@ -116,7 +116,7 @@ func TestGetScalarList(t *testing.T) {
 		txn.UpdateCachedKeys(commitTs)
 	}
 
-	attr := x.GalaxyAttr("scalarPredicateCount4")
+	attr := x.AttrInRootNamespace("scalarPredicateCount4")
 
 	runM(5, 7, []*pb.DirectedEdge{{
 		ValueId:   3,
@@ -160,7 +160,7 @@ func TestMultipleTxnListCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount3")
+	attr := x.AttrInRootNamespace("scalarPredicateCount3")
 
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
@@ -219,7 +219,7 @@ func TestScalarPredicateRevCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount2")
+	attr := x.AttrInRootNamespace("scalarPredicateCount2")
 
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
@@ -301,7 +301,7 @@ func TestScalarPredicateIntCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount1")
+	attr := x.AttrInRootNamespace("scalarPredicateCount1")
 
 	runM := func(startTs, commitTs uint64, edge *pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
@@ -355,7 +355,7 @@ func TestScalarPredicateCount(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attr := x.GalaxyAttr("scalarPredicateCount")
+	attr := x.AttrInRootNamespace("scalarPredicateCount")
 
 	runM := func(startTs, commitTs uint64, edge *pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
@@ -410,7 +410,7 @@ func TestSingleUidReplacement(t *testing.T) {
 
 	ctx := context.Background()
 	txn := posting.Oracle().RegisterStartTs(5)
-	attr := x.GalaxyAttr("singleUidReplaceTest")
+	attr := x.AttrInRootNamespace("singleUidReplaceTest")
 
 	// Txn 1. Set 1 -> 2
 	x.Check(runMutation(ctx, &pb.DirectedEdge{
@@ -470,7 +470,7 @@ func TestSingleString(t *testing.T) {
 
 	ctx := context.Background()
 	txn := posting.Oracle().RegisterStartTs(5)
-	attr := x.GalaxyAttr("singleUidTest")
+	attr := x.AttrInRootNamespace("singleUidTest")
 
 	// Txn 1. Set 1 -> david 2 -> blush
 	x.Check(runMutation(ctx, &pb.DirectedEdge{
@@ -565,7 +565,7 @@ func TestLangExact(t *testing.T) {
 
 	ctx := context.Background()
 	txn := posting.Oracle().RegisterStartTs(5)
-	attr := x.GalaxyAttr("testLang")
+	attr := x.AttrInRootNamespace("testLang")
 
 	edge := &pb.DirectedEdge{
 		Value:  []byte("english"),
@@ -633,7 +633,7 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	}
 	ctx := context.Background()
 	txn := posting.Oracle().RegisterStartTs(5)
-	attr := x.GalaxyAttr("benchmarkadd")
+	attr := x.AttrInRootNamespace("benchmarkadd")
 
 	n := uint64(1000)
 	values := make([]string, 0)

@@ -260,7 +260,7 @@ func (s *ServerV25) Alter(ctx context.Context, req *apiv25.AlterRequest) (*apiv2
 	defer glog.Infof("ALTER op: %+v done", req)
 
 	// For now, we only allow guadian of galaxies to do this operation in v25
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"v25.Alter can only be called by the guardian of the galaxy. "+s.Message())

@@ -39,7 +39,7 @@ func TestACLJwtAlgo(t *testing.T) {
 			require.NoError(t, err)
 			defer cleanup()
 			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 			// op with Grpc client
 			_, err = gc.Query(`{q(func: uid(0x1)) {uid}}`)
@@ -53,7 +53,7 @@ func TestACLJwtAlgo(t *testing.T) {
 			hc, err := c.HTTPClient()
 			require.NoError(t, err)
 			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-				dgraphapi.DefaultPassword, x.GalaxyNamespace))
+				dgraphapi.DefaultPassword, x.RootNamespace))
 
 			// op with HTTP client
 			require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))

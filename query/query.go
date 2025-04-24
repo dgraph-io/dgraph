@@ -2978,7 +2978,7 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		}
 	}
 
-	if !x.IsGalaxyOperation(ctx) {
+	if !x.IsRootNsOperation(ctx) {
 		// Filter the schema nodes for the given namespace.
 		er.SchemaNode = filterSchemaNodeForNamespace(namespace, er.SchemaNode)
 		// Filter the types for the given namespace.

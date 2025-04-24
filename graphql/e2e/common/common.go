@@ -360,7 +360,7 @@ func CreateNamespace(t *testing.T, headers http.Header, whichAlpha string) uint6
 		}
 	}
 	require.NoError(t, json.Unmarshal(gqlResponse.Data, &resp))
-	require.Greater(t, resp.AddNamespace.NamespaceId, x.GalaxyNamespace)
+	require.Greater(t, resp.AddNamespace.NamespaceId, x.RootNamespace)
 	return resp.AddNamespace.NamespaceId
 }
 

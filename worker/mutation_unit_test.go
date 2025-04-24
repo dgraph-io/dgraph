@@ -38,7 +38,7 @@ func TestReverseEdge(t *testing.T) {
 
 	ctx := context.Background()
 	txn := posting.Oracle().RegisterStartTs(5)
-	attr := x.GalaxyAttr("revc")
+	attr := x.AttrInRootNamespace("revc")
 
 	edge := &pb.DirectedEdge{
 		ValueId: 2,
@@ -68,13 +68,13 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Attr:  x.GalaxyAttr("name"),
+				Attr:  x.AttrInRootNamespace("name"),
 			},
 			to:        types.StringID,
 			expectErr: false,
 			output: &pb.DirectedEdge{
 				Value:     []byte("set edge"),
-				Attr:      x.GalaxyAttr("name"),
+				Attr:      x.AttrInRootNamespace("name"),
 				ValueType: 9,
 			},
 		},
@@ -96,7 +96,7 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				ValueId: 123,
-				Attr:    x.GalaxyAttr("name"),
+				Attr:    x.AttrInRootNamespace("name"),
 			},
 			to:        types.StringID,
 			expectErr: true,
@@ -104,7 +104,7 @@ func TestConvertEdgeType(t *testing.T) {
 		{
 			input: &pb.DirectedEdge{
 				Value: []byte("set edge"),
-				Attr:  x.GalaxyAttr("name"),
+				Attr:  x.AttrInRootNamespace("name"),
 			},
 			to:        types.UidID,
 			expectErr: true,
@@ -129,7 +129,7 @@ func TestConvertEdgeType(t *testing.T) {
 func TestValidateEdgeTypeError(t *testing.T) {
 	edge := &pb.DirectedEdge{
 		Value: []byte("set edge"),
-		Attr:  x.GalaxyAttr("name"),
+		Attr:  x.AttrInRootNamespace("name"),
 	}
 
 	err := ValidateAndConvert(edge,
@@ -144,7 +144,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef := &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: x.GalaxyAttr(""),
+				Predicate: x.AttrInRootNamespace(""),
 			},
 		},
 	}
@@ -156,7 +156,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: x.GalaxyAttr("name"),
+				Predicate: x.AttrInRootNamespace("name"),
 				ValueType: pb.Posting_OBJECT,
 			},
 		},
@@ -169,7 +169,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: x.GalaxyAttr("name"),
+				Predicate: x.AttrInRootNamespace("name"),
 				Directive: pb.SchemaUpdate_REVERSE,
 			},
 		},
@@ -182,7 +182,7 @@ func TestTypeSanityCheck(t *testing.T) {
 	typeDef = &pb.TypeUpdate{
 		Fields: []*pb.SchemaUpdate{
 			{
-				Predicate: x.GalaxyAttr("name"),
+				Predicate: x.AttrInRootNamespace("name"),
 				Tokenizer: []string{"int"},
 			},
 		},

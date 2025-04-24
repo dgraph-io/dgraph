@@ -37,7 +37,7 @@ func TestShortestPath(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	_, err = gc.Query(`
 	{

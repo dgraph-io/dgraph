@@ -165,16 +165,16 @@ func upgradeManifest(m *Manifest) error {
 		for gid, preds := range m.Groups {
 			parsedPreds := preds[:0]
 			for _, pred := range preds {
-				parsedPreds = append(parsedPreds, x.GalaxyAttr(pred))
+				parsedPreds = append(parsedPreds, x.AttrInRootNamespace(pred))
 			}
 			m.Groups[gid] = parsedPreds
 		}
 		for _, op := range m.DropOperations {
 			switch op.DropOp {
 			case pb.DropOperation_DATA:
-				op.DropValue = fmt.Sprintf("%#x", x.GalaxyNamespace)
+				op.DropValue = fmt.Sprintf("%#x", x.RootNamespace)
 			case pb.DropOperation_ATTR:
-				op.DropValue = x.GalaxyAttr(op.DropValue)
+				op.DropValue = x.AttrInRootNamespace(op.DropValue)
 			default:
 				// do nothing for drop all and drop namespace.
 			}

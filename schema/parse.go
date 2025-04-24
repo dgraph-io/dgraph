@@ -676,7 +676,7 @@ func parse(s string, namespace uint64) (*ParsedSchema, error) {
 		case itemText:
 			// For schema which does not contain the namespace information, use the default
 			// namespace, if namespace has to be preserved. Else, use the passed namespace.
-			ns := x.GalaxyNamespace
+			ns := x.RootNamespace
 			if namespace != math.MaxUint64 {
 				ns = namespace
 			}

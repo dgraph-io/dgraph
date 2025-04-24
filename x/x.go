@@ -112,8 +112,8 @@ const (
 
 	// GrootId is the ID of the admin user for ACLs.
 	GrootId = "groot"
-	// GuardiansId is the ID of the admin group for ACLs.
-	GuardiansId = "guardians"
+	// SuperAdminId is the ID of the admin group for ACLs.
+	SuperAdminId = "guardians"
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -137,15 +137,15 @@ var (
 	regExpHostName = regexp.MustCompile(ValidHostnameRegex)
 	// Nilbyte is a nil byte slice. Used
 	Nilbyte []byte
-	// GuardiansUid is a map from namespace to the Uid of guardians group node.
-	GuardiansUid = &sync.Map{}
+	// SuperAdminUid is a map from namespace to the Uid of superadmin group node.
+	SuperAdminUid = &sync.Map{}
 	// GrootUid is a map from namespace to the Uid of groot user node.
 	GrootUid = &sync.Map{}
 )
 
 func init() {
-	GuardiansUid.Store(GalaxyNamespace, 0)
-	GrootUid.Store(GalaxyNamespace, 0)
+	SuperAdminUid.Store(RootNamespace, 0)
+	GrootUid.Store(RootNamespace, 0)
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -268,7 +268,7 @@ func ExtractNamespace(ctx context.Context) (uint64, error) {
 	return namespace, nil
 }
 
-func IsGalaxyOperation(ctx context.Context) bool {
+func IsRootNsOperation(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return false
@@ -429,7 +429,7 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 // it attaches the galaxy namespace.
 func AttachJWTNamespace(ctx context.Context) context.Context {
 	if !WorkerConfig.AclEnabled {
-		return AttachNamespace(ctx, GalaxyNamespace)
+		return AttachNamespace(ctx, RootNamespace)
 	}
 
 	ns, err := ExtractNamespaceFrom(ctx)
@@ -458,7 +458,7 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 // the context.
 func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
 	if !WorkerConfig.AclEnabled {
-		return AttachNamespaceOutgoing(ctx, GalaxyNamespace), nil
+		return AttachNamespaceOutgoing(ctx, RootNamespace), nil
 	}
 	ns, err := ExtractNamespaceFrom(ctx)
 	if err != nil {
@@ -478,8 +478,8 @@ func AttachNamespaceOutgoing(ctx context.Context, namespace uint64) context.Cont
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
-// AttachGalaxyOperation specifies in the context that it will be used for doing a galaxy operation.
-func AttachGalaxyOperation(ctx context.Context, ns uint64) context.Context {
+// AttachRootNsOperation specifies in the context that it will be used for doing a Root Namespace operation.
+func AttachRootNsOperation(ctx context.Context, ns uint64) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
@@ -1169,9 +1169,9 @@ func GetPassAndLogin(dg *dgo.Dgraph, opt *CredOpt) error {
 	return nil
 }
 
-func IsGuardian(groups []string) bool {
+func IsSuperAdmin(groups []string) bool {
 	for _, group := range groups {
-		if group == GuardiansId {
+		if group == SuperAdminId {
 			return true
 		}
 	}

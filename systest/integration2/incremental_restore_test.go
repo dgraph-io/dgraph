@@ -34,12 +34,12 @@ func TestIncrementalRestore(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	uids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	c.AssignUids(gc.Dgraph, uint64(len(uids)))

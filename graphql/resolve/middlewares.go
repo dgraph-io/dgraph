@@ -112,9 +112,9 @@ func (mws MutationMiddlewares) Then(resolver MutationResolver) MutationResolver 
 }
 
 // resolveGuardianOfTheGalaxyAuth returns a Resolved with error if the context doesn't contain any
-// Guardian of Galaxy auth, otherwise it returns nil
+// superadmin auth, otherwise it returns nil
 func resolveGuardianOfTheGalaxyAuth(ctx context.Context, f schema.Field) *Resolved {
-	if err := edgraph.AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := edgraph.AuthSuperAdmin(ctx); err != nil {
 		return EmptyResult(f, err)
 	}
 	return nil

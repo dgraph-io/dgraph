@@ -28,7 +28,7 @@ func (s *ServerV25) Ping(ctx context.Context, req *apiv25.PingRequest) (*apiv25.
 // Alter handles requests to change the schema or remove parts or all of the data.
 func (s *ServerV25) RunDQL(ctx context.Context, req *apiv25.RunDQLRequest) (*apiv25.RunDQLResponse, error) {
 	// For now, we only allow guardian of galaxies to do this operation in v25
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"v25.RunDQL can only be called by the guardian of the galaxy. "+s.Message())

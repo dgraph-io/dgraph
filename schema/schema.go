@@ -675,7 +675,7 @@ func initialTypesInternal(namespace uint64, all bool) []*pb.TypeUpdate {
 			},
 		})
 
-	if namespace == x.GalaxyNamespace {
+	if namespace == x.RootNamespace {
 		initialTypes = append(initialTypes,
 			&pb.TypeUpdate{
 				TypeName: "dgraph.namespace",
@@ -800,7 +800,7 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 		},
 	}...)
 
-	if namespace == x.GalaxyNamespace {
+	if namespace == x.RootNamespace {
 		initialSchema = append(initialSchema, []*pb.SchemaUpdate{
 			{
 				Predicate: "dgraph.namespace.name",

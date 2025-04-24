@@ -88,7 +88,7 @@ func TestNamespacesPreV25(t *testing.T) {
 	hc, err := dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	// Drop all data
 	require.NoError(t, client.Login(context.Background(),
@@ -190,7 +190,7 @@ func TestCreateNamespaceErr(t *testing.T) {
 	// require.NoError(t, client.LoginToNamespace(ctx,
 	// 	"ns1", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	// require.ErrorContains(t, client.CreateNamespace(ctx, "ns2"),
-	// 	"Non guardian of galaxy user cannot create namespace")
+	// 	"Non superadmin user cannot create namespace")
 }
 
 func TestDropNamespaceErr(t *testing.T) {
@@ -240,7 +240,7 @@ func TestDropNamespaceErr(t *testing.T) {
 	// require.NoError(t, client.LoginToNamespace(ctx,
 	// 	"ns1", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	// require.ErrorContains(t, client.DropNamespace(ctx, "ns1"),
-	// 	`Only guardian of galaxy is allowed to do this operation`)
+	// 	`Only superadmin is allowed to do this operation`)
 }
 
 func TestRenameNamespaceErr(t *testing.T) {
@@ -306,5 +306,5 @@ func TestListNamespacesErr(t *testing.T) {
 	// require.NoError(t, client.LoginToNamespace(ctx,
 	// 	"ns1", dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	// _, err = client.ListNamespaces(ctx)
-	// require.ErrorContains(t, err, "Only guardian of galaxy is allowed to do this operation")
+	// require.ErrorContains(t, err, "Only superadmin is allowed to do this operation")
 }

@@ -33,13 +33,13 @@ func TestSnapshotTranferAfterNewNodeJoins(t *testing.T) {
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
-	hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	prevSnapshotTs, err := hc.GetCurrentSnapshotTs(1)
 	require.NoError(t, err)

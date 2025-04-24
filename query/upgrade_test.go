@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 		x.Panic(err)
 		defer cleanup()
 		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
-			dgraphapi.DefaultPassword, x.GalaxyNamespace))
+			dgraphapi.DefaultPassword, x.RootNamespace))
 
 		client = dg
 		dc = c
@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 		x.Panic(err)
 		defer cleanup()
 		x.Panic(dg.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
-			dgraphapi.DefaultPassword, x.GalaxyNamespace))
+			dgraphapi.DefaultPassword, x.RootNamespace))
 
 		client = dg
 		dc = c
@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 
 		hc, err := c.HTTPClient()
 		x.Panic(err)
-		x.Panic(hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		x.Panic(hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 		mutate(c)
 		x.Panic(c.Upgrade(uc.After, uc.Strategy))

@@ -532,7 +532,7 @@ func setupServer(closer *z.Closer) {
 	globalEpoch := make(map[uint64]*uint64)
 	e := new(uint64)
 	atomic.StoreUint64(e, 0)
-	globalEpoch[x.GalaxyNamespace] = e
+	globalEpoch[x.RootNamespace] = e
 	var mainServer admin.IServeGraphQL
 	var gqlHealthStore *admin.GraphQLHealthStore
 	// Do not use := notation here because adminServer is a global variable.
@@ -583,7 +583,7 @@ func setupServer(closer *z.Closer) {
 
 		<-x.ServerCloser.HasBeenClosed()
 		// TODO - Verify why do we do this and does it have to be done for all namespaces.
-		e = globalEpoch[x.GalaxyNamespace]
+		e = globalEpoch[x.RootNamespace]
 		atomic.StoreUint64(e, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.

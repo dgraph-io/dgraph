@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 	x.Panic(err)
 	defer cleanup()
 	x.Panic(client.LoginIntoNamespace(context.Background(), dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	populateCluster(dc)
 	m.Run()

@@ -199,7 +199,7 @@ func TestBackupFilesystem(t *testing.T) {
 	for retry := 5; retry > 0; retry-- {
 		state, err := testutil.GetStateHttps(testutil.GetAlphaClientConfig(t))
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.GalaxyNamespace, "movie")]; ok {
+		if _, ok := state.Groups["1"].Tablets[x.NamespaceAttr(x.RootNamespace, "movie")]; ok {
 			moveOk = true
 			break
 		}
@@ -467,7 +467,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	}
 
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.AttrInRootNamespace("movie"), commitTs)
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored

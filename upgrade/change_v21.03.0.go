@@ -262,7 +262,7 @@ func upgradeCORS() error {
 
 func getData(db *badger.DB, attr string, fn func(item *badger.Item) error) error {
 	return db.View(func(txn *badger.Txn) error {
-		attr = x.GalaxyAttr(attr)
+		attr = x.AttrInRootNamespace(attr)
 		initKey := x.ParsedKey{
 			Attr: attr,
 		}
@@ -359,11 +359,11 @@ func getCors(db *badger.DB) ([][]byte, error) {
 func dropDepreciated(db *badger.DB) error {
 	var prefixes [][]byte
 	for pred := range deprecatedPreds {
-		pred = x.GalaxyAttr(pred)
+		pred = x.AttrInRootNamespace(pred)
 		prefixes = append(prefixes, x.SchemaKey(pred), x.PredicatePrefix(pred))
 	}
 	for typ := range deprecatedTypes {
-		prefixes = append(prefixes, x.TypeKey(x.GalaxyAttr(typ)))
+		prefixes = append(prefixes, x.TypeKey(x.AttrInRootNamespace(typ)))
 	}
 	return db.DropPrefix(prefixes...)
 }
@@ -398,7 +398,7 @@ func fixPersistedQuery(db *badger.DB) error {
 
 	// Update the tokenizer in the schema.
 	su := pb.SchemaUpdate{
-		Predicate: x.GalaxyAttr("dgraph.graphql.p_query"),
+		Predicate: x.AttrInRootNamespace("dgraph.graphql.p_query"),
 		ValueType: pb.Posting_STRING,
 		Directive: pb.SchemaUpdate_INDEX,
 		Tokenizer: []string{"sha256"},
@@ -408,7 +408,7 @@ func fixPersistedQuery(db *badger.DB) error {
 		return err
 	}
 	entry := &badger.Entry{}
-	entry.Key = x.SchemaKey(x.GalaxyAttr("dgraph.graphql.p_query"))
+	entry.Key = x.SchemaKey(x.AttrInRootNamespace("dgraph.graphql.p_query"))
 	entry.Value = data
 	entry.UserMeta = posting.BitSchemaPosting
 	if err := update(entry); err != nil {
@@ -417,7 +417,7 @@ func fixPersistedQuery(db *badger.DB) error {
 
 	// Update the type.
 	tu := pb.TypeUpdate{
-		TypeName: x.GalaxyAttr("dgraph.graphql.persisted_query"),
+		TypeName: x.AttrInRootNamespace("dgraph.graphql.persisted_query"),
 		Fields:   []*pb.SchemaUpdate{&su},
 	}
 	data, err = proto.Marshal(&tu)
@@ -425,7 +425,7 @@ func fixPersistedQuery(db *badger.DB) error {
 		return err
 	}
 	entry = &badger.Entry{}
-	entry.Key = x.TypeKey(x.GalaxyAttr("dgraph.graphql.persisted_query"))
+	entry.Key = x.TypeKey(x.AttrInRootNamespace("dgraph.graphql.persisted_query"))
 	entry.Value = data
 	entry.UserMeta = posting.BitSchemaPosting
 	if err := update(entry); err != nil {

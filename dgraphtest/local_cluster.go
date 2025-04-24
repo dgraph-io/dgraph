@@ -616,7 +616,7 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		return errors.Wrap(err, "error creating http client while graphql health check")
 	}
 	if c.conf.acl {
-		if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
+		if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
 			return errors.Wrap(err, "error during login while graphql health check")
 		}
 	}
@@ -654,7 +654,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}
@@ -677,7 +677,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return errors.Wrapf(err, "error creating HTTP client after upgrade")
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
 				return errors.Wrapf(err, "error during login after upgrade")
 			}
 		}
@@ -695,7 +695,7 @@ func (c *LocalCluster) Upgrade(version string, strategy UpgradeStrategy) error {
 			return err
 		}
 		if c.conf.acl {
-			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace); err != nil {
+			if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
 				return errors.Wrapf(err, "error during login before upgrade")
 			}
 		}

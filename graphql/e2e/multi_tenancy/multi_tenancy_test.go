@@ -451,7 +451,7 @@ func TestNamespacesQueryField(t *testing.T) {
 	header1.Set(accessJwtHeader, testutil.GrootHttpLoginNamespace(groupOneAdminServer,
 		ns1).AccessJwt)
 
-	// Test namespaces query shows no namespace in case user is not guardian of galaxy.
+	// Test namespaces query shows no namespace in case user is not superadmin.
 	queryHelper(t, groupOneAdminServer, namespaceQuery, header1,
 		`{
 			"state": {
@@ -459,7 +459,7 @@ func TestNamespacesQueryField(t *testing.T) {
 			}
 		}`)
 
-	// Test namespaces query shows all 3 namespaces, 0,ns1,ns2 in case user is guardian of galaxy.
+	// Test namespaces query shows all 3 namespaces, 0,ns1,ns2 in case user is superadmin.
 	queryHelper(t, groupOneAdminServer, namespaceQuery, header,
 		`{
 			"state": {

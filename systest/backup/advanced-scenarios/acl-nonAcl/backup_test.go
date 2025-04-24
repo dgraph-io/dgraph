@@ -43,7 +43,7 @@ func BackupRestore(t *testing.T, jwtTokenBackupAlpha string, jwtTokenRestoreAlph
 	utilsCommon.CheckItemExists(t, 5, jwtTokenBackupAlpha, backupAlpha)
 	utilsCommon.TakeBackup(t, jwtTokenBackupAlpha, backupDst, backupAlpha)
 	utilsCommon.RunRestore(t, jwtTokenRestoreAlpha, restoreLocation, restoreAlpha)
-	dg := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	dg := testutil.DgClientWithLogin(t, "groot", "password", x.RootNamespace)
 	testutil.WaitForRestore(t, dg, testutil.ContainerAddr(restoreAlpha, 8080))
 	utilsCommon.CheckItemExists(t, 5, jwtTokenRestoreAlpha, restoreAlpha)
 }

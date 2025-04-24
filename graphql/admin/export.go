@@ -55,7 +55,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 			return ns, nil
 		}
 		switch ns {
-		case x.GalaxyNamespace:
+		case x.RootNamespace:
 			if input.Namespace < 0 { // export all namespaces.
 				return math.MaxUint64, nil
 			}

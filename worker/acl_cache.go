@@ -175,7 +175,7 @@ func (cache *AclCache) AuthorizePredicate(groups []string, predicate string,
 
 }
 
-// accessAllPredicate is a wildcard to allow access to all non-ACL predicates to non-guardian group.
+// accessAllPredicate is a wildcard to allow access to all non-ACL predicates to non-superadmin group.
 const accessAllPredicate = "dgraph.all"
 
 func HasAccessToAllPreds(ns uint64, groups []string, operation *acl.Operation) bool {
