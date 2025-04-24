@@ -643,7 +643,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 			trace.WithAttributes(attribute.String("err", err.Error())))
 
 		if err == dgo.ErrAborted {
-			err = status.Errorf(codes.Aborted, err.Error())
+			err = status.Error(codes.Aborted, err.Error())
 			resp.Txn.Aborted = true
 		}
 
@@ -1842,7 +1842,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 			return tctx, nil
 		}
 
-		return tctx, status.Errorf(codes.Aborted, err.Error())
+		return tctx, status.Error(codes.Aborted, err.Error())
 	}
 	tctx.StartTs = tc.StartTs
 	tctx.CommitTs = commitTs

@@ -829,7 +829,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- errors.Wrapf(l.processFile(ctx, fs, file, opt.key), file)
+			errCh <- errors.Wrap(l.processFile(ctx, fs, file, opt.key), file)
 		}(file)
 	}
 

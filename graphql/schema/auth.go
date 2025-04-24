@@ -445,7 +445,7 @@ func getRBACQuery(typ *ast.Definition, rule string) (*RBACQuery, error) {
 func validateRBACQuery(typ *ast.Definition, rbacQuery *RBACQuery) error {
 	// validate rule operators
 	if ok, reason := validateRBACOperators(typ, rbacQuery); !ok {
-		return gqlerror.Errorf(reason)
+		return gqlerror.Errorf("%v", reason)
 	}
 
 	// validate variable name

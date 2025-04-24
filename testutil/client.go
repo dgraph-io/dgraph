@@ -358,7 +358,7 @@ func HttpLogin(params *LoginParams) (*HttpToken, error) {
 	}
 
 	if len(gqlResp.Errors) > 0 {
-		return nil, errors.Errorf(gqlResp.Errors.Error())
+		return nil, errors.Errorf("%v", gqlResp.Errors.Error())
 	}
 
 	if gqlResp.Data == nil {

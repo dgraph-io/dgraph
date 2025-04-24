@@ -42,10 +42,9 @@ var (
 )
 
 func TestBackupMinioE(t *testing.T) {
-	t.Skip()
-	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
+	backupDst = "s3://minio:9001/dgraph-backup?secure=false"
 	addr := testutil.ContainerAddr("minio", 9001)
-	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
+	localBackupDst = "s3://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
 	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
