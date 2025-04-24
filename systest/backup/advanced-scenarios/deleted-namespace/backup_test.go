@@ -58,5 +58,4 @@ func TestDeletedNamespaceID(t *testing.T) {
 		require.NotEqual(t, ns, ns1[2])
 	}
 	require.Contains(t, nsl, lastAddedNamespaceId)
-
 }

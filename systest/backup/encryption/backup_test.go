@@ -42,9 +42,9 @@ var (
 )
 
 func TestBackupMinioE(t *testing.T) {
-	backupDst = "s3://minio:9001/dgraph-backup?secure=false"
+	backupDst = "minio://minio:9001/dgraph-backup?secure=false"
 	addr := testutil.ContainerAddr("minio", 9001)
-	localBackupDst = "s3://" + addr + "/dgraph-backup?secure=false"
+	localBackupDst = "minio://" + addr + "/dgraph-backup?secure=false"
 
 	conf := viper.GetViper()
 	conf.Set("tls", fmt.Sprintf("ca-cert=%s; server-name=%s; internal-port=%v;",
@@ -105,8 +105,8 @@ func TestBackupMinioE(t *testing.T) {
 	require.True(t, moveOk)
 
 	// Setup environmental variables for use during restore.
-	os.Setenv("MINIO_ACCESS_KEY", "accesskey")
-	os.Setenv("MINIO_SECRET_KEY", "secretkey")
+	t.Setenv("MINIO_ACCESS_KEY", "accesskey")
+	t.Setenv("MINIO_SECRET_KEY", "secretkey")
 
 	// Setup test directories.
 	dirSetup(t)
@@ -326,13 +326,13 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	restoredPreds, err := testutil.GetPredicateNames(pdir)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type",
-		"movie", "dgraph.graphql.p_query", "dgraph.drop.op"},
+		"movie", "dgraph.graphql.p_query", "dgraph.drop.op", "dgraph.namespace.id", "dgraph.namespace.name"},
 		restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"Node", "dgraph.graphql",
-		"dgraph.graphql.persisted_query"}, restoredTypes)
+		"dgraph.graphql.persisted_query", "dgraph.namespace"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
