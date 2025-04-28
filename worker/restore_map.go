@@ -424,9 +424,9 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 				if err := proto.Unmarshal(kv.Value, &update); err != nil {
 					return err
 				}
-				update.TypeName = x.GalaxyAttr(update.TypeName)
+				update.TypeName = x.AttrInRootNamespace(update.TypeName)
 				for _, sch := range update.Fields {
-					sch.Predicate = x.GalaxyAttr(sch.Predicate)
+					sch.Predicate = x.AttrInRootNamespace(sch.Predicate)
 				}
 				kv.Value, err = proto.Marshal(&update)
 				return err

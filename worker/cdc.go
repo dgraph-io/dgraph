@@ -405,7 +405,7 @@ func toCDCEvent(index uint64, mutation *pb.Mutations) []CDCEvent {
 		switch mutation.DropOp {
 		case pb.Mutations_ALL:
 			// Drop all is cluster wide.
-			binary.BigEndian.PutUint64(namespace, x.GalaxyNamespace)
+			binary.BigEndian.PutUint64(namespace, x.RootNamespace)
 		case pb.Mutations_DATA:
 			ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
 			if err != nil {

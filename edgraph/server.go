@@ -167,7 +167,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	parsedDgraphSchema := &schema.ParsedSchema{}
 
 	if !x.WorkerConfig.AclEnabled {
-		ctx = x.AttachNamespace(ctx, x.GalaxyNamespace)
+		ctx = x.AttachNamespace(ctx, x.RootNamespace)
 	}
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
@@ -236,13 +236,13 @@ func parseSchemaFromAlterOperation(ctx context.Context, sch string) (
 		return nil, errors.Wrapf(err, "While parsing schema")
 	}
 
-	if x.IsGalaxyOperation(ctx) {
+	if x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		if err := AuthSuperAdmin(ctx); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
-				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
+				"Non superadmin user cannot bypass namespaces. "+s.Message())
 		}
 		var err error
 		namespace, err = strconv.ParseUint(x.GetForceNamespace(ctx), 0, 64)
@@ -365,7 +365,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		if err := AuthSuperAdmin(ctx); err != nil {
 			s := status.Convert(err)
 			return empty, status.Error(s.Code(),
 				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
@@ -1110,7 +1110,7 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
 	}
-	if namespace == x.GalaxyNamespace {
+	if namespace == x.RootNamespace {
 		// For galaxy namespace, we don't want to filter out the predicates.
 		return nil
 	}
@@ -1300,13 +1300,13 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	if req.doAuth == NeedAuthorize && x.IsGalaxyOperation(ctx) {
+	if req.doAuth == NeedAuthorize && x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+		if err := AuthSuperAdmin(ctx); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
-				"Non guardian of galaxy user cannot bypass namespaces. "+s.Message())
+				"Non superadmin user cannot bypass namespaces. "+s.Message())
 		}
 	}
 
@@ -1685,7 +1685,7 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 		glog.Errorf("Error while extracting namespace, assuming default %s", err)
 		namespace = 0
 	}
-	isGalaxyQuery := x.IsGalaxyOperation(ctx)
+	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	for gmuIndex, gmu := range qc.gmuList {

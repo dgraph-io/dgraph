@@ -1321,7 +1321,7 @@ func TestGrpcCompressionSupport(t *testing.T) {
 	require.NoError(t, err)
 
 	dc := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	require.NoError(t, dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.GalaxyNamespace))
+	require.NoError(t, dc.LoginIntoNamespace(context.Background(), x.GrootId, "password", x.RootNamespace))
 	q := `schema {}`
 	tx := dc.NewTxn()
 	_, err = tx.Query(context.Background(), q)

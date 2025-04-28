@@ -85,7 +85,7 @@ func TestBackupMinioE(t *testing.T) {
 	t.Logf("--- Original uid mapping: %+v\n", original.Uids)
 
 	client := testutil.GetHttpsClient(t)
-	tabletName := x.NamespaceAttr(x.GalaxyNamespace, "movie")
+	tabletName := x.NamespaceAttr(x.RootNamespace, "movie")
 	// Move tablet to group 1 to avoid messes later.
 	_, err = client.Get("https://" + testutil.SockAddrZeroHttp + "/moveTablet?tablet=movie&group=1")
 	require.NoError(t, err)
@@ -320,7 +320,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, x.GalaxyAttr("movie"), commitTs)
+	restored, err := testutil.GetPredicateValues(pdir, x.AttrInRootNamespace("movie"), commitTs)
 	require.NoError(t, err)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir)

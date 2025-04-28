@@ -545,7 +545,7 @@ func (ssuite *SystestTestSuite) TestSchemaQueryHTTP() {
 
 	hcli, err := ssuite.dc.HTTPClient()
 	require.NoError(t, err)
-	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
+	err = hcli.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace)
 	require.NotNil(t, hcli.AccessJwt, "token is nil")
 	require.NoError(t, err)
 
@@ -1501,7 +1501,7 @@ func doGrpcLogin(ssuite *SystestTestSuite) (*dgraphapi.GrpcClient, func(), error
 		return nil, nil, errors.Wrap(err, "error creating grpc client")
 	}
 	err = gcli.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace)
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "groot login into galaxy namespace failed")
 	}

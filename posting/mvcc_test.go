@@ -24,7 +24,7 @@ import (
 )
 
 func TestIncrRollupGetsCancelledQuickly(t *testing.T) {
-	attr := x.GalaxyAttr("rollup")
+	attr := x.AttrInRootNamespace("rollup")
 	key := x.DataKey(attr, 1)
 	closer = z.NewCloser(1)
 
@@ -56,7 +56,7 @@ func TestIncrRollupGetsCancelledQuickly(t *testing.T) {
 }
 
 func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
-	attr := x.GalaxyAttr("cache")
+	attr := x.AttrInRootNamespace("cache")
 	key := x.IndexKey(attr, "temp")
 
 	// Create a delta from 5->15. Mimick how a follower recieves a delta.
@@ -101,7 +101,7 @@ func BenchmarkTestCache(b *testing.B) {
 	Init(ps, 10000000, true)
 	schema.Init(ps)
 
-	attr := x.GalaxyAttr("cache")
+	attr := x.AttrInRootNamespace("cache")
 	keys := make([][]byte, 0)
 	N := uint64(10000)
 	NInt := 10000
@@ -144,7 +144,7 @@ func BenchmarkTestCache(b *testing.B) {
 }
 
 func TestRollupTimestamp(t *testing.T) {
-	attr := x.GalaxyAttr("rollup")
+	attr := x.AttrInRootNamespace("rollup")
 	key := x.DataKey(attr, 1)
 	// 3 Delta commits.
 	addEdgeToUID(t, attr, 1, 2, 1, 2)
@@ -183,7 +183,7 @@ func TestRollupTimestamp(t *testing.T) {
 }
 
 func TestPostingListRead(t *testing.T) {
-	attr := x.GalaxyAttr("emptypl")
+	attr := x.AttrInRootNamespace("emptypl")
 	key := x.DataKey(attr, 1)
 
 	assertLength := func(readTs, sz int) {

@@ -40,7 +40,7 @@ func newSchemaStore(initial *schema.ParsedSchema, opt *options, state *state) *s
 
 	// Initialize only for the default namespace. Initialization for other namespaces will be done
 	// whenever we see data for a new namespace.
-	s.checkAndSetInitialSchema(x.GalaxyNamespace)
+	s.checkAndSetInitialSchema(x.RootNamespace)
 
 	s.types = initial.Types
 	// This is from the schema read from the schema file.

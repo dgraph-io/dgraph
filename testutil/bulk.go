@@ -45,7 +45,7 @@ func LiveLoad(opts LiveOpts) error {
 		"--zero", opts.Zero,
 	}
 	if opts.Creds != nil {
-		if opts.Creds.Namespace == x.GalaxyNamespace || opts.ForceNs != 0 {
+		if opts.Creds.Namespace == x.RootNamespace || opts.ForceNs != 0 {
 			args = append(args, "--force-namespace", strconv.FormatInt(opts.ForceNs, 10))
 		}
 		args = append(args, "--creds")

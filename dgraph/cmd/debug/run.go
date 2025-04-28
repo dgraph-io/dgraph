@@ -901,7 +901,7 @@ func printSummary(db *badger.DB) {
 			// Some of the keys are badger's internal and couldn't be parsed.
 			// Hence, the error is expected in that case.
 			fmt.Printf("Unable to parse key: %#x\n", key)
-			return x.GalaxyNamespace
+			return x.RootNamespace
 		}
 		return x.ParseNamespace(pk.Attr)
 	}

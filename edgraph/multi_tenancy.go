@@ -80,7 +80,7 @@ func (s *Server) ResetPassword(ctx context.Context, inp *ResetPasswordInput) err
 	return nil
 }
 
-// CreateNamespaceInternal creates a new namespace. Only guardian of galaxy is authorized to do so.
+// CreateNamespaceInternal creates a new namespace. Only superadmin is authorized to do so.
 // Authorization is handled by middlewares.
 func (s *Server) CreateNamespaceInternal(ctx context.Context, passwd string) (uint64, error) {
 	glog.V(2).Info("Got create namespace request.")
@@ -126,7 +126,7 @@ func createGuardianAndGroot(ctx context.Context, namespace uint64, passwd string
 	return nil
 }
 
-// DeleteNamespace deletes a new namespace. Only guardian of galaxy is authorized to do so.
+// DeleteNamespace deletes a new namespace. Only superadmin is authorized to do so.
 // Authorization is handled by middlewares.
 func (s *Server) DeleteNamespace(ctx context.Context, namespace uint64) error {
 	glog.Info("Deleting namespace", namespace)

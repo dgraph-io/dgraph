@@ -158,7 +158,7 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 
 	namespace := r.URL.Query().Get("namespace")
 	namespace = strings.TrimSpace(namespace)
-	ns := x.GalaxyNamespace
+	ns := x.RootNamespace
 	if namespace != "" {
 		var err error
 		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {

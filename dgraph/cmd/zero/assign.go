@@ -189,8 +189,8 @@ func (s *Server) AssignIds(ctx context.Context, num *pb.Num) (*pb.AssignedIds, e
 			return nil
 		}
 		ns, err := x.ExtractNamespace(ctx)
-		if err != nil || ns == x.GalaxyNamespace {
-			// There is no rate limiting for GalaxyNamespace. Also, we allow the requests which do
+		if err != nil || ns == x.RootNamespace {
+			// There is no rate limiting for RootNamespace. Also, we allow the requests which do
 			// not contain namespace into context.
 			return nil
 		}

@@ -46,7 +46,7 @@ func getAccessJwt() (*api.Jwt, error) {
 			}
 		}`,
 		Variables: map[string]interface{}{"userId": user, "password": password,
-			"namespace": x.GalaxyNamespace},
+			"namespace": x.RootNamespace},
 		Headers: header,
 	}
 

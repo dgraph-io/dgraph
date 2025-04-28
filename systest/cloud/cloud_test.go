@@ -23,7 +23,7 @@ import (
 )
 
 func setup(t *testing.T) {
-	dc := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	dc := testutil.DgClientWithLogin(t, "groot", "password", x.RootNamespace)
 	require.NoError(t, dc.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
@@ -63,7 +63,7 @@ func graphqlHelper(t *testing.T, query string, headers http.Header,
 func TestDisallowNonGalaxy(t *testing.T) {
 	setup(t)
 
-	galaxyToken := getHttpToken(t, "groot", "password", x.GalaxyNamespace)
+	galaxyToken := getHttpToken(t, "groot", "password", x.RootNamespace)
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)
@@ -123,12 +123,12 @@ func TestDisallowNonGalaxy(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "operation is not allowed in shared cloud mode")
 
-	// Ns guardian should not be able to create user.
+	// Ns superadmin should not be able to create user.
 	resp := testutil.CreateUser(t, nsToken, "alice", "newpassword")
 	require.Greater(t, len(resp.Errors), 0)
 	require.Contains(t, resp.Errors.Error(), "unauthorized to mutate acl predicates")
 
-	// Galaxy guardian should be able to create user.
+	// root superadmin should be able to create user.
 	resp = testutil.CreateUser(t, galaxyToken, "alice", "newpassword")
 	require.Equal(t, 0, len(resp.Errors))
 }
@@ -136,7 +136,7 @@ func TestDisallowNonGalaxy(t *testing.T) {
 func TestEnvironmentAccess(t *testing.T) {
 	setup(t)
 
-	galaxyToken := getHttpToken(t, "groot", "password", x.GalaxyNamespace)
+	galaxyToken := getHttpToken(t, "groot", "password", x.RootNamespace)
 	// Create a new namespace
 	ns, err := testutil.CreateNamespaceWithRetry(t, galaxyToken)
 	require.NoError(t, err)

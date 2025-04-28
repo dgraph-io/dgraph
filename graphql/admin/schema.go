@@ -47,7 +47,7 @@ func (usr *updateSchemaResolver) Resolve(ctx context.Context, m schema.Mutation)
 	}
 
 	// we don't need the correct namespace for validation, so passing the Galaxy namespace
-	if _, err = schema.FromString(schHandler.GQLSchema(), x.GalaxyNamespace); err != nil {
+	if _, err = schema.FromString(schHandler.GQLSchema(), x.RootNamespace); err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 

@@ -172,7 +172,7 @@ func run() {
 
 	// Login using dgo client fetches the information from creds flag.
 	Upgrade.Conf.Set("creds", fmt.Sprintf("user=%s; password=%s; namespace=%d",
-		Upgrade.Conf.GetString(user), Upgrade.Conf.GetString(password), x.GalaxyNamespace))
+		Upgrade.Conf.GetString(user), Upgrade.Conf.GetString(password), x.RootNamespace))
 	applyChangeList(cmdInput, allChanges)
 }
 

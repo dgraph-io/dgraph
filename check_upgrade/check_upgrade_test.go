@@ -16,12 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCheckUpgrade(t *testing.T) {
@@ -36,14 +37,14 @@ func TestCheckUpgrade(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
-	rdfs := ` 
+	rdfs := `
 		_:a <dgraph.xid> "user1" .
 	    _:a <dgraph.type> "dgraph.type.User"  .
 		_:b <dgraph.xid> "user1" .
@@ -106,11 +107,11 @@ func TestQueryDuplicateNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 	rdfs := `
 			<0x40> <dgraph.xid> "user1" .
 			<0x40> <dgraph.type> "dgraph.type.User"  .

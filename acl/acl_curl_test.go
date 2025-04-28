@@ -33,16 +33,16 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	hc, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 	createAccountAndData(t, gc, hc)
 
 	// test query through curl
-	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(userid, userpassword, x.RootNamespace))
 	// No ACL rules are specified, so query should return empty response,
 	// alter and mutate should fail.
 	queryArgs := func(jwt string) []string {
@@ -96,12 +96,12 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 		DgraphErrMsg: "Token is expired",
 	})
 	// login again using the refreshJwt
-	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
+	require.NoError(t, hc.LoginUsingToken(x.RootNamespace))
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	hcWithGroot, err := asuite.dc.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 	createGroupAndAcls(t, unusedGroup, false, hcWithGroot)
 	time.Sleep(expireJwtSleep)
 	testutil.VerifyCurlCmd(t, queryArgs(hc.AccessJwt), &testutil.CurlFailureConfig{
@@ -109,7 +109,7 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 		DgraphErrMsg: "Token is expired",
 	})
 	// refresh the jwts again
-	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
+	require.NoError(t, hc.LoginUsingToken(x.RootNamespace))
 
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	// verify that with an ACL rule defined, all the operations except query should
@@ -126,11 +126,11 @@ func (asuite *AclTestSuite) TestCurlAuthorization() {
 		DgraphErrMsg: "PermissionDenied",
 	})
 	require.NoError(t, hcWithGroot.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 	createGroupAndAcls(t, devGroup, true, hcWithGroot)
 	time.Sleep(defaultTimeToSleep)
 	// refresh the jwts again
-	require.NoError(t, hc.LoginUsingToken(x.GalaxyNamespace))
+	require.NoError(t, hc.LoginUsingToken(x.RootNamespace))
 
 	require.NoError(t, err, fmt.Sprintf("login through refresh httpToken failed: %v", err))
 	// verify that the operations should be allowed again through the dev group

@@ -79,10 +79,10 @@ func (s *ServerV25) SignInUser(ctx context.Context,
 func (s *ServerV25) CreateNamespace(ctx context.Context, in *apiv25.CreateNamespaceRequest) (
 	*apiv25.CreateNamespaceResponse, error) {
 
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
-			"Non guardian of galaxy user cannot create namespace. "+s.Message())
+			"Non superadmin user cannot create namespace. "+s.Message())
 	}
 
 	if err := isValidNamespaceName(in.NsName); err != nil {
@@ -118,10 +118,10 @@ func (s *ServerV25) CreateNamespace(ctx context.Context, in *apiv25.CreateNamesp
 func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv25.DropNamespaceRequest) (
 	*apiv25.DropNamespaceResponse, error) {
 
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
-			"Non guardian of galaxy user cannot drop namespace. "+s.Message())
+			"Non superadmin user cannot drop namespace. "+s.Message())
 	}
 
 	if err := isValidNamespaceToDelete(in.NsName); err != nil {
@@ -173,10 +173,10 @@ func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv25.DropNamespaceR
 func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv25.UpdateNamespaceRequest) (
 	*apiv25.UpdateNamespaceResponse, error) {
 
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
-			"Non guardian of galaxy user cannot rename a namespace. "+s.Message())
+			"Non superadmin user cannot rename a namespace. "+s.Message())
 	}
 
 	if err := isValidNamespaceToDelete(in.NsName); err != nil {
@@ -202,10 +202,10 @@ func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv25.UpdateNamesp
 func (s *ServerV25) ListNamespaces(ctx context.Context, in *apiv25.ListNamespacesRequest) (
 	*apiv25.ListNamespacesResponse, error) {
 
-	if err := AuthGuardianOfTheGalaxy(ctx); err != nil {
+	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
-			"Non guardian of galaxy user cannot list namespaces. "+s.Message())
+			"Non superadmin user cannot list namespaces. "+s.Message())
 	}
 
 	resp, err := (&Server{}).doQuery(x.AttachJWTNamespace(ctx),

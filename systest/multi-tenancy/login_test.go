@@ -41,10 +41,10 @@ func (msuite *MultitenancyTestSuite) TestLoggingIntoTheNSAfterDropDataFromTheNS(
 	require.NoError(t, err)
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	require.NoError(t, gc.DropAll())
 
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	for i := 1; i < 5; i++ {
 		ns, err := hc.AddNamespace()
 		require.NoError(t, err)
@@ -71,10 +71,10 @@ func (msuite *MultitenancyTestSuite) TestLoggingIntoAllNamespacesAfterDropDataOp
 	require.NoError(t, err)
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.DropAll())
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	nss := []uint64{}
 	for i := 1; i <= 2; i++ {
@@ -89,13 +89,13 @@ func (msuite *MultitenancyTestSuite) TestLoggingIntoAllNamespacesAfterDropDataOp
 
 	// Drop data from default namespace
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	require.NoError(t, gc.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
 
 	// verify here that login into the namespace should not fail
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
 	for _, ns := range nss {
 		require.NoError(t, gc.LoginIntoNamespace(context.Background(),

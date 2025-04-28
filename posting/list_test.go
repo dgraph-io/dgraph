@@ -103,7 +103,7 @@ func (l *List) commitMutation(startTs, commitTs uint64) error {
 }
 
 func TestGetSinglePosting(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("GetSinglePosting"), 123)
+	key := x.DataKey(x.AttrInRootNamespace("GetSinglePosting"), 123)
 	txn := NewTxn(5)
 	l, err := txn.Get(key)
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestGetSinglePosting(t *testing.T) {
 }
 
 func TestAddMutation(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("name"), 2)
+	key := x.DataKey(x.AttrInRootNamespace("name"), 2)
 
 	txn := NewTxn(1)
 	l, err := txn.Get(key)
@@ -229,7 +229,7 @@ func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 
 // TODO(txn): Add tests after lru eviction
 func TestAddMutation_Value(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 10)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 10)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	edge := &pb.DirectedEdge{
@@ -251,7 +251,7 @@ func TestAddMutation_Value(t *testing.T) {
 }
 
 func TestAddMutation_jchiu1(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 12)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 12)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -294,7 +294,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 }
 
 func TestAddMutation_DelSet(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 1534)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 1534)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -321,7 +321,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 }
 
 func TestAddMutation_DelRead(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 1543)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 1543)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -359,7 +359,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 15)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 15)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -381,7 +381,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 }
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr(x.GalaxyAttr("value")), 16)
+	key := x.DataKey(x.AttrInRootNamespace(x.AttrInRootNamespace("value")), 16)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -406,7 +406,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 }
 
 func TestAddMutation_jchiu3(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 29)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 29)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -446,7 +446,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 }
 
 func TestAddMutation_mrjn1(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 21)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 21)
 	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -499,7 +499,7 @@ func TestReadSingleValue(t *testing.T) {
 	// single values. This test confirms that the two functions, getFirst from this file
 	// and GetSingeValueForKey works without an issue.
 
-	key := x.DataKey(x.GalaxyAttr("value"), 1240)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 1240)
 	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	N := uint64(10000)
@@ -546,7 +546,7 @@ func TestRollupMaxTsIsSet(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey(x.GalaxyAttr("bal"), 1333)
+	key := x.DataKey(x.AttrInRootNamespace("bal"), 1333)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
@@ -580,7 +580,7 @@ func TestMillion(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = math.MaxInt32
 
-	key := x.DataKey(x.GalaxyAttr("bal"), 1331)
+	key := x.DataKey(x.AttrInRootNamespace("bal"), 1331)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
@@ -619,7 +619,7 @@ func TestMillion(t *testing.T) {
 func TestAddMutation_mrjn2(t *testing.T) {
 	t.Skip()
 	ctx := context.Background()
-	key := x.DataKey(x.GalaxyAttr("bal"), 1001)
+	key := x.DataKey(x.AttrInRootNamespace("bal"), 1001)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var readTs uint64
@@ -694,7 +694,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 }
 
 func TestAddMutation_gru(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x01)
+	key := x.DataKey(x.AttrInRootNamespace("question.tag"), 0x01)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -727,7 +727,7 @@ func TestAddMutation_gru(t *testing.T) {
 }
 
 func TestAddMutation_gru2(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("question.tag"), 0x100)
+	key := x.DataKey(x.AttrInRootNamespace("question.tag"), 0x100)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -774,7 +774,7 @@ func TestAddMutation_gru2(t *testing.T) {
 func TestAddAndDelMutation(t *testing.T) {
 	// Ensure each test uses unique key since we don't clear the postings
 	// after each test
-	key := x.DataKey(x.GalaxyAttr("dummy_key"), 0x927)
+	key := x.DataKey(x.AttrInRootNamespace("dummy_key"), 0x927)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -802,7 +802,7 @@ func TestAddAndDelMutation(t *testing.T) {
 }
 
 func TestAfterUIDCount(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 22)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 22)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	// Set value to cars and merge to BadgerDB.
@@ -873,7 +873,7 @@ func TestAfterUIDCount(t *testing.T) {
 }
 
 func TestAfterUIDCount2(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 23)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 23)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -900,7 +900,7 @@ func TestAfterUIDCount2(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 25)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 25)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -922,7 +922,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
-	key := x.DataKey(x.GalaxyAttr("value"), 26)
+	key := x.DataKey(x.AttrInRootNamespace("value"), 26)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -1013,7 +1013,7 @@ func createMultiPartList(t *testing.T, size int, addFacet bool) (*List, int) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = 5000
 
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1331)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -1061,7 +1061,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = 10000
 
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1331)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -1220,7 +1220,7 @@ func TestBinSplit(t *testing.T) {
 		defer func() {
 			maxListSize = originalListSize
 		}()
-		key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
+		key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1331)
 		ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 		require.NoError(t, err)
 		for i := 1; i <= size; i++ {
@@ -1401,7 +1401,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	maxListSize = 5000
 
 	// Add entries to the maps.
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1331)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for i := 1; i <= size; i++ {
@@ -1674,7 +1674,7 @@ func TestListDeleteMarker(t *testing.T) {
 	defer setMaxListSize(maxListSize)
 	maxListSize = mb / 2
 
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 13345)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 13345)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
@@ -1702,7 +1702,7 @@ func TestSplitLength(t *testing.T) {
 
 	// Create a list that should be split recursively.
 	size := uint64(1e5)
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1333)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1333)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -1742,7 +1742,7 @@ func TestRecursiveSplits(t *testing.T) {
 
 	// Create a list that should be split recursively.
 	size := int(1e5)
-	key := x.DataKey(x.GalaxyAttr(uuid.New().String()), 1331)
+	key := x.DataKey(x.AttrInRootNamespace(uuid.New().String()), 1331)
 	ol, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
@@ -1803,7 +1803,7 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkAddMutations(b *testing.B) {
-	key := x.DataKey(x.GalaxyAttr("name"), 1)
+	key := x.DataKey(x.AttrInRootNamespace("name"), 1)
 	l, err := readPostingListFromDisk(key, ps, math.MaxUint64)
 	if err != nil {
 		b.Error(err)

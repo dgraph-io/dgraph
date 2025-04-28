@@ -31,10 +31,10 @@ var (
 func TestBackupMultiTenancy(t *testing.T) {
 	ctx := context.Background()
 
-	dg := testutil.DgClientWithLogin(t, "groot", "password", x.GalaxyNamespace)
+	dg := testutil.DgClientWithLogin(t, "groot", "password", x.RootNamespace)
 	testutil.DropAll(t, dg)
 
-	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.GalaxyNamespace}
+	galaxyCreds := &testutil.LoginParams{UserID: "groot", Passwd: "password", Namespace: x.RootNamespace}
 	galaxyToken, err := testutil.Login(t, galaxyCreds)
 	require.NoError(t, err, "login failed")
 
@@ -84,7 +84,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	}
 
 	original := make(map[uint64]*api.Response)
-	original[x.GalaxyNamespace] = addData(dg, "galaxy")
+	original[x.RootNamespace] = addData(dg, "galaxy")
 	original[ns1] = addData(dg1, "ns1")
 	original[ns2] = addData(dg2, "ns2")
 

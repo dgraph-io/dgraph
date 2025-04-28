@@ -405,12 +405,12 @@ const queryAcls = `
 `
 
 var aclPrefixes = [][]byte{
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.permission")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.rule.predicate")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.acl.rule")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.user.group")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.type.Group")),
-	x.PredicatePrefix(x.GalaxyAttr("dgraph.xid")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.rule.permission")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.rule.predicate")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.acl.rule")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.user.group")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.type.Group")),
+	x.PredicatePrefix(x.AttrInRootNamespace("dgraph.xid")),
 }
 
 // upserts the Groot account.
@@ -424,7 +424,7 @@ func InitializeAcl(closer *z.Closer) {
 		// The acl feature is not turned on.
 		return
 	}
-	upsertGuardianAndGroot(closer, x.GalaxyNamespace)
+	upsertGuardianAndGroot(closer, x.RootNamespace)
 }
 
 // Note: The handling of closer should be done by caller.
@@ -466,8 +466,8 @@ func upsertGuardian(ctx context.Context) error {
 					uid
 				}
 			}
-		`, x.GuardiansId)
-	groupNQuads := acl.CreateGroupNQuads(x.GuardiansId)
+		`, x.SuperAdminId)
+	groupNQuads := acl.CreateGroupNQuads(x.SuperAdminId)
 	req := &Request{
 		req: &api.Request{
 			CommitNow: true,
@@ -494,7 +494,7 @@ func upsertGuardian(ctx context.Context) error {
 	}
 
 	if err != nil {
-		return errors.Wrapf(err, "while upserting group with id %s", x.GuardiansId)
+		return errors.Wrapf(err, "while upserting group with id %s", x.SuperAdminId)
 	}
 	var groupResp groupQryResp
 	var guardiansUidStr string
@@ -520,9 +520,9 @@ func upsertGuardian(ctx context.Context) error {
 	}
 	ns, err := x.ExtractNamespace(ctx)
 	if err != nil {
-		return errors.Wrapf(err, "While upserting group with id %s", x.GuardiansId)
+		return errors.Wrapf(err, "While upserting group with id %s", x.SuperAdminId)
 	}
-	x.GuardiansUid.Store(ns, uid)
+	x.SuperAdminUid.Store(ns, uid)
 	glog.V(2).Infof("Successfully upserted the guardian of namespace: %d\n", ns)
 	return nil
 }
@@ -537,7 +537,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 				}
 				guid as var(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group))
 			}
-		`, x.GrootId, x.GuardiansId)
+		`, x.GrootId, x.SuperAdminId)
 	userNQuads := acl.CreateUserNQuads(x.GrootId, passwd)
 	userNQuads = append(userNQuads, &api.NQuad{
 		Subject:   "_:newuser",
@@ -698,7 +698,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 		userId = userData.userId
 		groupIds = userData.groupIds
 
-		if x.IsGuardian(groupIds) {
+		if x.IsSuperAdmin(groupIds) {
 			// Members of guardian group are allowed to alter anything.
 			return nil
 		}
@@ -809,7 +809,7 @@ func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 		userId = userData.userId
 		groupIds = userData.groupIds
 
-		if x.IsGuardian(groupIds) {
+		if x.IsSuperAdmin(groupIds) {
 			// Members of guardians group are allowed to mutate anything
 			// (including delete) except the permission of the acl predicates.
 			switch {
@@ -948,7 +948,7 @@ func blockedPreds(preds []string) map[string]struct{} {
 
 // With shared instance enabled, we don't allow ACL operations from any of the non-galaxy namespace.
 func shouldAllowAcls(ns uint64) bool {
-	return !x.Config.SharedInstance || ns == x.GalaxyNamespace
+	return !x.Config.SharedInstance || ns == x.RootNamespace
 }
 
 // authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
@@ -984,7 +984,7 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 		groupIds = userData.groupIds
 		namespace = userData.namespace
 
-		if x.IsGuardian(groupIds) {
+		if x.IsSuperAdmin(groupIds) {
 			if shouldAllowAcls(userData.namespace) {
 				// Members of guardian groups are allowed to query anything.
 				return nil, nil, nil
@@ -1074,7 +1074,7 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 		}
 
 		groupIds := userData.groupIds
-		if x.IsGuardian(groupIds) {
+		if x.IsSuperAdmin(groupIds) {
 			if shouldAllowAcls(userData.namespace) {
 				// Members of guardian groups are allowed to query anything.
 				return nil, nil
@@ -1115,11 +1115,11 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	return nil
 }
 
-// AuthGuardianOfTheGalaxy authorizes the operations for the users who belong to the guardians
+// AuthSuperAdmin authorizes the operations for the users who belong to the guardians
 // group in the galaxy namespace. This authorization is used for admin usages like creation and
 // deletion of a namespace, resetting passwords across namespaces etc.
 // NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
-func AuthGuardianOfTheGalaxy(ctx context.Context) error {
+func AuthSuperAdmin(ctx context.Context) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
@@ -1129,14 +1129,14 @@ func AuthGuardianOfTheGalaxy(ctx context.Context) error {
 	}
 	if ns != 0 {
 		return status.Error(
-			codes.PermissionDenied, "Only guardian of galaxy is allowed to do this operation")
+			codes.PermissionDenied, "Only superadmin is allowed to do this operation")
 	}
 	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
 	// any of the group to which the user belongs is "guardians" or not.
 	if err := AuthorizeGuardians(ctx); err != nil {
 		s := status.Convert(err)
 		return status.Error(
-			s.Code(), "AuthGuardianOfTheGalaxy: failed to authorize guardians. "+s.Message())
+			s.Code(), "AuthSuperAdmin: failed to authorize guardians. "+s.Message())
 	}
 	glog.V(3).Info("Successfully authorised guardian of the galaxy")
 	return nil
@@ -1160,7 +1160,7 @@ func AuthorizeGuardians(ctx context.Context) error {
 		userId := userData.userId
 		groupIds := userData.groupIds
 
-		if !x.IsGuardian(groupIds) {
+		if !x.IsSuperAdmin(groupIds) {
 			// Deny access for members of non-guardian groups
 			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
 				"allowed access. User '%v' is not a member of guardians group.", userId))

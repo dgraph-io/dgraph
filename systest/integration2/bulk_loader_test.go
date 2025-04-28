@@ -15,8 +15,8 @@ import (
 
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
 	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
-
 	"github.com/hypermodeinc/dgraph/v25/x"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,7 +92,7 @@ func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	params := dgraphapi.GraphQLParams{
 		Query: `query {

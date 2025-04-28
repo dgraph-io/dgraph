@@ -54,7 +54,7 @@ func getMoveTabletInput(m schema.Mutation) (*moveTabletInput, error) {
 	inputRef := &moveTabletInput{}
 	// namespace is an optional parameter
 	if _, ok = inputArg["namespace"]; !ok {
-		inputRef.Namespace = x.GalaxyNamespace
+		inputRef.Namespace = x.RootNamespace
 	} else {
 		ns, err := parseAsUint64(inputArg["namespace"])
 		if err != nil {

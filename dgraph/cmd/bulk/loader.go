@@ -334,7 +334,7 @@ func parseGqlSchema(s string) map[uint64]string {
 	var schemas []x.ExportedGQLSchema
 	if err := json.Unmarshal([]byte(s), &schemas); err != nil {
 		fmt.Println("Error while decoding the graphql schema. Assuming it to be in format < 21.03.")
-		return map[uint64]string{x.GalaxyNamespace: s}
+		return map[uint64]string{x.RootNamespace: s}
 	}
 
 	schemaMap := make(map[uint64]string)

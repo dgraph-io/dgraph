@@ -35,7 +35,7 @@ func (msuite *MultitenancyTestSuite) TearDownTest() {
 	defer cleanup()
 	require.NoError(t, err)
 	require.NoError(t, gcli.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 	require.NoError(t, gcli.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 

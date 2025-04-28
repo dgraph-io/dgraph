@@ -449,7 +449,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		mr.uid = getNextBlank()
 	}
 
-	namespace := x.GalaxyNamespace
+	namespace := x.RootNamespace
 	if ns, ok := m["namespace"]; ok {
 		switch nsVal := ns.(type) {
 		case json.Number:

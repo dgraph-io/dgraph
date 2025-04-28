@@ -29,7 +29,7 @@ func TestGraphqlSchema(t *testing.T) {
 	hc, err := c.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.GalaxyNamespace))
+		dgraphapi.DefaultPassword, x.RootNamespace))
 
 	// DGRAPHCORE-329
 	//nolint:lll
