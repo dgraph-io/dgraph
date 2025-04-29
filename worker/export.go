@@ -32,6 +32,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/enc"
 	"github.com/hypermodeinc/dgraph/v25/posting"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
 	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/hypermodeinc/dgraph/v25/types/facets"
 	"github.com/hypermodeinc/dgraph/v25/x"
@@ -820,6 +821,10 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}
+		}
+
+		if strings.Contains(pk.Attr, hnsw.VecKeyword) {
+			return false
 		}
 		return pk.IsData()
 	}

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/posting"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
 	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
 	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
@@ -510,6 +512,10 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	}
 	if types.TypeID(edge.ValueType) == types.DefaultID && isStarAll(edge.Value) {
 		return nil
+	}
+
+	if strings.Contains(su.Predicate, hnsw.VecKeyword) {
+		return errors.Errorf("Not allowed to insert mutations in vector index keys, edge: [%v]", edge)
 	}
 
 	storageType := posting.TypeID(edge)
