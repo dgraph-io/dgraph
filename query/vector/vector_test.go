@@ -815,3 +815,33 @@ func TestGetVector(t *testing.T) {
 	  }`
 	require.JSONEq(t, k, js)
 }
+
+func TestDotProductWithConstantVector(t *testing.T) {
+	setSchema("vec452 : float32vector .")
+
+	rdfs := `
+		<1> <vec452> "[1.0, 1.0, 2.0, 2.0]" .
+		<2> <vec452> "[2.0, 1.0, 2.0, 2.0]" .`
+	require.NoError(t, addTriplesToCluster(rdfs))
+
+	query := `query q($vec: float32vector) {
+		q(func: has(vec452)) {
+			v1 as vec452
+			distance: Math(v1 dot $vec)
+		}
+	}`
+	js, err := processQueryWithVars(t, query, map[string]string{"$vec": "[1.0, 1.0, 2.0, 2.0]"})
+	require.NoError(t, err)
+	k := `{"data":{"q":[{"vec452":[1,1,2,2],"distance":10},{"vec452":[2,1,2,2],"distance":11}]}}`
+	require.JSONEq(t, k, js)
+
+	query = `{
+		q(func: has(vec452)) {
+			v1 as vec452
+			distance: Math(v1 dot v1)
+		}
+	}`
+	require.JSONEq(t,
+		`{"data":{"q":[{"vec452":[1,1,2,2],"distance":10},{"vec452":[2,1,2,2],"distance":13}]} }`,
+		processQueryNoErr(t, query))
+}
