@@ -55,7 +55,7 @@ func TestReverseEdge(t *testing.T) {
 	pl.RLock()
 	c := pl.GetLength(5)
 	pl.RUnlock()
-	require.Equal(t, c, 0)
+	require.Equal(t, 0, c)
 }
 
 func TestReverseEdgeSetDel(t *testing.T) {
