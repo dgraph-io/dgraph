@@ -881,14 +881,14 @@ func isVectorPackage(pkg string) bool {
 }
 
 var datafiles = map[string]string{
-	"1million-noindex.schema": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million-noindex.schema?raw=true",
-	"1million.schema":         "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
-	"1million.rdf.gz":         "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
-	"21million.schema":        "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
-	"21million.rdf.gz":        "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
+	"1million-noindex.schema": "https://raw.githubusercontent.com/hypermodeinc/dgraph-benchmarks/refs/heads/main/data/1million-noindex.schema",
+	"1million.schema":         "https://raw.githubusercontent.com/hypermodeinc/dgraph-benchmarks/refs/heads/main/data/1million.schema",
+	"1million.rdf.gz":         "https://media.githubusercontent.com/media/hypermodeinc/dgraph-benchmarks/refs/heads/main/data/1million.rdf.gz",
+	"21million.schema":        "https://raw.githubusercontent.com/hypermodeinc/dgraph-benchmarks/refs/heads/main/data/21million.schema",
+	"21million.rdf.gz":        "https://media.githubusercontent.com/media/hypermodeinc/dgraph-benchmarks/refs/heads/main/data/21million.rdf.gz",
 }
 
-var baseUrl = "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/ldbc/sf0.3/ldbc_rdf_0.3/"
+var baseUrl = "https://media.githubusercontent.com/media/hypermodeinc/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbc_rdf_0.3/"
 var suffix = "?raw=true"
 
 var rdfFileNames = [...]string{
@@ -944,8 +944,7 @@ func downloadLDBCFiles() {
 	}
 
 	for _, name := range rdfFileNames {
-		filepath := baseUrl + name + suffix
-		ldbcDataFiles[name] = filepath
+		ldbcDataFiles[name] = baseUrl + name + suffix
 	}
 
 	start := time.Now()
