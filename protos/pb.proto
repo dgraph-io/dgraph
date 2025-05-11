@@ -597,11 +597,7 @@ service Worker {
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
   rpc ApplyDrainmode(DrainModeRequest) returns (Status) {}
-  rpc InternalStreamSnapshot(stream api.v25.StreamSnapshotRequest) returns (api.v25.StreamSnapshotResponse) {}
-}
-
-message ReceiveSnapshotKVRequest {
-    bool done = 1;
+  rpc InternalStreamPDir(stream api.v25.StreamPDirRequest) returns (api.v25.StreamPDirResponse) {}
 }
 
 message DrainModeRequest {

@@ -39,32 +39,32 @@ func Import(ctx context.Context, endpoint string, opts grpc.DialOption, bulkOutD
 	if err != nil {
 		return err
 	}
-	resp, err := startSnapshotStream(ctx, dg)
+	resp, err := startPDirStream(ctx, dg)
 	if err != nil {
 		return err
 	}
 
-	return sendSnapshot(ctx, dg, bulkOutDir, resp.Groups)
+	return sendPDir(ctx, dg, bulkOutDir, resp.Groups)
 }
 
-// startSnapshotStream initiates a snapshot stream session with the Dgraph server.
-func startSnapshotStream(ctx context.Context, dc apiv25.DgraphClient) (*apiv25.InitiateSnapshotStreamResponse, error) {
-	glog.Info("Initiating snapshot stream")
-	req := &apiv25.InitiateSnapshotStreamRequest{}
-	resp, err := dc.InitiateSnapshotStream(ctx, req)
+// startPDirStream initiates a snapshot stream session with the Dgraph server.
+func startPDirStream(ctx context.Context, dc apiv25.DgraphClient) (*apiv25.InitiatePDirStreamResponse, error) {
+	glog.Info("Initiating pdir stream")
+	req := &apiv25.InitiatePDirStreamRequest{}
+	resp, err := dc.InitiatePDirStream(ctx, req)
 	if err != nil {
-		glog.Errorf("failed to initiate snapshot stream: %v", err)
-		return nil, fmt.Errorf("failed to initiate snapshot stream: %v", err)
+		glog.Errorf("failed to initiate pdir stream: %v", err)
+		return nil, fmt.Errorf("failed to initiate pdir stream: %v", err)
 	}
-	glog.Info("Snapshot stream initiated successfully")
+	glog.Info("Pdir stream initiated successfully")
 	return resp, nil
 }
 
-// sendSnapshot takes a p directory and a set of group IDs and streams the data from the
+// sendPDir takes a p directory and a set of group IDs and streams the data from the
 // p directory to the corresponding group IDs. It first scans the provided directory for
 // subdirectories named with numeric group IDs.
-func sendSnapshot(ctx context.Context, dg apiv25.DgraphClient, baseDir string, groups []uint32) error {
-	glog.Infof("Starting to stream snapshots from directory: %s", baseDir)
+func sendPDir(ctx context.Context, dg apiv25.DgraphClient, baseDir string, groups []uint32) error {
+	glog.Infof("Starting to stream pdir from directory: %s", baseDir)
 
 	errG, ctx := errgroup.WithContext(ctx)
 	for _, group := range groups {
@@ -88,7 +88,7 @@ func sendSnapshot(ctx context.Context, dg apiv25.DgraphClient, baseDir string, g
 		return err
 	}
 
-	glog.Infof("Completed streaming all snapshots")
+	glog.Infof("Completed streaming all pdirs")
 	return nil
 }
 
@@ -98,9 +98,9 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 	glog.Infof("Opening stream for group %d from directory %s", groupId, pdir)
 
 	// Initialize stream with the server
-	out, err := dg.StreamSnapshot(ctx)
+	out, err := dg.StreamPDir(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to start snapshot stream for group %d: %w", groupId, err)
+		return fmt.Errorf("failed to start pdir stream for group %d: %w", groupId, err)
 	}
 
 	// Open the BadgerDB instance at the specified directory
@@ -118,7 +118,7 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 
 	// Send group ID as the first message in the stream
 	glog.Infof("Sending group ID [%d] to server", groupId)
-	groupReq := &apiv25.StreamSnapshotRequest{GroupId: groupId}
+	groupReq := &apiv25.StreamPDirRequest{GroupId: groupId}
 	if err := out.Send(groupReq); err != nil {
 		return fmt.Errorf("failed to send group ID [%d]: %w", groupId, err)
 	}
@@ -129,8 +129,8 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 	stream.LogPrefix = fmt.Sprintf("Sending P dir for group [%d]", groupId)
 	stream.KeyToList = nil
 	stream.Send = func(buf *z.Buffer) error {
-		kvs := &apiv25.KVS{Data: buf.Bytes()}
-		if err := out.Send(&apiv25.StreamSnapshotRequest{Pairs: kvs}); err != nil && !errors.Is(err, io.EOF) {
+		p := &apiv25.StreamPacket{Data: buf.Bytes()}
+		if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: p}); err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to send data chunk: %w", err)
 		}
 		return nil
@@ -143,9 +143,9 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 
 	// Send the final 'done' signal to mark completion
 	glog.Infof("Sending completion signal for group [%d]", groupId)
-	done := &apiv25.KVS{Done: true}
+	done := &apiv25.StreamPacket{Done: true}
 
-	if err := out.Send(&apiv25.StreamSnapshotRequest{Pairs: done}); err != nil && !errors.Is(err, io.EOF) {
+	if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: done}); err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("failed to send 'done' signal for group [%d]: %w", groupId, err)
 	}
 	// Wait for acknowledgment from the server

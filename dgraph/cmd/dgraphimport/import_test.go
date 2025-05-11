@@ -71,7 +71,7 @@ func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
 			dc, err := newClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			require.NoError(t, err)
 
-			resp, err := startSnapshotStream(context.Background(), dc)
+			resp, err := startPDirStream(context.Background(), dc)
 			require.NoError(t, err)
 
 			require.Equal(t, tt.expectedNum, len(resp.Groups))

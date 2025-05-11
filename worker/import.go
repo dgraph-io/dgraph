@@ -25,8 +25,8 @@ import (
 
 // streamProcessor defines the common interface for stream processing
 type streamProcessor interface {
-	SendAndClose(*apiv25.StreamSnapshotResponse) error
-	Recv() (*apiv25.StreamSnapshotRequest, error)
+	SendAndClose(*apiv25.StreamPDirResponse) error
+	Recv() (*apiv25.StreamPDirRequest, error)
 	grpc.ServerStream
 }
 
@@ -70,7 +70,7 @@ func ProposeDrain(ctx context.Context, drainMode *pb.DrainModeRequest) ([]uint32
 // with the leader of that group and streams data to it. The function returns an error if
 // there are any issues in the process, such as a broken connection or failure to establish
 // a stream with the leader.
-func InStream(stream apiv25.Dgraph_StreamSnapshotServer) error {
+func InStream(stream apiv25.Dgraph_StreamPDirServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return fmt.Errorf("failed to receive initial stream message: %v", err)
@@ -89,7 +89,7 @@ func InStream(stream apiv25.Dgraph_StreamSnapshotServer) error {
 
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
-	alphaStream, err := c.InternalStreamSnapshot(stream.Context())
+	alphaStream, err := c.InternalStreamPDir(stream.Context())
 	if err != nil {
 		return fmt.Errorf("failed to establish stream with leader: %v", err)
 	}
@@ -97,8 +97,8 @@ func InStream(stream apiv25.Dgraph_StreamSnapshotServer) error {
 	return pipeTwoStream(stream, alphaStream)
 }
 
-func pipeTwoStream(in apiv25.Dgraph_StreamSnapshotServer, out pb.Worker_InternalStreamSnapshotClient) error {
-	buffer := make(chan *apiv25.StreamSnapshotRequest, 10)
+func pipeTwoStream(in apiv25.Dgraph_StreamPDirServer, out pb.Worker_InternalStreamPDirClient) error {
+	buffer := make(chan *apiv25.StreamPDirRequest, 10)
 	errCh := make(chan error, 1)
 	ctx := in.Context()
 
@@ -138,10 +138,11 @@ Loop:
 				break Loop
 			}
 
-			data := &apiv25.StreamSnapshotRequest{Pairs: &apiv25.KVS{Data: msg.Pairs.Data}}
+			data := &apiv25.StreamPDirRequest{StreamPacket: &apiv25.StreamPacket{Data: msg.StreamPacket.Data}}
 
-			if msg.Pairs.Done {
-				if err := out.Send(&apiv25.StreamSnapshotRequest{Pairs: &apiv25.KVS{Done: true}}); err != nil {
+			if msg.StreamPacket.Done {
+				d := apiv25.StreamPacket{Done: true}
+				if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: &d}); err != nil {
 					glog.Errorf("Error sending 'done' to out stream: %v", err)
 					return err
 				}
@@ -154,14 +155,14 @@ Loop:
 				return fmt.Errorf("error sending to outstream: %v", err)
 			}
 
-			size += len(msg.Pairs.Data)
+			size += len(msg.StreamPacket.Data)
 			glog.Infof("[import] Sent batch of size: %s. Total so far: %s\n",
-				humanize.IBytes(uint64(len(msg.Pairs.Data))), humanize.IBytes(uint64(size)))
+				humanize.IBytes(uint64(len(msg.StreamPacket.Data))), humanize.IBytes(uint64(size)))
 		}
 	}
 
 	// Close the incoming stream properly
-	if err := in.SendAndClose(&apiv25.StreamSnapshotResponse{Done: true}); err != nil {
+	if err := in.SendAndClose(&apiv25.StreamPDirResponse{Done: true}); err != nil {
 		return fmt.Errorf("failed to send close on in: %v", err)
 	}
 
@@ -177,7 +178,7 @@ Loop:
 
 // flushKvs receives the stream of data from the client and writes it to BadgerDB.
 // It also sends a streams the data to other nodes of the same group and reloads the schema from the DB.
-func flushKvs(stream apiv25.Dgraph_StreamSnapshotServer) error {
+func flushKvs(stream apiv25.Dgraph_StreamPDirServer) error {
 	if err := processStreamData(stream); err != nil {
 		return err
 	}
@@ -196,7 +197,7 @@ func (w *grpcWorker) ApplyDrainmode(ctx context.Context, req *pb.DrainModeReques
 // InternalStreamSnapshot handles the stream of key-value pairs sent from proxy alpha.
 // It writes the data to BadgerDB, sends an acknowledgment once all data is received,
 // and proposes to accept the newly added data to other group nodes.
-func (w *grpcWorker) InternalStreamSnapshot(stream pb.Worker_InternalStreamSnapshotServer) error {
+func (w *grpcWorker) InternalStreamPDir(stream pb.Worker_InternalStreamPDirServer) error {
 	if err := processStreamData(stream); err != nil {
 		return err
 	}
@@ -222,7 +223,7 @@ func processStreamData(stream streamProcessor) error {
 			return err
 		}
 
-		kvs := req.GetPairs()
+		kvs := req.GetStreamPacket()
 		// Check if all key-value pairs have been received.
 		if kvs != nil && kvs.Done {
 			glog.Info("[import] All key-values have been received.")
@@ -249,7 +250,7 @@ func processStreamData(stream streamProcessor) error {
 	glog.Info("[import] P dir writes DONE. Sending ACK")
 
 	// Send an acknowledgment to the leader indicating completion.
-	return stream.SendAndClose(&apiv25.StreamSnapshotResponse{Done: true})
+	return stream.SendAndClose(&apiv25.StreamPDirResponse{Done: true})
 }
 
 func postStreamProcessing(ctx context.Context) error {

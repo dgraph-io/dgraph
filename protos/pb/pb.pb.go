@@ -420,7 +420,7 @@ func (x NumLeaseType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use NumLeaseType.Descriptor instead.
 func (NumLeaseType) EnumDescriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{57, 0}
+	return file_pb_proto_rawDescGZIP(), []int{56, 0}
 }
 
 type DropOperation_DropOp int32
@@ -472,7 +472,7 @@ func (x DropOperation_DropOp) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DropOperation_DropOp.Descriptor instead.
 func (DropOperation_DropOp) EnumDescriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{65, 0}
+	return file_pb_proto_rawDescGZIP(), []int{64, 0}
 }
 
 type BackupKey_KeyType int32
@@ -536,7 +536,7 @@ func (x BackupKey_KeyType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BackupKey_KeyType.Descriptor instead.
 func (BackupKey_KeyType) EnumDescriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{68, 0}
+	return file_pb_proto_rawDescGZIP(), []int{67, 0}
 }
 
 type List struct {
@@ -4565,53 +4565,6 @@ func (x *RaftBatch) GetPayload() *api.Payload {
 	return nil
 }
 
-type ReceiveSnapshotKVRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Done bool `protobuf:"varint,1,opt,name=done,proto3" json:"done,omitempty"`
-}
-
-func (x *ReceiveSnapshotKVRequest) Reset() {
-	*x = ReceiveSnapshotKVRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[51]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ReceiveSnapshotKVRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ReceiveSnapshotKVRequest) ProtoMessage() {}
-
-func (x *ReceiveSnapshotKVRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[51]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ReceiveSnapshotKVRequest.ProtoReflect.Descriptor instead.
-func (*ReceiveSnapshotKVRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{51}
-}
-
-func (x *ReceiveSnapshotKVRequest) GetDone() bool {
-	if x != nil {
-		return x.Done
-	}
-	return false
-}
-
 type DrainModeRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -4623,7 +4576,7 @@ type DrainModeRequest struct {
 func (x *DrainModeRequest) Reset() {
 	*x = DrainModeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[52]
+		mi := &file_pb_proto_msgTypes[51]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4636,7 +4589,7 @@ func (x *DrainModeRequest) String() string {
 func (*DrainModeRequest) ProtoMessage() {}
 
 func (x *DrainModeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[52]
+	mi := &file_pb_proto_msgTypes[51]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4649,7 +4602,7 @@ func (x *DrainModeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainModeRequest.ProtoReflect.Descriptor instead.
 func (*DrainModeRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{52}
+	return file_pb_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *DrainModeRequest) GetState() bool {
@@ -4670,7 +4623,7 @@ type TabletResponse struct {
 func (x *TabletResponse) Reset() {
 	*x = TabletResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[53]
+		mi := &file_pb_proto_msgTypes[52]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4683,7 +4636,7 @@ func (x *TabletResponse) String() string {
 func (*TabletResponse) ProtoMessage() {}
 
 func (x *TabletResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[53]
+	mi := &file_pb_proto_msgTypes[52]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4696,7 +4649,7 @@ func (x *TabletResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TabletResponse.ProtoReflect.Descriptor instead.
 func (*TabletResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{53}
+	return file_pb_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *TabletResponse) GetTablets() []*Tablet {
@@ -4718,7 +4671,7 @@ type TabletRequest struct {
 func (x *TabletRequest) Reset() {
 	*x = TabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[54]
+		mi := &file_pb_proto_msgTypes[53]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4731,7 +4684,7 @@ func (x *TabletRequest) String() string {
 func (*TabletRequest) ProtoMessage() {}
 
 func (x *TabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[54]
+	mi := &file_pb_proto_msgTypes[53]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4744,7 +4697,7 @@ func (x *TabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TabletRequest.ProtoReflect.Descriptor instead.
 func (*TabletRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{54}
+	return file_pb_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *TabletRequest) GetTablets() []*Tablet {
@@ -4773,7 +4726,7 @@ type SubscriptionRequest struct {
 func (x *SubscriptionRequest) Reset() {
 	*x = SubscriptionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[55]
+		mi := &file_pb_proto_msgTypes[54]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4786,7 +4739,7 @@ func (x *SubscriptionRequest) String() string {
 func (*SubscriptionRequest) ProtoMessage() {}
 
 func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[55]
+	mi := &file_pb_proto_msgTypes[54]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4799,7 +4752,7 @@ func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*SubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{55}
+	return file_pb_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *SubscriptionRequest) GetPrefixes() [][]byte {
@@ -4827,7 +4780,7 @@ type SubscriptionResponse struct {
 func (x *SubscriptionResponse) Reset() {
 	*x = SubscriptionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[56]
+		mi := &file_pb_proto_msgTypes[55]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4840,7 +4793,7 @@ func (x *SubscriptionResponse) String() string {
 func (*SubscriptionResponse) ProtoMessage() {}
 
 func (x *SubscriptionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[56]
+	mi := &file_pb_proto_msgTypes[55]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4853,7 +4806,7 @@ func (x *SubscriptionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionResponse.ProtoReflect.Descriptor instead.
 func (*SubscriptionResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{56}
+	return file_pb_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *SubscriptionResponse) GetKvs() *pb.KVList {
@@ -4880,7 +4833,7 @@ type Num struct {
 func (x *Num) Reset() {
 	*x = Num{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[57]
+		mi := &file_pb_proto_msgTypes[56]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4893,7 +4846,7 @@ func (x *Num) String() string {
 func (*Num) ProtoMessage() {}
 
 func (x *Num) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[57]
+	mi := &file_pb_proto_msgTypes[56]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4906,7 +4859,7 @@ func (x *Num) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Num.ProtoReflect.Descriptor instead.
 func (*Num) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{57}
+	return file_pb_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *Num) GetVal() uint64 {
@@ -4958,7 +4911,7 @@ type AssignedIds struct {
 func (x *AssignedIds) Reset() {
 	*x = AssignedIds{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[58]
+		mi := &file_pb_proto_msgTypes[57]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -4971,7 +4924,7 @@ func (x *AssignedIds) String() string {
 func (*AssignedIds) ProtoMessage() {}
 
 func (x *AssignedIds) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[58]
+	mi := &file_pb_proto_msgTypes[57]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4984,7 +4937,7 @@ func (x *AssignedIds) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignedIds.ProtoReflect.Descriptor instead.
 func (*AssignedIds) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{58}
+	return file_pb_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *AssignedIds) GetStartId() uint64 {
@@ -5020,7 +4973,7 @@ type RemoveNodeRequest struct {
 func (x *RemoveNodeRequest) Reset() {
 	*x = RemoveNodeRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[59]
+		mi := &file_pb_proto_msgTypes[58]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5033,7 +4986,7 @@ func (x *RemoveNodeRequest) String() string {
 func (*RemoveNodeRequest) ProtoMessage() {}
 
 func (x *RemoveNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[59]
+	mi := &file_pb_proto_msgTypes[58]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5046,7 +4999,7 @@ func (x *RemoveNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNodeRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNodeRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{59}
+	return file_pb_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RemoveNodeRequest) GetNodeId() uint64 {
@@ -5076,7 +5029,7 @@ type MoveTabletRequest struct {
 func (x *MoveTabletRequest) Reset() {
 	*x = MoveTabletRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[60]
+		mi := &file_pb_proto_msgTypes[59]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5089,7 +5042,7 @@ func (x *MoveTabletRequest) String() string {
 func (*MoveTabletRequest) ProtoMessage() {}
 
 func (x *MoveTabletRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[60]
+	mi := &file_pb_proto_msgTypes[59]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5102,7 +5055,7 @@ func (x *MoveTabletRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveTabletRequest.ProtoReflect.Descriptor instead.
 func (*MoveTabletRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{60}
+	return file_pb_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *MoveTabletRequest) GetNamespace() uint64 {
@@ -5138,7 +5091,7 @@ type SnapshotMeta struct {
 func (x *SnapshotMeta) Reset() {
 	*x = SnapshotMeta{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[61]
+		mi := &file_pb_proto_msgTypes[60]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5151,7 +5104,7 @@ func (x *SnapshotMeta) String() string {
 func (*SnapshotMeta) ProtoMessage() {}
 
 func (x *SnapshotMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[61]
+	mi := &file_pb_proto_msgTypes[60]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5164,7 +5117,7 @@ func (x *SnapshotMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotMeta.ProtoReflect.Descriptor instead.
 func (*SnapshotMeta) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{61}
+	return file_pb_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *SnapshotMeta) GetClientTs() uint64 {
@@ -5195,7 +5148,7 @@ type Status struct {
 func (x *Status) Reset() {
 	*x = Status{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[62]
+		mi := &file_pb_proto_msgTypes[61]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5208,7 +5161,7 @@ func (x *Status) String() string {
 func (*Status) ProtoMessage() {}
 
 func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[62]
+	mi := &file_pb_proto_msgTypes[61]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5221,7 +5174,7 @@ func (x *Status) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Status.ProtoReflect.Descriptor instead.
 func (*Status) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{62}
+	return file_pb_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *Status) GetCode() int32 {
@@ -5267,7 +5220,7 @@ type BackupRequest struct {
 func (x *BackupRequest) Reset() {
 	*x = BackupRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[63]
+		mi := &file_pb_proto_msgTypes[62]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5280,7 +5233,7 @@ func (x *BackupRequest) String() string {
 func (*BackupRequest) ProtoMessage() {}
 
 func (x *BackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[63]
+	mi := &file_pb_proto_msgTypes[62]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5293,7 +5246,7 @@ func (x *BackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupRequest.ProtoReflect.Descriptor instead.
 func (*BackupRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{63}
+	return file_pb_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *BackupRequest) GetReadTs() uint64 {
@@ -5384,7 +5337,7 @@ type BackupResponse struct {
 func (x *BackupResponse) Reset() {
 	*x = BackupResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[64]
+		mi := &file_pb_proto_msgTypes[63]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5397,7 +5350,7 @@ func (x *BackupResponse) String() string {
 func (*BackupResponse) ProtoMessage() {}
 
 func (x *BackupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[64]
+	mi := &file_pb_proto_msgTypes[63]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5410,7 +5363,7 @@ func (x *BackupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupResponse.ProtoReflect.Descriptor instead.
 func (*BackupResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{64}
+	return file_pb_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *BackupResponse) GetDropOperations() []*DropOperation {
@@ -5434,7 +5387,7 @@ type DropOperation struct {
 func (x *DropOperation) Reset() {
 	*x = DropOperation{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[65]
+		mi := &file_pb_proto_msgTypes[64]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5447,7 +5400,7 @@ func (x *DropOperation) String() string {
 func (*DropOperation) ProtoMessage() {}
 
 func (x *DropOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[65]
+	mi := &file_pb_proto_msgTypes[64]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5460,7 +5413,7 @@ func (x *DropOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropOperation.ProtoReflect.Descriptor instead.
 func (*DropOperation) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{65}
+	return file_pb_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *DropOperation) GetDropOp() DropOperation_DropOp {
@@ -5498,7 +5451,7 @@ type ExportRequest struct {
 func (x *ExportRequest) Reset() {
 	*x = ExportRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[66]
+		mi := &file_pb_proto_msgTypes[65]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5511,7 +5464,7 @@ func (x *ExportRequest) String() string {
 func (*ExportRequest) ProtoMessage() {}
 
 func (x *ExportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[66]
+	mi := &file_pb_proto_msgTypes[65]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5524,7 +5477,7 @@ func (x *ExportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportRequest.ProtoReflect.Descriptor instead.
 func (*ExportRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{66}
+	return file_pb_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ExportRequest) GetGroupId() uint32 {
@@ -5611,7 +5564,7 @@ type ExportResponse struct {
 func (x *ExportResponse) Reset() {
 	*x = ExportResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[67]
+		mi := &file_pb_proto_msgTypes[66]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5624,7 +5577,7 @@ func (x *ExportResponse) String() string {
 func (*ExportResponse) ProtoMessage() {}
 
 func (x *ExportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[67]
+	mi := &file_pb_proto_msgTypes[66]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5637,7 +5590,7 @@ func (x *ExportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportResponse.ProtoReflect.Descriptor instead.
 func (*ExportResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{67}
+	return file_pb_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ExportResponse) GetCode() int32 {
@@ -5679,7 +5632,7 @@ type BackupKey struct {
 func (x *BackupKey) Reset() {
 	*x = BackupKey{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[68]
+		mi := &file_pb_proto_msgTypes[67]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5692,7 +5645,7 @@ func (x *BackupKey) String() string {
 func (*BackupKey) ProtoMessage() {}
 
 func (x *BackupKey) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[68]
+	mi := &file_pb_proto_msgTypes[67]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5705,7 +5658,7 @@ func (x *BackupKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupKey.ProtoReflect.Descriptor instead.
 func (*BackupKey) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{68}
+	return file_pb_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *BackupKey) GetType() BackupKey_KeyType {
@@ -5773,7 +5726,7 @@ type BackupPostingList struct {
 func (x *BackupPostingList) Reset() {
 	*x = BackupPostingList{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[69]
+		mi := &file_pb_proto_msgTypes[68]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5786,7 +5739,7 @@ func (x *BackupPostingList) String() string {
 func (*BackupPostingList) ProtoMessage() {}
 
 func (x *BackupPostingList) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[69]
+	mi := &file_pb_proto_msgTypes[68]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5799,7 +5752,7 @@ func (x *BackupPostingList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupPostingList.ProtoReflect.Descriptor instead.
 func (*BackupPostingList) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{69}
+	return file_pb_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *BackupPostingList) GetUids() []uint64 {
@@ -5851,7 +5804,7 @@ type UpdateGraphQLSchemaRequest struct {
 func (x *UpdateGraphQLSchemaRequest) Reset() {
 	*x = UpdateGraphQLSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[70]
+		mi := &file_pb_proto_msgTypes[69]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5864,7 +5817,7 @@ func (x *UpdateGraphQLSchemaRequest) String() string {
 func (*UpdateGraphQLSchemaRequest) ProtoMessage() {}
 
 func (x *UpdateGraphQLSchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[70]
+	mi := &file_pb_proto_msgTypes[69]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5877,7 +5830,7 @@ func (x *UpdateGraphQLSchemaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGraphQLSchemaRequest.ProtoReflect.Descriptor instead.
 func (*UpdateGraphQLSchemaRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{70}
+	return file_pb_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *UpdateGraphQLSchemaRequest) GetStartTs() uint64 {
@@ -5919,7 +5872,7 @@ type UpdateGraphQLSchemaResponse struct {
 func (x *UpdateGraphQLSchemaResponse) Reset() {
 	*x = UpdateGraphQLSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[71]
+		mi := &file_pb_proto_msgTypes[70]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5932,7 +5885,7 @@ func (x *UpdateGraphQLSchemaResponse) String() string {
 func (*UpdateGraphQLSchemaResponse) ProtoMessage() {}
 
 func (x *UpdateGraphQLSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[71]
+	mi := &file_pb_proto_msgTypes[70]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5945,7 +5898,7 @@ func (x *UpdateGraphQLSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateGraphQLSchemaResponse.ProtoReflect.Descriptor instead.
 func (*UpdateGraphQLSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{71}
+	return file_pb_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *UpdateGraphQLSchemaResponse) GetUid() uint64 {
@@ -5969,7 +5922,7 @@ type BulkMeta struct {
 func (x *BulkMeta) Reset() {
 	*x = BulkMeta{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[72]
+		mi := &file_pb_proto_msgTypes[71]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -5982,7 +5935,7 @@ func (x *BulkMeta) String() string {
 func (*BulkMeta) ProtoMessage() {}
 
 func (x *BulkMeta) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[72]
+	mi := &file_pb_proto_msgTypes[71]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5995,7 +5948,7 @@ func (x *BulkMeta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BulkMeta.ProtoReflect.Descriptor instead.
 func (*BulkMeta) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{72}
+	return file_pb_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *BulkMeta) GetEdgeCount() int64 {
@@ -6031,7 +5984,7 @@ type DeleteNsRequest struct {
 func (x *DeleteNsRequest) Reset() {
 	*x = DeleteNsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[73]
+		mi := &file_pb_proto_msgTypes[72]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6044,7 +5997,7 @@ func (x *DeleteNsRequest) String() string {
 func (*DeleteNsRequest) ProtoMessage() {}
 
 func (x *DeleteNsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[73]
+	mi := &file_pb_proto_msgTypes[72]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6057,7 +6010,7 @@ func (x *DeleteNsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNsRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{73}
+	return file_pb_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *DeleteNsRequest) GetGroupId() uint32 {
@@ -6085,7 +6038,7 @@ type TaskStatusRequest struct {
 func (x *TaskStatusRequest) Reset() {
 	*x = TaskStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[74]
+		mi := &file_pb_proto_msgTypes[73]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6098,7 +6051,7 @@ func (x *TaskStatusRequest) String() string {
 func (*TaskStatusRequest) ProtoMessage() {}
 
 func (x *TaskStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[74]
+	mi := &file_pb_proto_msgTypes[73]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6111,7 +6064,7 @@ func (x *TaskStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskStatusRequest.ProtoReflect.Descriptor instead.
 func (*TaskStatusRequest) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{74}
+	return file_pb_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *TaskStatusRequest) GetTaskId() uint64 {
@@ -6132,7 +6085,7 @@ type TaskStatusResponse struct {
 func (x *TaskStatusResponse) Reset() {
 	*x = TaskStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pb_proto_msgTypes[75]
+		mi := &file_pb_proto_msgTypes[74]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6145,7 +6098,7 @@ func (x *TaskStatusResponse) String() string {
 func (*TaskStatusResponse) ProtoMessage() {}
 
 func (x *TaskStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_proto_msgTypes[75]
+	mi := &file_pb_proto_msgTypes[74]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6158,7 +6111,7 @@ func (x *TaskStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskStatusResponse.ProtoReflect.Descriptor instead.
 func (*TaskStatusResponse) Descriptor() ([]byte, []int) {
-	return file_pb_proto_rawDescGZIP(), []int{75}
+	return file_pb_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *TaskStatusResponse) GetTaskMeta() uint64 {
@@ -6793,10 +6746,7 @@ var file_pb_proto_rawDesc = []byte{
 	0x43, 0x6f, 0x6e, 0x74, 0x65, 0x78, 0x74, 0x52, 0x07, 0x63, 0x6f, 0x6e, 0x74, 0x65, 0x78, 0x74,
 	0x12, 0x26, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
 	0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x50, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x52,
-	0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x22, 0x2e, 0x0a, 0x18, 0x52, 0x65, 0x63, 0x65,
-	0x69, 0x76, 0x65, 0x53, 0x6e, 0x61, 0x70, 0x73, 0x68, 0x6f, 0x74, 0x4b, 0x56, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x6f, 0x6e, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x04, 0x64, 0x6f, 0x6e, 0x65, 0x22, 0x28, 0x0a, 0x10, 0x44, 0x72, 0x61, 0x69,
+	0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x22, 0x28, 0x0a, 0x10, 0x44, 0x72, 0x61, 0x69,
 	0x6e, 0x4d, 0x6f, 0x64, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x14, 0x0a, 0x05,
 	0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x73, 0x74, 0x61,
 	0x74, 0x65, 0x22, 0x36, 0x0a, 0x0e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x73, 0x70,
@@ -7035,7 +6985,7 @@ var file_pb_proto_rawDesc = []byte{
 	0x61, 0x74, 0x75, 0x73, 0x22, 0x00, 0x12, 0x31, 0x0a, 0x0a, 0x4d, 0x6f, 0x76, 0x65, 0x54, 0x61,
 	0x62, 0x6c, 0x65, 0x74, 0x12, 0x15, 0x2e, 0x70, 0x62, 0x2e, 0x4d, 0x6f, 0x76, 0x65, 0x54, 0x61,
 	0x62, 0x6c, 0x65, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0a, 0x2e, 0x70, 0x62,
-	0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x00, 0x32, 0x83, 0x07, 0x0a, 0x06, 0x57, 0x6f,
+	0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x00, 0x32, 0xf7, 0x06, 0x0a, 0x06, 0x57, 0x6f,
 	0x72, 0x6b, 0x65, 0x72, 0x12, 0x2a, 0x0a, 0x06, 0x4d, 0x75, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0d,
 	0x2e, 0x70, 0x62, 0x2e, 0x4d, 0x75, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x1a, 0x0f, 0x2e,
 	0x61, 0x70, 0x69, 0x2e, 0x54, 0x78, 0x6e, 0x43, 0x6f, 0x6e, 0x74, 0x65, 0x78, 0x74, 0x22, 0x00,
@@ -7086,13 +7036,13 @@ var file_pb_proto_rawDesc = []byte{
 	0x70, 0x6c, 0x79, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x6d, 0x6f, 0x64, 0x65, 0x12, 0x14, 0x2e, 0x70,
 	0x62, 0x2e, 0x44, 0x72, 0x61, 0x69, 0x6e, 0x4d, 0x6f, 0x64, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x1a, 0x0a, 0x2e, 0x70, 0x62, 0x2e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x00,
-	0x12, 0x5d, 0x0a, 0x16, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x53, 0x74, 0x72, 0x65,
-	0x61, 0x6d, 0x53, 0x6e, 0x61, 0x70, 0x73, 0x68, 0x6f, 0x74, 0x12, 0x1e, 0x2e, 0x61, 0x70, 0x69,
-	0x2e, 0x76, 0x32, 0x35, 0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x6e, 0x61, 0x70, 0x73,
-	0x68, 0x6f, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x61, 0x70, 0x69,
-	0x2e, 0x76, 0x32, 0x35, 0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x6e, 0x61, 0x70, 0x73,
-	0x68, 0x6f, 0x74, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x28, 0x01, 0x42,
-	0x06, 0x5a, 0x04, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x12, 0x51, 0x0a, 0x12, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x53, 0x74, 0x72, 0x65,
+	0x61, 0x6d, 0x50, 0x44, 0x69, 0x72, 0x12, 0x1a, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x76, 0x32, 0x35,
+	0x2e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x50, 0x44, 0x69, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x1b, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x76, 0x32, 0x35, 0x2e, 0x53, 0x74, 0x72,
+	0x65, 0x61, 0x6d, 0x50, 0x44, 0x69, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
+	0x00, 0x28, 0x01, 0x42, 0x06, 0x5a, 0x04, 0x2e, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -7108,110 +7058,109 @@ func file_pb_proto_rawDescGZIP() []byte {
 }
 
 var file_pb_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_pb_proto_msgTypes = make([]protoimpl.MessageInfo, 85)
+var file_pb_proto_msgTypes = make([]protoimpl.MessageInfo, 84)
 var file_pb_proto_goTypes = []interface{}{
-	(DirectedEdge_Op)(0),                   // 0: pb.DirectedEdge.Op
-	(Mutations_DropOp)(0),                  // 1: pb.Mutations.DropOp
-	(Metadata_HintType)(0),                 // 2: pb.Metadata.HintType
-	(Posting_ValType)(0),                   // 3: pb.Posting.ValType
-	(Posting_PostingType)(0),               // 4: pb.Posting.PostingType
-	(SchemaUpdate_Directive)(0),            // 5: pb.SchemaUpdate.Directive
-	(NumLeaseType)(0),                      // 6: pb.Num.leaseType
-	(DropOperation_DropOp)(0),              // 7: pb.DropOperation.DropOp
-	(BackupKey_KeyType)(0),                 // 8: pb.BackupKey.KeyType
-	(*List)(nil),                           // 9: pb.List
-	(*TaskValue)(nil),                      // 10: pb.TaskValue
-	(*SrcFunction)(nil),                    // 11: pb.SrcFunction
-	(*Query)(nil),                          // 12: pb.Query
-	(*ValueList)(nil),                      // 13: pb.ValueList
-	(*LangList)(nil),                       // 14: pb.LangList
-	(*Result)(nil),                         // 15: pb.Result
-	(*Order)(nil),                          // 16: pb.Order
-	(*SortMessage)(nil),                    // 17: pb.SortMessage
-	(*SortResult)(nil),                     // 18: pb.SortResult
-	(*RaftContext)(nil),                    // 19: pb.RaftContext
-	(*Member)(nil),                         // 20: pb.Member
-	(*Group)(nil),                          // 21: pb.Group
-	(*ZeroProposal)(nil),                   // 22: pb.ZeroProposal
-	(*MembershipState)(nil),                // 23: pb.MembershipState
-	(*ConnectionState)(nil),                // 24: pb.ConnectionState
-	(*HealthInfo)(nil),                     // 25: pb.HealthInfo
-	(*Tablet)(nil),                         // 26: pb.Tablet
-	(*DirectedEdge)(nil),                   // 27: pb.DirectedEdge
-	(*Mutations)(nil),                      // 28: pb.Mutations
-	(*Metadata)(nil),                       // 29: pb.Metadata
-	(*Snapshot)(nil),                       // 30: pb.Snapshot
-	(*ZeroSnapshot)(nil),                   // 31: pb.ZeroSnapshot
-	(*RestoreRequest)(nil),                 // 32: pb.RestoreRequest
-	(*Proposal)(nil),                       // 33: pb.Proposal
-	(*CDCState)(nil),                       // 34: pb.CDCState
-	(*KVS)(nil),                            // 35: pb.KVS
-	(*Posting)(nil),                        // 36: pb.Posting
-	(*UidBlock)(nil),                       // 37: pb.UidBlock
-	(*UidPack)(nil),                        // 38: pb.UidPack
-	(*PostingList)(nil),                    // 39: pb.PostingList
-	(*FacetParam)(nil),                     // 40: pb.FacetParam
-	(*FacetParams)(nil),                    // 41: pb.FacetParams
-	(*Facets)(nil),                         // 42: pb.Facets
-	(*FacetsList)(nil),                     // 43: pb.FacetsList
-	(*Function)(nil),                       // 44: pb.Function
-	(*FilterTree)(nil),                     // 45: pb.FilterTree
-	(*SchemaRequest)(nil),                  // 46: pb.SchemaRequest
-	(*SchemaNode)(nil),                     // 47: pb.SchemaNode
-	(*SchemaResult)(nil),                   // 48: pb.SchemaResult
-	(*SchemaUpdate)(nil),                   // 49: pb.SchemaUpdate
-	(*VectorIndexSpec)(nil),                // 50: pb.VectorIndexSpec
-	(*OptionPair)(nil),                     // 51: pb.OptionPair
-	(*TypeUpdate)(nil),                     // 52: pb.TypeUpdate
-	(*MapHeader)(nil),                      // 53: pb.MapHeader
-	(*MovePredicatePayload)(nil),           // 54: pb.MovePredicatePayload
-	(*TxnStatus)(nil),                      // 55: pb.TxnStatus
-	(*OracleDelta)(nil),                    // 56: pb.OracleDelta
-	(*TxnTimestamps)(nil),                  // 57: pb.TxnTimestamps
-	(*PeerResponse)(nil),                   // 58: pb.PeerResponse
-	(*RaftBatch)(nil),                      // 59: pb.RaftBatch
-	(*ReceiveSnapshotKVRequest)(nil),       // 60: pb.ReceiveSnapshotKVRequest
-	(*DrainModeRequest)(nil),               // 61: pb.DrainModeRequest
-	(*TabletResponse)(nil),                 // 62: pb.TabletResponse
-	(*TabletRequest)(nil),                  // 63: pb.TabletRequest
-	(*SubscriptionRequest)(nil),            // 64: pb.SubscriptionRequest
-	(*SubscriptionResponse)(nil),           // 65: pb.SubscriptionResponse
-	(*Num)(nil),                            // 66: pb.Num
-	(*AssignedIds)(nil),                    // 67: pb.AssignedIds
-	(*RemoveNodeRequest)(nil),              // 68: pb.RemoveNodeRequest
-	(*MoveTabletRequest)(nil),              // 69: pb.MoveTabletRequest
-	(*SnapshotMeta)(nil),                   // 70: pb.SnapshotMeta
-	(*Status)(nil),                         // 71: pb.Status
-	(*BackupRequest)(nil),                  // 72: pb.BackupRequest
-	(*BackupResponse)(nil),                 // 73: pb.BackupResponse
-	(*DropOperation)(nil),                  // 74: pb.DropOperation
-	(*ExportRequest)(nil),                  // 75: pb.ExportRequest
-	(*ExportResponse)(nil),                 // 76: pb.ExportResponse
-	(*BackupKey)(nil),                      // 77: pb.BackupKey
-	(*BackupPostingList)(nil),              // 78: pb.BackupPostingList
-	(*UpdateGraphQLSchemaRequest)(nil),     // 79: pb.UpdateGraphQLSchemaRequest
-	(*UpdateGraphQLSchemaResponse)(nil),    // 80: pb.UpdateGraphQLSchemaResponse
-	(*BulkMeta)(nil),                       // 81: pb.BulkMeta
-	(*DeleteNsRequest)(nil),                // 82: pb.DeleteNsRequest
-	(*TaskStatusRequest)(nil),              // 83: pb.TaskStatusRequest
-	(*TaskStatusResponse)(nil),             // 84: pb.TaskStatusResponse
-	nil,                                    // 85: pb.Result.VectorMetricsEntry
-	nil,                                    // 86: pb.Group.MembersEntry
-	nil,                                    // 87: pb.Group.TabletsEntry
-	nil,                                    // 88: pb.ZeroProposal.SnapshotTsEntry
-	nil,                                    // 89: pb.MembershipState.GroupsEntry
-	nil,                                    // 90: pb.MembershipState.ZerosEntry
-	nil,                                    // 91: pb.Metadata.PredHintsEntry
-	nil,                                    // 92: pb.OracleDelta.GroupChecksumsEntry
-	nil,                                    // 93: pb.BulkMeta.SchemaMapEntry
-	(*api.TxnContext)(nil),                 // 94: api.TxnContext
-	(*api.Facet)(nil),                      // 95: api.Facet
-	(*pb.KV)(nil),                          // 96: badgerpb4.KV
-	(*api.Payload)(nil),                    // 97: api.Payload
-	(*pb.Match)(nil),                       // 98: badgerpb4.Match
-	(*pb.KVList)(nil),                      // 99: badgerpb4.KVList
-	(*api_v25.StreamSnapshotRequest)(nil),  // 100: api.v25.StreamSnapshotRequest
-	(*api_v25.StreamSnapshotResponse)(nil), // 101: api.v25.StreamSnapshotResponse
+	(DirectedEdge_Op)(0),                // 0: pb.DirectedEdge.Op
+	(Mutations_DropOp)(0),               // 1: pb.Mutations.DropOp
+	(Metadata_HintType)(0),              // 2: pb.Metadata.HintType
+	(Posting_ValType)(0),                // 3: pb.Posting.ValType
+	(Posting_PostingType)(0),            // 4: pb.Posting.PostingType
+	(SchemaUpdate_Directive)(0),         // 5: pb.SchemaUpdate.Directive
+	(NumLeaseType)(0),                   // 6: pb.Num.leaseType
+	(DropOperation_DropOp)(0),           // 7: pb.DropOperation.DropOp
+	(BackupKey_KeyType)(0),              // 8: pb.BackupKey.KeyType
+	(*List)(nil),                        // 9: pb.List
+	(*TaskValue)(nil),                   // 10: pb.TaskValue
+	(*SrcFunction)(nil),                 // 11: pb.SrcFunction
+	(*Query)(nil),                       // 12: pb.Query
+	(*ValueList)(nil),                   // 13: pb.ValueList
+	(*LangList)(nil),                    // 14: pb.LangList
+	(*Result)(nil),                      // 15: pb.Result
+	(*Order)(nil),                       // 16: pb.Order
+	(*SortMessage)(nil),                 // 17: pb.SortMessage
+	(*SortResult)(nil),                  // 18: pb.SortResult
+	(*RaftContext)(nil),                 // 19: pb.RaftContext
+	(*Member)(nil),                      // 20: pb.Member
+	(*Group)(nil),                       // 21: pb.Group
+	(*ZeroProposal)(nil),                // 22: pb.ZeroProposal
+	(*MembershipState)(nil),             // 23: pb.MembershipState
+	(*ConnectionState)(nil),             // 24: pb.ConnectionState
+	(*HealthInfo)(nil),                  // 25: pb.HealthInfo
+	(*Tablet)(nil),                      // 26: pb.Tablet
+	(*DirectedEdge)(nil),                // 27: pb.DirectedEdge
+	(*Mutations)(nil),                   // 28: pb.Mutations
+	(*Metadata)(nil),                    // 29: pb.Metadata
+	(*Snapshot)(nil),                    // 30: pb.Snapshot
+	(*ZeroSnapshot)(nil),                // 31: pb.ZeroSnapshot
+	(*RestoreRequest)(nil),              // 32: pb.RestoreRequest
+	(*Proposal)(nil),                    // 33: pb.Proposal
+	(*CDCState)(nil),                    // 34: pb.CDCState
+	(*KVS)(nil),                         // 35: pb.KVS
+	(*Posting)(nil),                     // 36: pb.Posting
+	(*UidBlock)(nil),                    // 37: pb.UidBlock
+	(*UidPack)(nil),                     // 38: pb.UidPack
+	(*PostingList)(nil),                 // 39: pb.PostingList
+	(*FacetParam)(nil),                  // 40: pb.FacetParam
+	(*FacetParams)(nil),                 // 41: pb.FacetParams
+	(*Facets)(nil),                      // 42: pb.Facets
+	(*FacetsList)(nil),                  // 43: pb.FacetsList
+	(*Function)(nil),                    // 44: pb.Function
+	(*FilterTree)(nil),                  // 45: pb.FilterTree
+	(*SchemaRequest)(nil),               // 46: pb.SchemaRequest
+	(*SchemaNode)(nil),                  // 47: pb.SchemaNode
+	(*SchemaResult)(nil),                // 48: pb.SchemaResult
+	(*SchemaUpdate)(nil),                // 49: pb.SchemaUpdate
+	(*VectorIndexSpec)(nil),             // 50: pb.VectorIndexSpec
+	(*OptionPair)(nil),                  // 51: pb.OptionPair
+	(*TypeUpdate)(nil),                  // 52: pb.TypeUpdate
+	(*MapHeader)(nil),                   // 53: pb.MapHeader
+	(*MovePredicatePayload)(nil),        // 54: pb.MovePredicatePayload
+	(*TxnStatus)(nil),                   // 55: pb.TxnStatus
+	(*OracleDelta)(nil),                 // 56: pb.OracleDelta
+	(*TxnTimestamps)(nil),               // 57: pb.TxnTimestamps
+	(*PeerResponse)(nil),                // 58: pb.PeerResponse
+	(*RaftBatch)(nil),                   // 59: pb.RaftBatch
+	(*DrainModeRequest)(nil),            // 60: pb.DrainModeRequest
+	(*TabletResponse)(nil),              // 61: pb.TabletResponse
+	(*TabletRequest)(nil),               // 62: pb.TabletRequest
+	(*SubscriptionRequest)(nil),         // 63: pb.SubscriptionRequest
+	(*SubscriptionResponse)(nil),        // 64: pb.SubscriptionResponse
+	(*Num)(nil),                         // 65: pb.Num
+	(*AssignedIds)(nil),                 // 66: pb.AssignedIds
+	(*RemoveNodeRequest)(nil),           // 67: pb.RemoveNodeRequest
+	(*MoveTabletRequest)(nil),           // 68: pb.MoveTabletRequest
+	(*SnapshotMeta)(nil),                // 69: pb.SnapshotMeta
+	(*Status)(nil),                      // 70: pb.Status
+	(*BackupRequest)(nil),               // 71: pb.BackupRequest
+	(*BackupResponse)(nil),              // 72: pb.BackupResponse
+	(*DropOperation)(nil),               // 73: pb.DropOperation
+	(*ExportRequest)(nil),               // 74: pb.ExportRequest
+	(*ExportResponse)(nil),              // 75: pb.ExportResponse
+	(*BackupKey)(nil),                   // 76: pb.BackupKey
+	(*BackupPostingList)(nil),           // 77: pb.BackupPostingList
+	(*UpdateGraphQLSchemaRequest)(nil),  // 78: pb.UpdateGraphQLSchemaRequest
+	(*UpdateGraphQLSchemaResponse)(nil), // 79: pb.UpdateGraphQLSchemaResponse
+	(*BulkMeta)(nil),                    // 80: pb.BulkMeta
+	(*DeleteNsRequest)(nil),             // 81: pb.DeleteNsRequest
+	(*TaskStatusRequest)(nil),           // 82: pb.TaskStatusRequest
+	(*TaskStatusResponse)(nil),          // 83: pb.TaskStatusResponse
+	nil,                                 // 84: pb.Result.VectorMetricsEntry
+	nil,                                 // 85: pb.Group.MembersEntry
+	nil,                                 // 86: pb.Group.TabletsEntry
+	nil,                                 // 87: pb.ZeroProposal.SnapshotTsEntry
+	nil,                                 // 88: pb.MembershipState.GroupsEntry
+	nil,                                 // 89: pb.MembershipState.ZerosEntry
+	nil,                                 // 90: pb.Metadata.PredHintsEntry
+	nil,                                 // 91: pb.OracleDelta.GroupChecksumsEntry
+	nil,                                 // 92: pb.BulkMeta.SchemaMapEntry
+	(*api.TxnContext)(nil),              // 93: api.TxnContext
+	(*api.Facet)(nil),                   // 94: api.Facet
+	(*pb.KV)(nil),                       // 95: badgerpb4.KV
+	(*api.Payload)(nil),                 // 96: api.Payload
+	(*pb.Match)(nil),                    // 97: badgerpb4.Match
+	(*pb.KVList)(nil),                   // 98: badgerpb4.KVList
+	(*api_v25.StreamPDirRequest)(nil),   // 99: api.v25.StreamPDirRequest
+	(*api_v25.StreamPDirResponse)(nil),  // 100: api.v25.StreamPDirResponse
 }
 var file_pb_proto_depIdxs = []int32{
 	3,   // 0: pb.TaskValue.val_type:type_name -> pb.Posting.ValType
@@ -7224,52 +7173,52 @@ var file_pb_proto_depIdxs = []int32{
 	13,  // 7: pb.Result.value_matrix:type_name -> pb.ValueList
 	43,  // 8: pb.Result.facet_matrix:type_name -> pb.FacetsList
 	14,  // 9: pb.Result.lang_matrix:type_name -> pb.LangList
-	85,  // 10: pb.Result.vector_metrics:type_name -> pb.Result.VectorMetricsEntry
+	84,  // 10: pb.Result.vector_metrics:type_name -> pb.Result.VectorMetricsEntry
 	16,  // 11: pb.SortMessage.order:type_name -> pb.Order
 	9,   // 12: pb.SortMessage.uid_matrix:type_name -> pb.List
 	9,   // 13: pb.SortResult.uid_matrix:type_name -> pb.List
-	86,  // 14: pb.Group.members:type_name -> pb.Group.MembersEntry
-	87,  // 15: pb.Group.tablets:type_name -> pb.Group.TabletsEntry
-	88,  // 16: pb.ZeroProposal.snapshot_ts:type_name -> pb.ZeroProposal.SnapshotTsEntry
+	85,  // 14: pb.Group.members:type_name -> pb.Group.MembersEntry
+	86,  // 15: pb.Group.tablets:type_name -> pb.Group.TabletsEntry
+	87,  // 16: pb.ZeroProposal.snapshot_ts:type_name -> pb.ZeroProposal.SnapshotTsEntry
 	20,  // 17: pb.ZeroProposal.member:type_name -> pb.Member
 	26,  // 18: pb.ZeroProposal.tablet:type_name -> pb.Tablet
-	94,  // 19: pb.ZeroProposal.txn:type_name -> api.TxnContext
+	93,  // 19: pb.ZeroProposal.txn:type_name -> api.TxnContext
 	31,  // 20: pb.ZeroProposal.snapshot:type_name -> pb.ZeroSnapshot
-	82,  // 21: pb.ZeroProposal.delete_ns:type_name -> pb.DeleteNsRequest
+	81,  // 21: pb.ZeroProposal.delete_ns:type_name -> pb.DeleteNsRequest
 	26,  // 22: pb.ZeroProposal.tablets:type_name -> pb.Tablet
-	89,  // 23: pb.MembershipState.groups:type_name -> pb.MembershipState.GroupsEntry
-	90,  // 24: pb.MembershipState.zeros:type_name -> pb.MembershipState.ZerosEntry
+	88,  // 23: pb.MembershipState.groups:type_name -> pb.MembershipState.GroupsEntry
+	89,  // 24: pb.MembershipState.zeros:type_name -> pb.MembershipState.ZerosEntry
 	20,  // 25: pb.MembershipState.removed:type_name -> pb.Member
 	20,  // 26: pb.ConnectionState.member:type_name -> pb.Member
 	23,  // 27: pb.ConnectionState.state:type_name -> pb.MembershipState
 	3,   // 28: pb.DirectedEdge.value_type:type_name -> pb.Posting.ValType
 	0,   // 29: pb.DirectedEdge.op:type_name -> pb.DirectedEdge.Op
-	95,  // 30: pb.DirectedEdge.facets:type_name -> api.Facet
+	94,  // 30: pb.DirectedEdge.facets:type_name -> api.Facet
 	27,  // 31: pb.Mutations.edges:type_name -> pb.DirectedEdge
 	49,  // 32: pb.Mutations.schema:type_name -> pb.SchemaUpdate
 	52,  // 33: pb.Mutations.types:type_name -> pb.TypeUpdate
 	1,   // 34: pb.Mutations.drop_op:type_name -> pb.Mutations.DropOp
 	29,  // 35: pb.Mutations.metadata:type_name -> pb.Metadata
-	91,  // 36: pb.Metadata.pred_hints:type_name -> pb.Metadata.PredHintsEntry
+	90,  // 36: pb.Metadata.pred_hints:type_name -> pb.Metadata.PredHintsEntry
 	19,  // 37: pb.Snapshot.context:type_name -> pb.RaftContext
 	23,  // 38: pb.ZeroSnapshot.state:type_name -> pb.MembershipState
 	28,  // 39: pb.Proposal.mutations:type_name -> pb.Mutations
-	96,  // 40: pb.Proposal.kv:type_name -> badgerpb4.KV
+	95,  // 40: pb.Proposal.kv:type_name -> badgerpb4.KV
 	23,  // 41: pb.Proposal.state:type_name -> pb.MembershipState
 	56,  // 42: pb.Proposal.delta:type_name -> pb.OracleDelta
 	30,  // 43: pb.Proposal.snapshot:type_name -> pb.Snapshot
 	32,  // 44: pb.Proposal.restore:type_name -> pb.RestoreRequest
 	34,  // 45: pb.Proposal.cdc_state:type_name -> pb.CDCState
-	82,  // 46: pb.Proposal.delete_ns:type_name -> pb.DeleteNsRequest
-	61,  // 47: pb.Proposal.drainmode:type_name -> pb.DrainModeRequest
+	81,  // 46: pb.Proposal.delete_ns:type_name -> pb.DeleteNsRequest
+	60,  // 47: pb.Proposal.drainmode:type_name -> pb.DrainModeRequest
 	3,   // 48: pb.Posting.val_type:type_name -> pb.Posting.ValType
 	4,   // 49: pb.Posting.posting_type:type_name -> pb.Posting.PostingType
-	95,  // 50: pb.Posting.facets:type_name -> api.Facet
+	94,  // 50: pb.Posting.facets:type_name -> api.Facet
 	37,  // 51: pb.UidPack.blocks:type_name -> pb.UidBlock
 	38,  // 52: pb.PostingList.pack:type_name -> pb.UidPack
 	36,  // 53: pb.PostingList.postings:type_name -> pb.Posting
 	40,  // 54: pb.FacetParams.param:type_name -> pb.FacetParam
-	95,  // 55: pb.Facets.facets:type_name -> api.Facet
+	94,  // 55: pb.Facets.facets:type_name -> api.Facet
 	42,  // 56: pb.FacetsList.facets_list:type_name -> pb.Facets
 	45,  // 57: pb.FilterTree.children:type_name -> pb.FilterTree
 	44,  // 58: pb.FilterTree.func:type_name -> pb.Function
@@ -7281,21 +7230,21 @@ var file_pb_proto_depIdxs = []int32{
 	51,  // 64: pb.VectorIndexSpec.options:type_name -> pb.OptionPair
 	49,  // 65: pb.TypeUpdate.fields:type_name -> pb.SchemaUpdate
 	55,  // 66: pb.OracleDelta.txns:type_name -> pb.TxnStatus
-	92,  // 67: pb.OracleDelta.group_checksums:type_name -> pb.OracleDelta.GroupChecksumsEntry
+	91,  // 67: pb.OracleDelta.group_checksums:type_name -> pb.OracleDelta.GroupChecksumsEntry
 	19,  // 68: pb.RaftBatch.context:type_name -> pb.RaftContext
-	97,  // 69: pb.RaftBatch.payload:type_name -> api.Payload
+	96,  // 69: pb.RaftBatch.payload:type_name -> api.Payload
 	26,  // 70: pb.TabletResponse.tablets:type_name -> pb.Tablet
 	26,  // 71: pb.TabletRequest.tablets:type_name -> pb.Tablet
-	98,  // 72: pb.SubscriptionRequest.matches:type_name -> badgerpb4.Match
-	99,  // 73: pb.SubscriptionResponse.kvs:type_name -> badgerpb4.KVList
+	97,  // 72: pb.SubscriptionRequest.matches:type_name -> badgerpb4.Match
+	98,  // 73: pb.SubscriptionResponse.kvs:type_name -> badgerpb4.KVList
 	6,   // 74: pb.Num.type:type_name -> pb.Num.leaseType
-	74,  // 75: pb.BackupResponse.drop_operations:type_name -> pb.DropOperation
+	73,  // 75: pb.BackupResponse.drop_operations:type_name -> pb.DropOperation
 	7,   // 76: pb.DropOperation.drop_op:type_name -> pb.DropOperation.DropOp
 	8,   // 77: pb.BackupKey.type:type_name -> pb.BackupKey.KeyType
 	36,  // 78: pb.BackupPostingList.postings:type_name -> pb.Posting
 	49,  // 79: pb.UpdateGraphQLSchemaRequest.dgraph_preds:type_name -> pb.SchemaUpdate
 	52,  // 80: pb.UpdateGraphQLSchemaRequest.dgraph_types:type_name -> pb.TypeUpdate
-	93,  // 81: pb.BulkMeta.schema_map:type_name -> pb.BulkMeta.SchemaMapEntry
+	92,  // 81: pb.BulkMeta.schema_map:type_name -> pb.BulkMeta.SchemaMapEntry
 	52,  // 82: pb.BulkMeta.types:type_name -> pb.TypeUpdate
 	20,  // 83: pb.Group.MembersEntry.value:type_name -> pb.Member
 	26,  // 84: pb.Group.TabletsEntry.value:type_name -> pb.Tablet
@@ -7303,72 +7252,72 @@ var file_pb_proto_depIdxs = []int32{
 	20,  // 86: pb.MembershipState.ZerosEntry.value:type_name -> pb.Member
 	2,   // 87: pb.Metadata.PredHintsEntry.value:type_name -> pb.Metadata.HintType
 	49,  // 88: pb.BulkMeta.SchemaMapEntry.value:type_name -> pb.SchemaUpdate
-	97,  // 89: pb.Raft.Heartbeat:input_type -> api.Payload
+	96,  // 89: pb.Raft.Heartbeat:input_type -> api.Payload
 	59,  // 90: pb.Raft.RaftMessage:input_type -> pb.RaftBatch
 	19,  // 91: pb.Raft.JoinCluster:input_type -> pb.RaftContext
 	19,  // 92: pb.Raft.IsPeer:input_type -> pb.RaftContext
 	20,  // 93: pb.Zero.Connect:input_type -> pb.Member
 	21,  // 94: pb.Zero.UpdateMembership:input_type -> pb.Group
-	97,  // 95: pb.Zero.StreamMembership:input_type -> api.Payload
-	97,  // 96: pb.Zero.Oracle:input_type -> api.Payload
+	96,  // 95: pb.Zero.StreamMembership:input_type -> api.Payload
+	96,  // 96: pb.Zero.Oracle:input_type -> api.Payload
 	26,  // 97: pb.Zero.ShouldServe:input_type -> pb.Tablet
-	63,  // 98: pb.Zero.Inform:input_type -> pb.TabletRequest
-	66,  // 99: pb.Zero.AssignIds:input_type -> pb.Num
-	66,  // 100: pb.Zero.Timestamps:input_type -> pb.Num
-	94,  // 101: pb.Zero.CommitOrAbort:input_type -> api.TxnContext
+	62,  // 98: pb.Zero.Inform:input_type -> pb.TabletRequest
+	65,  // 99: pb.Zero.AssignIds:input_type -> pb.Num
+	65,  // 100: pb.Zero.Timestamps:input_type -> pb.Num
+	93,  // 101: pb.Zero.CommitOrAbort:input_type -> api.TxnContext
 	57,  // 102: pb.Zero.TryAbort:input_type -> pb.TxnTimestamps
-	82,  // 103: pb.Zero.DeleteNamespace:input_type -> pb.DeleteNsRequest
-	68,  // 104: pb.Zero.RemoveNode:input_type -> pb.RemoveNodeRequest
-	69,  // 105: pb.Zero.MoveTablet:input_type -> pb.MoveTabletRequest
+	81,  // 103: pb.Zero.DeleteNamespace:input_type -> pb.DeleteNsRequest
+	67,  // 104: pb.Zero.RemoveNode:input_type -> pb.RemoveNodeRequest
+	68,  // 105: pb.Zero.MoveTablet:input_type -> pb.MoveTabletRequest
 	28,  // 106: pb.Worker.Mutate:input_type -> pb.Mutations
 	12,  // 107: pb.Worker.ServeTask:input_type -> pb.Query
 	30,  // 108: pb.Worker.StreamSnapshot:input_type -> pb.Snapshot
 	17,  // 109: pb.Worker.Sort:input_type -> pb.SortMessage
 	46,  // 110: pb.Worker.Schema:input_type -> pb.SchemaRequest
-	72,  // 111: pb.Worker.Backup:input_type -> pb.BackupRequest
+	71,  // 111: pb.Worker.Backup:input_type -> pb.BackupRequest
 	32,  // 112: pb.Worker.Restore:input_type -> pb.RestoreRequest
-	75,  // 113: pb.Worker.Export:input_type -> pb.ExportRequest
+	74,  // 113: pb.Worker.Export:input_type -> pb.ExportRequest
 	35,  // 114: pb.Worker.ReceivePredicate:input_type -> pb.KVS
 	54,  // 115: pb.Worker.MovePredicate:input_type -> pb.MovePredicatePayload
-	64,  // 116: pb.Worker.Subscribe:input_type -> pb.SubscriptionRequest
-	79,  // 117: pb.Worker.UpdateGraphQLSchema:input_type -> pb.UpdateGraphQLSchemaRequest
-	82,  // 118: pb.Worker.DeleteNamespace:input_type -> pb.DeleteNsRequest
-	83,  // 119: pb.Worker.TaskStatus:input_type -> pb.TaskStatusRequest
-	61,  // 120: pb.Worker.ApplyDrainmode:input_type -> pb.DrainModeRequest
-	100, // 121: pb.Worker.InternalStreamSnapshot:input_type -> api.v25.StreamSnapshotRequest
+	63,  // 116: pb.Worker.Subscribe:input_type -> pb.SubscriptionRequest
+	78,  // 117: pb.Worker.UpdateGraphQLSchema:input_type -> pb.UpdateGraphQLSchemaRequest
+	81,  // 118: pb.Worker.DeleteNamespace:input_type -> pb.DeleteNsRequest
+	82,  // 119: pb.Worker.TaskStatus:input_type -> pb.TaskStatusRequest
+	60,  // 120: pb.Worker.ApplyDrainmode:input_type -> pb.DrainModeRequest
+	99,  // 121: pb.Worker.InternalStreamPDir:input_type -> api.v25.StreamPDirRequest
 	25,  // 122: pb.Raft.Heartbeat:output_type -> pb.HealthInfo
-	97,  // 123: pb.Raft.RaftMessage:output_type -> api.Payload
-	97,  // 124: pb.Raft.JoinCluster:output_type -> api.Payload
+	96,  // 123: pb.Raft.RaftMessage:output_type -> api.Payload
+	96,  // 124: pb.Raft.JoinCluster:output_type -> api.Payload
 	58,  // 125: pb.Raft.IsPeer:output_type -> pb.PeerResponse
 	24,  // 126: pb.Zero.Connect:output_type -> pb.ConnectionState
-	97,  // 127: pb.Zero.UpdateMembership:output_type -> api.Payload
+	96,  // 127: pb.Zero.UpdateMembership:output_type -> api.Payload
 	23,  // 128: pb.Zero.StreamMembership:output_type -> pb.MembershipState
 	56,  // 129: pb.Zero.Oracle:output_type -> pb.OracleDelta
 	26,  // 130: pb.Zero.ShouldServe:output_type -> pb.Tablet
-	62,  // 131: pb.Zero.Inform:output_type -> pb.TabletResponse
-	67,  // 132: pb.Zero.AssignIds:output_type -> pb.AssignedIds
-	67,  // 133: pb.Zero.Timestamps:output_type -> pb.AssignedIds
-	94,  // 134: pb.Zero.CommitOrAbort:output_type -> api.TxnContext
+	61,  // 131: pb.Zero.Inform:output_type -> pb.TabletResponse
+	66,  // 132: pb.Zero.AssignIds:output_type -> pb.AssignedIds
+	66,  // 133: pb.Zero.Timestamps:output_type -> pb.AssignedIds
+	93,  // 134: pb.Zero.CommitOrAbort:output_type -> api.TxnContext
 	56,  // 135: pb.Zero.TryAbort:output_type -> pb.OracleDelta
-	71,  // 136: pb.Zero.DeleteNamespace:output_type -> pb.Status
-	71,  // 137: pb.Zero.RemoveNode:output_type -> pb.Status
-	71,  // 138: pb.Zero.MoveTablet:output_type -> pb.Status
-	94,  // 139: pb.Worker.Mutate:output_type -> api.TxnContext
+	70,  // 136: pb.Zero.DeleteNamespace:output_type -> pb.Status
+	70,  // 137: pb.Zero.RemoveNode:output_type -> pb.Status
+	70,  // 138: pb.Zero.MoveTablet:output_type -> pb.Status
+	93,  // 139: pb.Worker.Mutate:output_type -> api.TxnContext
 	15,  // 140: pb.Worker.ServeTask:output_type -> pb.Result
 	35,  // 141: pb.Worker.StreamSnapshot:output_type -> pb.KVS
 	18,  // 142: pb.Worker.Sort:output_type -> pb.SortResult
 	48,  // 143: pb.Worker.Schema:output_type -> pb.SchemaResult
-	73,  // 144: pb.Worker.Backup:output_type -> pb.BackupResponse
-	71,  // 145: pb.Worker.Restore:output_type -> pb.Status
-	76,  // 146: pb.Worker.Export:output_type -> pb.ExportResponse
-	97,  // 147: pb.Worker.ReceivePredicate:output_type -> api.Payload
-	97,  // 148: pb.Worker.MovePredicate:output_type -> api.Payload
-	99,  // 149: pb.Worker.Subscribe:output_type -> badgerpb4.KVList
-	80,  // 150: pb.Worker.UpdateGraphQLSchema:output_type -> pb.UpdateGraphQLSchemaResponse
-	71,  // 151: pb.Worker.DeleteNamespace:output_type -> pb.Status
-	84,  // 152: pb.Worker.TaskStatus:output_type -> pb.TaskStatusResponse
-	71,  // 153: pb.Worker.ApplyDrainmode:output_type -> pb.Status
-	101, // 154: pb.Worker.InternalStreamSnapshot:output_type -> api.v25.StreamSnapshotResponse
+	72,  // 144: pb.Worker.Backup:output_type -> pb.BackupResponse
+	70,  // 145: pb.Worker.Restore:output_type -> pb.Status
+	75,  // 146: pb.Worker.Export:output_type -> pb.ExportResponse
+	96,  // 147: pb.Worker.ReceivePredicate:output_type -> api.Payload
+	96,  // 148: pb.Worker.MovePredicate:output_type -> api.Payload
+	98,  // 149: pb.Worker.Subscribe:output_type -> badgerpb4.KVList
+	79,  // 150: pb.Worker.UpdateGraphQLSchema:output_type -> pb.UpdateGraphQLSchemaResponse
+	70,  // 151: pb.Worker.DeleteNamespace:output_type -> pb.Status
+	83,  // 152: pb.Worker.TaskStatus:output_type -> pb.TaskStatusResponse
+	70,  // 153: pb.Worker.ApplyDrainmode:output_type -> pb.Status
+	100, // 154: pb.Worker.InternalStreamPDir:output_type -> api.v25.StreamPDirResponse
 	122, // [122:155] is the sub-list for method output_type
 	89,  // [89:122] is the sub-list for method input_type
 	89,  // [89:89] is the sub-list for extension type_name
@@ -7995,18 +7944,6 @@ func file_pb_proto_init() {
 			}
 		}
 		file_pb_proto_msgTypes[51].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ReceiveSnapshotKVRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_pb_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*DrainModeRequest); i {
 			case 0:
 				return &v.state
@@ -8018,7 +7955,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[52].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*TabletResponse); i {
 			case 0:
 				return &v.state
@@ -8030,7 +7967,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[53].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*TabletRequest); i {
 			case 0:
 				return &v.state
@@ -8042,7 +7979,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[54].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SubscriptionRequest); i {
 			case 0:
 				return &v.state
@@ -8054,7 +7991,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[55].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SubscriptionResponse); i {
 			case 0:
 				return &v.state
@@ -8066,7 +8003,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[56].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Num); i {
 			case 0:
 				return &v.state
@@ -8078,7 +8015,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[57].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*AssignedIds); i {
 			case 0:
 				return &v.state
@@ -8090,7 +8027,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[58].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RemoveNodeRequest); i {
 			case 0:
 				return &v.state
@@ -8102,7 +8039,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[59].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*MoveTabletRequest); i {
 			case 0:
 				return &v.state
@@ -8114,7 +8051,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[60].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SnapshotMeta); i {
 			case 0:
 				return &v.state
@@ -8126,7 +8063,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[61].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Status); i {
 			case 0:
 				return &v.state
@@ -8138,7 +8075,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[62].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BackupRequest); i {
 			case 0:
 				return &v.state
@@ -8150,7 +8087,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[64].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[63].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BackupResponse); i {
 			case 0:
 				return &v.state
@@ -8162,7 +8099,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[65].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[64].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*DropOperation); i {
 			case 0:
 				return &v.state
@@ -8174,7 +8111,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[66].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[65].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ExportRequest); i {
 			case 0:
 				return &v.state
@@ -8186,7 +8123,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[67].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[66].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ExportResponse); i {
 			case 0:
 				return &v.state
@@ -8198,7 +8135,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[68].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[67].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BackupKey); i {
 			case 0:
 				return &v.state
@@ -8210,7 +8147,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[69].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[68].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BackupPostingList); i {
 			case 0:
 				return &v.state
@@ -8222,7 +8159,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[70].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[69].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateGraphQLSchemaRequest); i {
 			case 0:
 				return &v.state
@@ -8234,7 +8171,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[71].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[70].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*UpdateGraphQLSchemaResponse); i {
 			case 0:
 				return &v.state
@@ -8246,7 +8183,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[72].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[71].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BulkMeta); i {
 			case 0:
 				return &v.state
@@ -8258,7 +8195,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[73].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[72].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*DeleteNsRequest); i {
 			case 0:
 				return &v.state
@@ -8270,7 +8207,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[74].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[73].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*TaskStatusRequest); i {
 			case 0:
 				return &v.state
@@ -8282,7 +8219,7 @@ func file_pb_proto_init() {
 				return nil
 			}
 		}
-		file_pb_proto_msgTypes[75].Exporter = func(v interface{}, i int) interface{} {
+		file_pb_proto_msgTypes[74].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*TaskStatusResponse); i {
 			case 0:
 				return &v.state
@@ -8301,7 +8238,7 @@ func file_pb_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_pb_proto_rawDesc,
 			NumEnums:      9,
-			NumMessages:   85,
+			NumMessages:   84,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

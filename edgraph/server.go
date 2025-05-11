@@ -1810,8 +1810,8 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 	return nil
 }
 
-func (s *ServerV25) InitiateSnapshotStream(ctx context.Context,
-	c *apiv25.InitiateSnapshotStreamRequest) (v *apiv25.InitiateSnapshotStreamResponse, err error) {
+func (s *ServerV25) InitiatePDirStream(ctx context.Context,
+	c *apiv25.InitiatePDirStreamRequest) (v *apiv25.InitiatePDirStreamResponse, err error) {
 
 	drainMode := &pb.DrainModeRequest{State: true}
 	groups, err := worker.ProposeDrain(ctx, drainMode)
@@ -1819,12 +1819,12 @@ func (s *ServerV25) InitiateSnapshotStream(ctx context.Context,
 		return nil, err
 	}
 
-	resp := &apiv25.InitiateSnapshotStreamResponse{Groups: groups}
+	resp := &apiv25.InitiatePDirStreamResponse{Groups: groups}
 
 	return resp, nil
 }
 
-func (s *ServerV25) StreamSnapshot(stream apiv25.Dgraph_StreamSnapshotServer) error {
+func (s *ServerV25) StreamPDir(stream apiv25.Dgraph_StreamPDirServer) error {
 	if err := worker.InStream(stream); err != nil {
 		return err
 	}
