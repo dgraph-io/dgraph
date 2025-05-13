@@ -139,7 +139,7 @@ func checkAclKeyLength(alg jwt.SigningMethod, key Sensitive) error {
 
 	// SHA length has to be smaller or equal to the key length
 	if sl > len(key)*8 {
-		return errors.Errorf("ACL key length [%v <= %v] bits for JWT algorithm [%v]", sl, len(key)*8, alg.Alg())
+		return errors.Errorf("ACL key length [%v <= %v] bits for JWT algorithm [%v]", len(key)*8, sl, alg.Alg())
 	}
 	return nil
 }

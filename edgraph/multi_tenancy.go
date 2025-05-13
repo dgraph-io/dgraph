@@ -105,18 +105,23 @@ func (s *Server) CreateNamespaceInternal(ctx context.Context, passwd string) (ui
 	}
 
 	err = x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
-		return createGuardianAndGroot(ctx, ids.StartId, passwd)
+		return createGuardianAndGroot(ctx, passwd)
 	})
 	if err != nil {
 		return 0, errors.Wrapf(err, "Failed to create guardian and groot: ")
 	}
+
 	glog.V(2).Infof("Created namespace: %d", ns)
 	return ns, nil
 }
 
 // This function is used while creating new namespace. New namespace creation is only allowed
 // by the guardians of the galaxy group.
-func createGuardianAndGroot(ctx context.Context, namespace uint64, passwd string) error {
+func createGuardianAndGroot(ctx context.Context, passwd string) error {
+	if !x.WorkerConfig.AclEnabled {
+		return nil
+	}
+
 	if err := upsertGuardian(ctx); err != nil {
 		return errors.Wrap(err, "While creating Guardian")
 	}
