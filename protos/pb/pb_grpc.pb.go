@@ -19,6 +19,7 @@ import (
 	context "context"
 	pb "github.com/dgraph-io/badger/v4/pb"
 	api "github.com/dgraph-io/dgo/v250/protos/api"
+	api_v25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -898,6 +899,8 @@ const (
 	Worker_UpdateGraphQLSchema_FullMethodName = "/pb.Worker/UpdateGraphQLSchema"
 	Worker_DeleteNamespace_FullMethodName     = "/pb.Worker/DeleteNamespace"
 	Worker_TaskStatus_FullMethodName          = "/pb.Worker/TaskStatus"
+	Worker_ApplyDrainmode_FullMethodName      = "/pb.Worker/ApplyDrainmode"
+	Worker_InternalStreamPDir_FullMethodName  = "/pb.Worker/InternalStreamPDir"
 )
 
 // WorkerClient is the client API for Worker service.
@@ -919,6 +922,8 @@ type WorkerClient interface {
 	UpdateGraphQLSchema(ctx context.Context, in *UpdateGraphQLSchemaRequest, opts ...grpc.CallOption) (*UpdateGraphQLSchemaResponse, error)
 	DeleteNamespace(ctx context.Context, in *DeleteNsRequest, opts ...grpc.CallOption) (*Status, error)
 	TaskStatus(ctx context.Context, in *TaskStatusRequest, opts ...grpc.CallOption) (*TaskStatusResponse, error)
+	ApplyDrainmode(ctx context.Context, in *DrainModeRequest, opts ...grpc.CallOption) (*Status, error)
+	InternalStreamPDir(ctx context.Context, opts ...grpc.CallOption) (Worker_InternalStreamPDirClient, error)
 }
 
 type workerClient struct {
@@ -1125,6 +1130,49 @@ func (c *workerClient) TaskStatus(ctx context.Context, in *TaskStatusRequest, op
 	return out, nil
 }
 
+func (c *workerClient) ApplyDrainmode(ctx context.Context, in *DrainModeRequest, opts ...grpc.CallOption) (*Status, error) {
+	out := new(Status)
+	err := c.cc.Invoke(ctx, Worker_ApplyDrainmode_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) InternalStreamPDir(ctx context.Context, opts ...grpc.CallOption) (Worker_InternalStreamPDirClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Worker_ServiceDesc.Streams[3], Worker_InternalStreamPDir_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &workerInternalStreamPDirClient{stream}
+	return x, nil
+}
+
+type Worker_InternalStreamPDirClient interface {
+	Send(*api_v25.StreamPDirRequest) error
+	CloseAndRecv() (*api_v25.StreamPDirResponse, error)
+	grpc.ClientStream
+}
+
+type workerInternalStreamPDirClient struct {
+	grpc.ClientStream
+}
+
+func (x *workerInternalStreamPDirClient) Send(m *api_v25.StreamPDirRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *workerInternalStreamPDirClient) CloseAndRecv() (*api_v25.StreamPDirResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(api_v25.StreamPDirResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // WorkerServer is the server API for Worker service.
 // All implementations must embed UnimplementedWorkerServer
 // for forward compatibility
@@ -1144,6 +1192,8 @@ type WorkerServer interface {
 	UpdateGraphQLSchema(context.Context, *UpdateGraphQLSchemaRequest) (*UpdateGraphQLSchemaResponse, error)
 	DeleteNamespace(context.Context, *DeleteNsRequest) (*Status, error)
 	TaskStatus(context.Context, *TaskStatusRequest) (*TaskStatusResponse, error)
+	ApplyDrainmode(context.Context, *DrainModeRequest) (*Status, error)
+	InternalStreamPDir(Worker_InternalStreamPDirServer) error
 	mustEmbedUnimplementedWorkerServer()
 }
 
@@ -1192,6 +1242,12 @@ func (UnimplementedWorkerServer) DeleteNamespace(context.Context, *DeleteNsReque
 }
 func (UnimplementedWorkerServer) TaskStatus(context.Context, *TaskStatusRequest) (*TaskStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TaskStatus not implemented")
+}
+func (UnimplementedWorkerServer) ApplyDrainmode(context.Context, *DrainModeRequest) (*Status, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyDrainmode not implemented")
+}
+func (UnimplementedWorkerServer) InternalStreamPDir(Worker_InternalStreamPDirServer) error {
+	return status.Errorf(codes.Unimplemented, "method InternalStreamPDir not implemented")
 }
 func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
 
@@ -1477,6 +1533,50 @@ func _Worker_TaskStatus_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_ApplyDrainmode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DrainModeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).ApplyDrainmode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_ApplyDrainmode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).ApplyDrainmode(ctx, req.(*DrainModeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_InternalStreamPDir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerServer).InternalStreamPDir(&workerInternalStreamPDirServer{stream})
+}
+
+type Worker_InternalStreamPDirServer interface {
+	SendAndClose(*api_v25.StreamPDirResponse) error
+	Recv() (*api_v25.StreamPDirRequest, error)
+	grpc.ServerStream
+}
+
+type workerInternalStreamPDirServer struct {
+	grpc.ServerStream
+}
+
+func (x *workerInternalStreamPDirServer) SendAndClose(m *api_v25.StreamPDirResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *workerInternalStreamPDirServer) Recv() (*api_v25.StreamPDirRequest, error) {
+	m := new(api_v25.StreamPDirRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Worker_ServiceDesc is the grpc.ServiceDesc for Worker service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1528,6 +1628,10 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "TaskStatus",
 			Handler:    _Worker_TaskStatus_Handler,
 		},
+		{
+			MethodName: "ApplyDrainmode",
+			Handler:    _Worker_ApplyDrainmode_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1545,6 +1649,11 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Subscribe",
 			Handler:       _Worker_Subscribe_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "InternalStreamPDir",
+			Handler:       _Worker_InternalStreamPDir_Handler,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "pb.proto",
