@@ -108,7 +108,7 @@ func executeDropAllInNs(ctx context.Context, startTs uint64, req *apiv25.AlterRe
 	}
 
 	err = x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
-		return createGuardianAndGroot(x.AttachNamespace(ctx, nsID), nsID, "password")
+		return createGuardianAndGroot(x.AttachNamespace(ctx, nsID), "password")
 	})
 	if err != nil {
 		return errors.Wrapf(err, "Failed to create guardian and groot: ")
