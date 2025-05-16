@@ -2998,3 +2998,23 @@ func TestLargeStringIndex(t *testing.T) {
 	require.Contains(t, dqlSchema,
 		`{"predicate":"name_term","type":"string","index":true,"tokenizer":["term"]}`)
 }
+
+func TestStringWithQuote(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchemaWithRetry(`name: string @unique @index(exact) .`))
+	mu := `{ set { <0x01> <name> "\"problem\" is the quotes (json)" . } }`
+	require.NoError(t, runMutation(mu))
+
+	var data struct {
+		Data struct {
+			Q []struct {
+				Name string `json:"name"`
+			} `json:"q"`
+		} `json:"data"`
+	}
+	q := `{ q(func: has(name)) { name } }`
+	res, _, err := queryWithTs(queryInp{body: q, typ: "application/dql"})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(res), &data))
+	require.Equal(t, `"problem" is the quotes (json)`, data.Data.Q[0].Name)
+}
