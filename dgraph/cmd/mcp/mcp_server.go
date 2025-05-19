@@ -9,6 +9,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/hypermodeinc/dgraph/v25/x"
 
 	"github.com/golang/glog"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -50,7 +51,7 @@ func getConn(connectionString string) (*dgo.Dgraph, error) {
 func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		"Dgraph MCP Server",
-		"v25.0.0",
+		x.Version(),
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
 		server.WithRecovery(),

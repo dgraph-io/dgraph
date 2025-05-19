@@ -35,12 +35,12 @@ interface for running mcp server.
 
 	flag := Mcp.Cmd.Flags()
 
-	flag.StringP("con-str", "c", "", "Dgraph connection string.")
+	flag.StringP("conn-str", "c", "", "Dgraph connection string.")
 	flag.Bool("read-only", false, "Run MCP server in read-only mode.")
 }
 
 func run() {
-	connectionString := Mcp.Conf.GetString("con-str")
+	connectionString := Mcp.Conf.GetString("conn-str")
 	readOnly := Mcp.Conf.GetBool("read-only")
 
 	s, err := NewMCPServer(connectionString, readOnly)
