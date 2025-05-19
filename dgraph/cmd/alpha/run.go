@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.opencensus.io/plugin/ocgrpc"
@@ -42,6 +43,7 @@ import (
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/audit"
+	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/mcp"
 	"github.com/hypermodeinc/dgraph/v25/edgraph"
 	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
 	"github.com/hypermodeinc/dgraph/v25/posting"
@@ -110,6 +112,8 @@ they form a Raft group and provide synchronous replication.
 	// Custom plugins.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins for custom indices.")
+
+	flag.Bool("mcp", false, "run MCP server along with alpha.")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
@@ -472,9 +476,27 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s.Stop()
 }
 
-func setupServer(closer *z.Closer) {
-	go worker.RunServer(bindall) // For pb.communication.
+func setupMcp(baseMux *http.ServeMux, connectionString, url string, readOnly bool) error {
+	s, err := mcp.NewMCPServer(connectionString, readOnly)
+	if err != nil {
+		glog.Errorf("Failed to initialize MCPServer: %v", err)
+		return err
+	}
 
+	sse := server.NewSSEServer(s,
+		server.WithBasePath(url),
+	)
+	baseMux.HandleFunc(url, sse.ServeHTTP)
+	baseMux.HandleFunc(url+"/", sse.ServeHTTP)
+	return nil
+}
+
+func buildConnectionString(addr string, port int) string {
+	return fmt.Sprintf("dgraph://%s:%d", addr, port)
+}
+
+func setupServer(closer *z.Closer, enableMcp bool) {
+	go worker.RunServer(bindall) // For pb.communication.
 	laddr := "localhost"
 	if bindall {
 		laddr = "0.0.0.0"
@@ -576,6 +598,16 @@ func setupServer(closer *z.Closer) {
 	// Initialize the servers.
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
+
+	if enableMcp {
+		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "/mcp", false); err != nil {
+			log.Fatal(err)
+		}
+		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "/mcp-ro", true); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
 	go func() {
@@ -640,6 +672,8 @@ func run() {
 
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
+
+	enableMcp := Alpha.Conf.GetBool("mcp")
 
 	opts := worker.Options{
 		PostingDir:      Alpha.Conf.GetString("postings"),
@@ -821,7 +855,7 @@ func run() {
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
 
-	setupServer(adminCloser)
+	setupServer(adminCloser, enableMcp)
 	glog.Infoln("GRPC and HTTP stopped.")
 
 	// This might not close until group is given the signal to close. So, only signal here,
