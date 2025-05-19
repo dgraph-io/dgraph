@@ -479,7 +479,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 func setupMcp(baseMux *http.ServeMux, connectionString, readOnly string) error {
 	s, err := dgraphmcp.NewMCPServer(connectionString, readOnly)
 	if err != nil {
-		glog.Errorf("Failed to initialize MCPServer: %v\n", err)
+		glog.Errorf("Failed to initialize MCPServer: %v", err)
 		return err
 	}
 

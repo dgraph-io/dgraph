@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/golang/glog"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/hypermodeinc/dgraph/v25/mcp"
@@ -16,12 +16,12 @@ func main() {
 
 	s, err := mcp.NewMCPServer(connectionString, readOnly)
 	if err != nil {
-		fmt.Printf("Failed to initialize MCPServer: %v\n", err)
+		glog.Errorf("Failed to initialize MCPServer: %v", err)
 		return
 	}
 
 	// Start the stdio server
 	if err := server.ServeStdio(s); err != nil {
-		fmt.Printf("Server error: %v\n", err)
+		glog.Errorf("Server error: %v", err)
 	}
 }
