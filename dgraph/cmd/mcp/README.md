@@ -49,7 +49,7 @@ For Read write:
   "mcpServers": {
     "dgraph": {
       "command": "dgraph_binary",
-      "args": ["mcp -c dgraph://localhost:9080"]
+      "args": ["mcp", "-c", "dgraph://localhost:9080"]
     }
   }
 }
