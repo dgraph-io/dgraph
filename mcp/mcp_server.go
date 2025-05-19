@@ -13,16 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// NewMCPServer initializes and returns a new MCPServer instance.
-func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) {
-	s := server.NewMCPServer(
-		"Dgraph MCP Server",
-		"1.0.0",
-		server.WithResourceCapabilities(true, true),
-		server.WithLogging(),
-		server.WithRecovery(),
-	)
-
+func getConn(connectionString string) (*dgo.Dgraph, error) {
 	conn, err := dgo.Open(connectionString)
 	if err != nil {
 		for i := range 10 {
@@ -36,9 +27,21 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 			return nil, fmt.Errorf("error opening connection: %v", err)
 		}
 	}
+	return conn, nil
+}
+
+// NewMCPServer initializes and returns a new MCPServer instance.
+func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) {
+	s := server.NewMCPServer(
+		"Dgraph MCP Server",
+		"1.0.0",
+		server.WithResourceCapabilities(true, true),
+		server.WithLogging(),
+		server.WithRecovery(),
+	)
 
 	schemaTool := mcp.NewTool("Get-Schema",
-		mcp.WithDescription("Get schema from dgraph db"),
+		mcp.WithDescription("Get Dgraph DQL Schema from dgraph db"),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
 			ReadOnlyHint:    true,
 			DestructiveHint: false,
@@ -47,22 +50,8 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 		}),
 	)
 
-	alterSchemaTool := mcp.NewTool("Alter-Schema",
-		mcp.WithDescription("Alter schema in dgraph db"),
-		mcp.WithString("schema",
-			mcp.Required(),
-			mcp.Description("Updated schema to insert inside the db"),
-		),
-		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    false,
-			DestructiveHint: true,
-			IdempotentHint:  false,
-			OpenWorldHint:   false,
-		}),
-	)
-
 	queryTool := mcp.NewTool("Run-Query",
-		mcp.WithDescription("Run Query on dgraph db"),
+		mcp.WithDescription("Run Dgraph Query on dgraph db"),
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("The query to perform"),
@@ -75,21 +64,22 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 		}),
 	)
 
-	mutationTool := mcp.NewTool("Run-Mutation",
-		mcp.WithDescription("Run Mutation on dgraph db"),
-		mcp.WithString("mutation",
-			mcp.Required(),
-			mcp.Description("The mutation to perform in json format"),
-		),
-		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    false,
-			DestructiveHint: true,
-			IdempotentHint:  false,
-			OpenWorldHint:   false,
-		}),
-	)
-
 	if readOnly != "true" {
+
+		alterSchemaTool := mcp.NewTool("Alter-Schema",
+			mcp.WithDescription("Alter Dgraph DQL Schema in dgraph db"),
+			mcp.WithString("schema",
+				mcp.Required(),
+				mcp.Description("Updated schema to insert inside the db"),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    false,
+				DestructiveHint: true,
+				IdempotentHint:  false,
+				OpenWorldHint:   false,
+			}),
+		)
+
 		s.AddTool(alterSchemaTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			schema, ok := request.Params.Arguments["schema"].(string)
 			if !ok {
@@ -97,7 +87,11 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 			}
 
 			// Execute alter operation
-			err := conn.SetSchema(ctx, "root", schema)
+			conn, err := getConn(connectionString)
+			if err != nil {
+				return nil, fmt.Errorf("error opening connection: %v", err)
+			}
+			err = conn.SetSchema(ctx, "root", schema)
 			if err != nil {
 				return nil, fmt.Errorf("schema alteration failed: %v", err)
 			}
@@ -105,7 +99,25 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 			return mcp.NewToolResultText("Schema updated successfully"), nil
 		})
 
+		mutationTool := mcp.NewTool("Run-Mutation",
+			mcp.WithDescription("Run DQL Mutation on dgraph db"),
+			mcp.WithString("mutation",
+				mcp.Required(),
+				mcp.Description("The mutation to perform in json format"),
+			),
+			mcp.WithToolAnnotation(mcp.ToolAnnotation{
+				ReadOnlyHint:    false,
+				DestructiveHint: true,
+				IdempotentHint:  false,
+				OpenWorldHint:   false,
+			}),
+		)
+
 		s.AddTool(mutationTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			conn, err := getConn(connectionString)
+			if err != nil {
+				return nil, fmt.Errorf("error opening connection: %v", err)
+			}
 			txn := conn.NewTxn()
 			defer func() {
 				err := txn.Discard(ctx)
@@ -130,6 +142,10 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 	}
 
 	s.AddTool(queryTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		conn, err := getConn(connectionString)
+		if err != nil {
+			return nil, fmt.Errorf("error opening connection: %v", err)
+		}
 		txn := conn.NewTxn()
 		defer func() {
 			err := txn.Discard(ctx)
@@ -146,6 +162,10 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 	})
 
 	s.AddTool(schemaTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		conn, err := getConn(connectionString)
+		if err != nil {
+			return nil, fmt.Errorf("error opening connection: %v", err)
+		}
 		txn := conn.NewTxn()
 		defer func() {
 			err := txn.Discard(ctx)
@@ -169,6 +189,10 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 
 	s.AddResource(schemaResource, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		// Execute operation
+		conn, err := getConn(connectionString)
+		if err != nil {
+			return nil, fmt.Errorf("error opening connection: %v", err)
+		}
 		resp, err := conn.NewTxn().Query(ctx, "schema {}")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get schema: %v", err)
@@ -256,6 +280,10 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 	// Add resource with its handler
 	s.AddResource(schemaResource, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		// Execute operation
+		conn, err := getConn(connectionString)
+		if err != nil {
+			return nil, fmt.Errorf("error opening connection: %v", err)
+		}
 		resp, err := conn.NewTxn().Query(ctx, "schema {}")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get schema: %v", err)

@@ -113,6 +113,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins for custom indices.")
 
+	flag.Bool("mcp", true, "Enable MCP server.")
+
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
@@ -493,7 +495,7 @@ func buildConnectionString(addr string, port int) string {
 	return fmt.Sprintf("dgraph://%s:%d", addr, port)
 }
 
-func setupServer(closer *z.Closer) {
+func setupServer(closer *z.Closer, enableMcp bool) {
 	go worker.RunServer(bindall) // For pb.communication.
 	laddr := "localhost"
 	if bindall {
@@ -597,9 +599,12 @@ func setupServer(closer *z.Closer) {
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 
-	if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "true"); err != nil {
-		log.Fatal(err)
+	if enableMcp {
+		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "true"); err != nil {
+			log.Fatal(err)
+		}
 	}
+
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser)
 
 	go func() {
@@ -664,6 +669,8 @@ func run() {
 
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
 		worker.LimitDefaults)
+
+	enableMcp := Alpha.Conf.GetBool("mcp")
 
 	opts := worker.Options{
 		PostingDir:      Alpha.Conf.GetString("postings"),
@@ -845,7 +852,7 @@ func run() {
 	// close alpha. This closer is for closing and waiting that subscription.
 	adminCloser := z.NewCloser(1)
 
-	setupServer(adminCloser)
+	setupServer(adminCloser, enableMcp)
 	glog.Infoln("GRPC and HTTP stopped.")
 
 	// This might not close until group is given the signal to close. So, only signal here,
