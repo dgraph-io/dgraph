@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/dgraph-io/dgo/v250"
@@ -39,7 +38,7 @@ func getConn(connectionString string) (*dgo.Dgraph, error) {
 }
 
 // NewMCPServer initializes and returns a new MCPServer instance.
-func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) {
+func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		"Dgraph MCP Server",
 		"1.0.0",
@@ -72,7 +71,7 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 		}),
 	)
 
-	if readOnly != "true" {
+	if !readOnly {
 		alterSchemaTool := mcp.NewTool("Alter-Schema",
 			mcp.WithDescription("Alter Dgraph DQL Schema in dgraph db"),
 			mcp.WithString("schema",
@@ -303,30 +302,5 @@ func NewMCPServer(connectionString, readOnly string) (*server.MCPServer, error) 
 		}, nil
 	})
 
-	addPrompt(s)
-
 	return s, nil
-}
-
-func addPrompt(s *server.MCPServer) {
-	promptFilePath := "./prompt.txt"
-	promptBytes, err := os.ReadFile(promptFilePath)
-	if err != nil {
-		glog.Errorf("failed to read prompt file: %v", err)
-		return
-	}
-	prompt := string(promptBytes)
-	s.AddPrompt(mcp.NewPrompt("Quick start prompt",
-		mcp.WithPromptDescription("A quick Start prompt for new users and llms"),
-	), func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return mcp.NewGetPromptResult(
-			"A quick start prompt",
-			[]mcp.PromptMessage{
-				mcp.NewPromptMessage(
-					mcp.RoleAssistant,
-					mcp.NewTextContent(prompt),
-				),
-			},
-		), nil
-	})
 }

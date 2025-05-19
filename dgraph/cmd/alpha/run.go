@@ -476,7 +476,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	s.Stop()
 }
 
-func setupMcp(baseMux *http.ServeMux, connectionString, readOnly string) error {
+func setupMcp(baseMux *http.ServeMux, connectionString, url string, readOnly bool) error {
 	s, err := dgraphmcp.NewMCPServer(connectionString, readOnly)
 	if err != nil {
 		glog.Errorf("Failed to initialize MCPServer: %v", err)
@@ -484,10 +484,10 @@ func setupMcp(baseMux *http.ServeMux, connectionString, readOnly string) error {
 	}
 
 	sse := server.NewSSEServer(s,
-		server.WithBasePath("/mcp"),
+		server.WithBasePath(url),
 	)
-	baseMux.HandleFunc("/mcp", sse.ServeHTTP)
-	baseMux.HandleFunc("/mcp/", sse.ServeHTTP)
+	baseMux.HandleFunc(url, sse.ServeHTTP)
+	baseMux.HandleFunc(url+"/", sse.ServeHTTP)
 	return nil
 }
 
@@ -600,7 +600,10 @@ func setupServer(closer *z.Closer, enableMcp bool) {
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 
 	if enableMcp {
-		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "true"); err != nil {
+		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "/mcp", false); err != nil {
+			log.Fatal(err)
+		}
+		if err := setupMcp(baseMux, buildConnectionString(laddr, grpcPort()), "/mcp-ro", true); err != nil {
 			log.Fatal(err)
 		}
 	}
