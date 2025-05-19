@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgo/v250"
@@ -13,16 +15,23 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+//go:embed prompt.txt
+var promptBytes []byte
+
 var dgraphConnection *dgo.Dgraph
+var getConnLock sync.Mutex
 
 func getConn(connectionString string) (*dgo.Dgraph, error) {
+	getConnLock.Lock()
+	defer getConnLock.Unlock()
+
 	if dgraphConnection != nil {
 		return dgraphConnection, nil
 	}
 
 	conn, err := dgo.Open(connectionString)
 	if err != nil {
-		for i := range 10 {
+		for i := range 3 {
 			time.Sleep(time.Second * time.Duration(i))
 			conn, err = dgo.Open(connectionString)
 			if err == nil {
@@ -41,7 +50,7 @@ func getConn(connectionString string) (*dgo.Dgraph, error) {
 func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		"Dgraph MCP Server",
-		"1.0.0",
+		"v25.0.0",
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
 		server.WithRecovery(),
@@ -226,10 +235,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			{
 				"shortest_path_query": "
 					{
-						q(func: eq(guid, "something") { // get first uid in form of a query
+						q(func: eq(guid, "first guid") { // get first uid in form of a query
 							a as uid
 						}
-						q1(func: eq(guid, "something else")) { // get second uid in form of a query
+						q1(func: eq(guid, "second guid")) { // get second uid in form of a query
 							b as uid
 						}
 						path as shortest(from: uid(a), to: uid(b), numpaths: 5, maxheapsize: 10000) {
@@ -259,10 +268,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 				{
 					"shortest_path_query": "
 						{
-							q(func: eq(guid, "something") { // get first uid in form of a query
+							q(func: eq(guid, "first guid")) { // get first uid in form of a query
 								a as uid
 							}
-							q1(func: eq(guid, "something else")) { // get second uid in form of a query
+							q1(func: eq(guid, "second guid")) { // get second uid in form of a query
 								b as uid
 							}
 
@@ -302,5 +311,24 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		}, nil
 	})
 
+	addPrompt(s)
+
 	return s, nil
+}
+
+func addPrompt(s *server.MCPServer) {
+	prompt := string(promptBytes)
+	s.AddPrompt(mcp.NewPrompt("Quick start prompt",
+		mcp.WithPromptDescription("A quick Start prompt for new users and llms"),
+	), func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		return mcp.NewGetPromptResult(
+			"A quick start prompt",
+			[]mcp.PromptMessage{
+				mcp.NewPromptMessage(
+					mcp.RoleAssistant,
+					mcp.NewTextContent(prompt),
+				),
+			},
+		), nil
+	})
 }

@@ -19,6 +19,18 @@ management and querying capabilities. There are two ways you can access the mcp 
 - Install dgraph alpha
 - Start dgraph alpha
 
+For Read only:
+
+```json
+{
+  "dgraph-mcp-ro": {
+    "serverUrl": "http://localhost:8080/mcp-ro/sse"
+  }
+}
+```
+
+For Read write:
+
 ```json
 {
   "dgraph-mcp": {
@@ -29,25 +41,21 @@ management and querying capabilities. There are two ways you can access the mcp 
 
 ## Setup Instructions for go code
 
-- Install golang 1.23+
-- Clone the repository
-- cd mcp/dgraph-mcp
-- go build
+- Install dgraph binary
 - Insert the following to your mcp config:
 
 ```json
 {
   "mcpServers": {
     "dgraph": {
-      "command": "<path to dgraph folder>/mcp/dgraph-mcp/dgraph-mcp",
-      "env": {
-        "DGRAPH_CONNECTION": "dgraph://<host>:443?sslmode=verify-ca&bearertoken=xxxxxxxxxx",
-        "DGRAPH_READ_ONLY": "true" / "false",
-      }
+      "command": "dgraph_binary",
+      "args": ["mcp -c dgraph://localhost:9080"]
     }
   }
 }
 ```
+
+- Modify the server details using args in dgraph mcp command
 
 ### Local Setup for Claude Desktop
 

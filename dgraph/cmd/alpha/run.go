@@ -43,9 +43,9 @@ import (
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/audit"
+	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/mcp"
 	"github.com/hypermodeinc/dgraph/v25/edgraph"
 	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
-	dgraphmcp "github.com/hypermodeinc/dgraph/v25/mcp"
 	"github.com/hypermodeinc/dgraph/v25/posting"
 	"github.com/hypermodeinc/dgraph/v25/schema"
 	"github.com/hypermodeinc/dgraph/v25/tok"
@@ -113,7 +113,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins for custom indices.")
 
-	flag.Bool("mcp", true, "Enable MCP server.")
+	flag.Bool("mcp", false, "run MCP server along with alpha.")
 
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
@@ -477,7 +477,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 }
 
 func setupMcp(baseMux *http.ServeMux, connectionString, url string, readOnly bool) error {
-	s, err := dgraphmcp.NewMCPServer(connectionString, readOnly)
+	s, err := mcp.NewMCPServer(connectionString, readOnly)
 	if err != nil {
 		glog.Errorf("Failed to initialize MCPServer: %v", err)
 		return err
