@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/moby/moby/client"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -404,19 +405,19 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 	}()
 
 	// we need to copy the exported data from the container to host
-	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), exportDir)
+	copyResult, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), client.CopyFromContainerOptions{SourcePath: exportDir})
 	if err != nil {
 		return errors.Wrapf(err, "error copying export dir from container [%v]", c.alphas[0].cname())
 	}
 	defer func() {
-		if err := ts.Close(); err != nil {
+		if err := copyResult.Content.Close(); err != nil {
 			log.Printf("[WARNING] error closing tared stream from docker cp for [%v]", c.alphas[0].cname())
 		}
 	}()
 
 	// .rdf.gz, .schema.gz,.gql_schema.gz
 	var rdfFiles, schemaFiles, gqlSchemaFiles, jsonFiles []string
-	tr := tar.NewReader(ts)
+	tr := tar.NewReader(copyResult.Content)
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {

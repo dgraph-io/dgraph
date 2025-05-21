@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/mount"
-	docker "github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
+	docker "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/v25/buildvars"
@@ -76,8 +76,8 @@ type dnode interface {
 	cname() string
 	aname() string
 	cid() string
-	ports() nat.PortSet
-	bindings(int) nat.PortMap
+	ports() network.PortSet
+	bindings(int) network.PortMap
 	cmd(*LocalCluster) []string
 	env(*LocalCluster) []string
 	workingDir() string
@@ -111,24 +111,24 @@ func (z *zero) cid() string {
 	return z.containerID
 }
 
-func (z *zero) ports() nat.PortSet {
-	return nat.PortSet{
-		zeroGrpcPort: {},
-		zeroHttpPort: {},
+func (z *zero) ports() network.PortSet {
+	return network.PortSet{
+		network.MustParsePort(zeroGrpcPort + "/tcp"): {},
+		network.MustParsePort(zeroHttpPort + "/tcp"): {},
 	}
 }
 
-func (z *zero) bindings(offset int) nat.PortMap {
+func (z *zero) bindings(offset int) network.PortMap {
 	if offset < 0 {
 		return nil
 	}
 
 	grpcPort, _ := strconv.Atoi(zeroGrpcPort)
 	httpPort, _ := strconv.Atoi(zeroHttpPort)
-	return nat.PortMap(map[nat.Port][]nat.PortBinding{
-		zeroGrpcPort: {{HostPort: strconv.Itoa(grpcPort + offset + z.id)}},
-		zeroHttpPort: {{HostPort: strconv.Itoa(httpPort + offset + z.id)}},
-	})
+	return network.PortMap{
+		network.MustParsePort(zeroGrpcPort + "/tcp"): {{HostPort: strconv.Itoa(grpcPort + offset + z.id)}},
+		network.MustParsePort(zeroHttpPort + "/tcp"): {{HostPort: strconv.Itoa(httpPort + offset + z.id)}},
+	}
 }
 
 func (z *zero) cmd(c *LocalCluster) []string {
@@ -231,24 +231,24 @@ func (a *alpha) aname() string {
 	return a.aliasName
 }
 
-func (a *alpha) ports() nat.PortSet {
-	return nat.PortSet{
-		alphaGrpcPort: {},
-		alphaHttpPort: {},
+func (a *alpha) ports() network.PortSet {
+	return network.PortSet{
+		network.MustParsePort(alphaGrpcPort + "/tcp"): {},
+		network.MustParsePort(alphaHttpPort + "/tcp"): {},
 	}
 }
 
-func (a *alpha) bindings(offset int) nat.PortMap {
+func (a *alpha) bindings(offset int) network.PortMap {
 	if offset < 0 {
 		return nil
 	}
 
 	grpcPort, _ := strconv.Atoi(alphaGrpcPort)
 	httpPort, _ := strconv.Atoi(alphaHttpPort)
-	return nat.PortMap(map[nat.Port][]nat.PortBinding{
-		alphaGrpcPort: {{HostPort: strconv.Itoa(grpcPort + offset + a.id)}},
-		alphaHttpPort: {{HostPort: strconv.Itoa(httpPort + offset + a.id)}},
-	})
+	return network.PortMap{
+		network.MustParsePort(alphaGrpcPort + "/tcp"): {{HostPort: strconv.Itoa(grpcPort + offset + a.id)}},
+		network.MustParsePort(alphaHttpPort + "/tcp"): {{HostPort: strconv.Itoa(httpPort + offset + a.id)}},
+	}
 }
 
 func (a *alpha) cmd(c *LocalCluster) []string {
@@ -413,12 +413,12 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	info, err := dcli.ContainerInspect(ctx, dc.cid())
+	info, err := dcli.ContainerInspect(ctx, dc.cid(), docker.ContainerInspectOptions{})
 	if err != nil {
 		return "", errors.Wrap(err, "error inspecting container")
 	}
 
-	for port, bindings := range info.NetworkSettings.Ports {
+	for port, bindings := range info.Container.NetworkSettings.Ports {
 		if len(bindings) == 0 {
 			continue
 		}
@@ -427,7 +427,7 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 		}
 
 		for _, binding := range bindings {
-			if binding.HostIP == "0.0.0.0" {
+			if binding.HostIP.IsUnspecified() {
 				return binding.HostPort, nil
 			}
 		}
