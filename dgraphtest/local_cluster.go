@@ -26,12 +26,10 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
-	docker "github.com/docker/docker/client"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	docker "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -107,7 +105,7 @@ func (c *LocalCluster) init() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	if _, err := c.dcli.Ping(ctx); err != nil {
+	if _, err := c.dcli.Ping(ctx, docker.PingOptions{}); err != nil {
 		return errors.Wrap(err, "unable to talk to docker daemon")
 	}
 
@@ -188,16 +186,16 @@ func (c *LocalCluster) createNetwork() error {
 	defer cancel()
 
 	// Check if network already exists
-	existingNet, err := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+	existingNet, err := c.dcli.NetworkInspect(ctx, c.net.name, docker.NetworkInspectOptions{})
 	if err == nil {
 		// Network exists, reuse it
-		log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
-		c.net.id = existingNet.ID
+		log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.Network.ID)
+		c.net.id = existingNet.Network.ID
 		return nil
 	}
 
 	// Network doesn't exist, create it
-	opts := network.CreateOptions{
+	opts := docker.NetworkCreateOptions{
 		Driver: "bridge",
 		IPAM:   &network.IPAM{Driver: "default"},
 	}
@@ -207,10 +205,10 @@ func (c *LocalCluster) createNetwork() error {
 		// If network already exists (race condition), try to inspect and reuse it
 		if strings.Contains(err.Error(), "already exists") {
 			log.Printf("[INFO] network %s already exists (race condition), inspecting", c.net.name)
-			existingNet, inspectErr := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+			existingNet, inspectErr := c.dcli.NetworkInspect(ctx, c.net.name, docker.NetworkInspectOptions{})
 			if inspectErr == nil {
-				log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
-				c.net.id = existingNet.ID
+				log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.Network.ID)
+				c.net.id = existingNet.Network.ID
 				return nil
 			}
 			// If inspect also fails, return original create error
@@ -227,7 +225,7 @@ func (c *LocalCluster) createVolume(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	req := volume.CreateOptions{Driver: "local", Name: name}
+	req := docker.VolumeCreateOptions{Driver: "local", Name: name}
 	if _, err := c.dcli.VolumeCreate(ctx, req); err != nil {
 		return errors.Wrapf(err, "error creating volume [%v]", name)
 	}
@@ -300,12 +298,12 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	if c.net.id != "" {
-		_, err := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+		_, err := c.dcli.NetworkInspect(ctx, c.net.id, docker.NetworkInspectOptions{})
 		if err != nil {
 			// Use mutex to prevent multiple goroutines from recreating network simultaneously
 			c.netMutex.Lock()
 			// Double-check after acquiring lock - another goroutine may have recreated it
-			_, recheckErr := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+			_, recheckErr := c.dcli.NetworkInspect(ctx, c.net.id, docker.NetworkInspectOptions{})
 			if recheckErr != nil {
 				log.Printf("[WARNING] network %s (ID: %s) not found, recreating", c.net.name, c.net.id)
 				if err := c.createNetwork(); err != nil {
@@ -336,7 +334,9 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		},
 	}
 
-	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, nil, dc.cname())
+	resp, err := c.dcli.ContainerCreate(ctx, docker.ContainerCreateOptions{
+		Config: cconf, HostConfig: hconf, NetworkingConfig: networkConfig, Name: dc.cname(),
+	})
 	if err != nil {
 		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
 	}
@@ -350,13 +350,13 @@ func (c *LocalCluster) destroyContainers() error {
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(c.zeros)+len(c.alphas))
-	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
+	ro := docker.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
 
 	for _, zo := range c.zeros {
 		wg.Add(1)
 		go func(z *zero) {
 			defer wg.Done()
-			if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
+			if _, err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 				errChan <- errors.Wrapf(err, "error removing zero [%v]", z.cname())
 			}
 		}(zo)
@@ -366,7 +366,7 @@ func (c *LocalCluster) destroyContainers() error {
 		wg.Add(1)
 		go func(a *alpha) {
 			defer wg.Done()
-			if err := c.dcli.ContainerRemove(ctx, a.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
+			if _, err := c.dcli.ContainerRemove(ctx, a.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 				errChan <- errors.Wrapf(err, "error removing alpha [%v]", a.cname())
 			}
 		}(aa)
@@ -383,23 +383,23 @@ func (c *LocalCluster) destroyContainers() error {
 }
 
 func (c *LocalCluster) printPortMappings() error {
-	containers, err := c.dcli.ContainerList(context.Background(), container.ListOptions{})
+	containers, err := c.dcli.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		return errors.Wrap(err, "error listing docker containers")
 	}
 
 	var result bytes.Buffer
-	for _, container := range containers {
+	for _, container := range containers.Items {
 		result.WriteString(fmt.Sprintf("ID: %s, Image: %s, Command: %s, Status: %s\n",
 			container.ID[:10], container.Image, container.Command, container.Status))
 
 		result.WriteString("Port Mappings:\n")
-		info, err := c.dcli.ContainerInspect(context.Background(), container.ID)
+		info, err := c.dcli.ContainerInspect(context.Background(), container.ID, docker.ContainerInspectOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "error inspecting container [%v]", container.ID)
 		}
 
-		for port, bindings := range info.NetworkSettings.Ports {
+		for port, bindings := range info.Container.NetworkSettings.Ports {
 			if len(bindings) == 0 {
 				continue
 			}
@@ -438,12 +438,12 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	for _, vol := range c.conf.volumes {
-		if err := c.dcli.VolumeRemove(ctx, vol, true); err != nil {
+		if _, err := c.dcli.VolumeRemove(ctx, vol, docker.VolumeRemoveOptions{Force: true}); err != nil {
 			log.Printf("[WARNING] error removing volume [%v]: %v", vol, err)
 		}
 	}
 	if c.net.id != "" {
-		if err := c.dcli.NetworkRemove(ctx, c.net.id); err != nil {
+		if _, err := c.dcli.NetworkRemove(ctx, c.net.id, docker.NetworkRemoveOptions{}); err != nil {
 			log.Printf("[WARNING] error removing network [%v]: %v", c.net.name, err)
 		}
 	}
@@ -459,7 +459,7 @@ func (c *LocalCluster) cleanupDocker() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	// Prune containers
-	contsReport, err := c.dcli.ContainersPrune(ctx, filters.Args{})
+	contsReport, err := c.dcli.ContainerPrune(ctx, docker.ContainerPruneOptions{})
 	if err != nil {
 		// Don't fail if prune is already running - just skip it
 		if strings.Contains(err.Error(), "already running") {
@@ -468,11 +468,11 @@ func (c *LocalCluster) cleanupDocker() error {
 			log.Printf("[WARNING] Error pruning containers: %v", err)
 		}
 	} else {
-		log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
+		log.Printf("[INFO] Pruned containers: %+v\n", contsReport.Report)
 	}
 
 	// Prune networks
-	netsReport, err := c.dcli.NetworksPrune(ctx, filters.Args{})
+	netsReport, err := c.dcli.NetworkPrune(ctx, docker.NetworkPruneOptions{})
 	if err != nil {
 		// Don't fail if prune is already running - just skip it
 		if strings.Contains(err.Error(), "already running") {
@@ -481,7 +481,7 @@ func (c *LocalCluster) cleanupDocker() error {
 			log.Printf("[WARNING] Error pruning networks: %v", err)
 		}
 	} else {
-		log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
+		log.Printf("[INFO] Pruned networks: %+v\n", netsReport.Report)
 	}
 
 	return nil
@@ -574,7 +574,7 @@ func (c *LocalCluster) startContainer(dc dnode) error {
 	defer cancel()
 
 	// verify the container still exists
-	_, err := c.dcli.ContainerInspect(ctx, dc.cid())
+	_, err := c.dcli.ContainerInspect(ctx, dc.cid(), docker.ContainerInspectOptions{})
 	if err != nil {
 		log.Printf("[WARNING] container %s (ID: %s) not found, attempting to recreate", dc.cname(), dc.cid())
 		newCID, createErr := c.createContainer(dc)
@@ -588,7 +588,7 @@ func (c *LocalCluster) startContainer(dc dnode) error {
 		log.Printf("[INFO] successfully recreated container %s with new ID: %s", dc.cname(), newCID)
 	}
 
-	if err := c.dcli.ContainerStart(ctx, dc.cid(), container.StartOptions{}); err != nil {
+	if _, err := c.dcli.ContainerStart(ctx, dc.cid(), docker.ContainerStartOptions{}); err != nil {
 		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
 	dc.changeStatus(true)
@@ -653,20 +653,20 @@ func (c *LocalCluster) RecreateZero(id int) error {
 	defer cancel()
 
 	// Extract the data directory from the stopped container so the WAL survives.
-	dataReader, _, err := c.dcli.CopyFromContainer(ctx, z.cid(), zeroWorkingDir)
+	dataReader, err := c.dcli.CopyFromContainer(ctx, z.cid(), docker.CopyFromContainerOptions{SourcePath: zeroWorkingDir})
 	if err != nil {
 		return errors.Wrapf(err, "error copying data from zero container [%v]", z.cname())
 	}
-	defer dataReader.Close()
+	defer dataReader.Content.Close()
 
 	// Read the tar into memory (Zero WAL is small).
-	dataTar, err := io.ReadAll(dataReader)
+	dataTar, err := io.ReadAll(dataReader.Content)
 	if err != nil {
 		return errors.Wrap(err, "error reading zero data tar")
 	}
 
-	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
-	if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
+	ro := docker.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+	if _, err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 		return errors.Wrapf(err, "error removing zero container [%v]", z.cname())
 	}
 
@@ -678,8 +678,9 @@ func (c *LocalCluster) RecreateZero(id int) error {
 
 	// Inject the data directory into the new container. CopyToContainer expects
 	// a tar archive rooted at the parent of the target path.
-	if err := c.dcli.CopyToContainer(ctx, cid, "/data", bytes.NewReader(dataTar),
-		container.CopyToContainerOptions{}); err != nil {
+	if _, err := c.dcli.CopyToContainer(ctx, cid, docker.CopyToContainerOptions{
+		DestinationPath: "/data", Content: bytes.NewReader(dataTar),
+	}); err != nil {
 		return errors.Wrapf(err, "error restoring data to zero container [%v]", z.cname())
 	}
 
@@ -698,11 +699,11 @@ func (c *LocalCluster) stopContainer(dc dnode) error {
 	defer cancel()
 
 	stopTimeout := 30 // in seconds
-	o := container.StopOptions{Timeout: &stopTimeout}
-	if err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
+	o := docker.ContainerStopOptions{Timeout: &stopTimeout}
+	if _, err := c.dcli.ContainerStop(ctx, dc.cid(), o); err != nil {
 		// Force kill the container if timeout exceeded
 		if strings.Contains(err.Error(), "context deadline exceeded") {
-			_ = c.dcli.ContainerKill(ctx, dc.cid(), "KILL")
+			_, _ = c.dcli.ContainerKill(ctx, dc.cid(), docker.ContainerKillOptions{Signal: "KILL"})
 			return nil
 		}
 		return errors.Wrapf(err, "error stopping container [%v]", dc.cname())
@@ -721,7 +722,7 @@ func (c *LocalCluster) KillAlpha(id int) error {
 func (c *LocalCluster) killContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
-	if err := c.dcli.ContainerKill(ctx, dc.cid(), "SIGKILL"); err != nil {
+	if _, err := c.dcli.ContainerKill(ctx, dc.cid(), docker.ContainerKillOptions{Signal: "SIGKILL"}); err != nil {
 		return errors.Wrapf(err, "error killing container [%v]", dc.cname())
 	}
 	return nil
@@ -1311,7 +1312,7 @@ func (c *LocalCluster) getLogs(containerID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	opts := container.LogsOptions{
+	opts := docker.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Details:    true,
@@ -1364,11 +1365,11 @@ func (c *LocalCluster) inspectContainer(containerID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	_, raw, err := c.dcli.ContainerInspectWithRaw(ctx, containerID, true)
+	result, err := c.dcli.ContainerInspect(ctx, containerID, docker.ContainerInspectOptions{Size: true})
 	if err != nil {
 		return "", errors.Wrapf(err, "error inspecting container %v", containerID)
 	}
-	return string(raw), nil
+	return string(result.Raw), nil
 }
 
 func (c *LocalCluster) setupSecrets() error {
@@ -1565,13 +1566,13 @@ func (c *LocalCluster) ReadFileFromContainer(containerPath string) ([]byte, erro
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
-	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), containerPath)
+	copyResult, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), docker.CopyFromContainerOptions{SourcePath: containerPath})
 	if err != nil {
 		return nil, errors.Wrapf(err, "error copying file from container [%v]", c.alphas[0].cname())
 	}
-	defer ts.Close()
+	defer copyResult.Content.Close()
 
-	tr := tar.NewReader(ts)
+	tr := tar.NewReader(copyResult.Content)
 	if _, err := tr.Next(); err != nil {
 		return nil, errors.Wrap(err, "error reading tar header")
 	}
@@ -1587,18 +1588,18 @@ func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, s
 	defer cancel()
 
 	// Copy the exported data from the container to host
-	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), exportDir)
+	copyResult, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), docker.CopyFromContainerOptions{SourcePath: exportDir})
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "error copying export dir from container [%v]", c.alphas[0].cname())
 	}
 	defer func() {
-		if err := ts.Close(); err != nil {
+		if err := copyResult.Content.Close(); err != nil {
 			log.Printf("[WARNING] error closing tared stream from docker cp for [%v]", c.alphas[0].cname())
 		}
 	}()
 
 	// Extract files from tar stream
-	tr := tar.NewReader(ts)
+	tr := tar.NewReader(copyResult.Content)
 	for {
 		header, err := tr.Next()
 		if stderrors.Is(err, io.EOF) {

@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/golang/glog"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -178,13 +178,13 @@ func getContainer(name string) container.Summary {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
 
 	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
-	for _, c := range containers {
+	for _, c := range containers.Items {
 		for _, n := range c.Names {
 			if !strings.HasPrefix(n, q) {
 				continue
@@ -199,13 +199,13 @@ func AllContainers(prefix string) []container.Summary {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{All: true})
 	if err != nil {
 		log.Fatalf("While listing container: %v\n", err)
 	}
 
 	var out []container.Summary
-	for _, c := range containers {
+	for _, c := range containers.Items {
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/"+prefix) {
 				out = append(out, c)
@@ -246,13 +246,14 @@ func DockerRun(instance string, op int) error {
 
 	switch op {
 	case Start:
-		if err := cli.ContainerStart(context.Background(), c.ID, container.StartOptions{}); err != nil {
+		if _, err := cli.ContainerStart(context.Background(), c.ID, client.ContainerStartOptions{}); err != nil {
 			return err
 		}
 	case Stop:
 		dur := 30
-		o := container.StopOptions{Timeout: &dur}
-		return cli.ContainerStop(context.Background(), c.ID, o)
+		o := client.ContainerStopOptions{Timeout: &dur}
+		_, err := cli.ContainerStop(context.Background(), c.ID, o)
+		return err
 	default:
 		x.Fatalf("Wrong Docker op: %v\n", op)
 	}
@@ -271,12 +272,13 @@ func DockerCpFromContainer(containerID, srcPath, dstPath string) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
-	tarStream, _, err := cli.CopyFromContainer(context.Background(), containerID, srcPath)
+	copyResult, err := cli.CopyFromContainer(context.Background(), containerID, client.CopyFromContainerOptions{SourcePath: srcPath})
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
-	tr := tar.NewReader(tarStream)
+	defer copyResult.Content.Close()
+	tr := tar.NewReader(copyResult.Content)
 	_, err = tr.Next()
 	x.Check(err)
 
@@ -301,7 +303,8 @@ func DockerExec(instance string, cmd ...string) error {
 func DockerInspect(containerID string) (container.InspectResponse, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
-	return cli.ContainerInspect(context.Background(), containerID)
+	result, err := cli.ContainerInspect(context.Background(), containerID, client.ContainerInspectOptions{})
+	return result.Container, err
 }
 
 // CheckHealthContainer checks health of container and determines wheather container is ready to accept request
