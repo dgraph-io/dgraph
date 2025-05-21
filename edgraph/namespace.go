@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/hypermodeinc/dgraph/v25/schema"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
@@ -61,7 +61,7 @@ type resultNamespaces struct {
 }
 
 func (s *ServerV25) SignInUser(ctx context.Context,
-	request *apiv25.SignInUserRequest) (*apiv25.SignInUserResponse, error) {
+	request *apiv2.SignInUserRequest) (*apiv2.SignInUserResponse, error) {
 
 	req := &api.LoginRequest{Userid: request.UserId, Password: request.Password, Namespace: 0}
 	resp, err := (&Server{}).Login(ctx, req)
@@ -73,11 +73,11 @@ func (s *ServerV25) SignInUser(ctx context.Context,
 		return nil, err
 	}
 
-	return &apiv25.SignInUserResponse{AccessJwt: jwt.AccessJwt, RefreshJwt: jwt.RefreshJwt}, nil
+	return &apiv2.SignInUserResponse{AccessJwt: jwt.AccessJwt, RefreshJwt: jwt.RefreshJwt}, nil
 }
 
-func (s *ServerV25) CreateNamespace(ctx context.Context, in *apiv25.CreateNamespaceRequest) (
-	*apiv25.CreateNamespaceResponse, error) {
+func (s *ServerV25) CreateNamespace(ctx context.Context, in *apiv2.CreateNamespaceRequest) (
+	*apiv2.CreateNamespaceResponse, error) {
 
 	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
@@ -112,11 +112,11 @@ func (s *ServerV25) CreateNamespace(ctx context.Context, in *apiv25.CreateNamesp
 	}
 
 	glog.Infof("Created namespace [%v] with id [%d]", in.NsName, ns)
-	return &apiv25.CreateNamespaceResponse{}, nil
+	return &apiv2.CreateNamespaceResponse{}, nil
 }
 
-func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv25.DropNamespaceRequest) (
-	*apiv25.DropNamespaceResponse, error) {
+func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv2.DropNamespaceRequest) (
+	*apiv2.DropNamespaceResponse, error) {
 
 	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
@@ -152,7 +152,7 @@ func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv25.DropNamespaceR
 
 	if nsID == 0 {
 		glog.Infof("Namespace [%v] not found", in.NsName)
-		return &apiv25.DropNamespaceResponse{}, nil
+		return &apiv2.DropNamespaceResponse{}, nil
 	}
 
 	// If we crash at this point, it is possible that namespace is deleted
@@ -167,11 +167,11 @@ func (s *ServerV25) DropNamespace(ctx context.Context, in *apiv25.DropNamespaceR
 	}
 
 	glog.Infof("Dropped namespace [%v] with id [%d]", in.NsName, nsID)
-	return &apiv25.DropNamespaceResponse{}, nil
+	return &apiv2.DropNamespaceResponse{}, nil
 }
 
-func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv25.UpdateNamespaceRequest) (
-	*apiv25.UpdateNamespaceResponse, error) {
+func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv2.UpdateNamespaceRequest) (
+	*apiv2.UpdateNamespaceResponse, error) {
 
 	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
@@ -188,7 +188,7 @@ func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv25.UpdateNamesp
 
 	if isLgacyNamespace(in.NsName) {
 		err := renameLeagcyNamespace(ctx, in.NsName, in.RenameToNs)
-		return &apiv25.UpdateNamespaceResponse{}, err
+		return &apiv2.UpdateNamespaceResponse{}, err
 	}
 
 	if err := renameNamespace(x.AttachJWTNamespace(ctx), in.NsName, in.RenameToNs); err != nil {
@@ -196,11 +196,11 @@ func (s *ServerV25) UpdateNamespace(ctx context.Context, in *apiv25.UpdateNamesp
 	}
 
 	glog.Infof("Renamed namespace [%v] to [%v]", in.NsName, in.RenameToNs)
-	return &apiv25.UpdateNamespaceResponse{}, nil
+	return &apiv2.UpdateNamespaceResponse{}, nil
 }
 
-func (s *ServerV25) ListNamespaces(ctx context.Context, in *apiv25.ListNamespacesRequest) (
-	*apiv25.ListNamespacesResponse, error) {
+func (s *ServerV25) ListNamespaces(ctx context.Context, in *apiv2.ListNamespacesRequest) (
+	*apiv2.ListNamespacesResponse, error) {
 
 	if err := AuthSuperAdmin(ctx); err != nil {
 		s := status.Convert(err)
@@ -224,13 +224,13 @@ func (s *ServerV25) ListNamespaces(ctx context.Context, in *apiv25.ListNamespace
 	}
 
 	schNsList := schema.State().Namespaces()
-	result := &apiv25.ListNamespacesResponse{NsList: make(map[string]*apiv25.Namespace)}
+	result := &apiv2.ListNamespacesResponse{NsList: make(map[string]*apiv2.Namespace)}
 	for id := range schNsList {
 		if name, ok := dataNsList[id]; !ok {
 			name = fmt.Sprintf("dgraph-%d", id)
-			result.NsList[name] = &apiv25.Namespace{Name: name, Id: id}
+			result.NsList[name] = &apiv2.Namespace{Name: name, Id: id}
 		} else {
-			result.NsList[name] = &apiv25.Namespace{Name: name, Id: id}
+			result.NsList[name] = &apiv2.Namespace{Name: name, Id: id}
 		}
 	}
 

@@ -13,7 +13,7 @@ syntax = "proto3";
 package pb;
 
 import "github.com/dgraph-io/dgo/v250/protos/api.proto";
-import "github.com/dgraph-io/dgo/v250/protos/api.v25.proto";
+import "github.com/dgraph-io/dgo/v250/protos/api.v2.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
 import "google/protobuf/descriptor.proto";
 
@@ -597,7 +597,7 @@ service Worker {
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
   rpc ApplyDrainmode(DrainModeRequest) returns (Status) {}
-  rpc InternalStreamPDir(stream api.v25.StreamPDirRequest) returns (api.v25.StreamPDirResponse) {}
+  rpc InternalStreamPDir(stream api.v2.StreamPDirRequest) returns (api.v2.StreamPDirResponse) {}
 }
 
 message DrainModeRequest {
