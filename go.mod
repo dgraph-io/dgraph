@@ -33,7 +33,7 @@ require (
 	github.com/graph-gophers/graphql-go v1.6.0
 	github.com/hashicorp/vault/api v1.16.0
 	github.com/klauspost/compress v1.18.0
-	github.com/mark3labs/mcp-go v0.28.0
+	github.com/mark3labs/mcp-go v0.29.0
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/paulmach/go.geojson v1.5.0
 	github.com/pkg/errors v0.9.1
