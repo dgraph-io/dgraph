@@ -35,7 +35,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/hypermodeinc/dgraph/v25/chunker"
 	"github.com/hypermodeinc/dgraph/v25/conn"
 	"github.com/hypermodeinc/dgraph/v25/dql"
@@ -1811,7 +1811,7 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 }
 
 func (s *ServerV25) InitiatePDirStream(ctx context.Context,
-	c *apiv25.InitiatePDirStreamRequest) (v *apiv25.InitiatePDirStreamResponse, err error) {
+	c *apiv2.InitiatePDirStreamRequest) (v *apiv2.InitiatePDirStreamResponse, err error) {
 
 	drainMode := &pb.DrainModeRequest{State: true}
 	groups, err := worker.ProposeDrain(ctx, drainMode)
@@ -1819,12 +1819,12 @@ func (s *ServerV25) InitiatePDirStream(ctx context.Context,
 		return nil, err
 	}
 
-	resp := &apiv25.InitiatePDirStreamResponse{Groups: groups}
+	resp := &apiv2.InitiatePDirStreamResponse{Groups: groups}
 
 	return resp, nil
 }
 
-func (s *ServerV25) StreamPDir(stream apiv25.Dgraph_StreamPDirServer) error {
+func (s *ServerV25) StreamPDir(stream apiv2.Dgraph_StreamPDirServer) error {
 	if err := worker.InStream(stream); err != nil {
 		return err
 	}

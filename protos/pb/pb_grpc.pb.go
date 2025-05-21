@@ -19,7 +19,7 @@ import (
 	context "context"
 	pb "github.com/dgraph-io/badger/v4/pb"
 	api "github.com/dgraph-io/dgo/v250/protos/api"
-	api_v25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	api_v2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -1149,8 +1149,8 @@ func (c *workerClient) InternalStreamPDir(ctx context.Context, opts ...grpc.Call
 }
 
 type Worker_InternalStreamPDirClient interface {
-	Send(*api_v25.StreamPDirRequest) error
-	CloseAndRecv() (*api_v25.StreamPDirResponse, error)
+	Send(*api_v2.StreamPDirRequest) error
+	CloseAndRecv() (*api_v2.StreamPDirResponse, error)
 	grpc.ClientStream
 }
 
@@ -1158,15 +1158,15 @@ type workerInternalStreamPDirClient struct {
 	grpc.ClientStream
 }
 
-func (x *workerInternalStreamPDirClient) Send(m *api_v25.StreamPDirRequest) error {
+func (x *workerInternalStreamPDirClient) Send(m *api_v2.StreamPDirRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *workerInternalStreamPDirClient) CloseAndRecv() (*api_v25.StreamPDirResponse, error) {
+func (x *workerInternalStreamPDirClient) CloseAndRecv() (*api_v2.StreamPDirResponse, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
-	m := new(api_v25.StreamPDirResponse)
+	m := new(api_v2.StreamPDirResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -1556,8 +1556,8 @@ func _Worker_InternalStreamPDir_Handler(srv interface{}, stream grpc.ServerStrea
 }
 
 type Worker_InternalStreamPDirServer interface {
-	SendAndClose(*api_v25.StreamPDirResponse) error
-	Recv() (*api_v25.StreamPDirRequest, error)
+	SendAndClose(*api_v2.StreamPDirResponse) error
+	Recv() (*api_v2.StreamPDirRequest, error)
 	grpc.ServerStream
 }
 
@@ -1565,12 +1565,12 @@ type workerInternalStreamPDirServer struct {
 	grpc.ServerStream
 }
 
-func (x *workerInternalStreamPDirServer) SendAndClose(m *api_v25.StreamPDirResponse) error {
+func (x *workerInternalStreamPDirServer) SendAndClose(m *api_v2.StreamPDirResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *workerInternalStreamPDirServer) Recv() (*api_v25.StreamPDirRequest, error) {
-	m := new(api_v25.StreamPDirRequest)
+func (x *workerInternalStreamPDirServer) Recv() (*api_v2.StreamPDirRequest, error) {
+	m := new(api_v2.StreamPDirRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
