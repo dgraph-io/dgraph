@@ -60,10 +60,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 	schemaTool := mcp.NewTool("Get-Schema",
 		mcp.WithDescription("Get Dgraph DQL Schema from dgraph db"),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    true,
-			DestructiveHint: false,
-			IdempotentHint:  true,
-			OpenWorldHint:   false,
+			ReadOnlyHint:    boolPointer(true),
+			DestructiveHint: boolPointer(false),
+			IdempotentHint:  boolPointer(true),
+			OpenWorldHint:   boolPointer(false),
 		}),
 	)
 
@@ -74,10 +74,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			mcp.Description("The query to perform"),
 		),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    true,
-			DestructiveHint: false,
-			IdempotentHint:  true,
-			OpenWorldHint:   false,
+			ReadOnlyHint:    boolPointer(true),
+			DestructiveHint: boolPointer(false),
+			IdempotentHint:  boolPointer(true),
+			OpenWorldHint:   boolPointer(false),
 		}),
 	)
 
@@ -89,15 +89,15 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 				mcp.Description("Updated schema to insert inside the db"),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
-				ReadOnlyHint:    false,
-				DestructiveHint: true,
-				IdempotentHint:  false,
-				OpenWorldHint:   false,
+				ReadOnlyHint:    boolPointer(false),
+				DestructiveHint: boolPointer(true),
+				IdempotentHint:  boolPointer(false),
+				OpenWorldHint:   boolPointer(false),
 			}),
 		)
 
 		s.AddTool(alterSchemaTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			schema, ok := request.Params.Arguments["schema"].(string)
+			schema, ok := request.GetArguments()["schema"].(string)
 			if !ok {
 				return nil, fmt.Errorf("schema must be present")
 			}
@@ -121,10 +121,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 				mcp.Description("The mutation to perform in json format"),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
-				ReadOnlyHint:    false,
-				DestructiveHint: true,
-				IdempotentHint:  false,
-				OpenWorldHint:   false,
+				ReadOnlyHint:    boolPointer(false),
+				DestructiveHint: boolPointer(true),
+				IdempotentHint:  boolPointer(false),
+				OpenWorldHint:   boolPointer(false),
 			}),
 		)
 
@@ -140,7 +140,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 					glog.Errorf("failed to discard transaction: %v", err)
 				}
 			}()
-			mutation, ok := request.Params.Arguments["mutation"].(string)
+			mutation, ok := request.GetArguments()["mutation"].(string)
 			if !ok {
 				return nil, fmt.Errorf("mutation must present")
 			}
@@ -167,7 +167,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 				glog.Errorf("failed to discard transaction: %v", err)
 			}
 		}()
-		op := request.Params.Arguments["query"].(string)
+		op := request.GetArguments()["query"].(string)
 		resp, err := txn.Query(ctx, op)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -224,10 +224,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 	commonQueriesTool := mcp.NewTool("Get-Common-Queries",
 		mcp.WithDescription("Get common queries that you can run on the db. If you are seeing issues with your queries, you can check this tool once."),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
-			ReadOnlyHint:    true,
-			DestructiveHint: false,
-			IdempotentHint:  true,
-			OpenWorldHint:   false,
+			ReadOnlyHint:    boolPointer(true),
+			DestructiveHint: boolPointer(false),
+			IdempotentHint:  boolPointer(true),
+			OpenWorldHint:   boolPointer(false),
 		}),
 	)
 
@@ -332,4 +332,8 @@ func addPrompt(s *server.MCPServer) {
 			},
 		), nil
 	})
+}
+
+func boolPointer(b bool) *bool {
+	return &b
 }
