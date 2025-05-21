@@ -7,7 +7,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.45.1
 	github.com/Masterminds/semver/v3 v3.3.1
-	github.com/blevesearch/bleve/v2 v2.5.0
+	github.com/blevesearch/bleve/v2 v2.5.1
 	github.com/dgraph-io/badger/v4 v4.7.0
 	github.com/dgraph-io/dgo/v250 v250.0.0-preview2
 	github.com/dgraph-io/gqlgen v0.13.2
@@ -23,7 +23,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/golang/geo v0.0.0-20250509130527-0a13e5a5d53d
+	github.com/golang/geo v0.0.0-20250516193853-92f93c4cb289
 	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v1.0.0
 	github.com/google/codesearch v1.2.0
@@ -33,7 +33,7 @@ require (
 	github.com/graph-gophers/graphql-go v1.6.0
 	github.com/hashicorp/vault/api v1.16.0
 	github.com/klauspost/compress v1.18.0
-	github.com/mark3labs/mcp-go v0.21.0
+	github.com/mark3labs/mcp-go v0.29.0
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/paulmach/go.geojson v1.5.0
 	github.com/pkg/errors v0.9.1
@@ -67,7 +67,7 @@ require (
 	golang.org/x/term v0.32.0
 	golang.org/x/text v0.25.0
 	golang.org/x/tools v0.33.0
-	google.golang.org/grpc v1.72.0
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -79,7 +79,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
 	github.com/blevesearch/bleve_index_api v1.2.8 // indirect
-	github.com/blevesearch/geo v0.2.0 // indirect
+	github.com/blevesearch/geo v0.2.3 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.3 // indirect
 	github.com/blevesearch/segment v0.9.1 // indirect
 	github.com/blevesearch/snowballstem v0.9.0 // indirect
