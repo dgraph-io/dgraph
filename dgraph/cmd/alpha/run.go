@@ -484,7 +484,7 @@ func setupMcp(baseMux *http.ServeMux, connectionString, url string, readOnly boo
 	}
 
 	sse := server.NewSSEServer(s,
-		server.WithBasePath(url),
+		server.WithStaticBasePath(url),
 	)
 	baseMux.HandleFunc(url, sse.ServeHTTP)
 	baseMux.HandleFunc(url+"/", sse.ServeHTTP)
