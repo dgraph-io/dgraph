@@ -100,9 +100,19 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		)
 
 		s.AddTool(alterSchemaTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			schema, ok := request.GetArguments()["schema"].(string)
-			if !ok {
+			args := request.GetArguments()
+			if args == nil {
 				return mcp.NewToolResultError("Schema must be present"), nil
+			}
+
+			schemaArg, ok := args["schema"]
+			if !ok || schemaArg == nil {
+				return mcp.NewToolResultError("Schema must be present"), nil
+			}
+
+			schema, ok := schemaArg.(string)
+			if !ok {
+				return mcp.NewToolResultError("Schema must be a string"), nil
 			}
 
 			// Execute alter operation
@@ -143,9 +153,19 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 					glog.Errorf("failed to discard transaction: %v", err)
 				}
 			}()
-			mutation, ok := request.GetArguments()["mutation"].(string)
-			if !ok {
+			args := request.GetArguments()
+			if args == nil {
 				return mcp.NewToolResultError("Mutation must be present"), nil
+			}
+
+			mutationArg, ok := args["mutation"]
+			if !ok || mutationArg == nil {
+				return mcp.NewToolResultError("Mutation must be present"), nil
+			}
+
+			mutation, ok := mutationArg.(string)
+			if !ok {
+				return mcp.NewToolResultError("Mutation must be a string"), nil
 			}
 			resp, err := txn.Mutate(ctx, &api.Mutation{
 				SetJson:   []byte(mutation),
@@ -154,7 +174,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			if err != nil {
 				return mcp.NewToolResultErrorFromErr("Error running mutation", err), nil
 			}
-			return mcp.NewToolResultText(string(resp.GetJson())), nil
+			return mcp.NewToolResultText(fmt.Sprintf("Mutation completed, %d UIDs created", len(resp.Uids)/2)), nil
 		})
 	}
 
@@ -170,7 +190,18 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 				glog.Errorf("failed to discard transaction: %v", err)
 			}
 		}()
-		op := request.GetArguments()["query"].(string)
+		args := request.GetArguments()
+		if args == nil {
+			return mcp.NewToolResultError("Query must be present"), nil
+		}
+		queryArg, ok := args["query"]
+		if !ok || queryArg == nil {
+			return mcp.NewToolResultError("Query must be present"), nil
+		}
+		op, ok := queryArg.(string)
+		if !ok {
+			return mcp.NewToolResultError("Query must be a string"), nil
+		}
 		resp, err := txn.Query(ctx, op)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error running query", err), nil
@@ -208,11 +239,11 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		// Execute operation
 		conn, err := getConn(connectionString)
 		if err != nil {
-			return nil, fmt.Errorf("Error opening connection with Dgraph Alpha: %w", err)
+			return nil, fmt.Errorf("error opening connection with Dgraph Alpha: %w", err)
 		}
 		resp, err := conn.NewTxn().Query(ctx, "schema {}")
 		if err != nil {
-			return nil, fmt.Errorf("Error running query: %w", err)
+			return nil, fmt.Errorf("error running query: %w", err)
 		}
 
 		return []mcp.ResourceContents{
@@ -266,7 +297,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 	s.AddResource(commonQueries, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return []mcp.ResourceContents{
 			mcp.TextResourceContents{
-				URI:      "dgraph://commmon-queries",
+				URI:      "dgraph://commmon_queries",
 				MIMEType: "text/plain",
 				Text: `
 				{
