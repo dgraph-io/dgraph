@@ -1701,7 +1701,7 @@ func (l *List) ApproxLen() int {
 
 func (l *List) calculateUids() error {
 	l.RLock()
-	if l.mutationMap.isUidsCalculated {
+	if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
 		l.RUnlock()
 		return nil
 	}
