@@ -607,6 +607,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 
 			l.minTs = item.Version()
+			if l.mutationMap == nil {
+				l.mutationMap = newMutableLayer()
+			}
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
