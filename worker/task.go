@@ -446,10 +446,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				if len(cache) == 0 {
 					keys := make([][]byte, 10)
 					keys[0] = key
+					lastI := 0
 					for j := i + 1; j < i+10 && j < end; j++ {
 						keys[j-i] = x.DataKey(q.Attr, q.UidList.Uids[j])
+						lastI = j - i
 					}
-					cache, err = qs.cache.GetBatchSinglePosting(keys)
+					cache, err = qs.cache.GetBatchSinglePosting(keys[:lastI+1])
 					if err != nil {
 						return err
 					}
