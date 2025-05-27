@@ -642,6 +642,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
+
+	l.calculateUids()
 	return l, nil
 }
 

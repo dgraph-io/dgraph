@@ -1738,7 +1738,6 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		l.calculateUids()
 		if l.mutationMap != nil && l.mutationMap.isUidsCalculated {
 			l.RLock()
 			defer l.RUnlock()
