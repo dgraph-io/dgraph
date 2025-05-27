@@ -612,6 +612,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
+			l.calculateUids()
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
