@@ -16,6 +16,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
@@ -1120,6 +1121,8 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 		return fromNode.Vals, nil
 	}
 
+	//now := time.Now()
+
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
 		if fromNode.path[idx] != toPath[idx] {
@@ -1131,13 +1134,28 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 		return fromNode.Vals, nil
 	}
 
+	fromStr := []string{}
+	toStr := []string{}
+
+	for i := range fromNode.path {
+		fromStr = append(fromStr, fromNode.path[i].Attr)
+	}
+
+	for i := range toPath {
+		toStr = append(toStr, toPath[i].Attr)
+	}
+
+	// defer func () {
+	// 	fmt.Println("TransformTo", fromStr, toStr, time.Since(now))
+	// }()
+
 	newMap := fromNode.Vals
 	for ; idx < len(toPath); idx++ {
 		curNode := toPath[idx]
-		tempMap := make(map[uint64]types.Val)
 		if idx == 0 {
 			continue
 		}
+		tempMap := make(map[uint64]types.Val, len(curNode.uidMatrix))
 
 		for i := range curNode.uidMatrix {
 			ul := curNode.uidMatrix[i]
@@ -1200,6 +1218,11 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		return nil
 	}
 
+	// now := time.Now()
+	// defer func() {
+	// 	fmt.Println("ValueVarAggregation", sg.Attr, time.Since(now))
+	// }()
+
 	// Aggregation function won't be present at root.
 	if sg.Params.IsEmpty && parent == nil {
 		return nil
@@ -1207,10 +1230,12 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 
 	switch {
 	case sg.IsGroupBy():
+		// fmt.Println("GROUP BY", sg.Attr)
 		if err := sg.processGroupBy(doneVars, path); err != nil {
 			return err
 		}
 	case sg.SrcFunc != nil && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc.Name):
+		// fmt.Println("AGGREGATION", sg.Attr)
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
 		if err != nil {
@@ -1223,16 +1248,19 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		sg.Params.UidToVal = mp
 	case sg.MathExp != nil:
+		// fmt.Println("MATH EXP", sg.Attr)
 		// Preprocess to bring all variables to the same level.
 		err := sg.transformVars(doneVars, path)
 		if err != nil {
 			return err
 		}
 
+		//t := time.Now()
 		err = evalMathTree(sg.MathExp)
 		if err != nil {
 			return err
 		}
+		//fmt.Println("MATH TREE EVAL TIME", time.Since(t))
 
 		switch {
 		case len(sg.MathExp.Val) != 0:
@@ -1288,12 +1316,14 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		// Put it in this node.
 	case len(sg.Params.NeedsVar) > 0:
+		//fmt.Println("NEEDS VAR", sg.Attr)
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
 		// The value var can be empty. No need to check for nil.
 		sg.Params.UidToVal = srcMap.Vals
 	case sg.Attr == "uid" && sg.Params.DoCount:
+		//fmt.Println("COUNT UID", sg.Attr)
 		// This is the count(uid) case.
 		// We will do the computation later while constructing the result.
 	default:
@@ -1305,6 +1335,12 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path []*SubGraph,
 	parent *SubGraph) error {
+	// now := time.Now()
+	// fmt.Println("****STARTING POST AGGREGATION", sg.Attr)
+	// defer func() {
+	// 	fmt.Println("****FINISHING POST AGGREGATION", sg.Attr, time.Since(now))
+	// }()
+
 	for idx := range sg.Children {
 		child := sg.Children[idx]
 		path = append(path, sg)
@@ -2846,17 +2882,19 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 				continue
 			}
 
+			_, spana := otel.Tracer("").Start(ctx, "Recursive Fill Vars"+sg.Attr)
 			err = sg.recursiveFillVars(req.Vars)
 			if err != nil {
 				return err
 			}
+			spana.End()
 			hasExecuted[idx] = true
 			numQueriesDone++
 			idxList = append(idxList, idx)
 			// A query doesn't need to be executed if
 			// 1. It just does aggregation and math functions which is when sg.Params.IsEmpty is true.
 			// 2. Its has an inequality fn at root without any args which can happen when it uses
-			// value variables for args which don't expand to any value.
+			// value varProcessGraphiables for args which don't expand to any value.
 			if sg.Params.IsEmpty || isEmptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
@@ -2901,13 +2939,16 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		// If the executed subgraph had some variable defined in it, Populate it in the map.
 		for _, idx := range idxList {
 			sg := req.Subgraphs[idx]
+			_, spann := otel.Tracer("").Start(ctx, "Populate Var Map "+sg.Attr)
 
 			var sgPath []*SubGraph
 			if err := sg.populateVarMap(req.Vars, sgPath); err != nil {
 				return err
 			}
-			// first time at the root here.
+			spann.End()
 
+			// first time at the root here.
+			_, spana := otel.Tracer("").Start(ctx, "Update Uid Matrix Var Map "+sg.Attr)
 			// Apply pagination at the root after @cascade.
 			if len(sg.Params.Cascade.Fields) > 0 && (sg.Params.Cascade.First != 0 || sg.Params.Cascade.Offset != 0) {
 				sg.updateUidMatrix()
@@ -2917,10 +2958,16 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 					sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
 				}
 			}
+			spana.End()
 
+			_, spanp := otel.Tracer("").Start(ctx, "Populate Post Aggregation Var Map "+sg.Attr)
+			fmt.Println("*********STARTING QUERY PART", sg.Attr)
+			t := time.Now()
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
+			fmt.Println("*********FINISHING QUERY PART", sg.Attr, time.Since(t))
+			spanp.End()
 		}
 	}
 

@@ -6,6 +6,8 @@
 package query
 
 import (
+	"sync"
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -244,13 +246,16 @@ func evalMathTree(mNode *mathTree) error {
 		return nil
 	}
 
+	var wg sync.WaitGroup
 	for _, child := range mNode.Child {
 		// Process the child nodes first.
-		err := evalMathTree(child)
-		if err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			evalMathTree(child)
+		}()
 	}
+	wg.Wait()
 
 	aggName := mNode.Fn
 	if isUnary(aggName) {
