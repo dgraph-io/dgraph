@@ -250,10 +250,7 @@ func processTernary(mNode *mathTree) error {
 	return nil
 }
 
-var a = 0
-
 func evalMathTree(mNode *mathTree) error {
-	a += 1
 	if mNode.Const.Value != nil {
 		return nil
 	}

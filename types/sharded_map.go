@@ -7,11 +7,15 @@
 // are of "miscellaneous" nature, e.g., error checking.
 package types
 
+import (
+	"sync"
+)
+
 type ShardedMap struct {
 	Shards []map[uint64]Val
 }
 
-const NumShards = 10
+const NumShards = 30
 
 func NewShardedMap() *ShardedMap {
 	shards := make([]map[uint64]Val, NumShards)
@@ -19,6 +23,31 @@ func NewShardedMap() *ShardedMap {
 		shards[i] = make(map[uint64]Val)
 	}
 	return &ShardedMap{Shards: shards}
+}
+
+func (s *ShardedMap) Merge(other *ShardedMap, ag func(a, b Val) Val) {
+	var wg sync.WaitGroup
+	for i := range s.Shards {
+		wg.Add(1)
+		go func(i int) {
+			for k, v := range s.Shards[i] {
+				val, ok := other.Shards[i][k]
+				if !ok {
+					continue
+				}
+				s.Shards[i][k] = ag(val, v)
+			}
+			for k, v := range other.Shards[i] {
+				if _, ok := s.Shards[i][k]; ok {
+					continue
+				}
+				s.Shards[i][k] = v
+			}
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func (s *ShardedMap) GetShardOrNil(key int) map[uint64]Val {

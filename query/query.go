@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -1125,7 +1126,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 		return fromNode.Vals, nil
 	}
 
-	//now := time.Now()
+	now := time.Now()
 
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
@@ -1149,9 +1150,9 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 		toStr = append(toStr, toPath[i].Attr)
 	}
 
-	// defer func () {
-	// 	fmt.Println("TransformTo", fromStr, toStr, time.Since(now))
-	// }()
+	defer func() {
+		fmt.Println("TransformTo", fromStr, toStr, time.Since(now))
+	}()
 
 	newMap := fromNode.Vals
 	for ; idx < len(toPath); idx++ {
@@ -1159,37 +1160,79 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 		if idx == 0 {
 			continue
 		}
-		tempMap := types.NewShardedMap()
 
-		for i := range curNode.uidMatrix {
-			ul := curNode.uidMatrix[i]
-			srcUid := curNode.SrcUIDs.Uids[i]
-			curVal, ok := newMap.Get(srcUid)
-			if !ok || curVal.Value == nil {
-				continue
-			}
-			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
-				return nil, errors.Errorf("Encountered non int/float type for summing")
-			}
-			for j := range ul.Uids {
-				dstUid := ul.Uids[j]
-				ag := aggregator{name: "sum"}
-				if err := ag.Apply(curVal); err != nil {
-					return nil, errors.Errorf("Error in applying aggregation %s", err)
-				}
-				if tempVal, ok := tempMap.Get(dstUid); ok {
-					if err := ag.Apply(tempVal); err != nil {
-						return nil, errors.Errorf("Error in applying aggregation %s", err)
-					}
-				}
-				val, err := ag.Value()
-				if err != nil {
+		var mutex sync.Mutex
+		var resultMap *types.ShardedMap
+
+		calculate := func(start, end int) {
+			tempMap := types.NewShardedMap()
+
+			for i := start; i < end; i++ {
+				ul := curNode.uidMatrix[i]
+				srcUid := curNode.SrcUIDs.Uids[i]
+				curVal, ok := newMap.Get(srcUid)
+				if !ok || curVal.Value == nil {
 					continue
 				}
-				tempMap.Set(dstUid, val)
+				if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
+					fmt.Println(errors.Errorf("Encountered non int/float type for summing"))
+					return
+				}
+				for j := range ul.Uids {
+					dstUid := ul.Uids[j]
+					ag := aggregator{name: "sum"}
+					if err := ag.Apply(curVal); err != nil {
+						fmt.Println(errors.Errorf("Error in applying aggregation %s", err))
+						return
+					}
+					if tempVal, ok := tempMap.Get(dstUid); ok {
+						if err := ag.Apply(tempVal); err != nil {
+							fmt.Println(errors.Errorf("Error in applying aggregation %s", err))
+							return
+						}
+					}
+					val, err := ag.Value()
+					if err != nil {
+						continue
+					}
+					tempMap.Set(dstUid, val)
+				}
+			}
+
+			mutex.Lock()
+			defer mutex.Unlock()
+			if resultMap == nil {
+				resultMap = tempMap
+			} else {
+				resultMap.Merge(tempMap, func(a, b types.Val) types.Val {
+					ag := &aggregator{name: "sum"}
+					ag.Apply(a)
+					ag.Apply(b)
+					v, _ := ag.Value()
+					return v
+				})
 			}
 		}
-		newMap = tempMap
+
+		numGo := 4
+		width := len(curNode.uidMatrix) / numGo
+		var wg sync.WaitGroup
+		for i := 0; i < numGo; i++ {
+			start := i * width
+			end := (i + 1) * width
+			if i == numGo-1 {
+				end = len(curNode.uidMatrix)
+			}
+			wg.Add(1)
+			go func() {
+				calculate(start, end)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		newMap = resultMap
+
 	}
 	return newMap, nil
 }
@@ -1262,9 +1305,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 
 		t := time.Now()
-		a = 0
 		err = evalMathTree(sg.MathExp)
-		fmt.Println("ALL NODES: ", a)
 		if err != nil {
 			return err
 		}
@@ -2990,12 +3031,9 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			spana.End()
 
 			_, spanp := otel.Tracer("").Start(ctx, "Populate Post Aggregation Var Map "+sg.Attr)
-			fmt.Println("*********STARTING QUERY PART", sg.Attr)
-			t := time.Now()
 			if err := sg.populatePostAggregation(req.Vars, []*SubGraph{}, nil); err != nil {
 				return err
 			}
-			fmt.Println("*********FINISHING QUERY PART", sg.Attr, time.Since(t))
 			spanp.End()
 		}
 	}
