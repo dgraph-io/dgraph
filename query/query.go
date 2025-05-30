@@ -1126,8 +1126,6 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 		return fromNode.Vals, nil
 	}
 
-	now := time.Now()
-
 	idx := 0
 	for ; idx < len(fromNode.path); idx++ {
 		if fromNode.path[idx] != toPath[idx] {
@@ -1138,21 +1136,6 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 	if fromNode.Vals.Len() == 0 {
 		return fromNode.Vals, nil
 	}
-
-	fromStr := []string{}
-	toStr := []string{}
-
-	for i := range fromNode.path {
-		fromStr = append(fromStr, fromNode.path[i].Attr)
-	}
-
-	for i := range toPath {
-		toStr = append(toStr, toPath[i].Attr)
-	}
-
-	defer func() {
-		fmt.Println("TransformTo", fromStr, toStr, time.Since(now))
-	}()
 
 	newMap := fromNode.Vals
 	for ; idx < len(toPath); idx++ {
@@ -1175,19 +1158,17 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 					continue
 				}
 				if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
-					fmt.Println(errors.Errorf("Encountered non int/float type for summing"))
 					return
 				}
+				ag := aggregator{name: "sum"}
 				for j := range ul.Uids {
+					ag.result = types.Val{}
 					dstUid := ul.Uids[j]
-					ag := aggregator{name: "sum"}
 					if err := ag.Apply(curVal); err != nil {
-						fmt.Println(errors.Errorf("Error in applying aggregation %s", err))
 						return
 					}
 					if tempVal, ok := tempMap.Get(dstUid); ok {
 						if err := ag.Apply(tempVal); err != nil {
-							fmt.Println(errors.Errorf("Error in applying aggregation %s", err))
 							return
 						}
 					}
@@ -1267,11 +1248,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		return nil
 	}
 
-	// now := time.Now()
-	// defer func() {
-	// 	fmt.Println("ValueVarAggregation", sg.Attr, time.Since(now))
-	// }()
-
 	// Aggregation function won't be present at root.
 	if sg.Params.IsEmpty && parent == nil {
 		return nil
@@ -1279,12 +1255,10 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 
 	switch {
 	case sg.IsGroupBy():
-		// fmt.Println("GROUP BY", sg.Attr)
 		if err := sg.processGroupBy(doneVars, path); err != nil {
 			return err
 		}
 	case sg.SrcFunc != nil && !parent.IsGroupBy() && isAggregatorFn(sg.SrcFunc.Name):
-		// fmt.Println("AGGREGATION", sg.Attr)
 		// Aggregate the value over level.
 		mp, err := evalLevelAgg(doneVars, sg, parent)
 		if err != nil {
@@ -1297,19 +1271,16 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		sg.Params.UidToVal = mp
 	case sg.MathExp != nil:
-		// fmt.Println("MATH EXP", sg.Attr)
 		// Preprocess to bring all variables to the same level.
 		err := sg.transformVars(doneVars, path)
 		if err != nil {
 			return err
 		}
 
-		t := time.Now()
 		err = evalMathTree(sg.MathExp)
 		if err != nil {
 			return err
 		}
-		fmt.Println("MATH TREE EVAL TIME", time.Since(t))
 
 		switch {
 		case sg.MathExp.Val.Len() != 0:
@@ -1372,14 +1343,12 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 		}
 		// Put it in this node.
 	case len(sg.Params.NeedsVar) > 0:
-		//fmt.Println("NEEDS VAR", sg.Attr)
 		// This is a var() block.
 		srcVar := sg.Params.NeedsVar[0]
 		srcMap := doneVars[srcVar.Name]
 		// The value var can be empty. No need to check for nil.
 		sg.Params.UidToVal = srcMap.Vals
 	case sg.Attr == "uid" && sg.Params.DoCount:
-		//fmt.Println("COUNT UID", sg.Attr)
 		// This is the count(uid) case.
 		// We will do the computation later while constructing the result.
 	default:
@@ -1391,11 +1360,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 
 func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path []*SubGraph,
 	parent *SubGraph) error {
-	// now := time.Now()
-	// fmt.Println("****STARTING POST AGGREGATION", sg.Attr)
-	// defer func() {
-	// 	fmt.Println("****FINISHING POST AGGREGATION", sg.Attr, time.Since(now))
-	// }()
 
 	for idx := range sg.Children {
 		child := sg.Children[idx]
