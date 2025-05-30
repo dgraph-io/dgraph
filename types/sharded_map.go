@@ -11,12 +11,21 @@ type ShardedMap struct {
 	Shards []map[uint64]Val
 }
 
+const NumShards = 10
+
 func NewShardedMap() *ShardedMap {
-	shards := make([]map[uint64]Val, 10)
+	shards := make([]map[uint64]Val, NumShards)
 	for i := range shards {
 		shards[i] = make(map[uint64]Val)
 	}
 	return &ShardedMap{Shards: shards}
+}
+
+func (s *ShardedMap) GetShardOrNil(key int) map[uint64]Val {
+	if s == nil {
+		return make(map[uint64]Val)
+	}
+	return s.Shards[key]
 }
 
 func (s *ShardedMap) init() {

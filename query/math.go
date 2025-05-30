@@ -97,22 +97,23 @@ func processBinary(mNode *mathTree) error {
 		var wg sync.WaitGroup
 		returnMap := types.NewShardedMap()
 
-		if mpl.Len() != 0 {
-			for i := range mpl.Shards {
-				wg.Add(1)
-				go func(i int) {
-					defer wg.Done()
-					for k := range mpl.Shards[i] {
-						f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
+		for i := range types.NumShards {
+			wg.Add(1)
+			mlps := mpl.GetShardOrNil(i)
+			mprs := mpr.GetShardOrNil(i)
+			destMapi := returnMap.GetShardOrNil(i)
+			go func(i int) {
+				defer wg.Done()
+				for k := range mlps {
+					f(k, &mlps, &mprs, &destMapi)
+				}
+				for k := range mprs {
+					if _, ok := mlps[k]; ok {
+						continue
 					}
-					for k := range mpr.Shards[i] {
-						if _, ok := mpl.Shards[i][k]; ok {
-							continue
-						}
-						f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
-					}
-				}(i)
-			}
+					f(k, &mlps, &mprs, &destMapi)
+				}
+			}(i)
 		}
 
 		wg.Wait()
