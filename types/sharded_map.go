@@ -35,6 +35,9 @@ func (s *ShardedMap) Get(key uint64) (Val, bool) {
 }
 
 func (s *ShardedMap) Len() int {
+	if s == nil {
+		return 0
+	}
 	var count int
 	for _, shard := range s.Shards {
 		count += len(shard)
