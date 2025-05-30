@@ -19,16 +19,28 @@ func NewShardedMap() *ShardedMap {
 	return &ShardedMap{Shards: shards}
 }
 
+func (s *ShardedMap) init() {
+	if s == nil {
+		s = NewShardedMap()
+	}
+}
+
 func (s *ShardedMap) getShard(key uint64) map[uint64]Val {
 	return s.Shards[key%uint64(len(s.Shards))]
 }
 
 func (s *ShardedMap) Set(key uint64, value Val) {
+	if s == nil {
+		s.init()
+	}
 	shard := s.getShard(key)
 	shard[key] = value
 }
 
 func (s *ShardedMap) Get(key uint64) (Val, bool) {
+	if s == nil {
+		return Val{}, false
+	}
 	shard := s.getShard(key)
 	val, ok := shard[key]
 	return val, ok

@@ -77,7 +77,7 @@ func processBinary(mNode *mathTree) error {
 	// If mpl or mpr have 0 and just 0 in it, that means it's an output of aggregation somewhere.
 	// This value would need to be applied to all.
 	checkAggrResult := func(value *types.ShardedMap) (types.Val, bool) {
-		if len(value.Shards) != 1 {
+		if value.Len() != 1 {
 			return types.Val{}, false
 		}
 
@@ -93,24 +93,26 @@ func processBinary(mNode *mathTree) error {
 		mpr = nil
 	}
 
-	if len(mpl.Shards) != 0 || len(mpr.Shards) != 0 {
+	if mpl.Len() != 0 || mpr.Len() != 0 {
 		var wg sync.WaitGroup
 		returnMap := types.NewShardedMap()
 
-		for i := range mpl.Shards {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				for k := range mpl.Shards[i] {
-					f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
-				}
-				for k := range mpr.Shards[i] {
-					if _, ok := mpl.Shards[i][k]; ok {
-						continue
+		if mpl.Len() != 0 {
+			for i := range mpl.Shards {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					for k := range mpl.Shards[i] {
+						f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
 					}
-					f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
-				}
-			}(i)
+					for k := range mpr.Shards[i] {
+						if _, ok := mpl.Shards[i][k]; ok {
+							continue
+						}
+						f(k, &mpl.Shards[i], &mpr.Shards[i], &returnMap.Shards[i])
+					}
+				}(i)
+			}
 		}
 
 		wg.Wait()
