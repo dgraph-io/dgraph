@@ -1,6 +1,5 @@
 name: Trunk Code Quality
 on:
-  workflow_dispatch:
   pull_request:
     branches: main
 
