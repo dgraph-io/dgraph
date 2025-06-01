@@ -5,7 +5,7 @@ go 1.24.3
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
-	github.com/IBM/sarama v1.45.1
+	github.com/IBM/sarama v1.45.2
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.5.1
 	github.com/dgraph-io/badger/v4 v4.7.0
@@ -33,7 +33,7 @@ require (
 	github.com/graph-gophers/graphql-go v1.6.0
 	github.com/hashicorp/vault/api v1.16.0
 	github.com/klauspost/compress v1.18.0
-	github.com/mark3labs/mcp-go v0.29.0
+	github.com/mark3labs/mcp-go v0.30.0
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/paulmach/go.geojson v1.5.0
 	github.com/pkg/errors v0.9.1
@@ -50,8 +50,8 @@ require (
 	github.com/xdg/scram v1.0.5
 	go.etcd.io/etcd/raft/v3 v3.5.21
 	go.opencensus.io v0.24.0
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
-	go.opentelemetry.io/contrib/zpages v0.60.0
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0
+	go.opentelemetry.io/contrib/zpages v0.61.0
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.36.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.36.0
