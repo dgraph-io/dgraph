@@ -7,7 +7,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/DataDog/opencensus-go-exporter-datadog v0.0.0-20220622145613-731d59e8b567
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
-	github.com/IBM/sarama v1.45.2
+	github.com/IBM/sarama v1.45.0
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.4.4
 	github.com/dgraph-io/badger/v4 v4.5.2
@@ -25,11 +25,11 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/golang/geo 92f93c4cb289
+	github.com/golang/geo v0.0.0-20250516193853-92f93c4cb289
 	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v0.0.4
 	github.com/google/codesearch v1.2.0
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/graph-gophers/graphql-go v1.5.0
