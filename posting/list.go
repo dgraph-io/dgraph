@@ -1020,6 +1020,8 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	l.mutationMap.currentEntries = nil
 	l.mutationMap.readTs = 0
 	l.mutationMap.currentUids = nil
+	l.mutationMap.isUidsCalculated = false
+	l.mutationMap.calculatedUids = nil
 
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
