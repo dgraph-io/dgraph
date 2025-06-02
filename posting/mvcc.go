@@ -604,9 +604,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 
 			l.minTs = item.Version()
-			if l.mutationMap == nil {
-				l.mutationMap = newMutableLayer()
-			}
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil
@@ -692,7 +689,12 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 		return l, err
 	}
 	if readUids {
-		l.calculateUids()
+		if l.mutationMap == nil {
+			l.mutationMap = newMutableLayer()
+		}
+		if err := l.calculateUids(); err != nil {
+			return nil, err
+		}
 	}
 	return l, nil
 }
