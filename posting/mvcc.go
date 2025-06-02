@@ -692,9 +692,9 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 		if l.mutationMap == nil {
 			l.mutationMap = newMutableLayer()
 		}
-		// if err := l.calculateUids(); err != nil {
-		// 	return nil, err
-		// }
+		if err := l.calculateUids(); err != nil {
+			return nil, err
+		}
 	}
 	return l, nil
 }
