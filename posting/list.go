@@ -161,6 +161,8 @@ func (mm *MutableLayer) setCurrentEntries(ts uint64, pl *pb.PostingList) {
 	mm.readTs = ts
 	mm.currentEntries = pl
 	clear(mm.currentUids)
+	mm.isUidsCalculated = false
+	mm.calculatedUids = nil
 	mm.deleteAllMarker = math.MaxUint64
 	mm.populateUidMap(pl)
 }
@@ -1729,6 +1731,13 @@ func (l *List) calculateUids() error {
 	return nil
 }
 
+func (l *List) canUseCalculatedUids() bool {
+	if l.mutationMap == nil {
+		return false
+	}
+	return l.mutationMap.isUidsCalculated && l.mutationMap.currentEntries == nil
+}
+
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
@@ -1738,7 +1747,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		if l.mutationMap != nil && l.mutationMap.isUidsCalculated {
+		if l.canUseCalculatedUids() {
 			l.RLock()
 			defer l.RUnlock()
 			out := &pb.List{Uids: l.mutationMap.calculatedUids}
