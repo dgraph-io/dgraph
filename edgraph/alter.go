@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/hypermodeinc/dgraph/v25/dql"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
 	"github.com/hypermodeinc/dgraph/v25/query"
@@ -28,7 +28,7 @@ import (
 )
 
 type ServerV25 struct {
-	apiv25.UnimplementedDgraphServer
+	apiv2.UnimplementedDgraphServer
 }
 
 func validateAlterReq(ctx context.Context) error {
@@ -74,7 +74,7 @@ func executeDropAll(ctx context.Context, startTs uint64) error {
 	return nil
 }
 
-func executeDropAllInNs(ctx context.Context, startTs uint64, req *apiv25.AlterRequest) error {
+func executeDropAllInNs(ctx context.Context, startTs uint64, req *apiv2.AlterRequest) error {
 	ctx = x.AttachJWTNamespace(ctx)
 
 	nsID, err := getNamespaceIDFromName(ctx, req.NsName)
@@ -108,7 +108,7 @@ func executeDropAllInNs(ctx context.Context, startTs uint64, req *apiv25.AlterRe
 	}
 
 	err = x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {
-		return createGuardianAndGroot(x.AttachNamespace(ctx, nsID), nsID, "password")
+		return createGuardianAndGroot(x.AttachNamespace(ctx, nsID), "password")
 	})
 	if err != nil {
 		return errors.Wrapf(err, "Failed to create guardian and groot: ")
@@ -117,7 +117,7 @@ func executeDropAllInNs(ctx context.Context, startTs uint64, req *apiv25.AlterRe
 	return nil
 }
 
-func executeDropData(ctx context.Context, startTs uint64, req *apiv25.AlterRequest) error {
+func executeDropData(ctx context.Context, startTs uint64, req *apiv2.AlterRequest) error {
 	nsID, err := getNamespaceIDFromName(x.AttachJWTNamespace(ctx), req.NsName)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func executeDropData(ctx context.Context, startTs uint64, req *apiv25.AlterReque
 	return nil
 }
 
-func executeDropPredicate(ctx context.Context, startTs uint64, req *apiv25.AlterRequest) error {
+func executeDropPredicate(ctx context.Context, startTs uint64, req *apiv2.AlterRequest) error {
 	if len(req.PredicateToDrop) == 0 {
 		return errors.Errorf("PredicateToDrop cannot be empty")
 	}
@@ -195,7 +195,7 @@ func executeDropPredicate(ctx context.Context, startTs uint64, req *apiv25.Alter
 	return nil
 }
 
-func executeDropType(ctx context.Context, startTs uint64, req *apiv25.AlterRequest) error {
+func executeDropType(ctx context.Context, startTs uint64, req *apiv2.AlterRequest) error {
 	if len(req.TypeToDrop) == 0 {
 		return errors.Errorf("TypeToDrop cannot be empty")
 	}
@@ -219,7 +219,7 @@ func executeDropType(ctx context.Context, startTs uint64, req *apiv25.AlterReque
 	return nil
 }
 
-func executeSetSchema(ctx context.Context, startTs uint64, req *apiv25.AlterRequest) error {
+func executeSetSchema(ctx context.Context, startTs uint64, req *apiv2.AlterRequest) error {
 	nsID, err := getNamespaceIDFromName(x.AttachJWTNamespace(ctx), req.NsName)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func executeSetSchema(ctx context.Context, startTs uint64, req *apiv25.AlterRequ
 }
 
 // Alter handles requests to change the schema or remove parts or all of the data.
-func (s *ServerV25) Alter(ctx context.Context, req *apiv25.AlterRequest) (*apiv25.AlterResponse, error) {
+func (s *ServerV25) Alter(ctx context.Context, req *apiv2.AlterRequest) (*apiv2.AlterResponse, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "ServerV25.Alter")
 	defer span.End()
 	span.AddEvent("Alter operation", trace.WithAttributes(attribute.String("request", req.String())))
@@ -274,19 +274,19 @@ func (s *ServerV25) Alter(ctx context.Context, req *apiv25.AlterRequest) (*apiv2
 	// but is required if it lies on some other machine. Let's get it for safety.
 	startTs := worker.State.GetTimestamp(false)
 
-	empty := &apiv25.AlterResponse{}
+	empty := &apiv2.AlterResponse{}
 	switch req.Op {
-	case apiv25.AlterOp_DROP_ALL:
+	case apiv2.AlterOp_DROP_ALL:
 		return empty, executeDropAll(ctx, startTs)
-	case apiv25.AlterOp_DROP_ALL_IN_NS:
+	case apiv2.AlterOp_DROP_ALL_IN_NS:
 		return empty, executeDropAllInNs(ctx, startTs, req)
-	case apiv25.AlterOp_DROP_DATA_IN_NS:
+	case apiv2.AlterOp_DROP_DATA_IN_NS:
 		return empty, executeDropData(ctx, startTs, req)
-	case apiv25.AlterOp_DROP_PREDICATE_IN_NS:
+	case apiv2.AlterOp_DROP_PREDICATE_IN_NS:
 		return empty, executeDropPredicate(ctx, startTs, req)
-	case apiv25.AlterOp_DROP_TYPE_IN_NS:
+	case apiv2.AlterOp_DROP_TYPE_IN_NS:
 		return empty, executeDropType(ctx, startTs, req)
-	case apiv25.AlterOp_SCHEMA_IN_NS:
+	case apiv2.AlterOp_SCHEMA_IN_NS:
 		return empty, executeSetSchema(ctx, startTs, req)
 	default:
 		return empty, errors.Errorf("invalid operation in Alter Request")

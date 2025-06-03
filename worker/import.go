@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 
-	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/conn"
 	"github.com/hypermodeinc/dgraph/v25/posting"
@@ -25,8 +25,8 @@ import (
 
 // streamProcessor defines the common interface for stream processing
 type streamProcessor interface {
-	SendAndClose(*apiv25.StreamPDirResponse) error
-	Recv() (*apiv25.StreamPDirRequest, error)
+	SendAndClose(*apiv2.StreamPDirResponse) error
+	Recv() (*apiv2.StreamPDirRequest, error)
 	grpc.ServerStream
 }
 
@@ -70,7 +70,7 @@ func ProposeDrain(ctx context.Context, drainMode *pb.DrainModeRequest) ([]uint32
 // with the leader of that group and streams data to it. The function returns an error if
 // there are any issues in the process, such as a broken connection or failure to establish
 // a stream with the leader.
-func InStream(stream apiv25.Dgraph_StreamPDirServer) error {
+func InStream(stream apiv2.Dgraph_StreamPDirServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return fmt.Errorf("failed to receive initial stream message: %v", err)
@@ -97,8 +97,8 @@ func InStream(stream apiv25.Dgraph_StreamPDirServer) error {
 	return pipeTwoStream(stream, alphaStream)
 }
 
-func pipeTwoStream(in apiv25.Dgraph_StreamPDirServer, out pb.Worker_InternalStreamPDirClient) error {
-	buffer := make(chan *apiv25.StreamPDirRequest, 10)
+func pipeTwoStream(in apiv2.Dgraph_StreamPDirServer, out pb.Worker_InternalStreamPDirClient) error {
+	buffer := make(chan *apiv2.StreamPDirRequest, 10)
 	errCh := make(chan error, 1)
 	ctx := in.Context()
 
@@ -138,11 +138,11 @@ Loop:
 				break Loop
 			}
 
-			data := &apiv25.StreamPDirRequest{StreamPacket: &apiv25.StreamPacket{Data: msg.StreamPacket.Data}}
+			data := &apiv2.StreamPDirRequest{StreamPacket: &apiv2.StreamPacket{Data: msg.StreamPacket.Data}}
 
 			if msg.StreamPacket.Done {
-				d := apiv25.StreamPacket{Done: true}
-				if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: &d}); err != nil {
+				d := apiv2.StreamPacket{Done: true}
+				if err := out.Send(&apiv2.StreamPDirRequest{StreamPacket: &d}); err != nil {
 					glog.Errorf("Error sending 'done' to out stream: %v", err)
 					return err
 				}
@@ -162,7 +162,7 @@ Loop:
 	}
 
 	// Close the incoming stream properly
-	if err := in.SendAndClose(&apiv25.StreamPDirResponse{Done: true}); err != nil {
+	if err := in.SendAndClose(&apiv2.StreamPDirResponse{Done: true}); err != nil {
 		return fmt.Errorf("failed to send close on in: %v", err)
 	}
 
@@ -178,7 +178,7 @@ Loop:
 
 // flushKvs receives the stream of data from the client and writes it to BadgerDB.
 // It also sends a streams the data to other nodes of the same group and reloads the schema from the DB.
-func flushKvs(stream apiv25.Dgraph_StreamPDirServer) error {
+func flushKvs(stream apiv2.Dgraph_StreamPDirServer) error {
 	if err := processStreamData(stream); err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func processStreamData(stream streamProcessor) error {
 	glog.Info("[import] P dir writes DONE. Sending ACK")
 
 	// Send an acknowledgment to the leader indicating completion.
-	return stream.SendAndClose(&apiv25.StreamPDirResponse{Done: true})
+	return stream.SendAndClose(&apiv2.StreamPDirResponse{Done: true})
 }
 
 func postStreamProcessing(ctx context.Context) error {

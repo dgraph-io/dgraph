@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/dgraph-io/badger/v4"
-	apiv25 "github.com/dgraph-io/dgo/v250/protos/api.v25"
+	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/dgraph-io/ristretto/v2/z"
 
 	"github.com/golang/glog"
@@ -24,14 +24,14 @@ import (
 )
 
 // newClient creates a new import client with the specified endpoint and gRPC options.
-func newClient(endpoint string, opts grpc.DialOption) (apiv25.DgraphClient, error) {
+func newClient(endpoint string, opts grpc.DialOption) (apiv2.DgraphClient, error) {
 	conn, err := grpc.NewClient(endpoint, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to endpoint [%s]: %w", endpoint, err)
 	}
 
 	glog.Infof("Successfully connected to Dgraph endpoint: %s", endpoint)
-	return apiv25.NewDgraphClient(conn), nil
+	return apiv2.NewDgraphClient(conn), nil
 }
 
 func Import(ctx context.Context, endpoint string, opts grpc.DialOption, bulkOutDir string) error {
@@ -48,9 +48,9 @@ func Import(ctx context.Context, endpoint string, opts grpc.DialOption, bulkOutD
 }
 
 // startPDirStream initiates a snapshot stream session with the Dgraph server.
-func startPDirStream(ctx context.Context, dc apiv25.DgraphClient) (*apiv25.InitiatePDirStreamResponse, error) {
+func startPDirStream(ctx context.Context, dc apiv2.DgraphClient) (*apiv2.InitiatePDirStreamResponse, error) {
 	glog.Info("Initiating pdir stream")
-	req := &apiv25.InitiatePDirStreamRequest{}
+	req := &apiv2.InitiatePDirStreamRequest{}
 	resp, err := dc.InitiatePDirStream(ctx, req)
 	if err != nil {
 		glog.Errorf("failed to initiate pdir stream: %v", err)
@@ -63,7 +63,7 @@ func startPDirStream(ctx context.Context, dc apiv25.DgraphClient) (*apiv25.Initi
 // sendPDir takes a p directory and a set of group IDs and streams the data from the
 // p directory to the corresponding group IDs. It first scans the provided directory for
 // subdirectories named with numeric group IDs.
-func sendPDir(ctx context.Context, dg apiv25.DgraphClient, baseDir string, groups []uint32) error {
+func sendPDir(ctx context.Context, dg apiv2.DgraphClient, baseDir string, groups []uint32) error {
 	glog.Infof("Starting to stream pdir from directory: %s", baseDir)
 
 	errG, ctx := errgroup.WithContext(ctx)
@@ -94,7 +94,7 @@ func sendPDir(ctx context.Context, dg apiv25.DgraphClient, baseDir string, group
 
 // streamData handles the actual data streaming process for a single group.
 // It opens the BadgerDB at the specified directory and streams all data to the server.
-func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupId uint32) error {
+func streamData(ctx context.Context, dg apiv2.DgraphClient, pdir string, groupId uint32) error {
 	glog.Infof("Opening stream for group %d from directory %s", groupId, pdir)
 
 	// Initialize stream with the server
@@ -118,7 +118,7 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 
 	// Send group ID as the first message in the stream
 	glog.Infof("Sending group ID [%d] to server", groupId)
-	groupReq := &apiv25.StreamPDirRequest{GroupId: groupId}
+	groupReq := &apiv2.StreamPDirRequest{GroupId: groupId}
 	if err := out.Send(groupReq); err != nil {
 		return fmt.Errorf("failed to send group ID [%d]: %w", groupId, err)
 	}
@@ -129,8 +129,8 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 	stream.LogPrefix = fmt.Sprintf("Sending P dir for group [%d]", groupId)
 	stream.KeyToList = nil
 	stream.Send = func(buf *z.Buffer) error {
-		p := &apiv25.StreamPacket{Data: buf.Bytes()}
-		if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: p}); err != nil && !errors.Is(err, io.EOF) {
+		p := &apiv2.StreamPacket{Data: buf.Bytes()}
+		if err := out.Send(&apiv2.StreamPDirRequest{StreamPacket: p}); err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to send data chunk: %w", err)
 		}
 		return nil
@@ -143,9 +143,9 @@ func streamData(ctx context.Context, dg apiv25.DgraphClient, pdir string, groupI
 
 	// Send the final 'done' signal to mark completion
 	glog.Infof("Sending completion signal for group [%d]", groupId)
-	done := &apiv25.StreamPacket{Done: true}
+	done := &apiv2.StreamPacket{Done: true}
 
-	if err := out.Send(&apiv25.StreamPDirRequest{StreamPacket: done}); err != nil && !errors.Is(err, io.EOF) {
+	if err := out.Send(&apiv2.StreamPDirRequest{StreamPacket: done}); err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("failed to send 'done' signal for group [%d]: %w", groupId, err)
 	}
 	// Wait for acknowledgment from the server

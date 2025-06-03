@@ -73,7 +73,7 @@ jobs:
       - name: Upload Test Results
         if: always() # Upload the results even if the tests fail
         continue-on-error: true # don't fail this job if the upload fails
-        uses: trunk-io/analytics-uploader@main
+        uses: trunk-io/analytics-uploader@v1
         with:
           junit-paths: ./test-results.xml
           org-slug: hypermode
