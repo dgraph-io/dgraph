@@ -780,6 +780,9 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate, hasCountI
 		l.mutationMap.currentEntries = &pb.PostingList{}
 	}
 
+	l.mutationMap.isUidsCalculated = false
+	l.mutationMap.calculatedUids = nil
+
 	if singleUidUpdate {
 		// This handles the special case when adding a value to predicates of type uid.
 		// The current value should be deleted in favor of this value. This needs to
