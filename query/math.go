@@ -6,6 +6,7 @@
 package query
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/golang/glog"
@@ -45,6 +46,10 @@ func processBinary(mNode *mathTree) error {
 	cl := mNode.Child[0].Const
 	cr := mNode.Child[1].Const
 
+	fmt.Println("PROCESS BINARY")
+	mpl.Print()
+	mpr.Print()
+
 	f := func(k uint64, lshard, rshard, destMapi *map[uint64]types.Val) error {
 		ag := aggregator{
 			name: aggName,
@@ -59,6 +64,7 @@ func processBinary(mNode *mathTree) error {
 			// Use the constant value that was supplied.
 			rVal = cr
 		}
+		fmt.Println("HERE", lVal, rVal, *lshard, *rshard)
 		err := ag.ApplyVal(lVal)
 		if err != nil {
 			return err
@@ -169,10 +175,7 @@ func processUnary(mNode *mathTree) error {
 		if err != nil {
 			return err
 		}
-		destMap.Set(k, types.Val{
-			Tid:   types.FloatID,
-			Value: value,
-		})
+		destMap.Set(k, value)
 		return nil
 	})
 	mNode.Val = destMap

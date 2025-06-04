@@ -1104,6 +1104,7 @@ func evalLevelAgg(
 			mp.Set(relSG.SrcUIDs.Uids[i], v)
 		}
 	}
+	mp.Print()
 	return mp, nil
 }
 
@@ -1215,6 +1216,9 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 		newMap = resultMap
 
 	}
+
+	fmt.Println("TRANSFORM TO", toPath)
+	newMap.Print()
 	return newMap, nil
 }
 

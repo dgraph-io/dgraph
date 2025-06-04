@@ -8,6 +8,7 @@
 package types
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -23,6 +24,17 @@ func NewShardedMap() *ShardedMap {
 		shards[i] = make(map[uint64]Val)
 	}
 	return &ShardedMap{Shards: shards}
+}
+
+func (s *ShardedMap) Print() {
+	if s == nil {
+		return
+	}
+	for _, shard := range s.Shards {
+		for k, v := range shard {
+			fmt.Printf("%d: %v\n", k, v)
+		}
+	}
 }
 
 func (s *ShardedMap) Merge(other *ShardedMap, ag func(a, b Val) Val) {

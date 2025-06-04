@@ -1636,7 +1636,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 				}
 
 				results := qr.Vars[queryVar.valVar]
-				results.Vals.Iterate(func(uidOfv uint64, v types.Val) error {
+				err := results.Vals.Iterate(func(uidOfv uint64, v types.Val) error {
 					varNameVal, _ := varName.Vals.Get(subjectUid)
 					if v.Value == varNameVal.Value && uidOfv != subjectUid {
 						return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
@@ -1644,6 +1644,9 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 					}
 					return nil
 				})
+				if err != nil {
+					return err
+				}
 				continue
 			} else {
 				predValue = val.Value
