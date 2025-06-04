@@ -1754,10 +1754,26 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	getUidList := func() (*pb.List, error, bool) {
 		if l.canUseCalculatedUids() {
 			l.RLock()
-			defer l.RUnlock()
-			copyArr := make([]uint64, len(l.mutationMap.calculatedUids))
-			copy(copyArr, l.mutationMap.calculatedUids)
+
+			afterIdx := 0
+
+			if opt.AfterUid != 0 {
+				after := sort.Search(len(l.mutationMap.calculatedUids), func(i int) bool {
+					return l.mutationMap.calculatedUids[i] > opt.AfterUid
+				})
+				if after >= len(l.mutationMap.calculatedUids) {
+					l.RUnlock()
+					return &pb.List{}, nil, false
+				}
+
+				afterIdx = after
+			}
+
+			copyArr := make([]uint64, len(l.mutationMap.calculatedUids)-afterIdx)
+			copy(copyArr, l.mutationMap.calculatedUids[afterIdx:])
 			out := &pb.List{Uids: copyArr}
+			l.RUnlock()
+
 			return out, nil, opt.Intersect != nil
 		}
 		// Pre-assign length to make it faster.
@@ -1812,13 +1828,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				}
 				res = append(res, p.Uid)
 
-				if opt.First < 0 {
-					// We need the last N.
-					// TODO: This could be optimized by only considering some of the last UidBlocks.
-					if len(res) > -opt.First {
-						res = res[1:]
-					}
-				} else if len(res) > opt.First {
+				if opt.First != 0 && len(res) > opt.First {
 					return ErrStopIteration
 				}
 			}
@@ -1834,19 +1844,22 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 	// Do The intersection here as it's optimized.
 	out, err, applyIntersectWith := getUidList()
-	if err != nil || !applyIntersectWith {
+	if err != nil || !applyIntersectWith || opt.First == 0 {
 		return out, err
 	}
 
-	lenBefore := len(out.Uids)
-	if opt.Intersect != nil {
+	if opt.Intersect != nil && applyIntersectWith {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
-	lenAfter := len(out.Uids)
-	if lenBefore-lenAfter > 0 {
-		// If we see this log, that means that iterate is going over too many elements that it doesn't need to
-		glog.V(3).Infof("Retrieved a list. length before intersection: %d, length after: %d, extra"+
-			" elements: %d", lenBefore, lenAfter, lenBefore-lenAfter)
+
+	if opt.First != 0 {
+		if opt.First < 0 {
+			if len(out.Uids) > -opt.First {
+				out.Uids = out.Uids[(len(out.Uids) + opt.First):]
+			}
+		} else if len(out.Uids) > opt.First {
+			out.Uids = out.Uids[:opt.First]
+		}
 	}
 	return out, nil
 }
