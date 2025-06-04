@@ -1755,7 +1755,9 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		if l.canUseCalculatedUids() {
 			l.RLock()
 			defer l.RUnlock()
-			out := &pb.List{Uids: l.mutationMap.calculatedUids}
+			copyArr := make([]uint64, len(l.mutationMap.calculatedUids))
+			copy(copyArr, l.mutationMap.calculatedUids)
+			out := &pb.List{Uids: copyArr}
 			return out, nil, opt.Intersect != nil
 		}
 		// Pre-assign length to make it faster.
