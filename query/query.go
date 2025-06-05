@@ -1308,6 +1308,7 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 						v.Tid = types.FloatID
 						v.Value = float64(v.Value.(int64))
 					}
+					sg.MathExp.Val.Set(k, v)
 					return nil
 				})
 				if err != nil {
@@ -1905,6 +1906,8 @@ func (sg *SubGraph) replaceVarInFunc() error {
 	return nil
 }
 
+var ErrStopIteration = errors.New("stop iteration")
+
 // Used to evaluate an inequality function which uses a value variable instead of a predicate.
 // E.g.
 // 1. func: eq(val(x), 35) or @filter(eq(val(x), 35)
@@ -1925,9 +1928,9 @@ func (sg *SubGraph) applyIneqFunc() error {
 	var typ types.TypeID
 	err := sg.Params.UidToVal.Iterate(func(uid uint64, v types.Val) error {
 		typ = v.Tid
-		return nil
+		return ErrStopIteration
 	})
-	if err != nil {
+	if err != nil && err != ErrStopIteration {
 		return err
 	}
 	val := sg.SrcFunc.Args[0].Value
@@ -1938,15 +1941,11 @@ func (sg *SubGraph) applyIneqFunc() error {
 	}
 
 	if sg.SrcUIDs != nil {
-		// This means its a filter.
-		err := sg.Params.UidToVal.Iterate(func(uid uint64, curVal types.Val) error {
-			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
+		for _, uid := range sg.SrcUIDs.Uids {
+			curVal, ok := sg.Params.UidToVal.Get(uid)
+			if ok && types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
 				sg.DestUIDs.Uids = append(sg.DestUIDs.Uids, uid)
 			}
-			return nil
-		})
-		if err != nil {
-			return err
 		}
 	} else {
 		// This means it's a function at root as SrcUIDs is nil
@@ -2694,13 +2693,14 @@ func (sg *SubGraph) sortAndPaginateUsingVar(ctx context.Context) error {
 		ul := sg.uidMatrix[i]
 		uids := make([]uint64, 0, len(ul.Uids))
 		values := make([][]types.Val, 0, len(ul.Uids))
-		err := sg.Params.UidToVal.Iterate(func(uid uint64, v types.Val) error {
+		for _, uid := range ul.Uids {
+			v, ok := sg.Params.UidToVal.Get(uid)
+			if !ok {
+				// We skip the UIDs which don't have a value
+				continue
+			}
 			values = append(values, []types.Val{v})
 			uids = append(uids, uid)
-			return nil
-		})
-		if err != nil {
-			return err
 		}
 		if len(values) == 0 {
 			continue
