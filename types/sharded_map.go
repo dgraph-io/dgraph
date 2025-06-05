@@ -71,7 +71,7 @@ func (s *ShardedMap) GetShardOrNil(key int) map[uint64]Val {
 
 func (s *ShardedMap) init() {
 	if s == nil {
-		s = NewShardedMap()
+		*s = *NewShardedMap()
 	}
 }
 
@@ -108,6 +108,9 @@ func (s *ShardedMap) Len() int {
 }
 
 func (s *ShardedMap) Iterate(f func(uint64, Val) error) error {
+	if s == nil {
+		return nil
+	}
 	for _, shard := range s.Shards {
 		for k, v := range shard {
 			if err := f(k, v); err != nil {
