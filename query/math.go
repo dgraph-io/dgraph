@@ -6,7 +6,6 @@
 package query
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/golang/glog"
@@ -60,7 +59,6 @@ func processBinary(mNode *mathTree) error {
 			// Use the constant value that was supplied.
 			rVal = cr
 		}
-		fmt.Println("HERE", lVal, rVal, *lshard, *rshard)
 		err := ag.ApplyVal(lVal)
 		if err != nil {
 			return err
