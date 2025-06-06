@@ -46,10 +46,6 @@ func processBinary(mNode *mathTree) error {
 	cl := mNode.Child[0].Const
 	cr := mNode.Child[1].Const
 
-	fmt.Println("PROCESS BINARY")
-	mpl.Print()
-	mpr.Print()
-
 	f := func(k uint64, lshard, rshard, destMapi *map[uint64]types.Val) error {
 		ag := aggregator{
 			name: aggName,
