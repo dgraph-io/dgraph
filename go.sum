@@ -222,8 +222,8 @@ github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69
 github.com/golang-jwt/jwt/v5 v5.2.2 h1:Rl4B7itRWVtYIHFrSNd7vhTiz9UpLdi6gZhZ3wEeDy8=
 github.com/golang-jwt/jwt/v5 v5.2.2/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
 github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0/go.mod h1:E/TSTwGwJL78qG/PmXZO1EjYhfJinVAhrmmHX6Z8B9k=
-github.com/golang/geo v0.0.0-20250516193853-92f93c4cb289 h1:HeOFbnyPys/vx/t+d4fwZM782mnjRVtbjxVkDittTUs=
-github.com/golang/geo v0.0.0-20250516193853-92f93c4cb289/go.mod h1:Vaw7L5b+xa3Rj4/pRtrQkymn3lSBRB/NAEdbF9YEVLA=
+github.com/golang/geo v0.0.0-20250606134707-e8fe6a72b492 h1:8mHyM6CCmj/DQAhHXJVTgdkg/6hAH71N7qGEF+t4Bzg=
+github.com/golang/geo v0.0.0-20250606134707-e8fe6a72b492/go.mod h1:Vaw7L5b+xa3Rj4/pRtrQkymn3lSBRB/NAEdbF9YEVLA=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/glog v1.2.5 h1:DrW6hGnjIhtvhOIiAKT6Psh/Kd/ldepEa81DKeiRJ5I=
 github.com/golang/glog v1.2.5/go.mod h1:6AhwSGph0fcJtXVM/PEHPqZlFeoLxhs7/t5UDAwmO+w=
