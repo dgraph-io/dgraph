@@ -23,7 +23,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/golang/geo v0.0.0-20250516193853-92f93c4cb289
+	github.com/golang/geo v0.0.0-20250606134707-e8fe6a72b492
 	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v1.0.0
 	github.com/google/codesearch v1.2.0
