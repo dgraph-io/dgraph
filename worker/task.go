@@ -370,6 +370,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
+
 		indexer, err := cspec.CreateIndex(args.q.Attr)
 		if err != nil {
 			return err
@@ -400,10 +401,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					int(numNeighbors), index.AcceptAll[float32])
 			}
 		}
-
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
 			return err
 		}
+
 		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
 		return nil
