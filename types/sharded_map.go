@@ -45,6 +45,13 @@ func (s *ShardedMap) Merge(other *ShardedMap, ag func(a, b Val) Val) {
 	wg.Wait()
 }
 
+func (s *ShardedMap) IsEmpty() bool {
+	if s == nil {
+		return true
+	}
+	return len(s.shards) == 0
+}
+
 func (s *ShardedMap) GetShardOrNil(key int) map[uint64]Val {
 	if s == nil {
 		return make(map[uint64]Val)

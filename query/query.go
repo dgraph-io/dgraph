@@ -1119,6 +1119,8 @@ func (mt *mathTree) extractVarNodes() []*mathTree {
 	return nodeList
 }
 
+const numThreadsVariablePropogation = 4
+
 // transformTo transforms fromNode to toNode level using the path between them and the
 // corresponding uidMatrices.
 func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, error) {
@@ -1195,13 +1197,12 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 			}
 		}
 
-		numGo := 4
-		width := len(curNode.uidMatrix) / numGo
+		width := len(curNode.uidMatrix) / numThreadsVariablePropogation
 		var wg sync.WaitGroup
-		for i := 0; i < numGo; i++ {
+		for i := 0; i < numThreadsVariablePropogation; i++ {
 			start := i * width
 			end := (i + 1) * width
-			if i == numGo-1 {
+			if i == numThreadsVariablePropogation-1 {
 				end = len(curNode.uidMatrix)
 			}
 			wg.Add(1)
@@ -1211,9 +1212,7 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (*types.ShardedMap, er
 			}()
 		}
 		wg.Wait()
-
 		newMap = resultMap
-
 	}
 
 	return newMap, nil

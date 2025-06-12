@@ -212,7 +212,7 @@ func processTernary(mNode *mathTree) error {
 	destMap := types.NewShardedMap()
 	aggName := mNode.Fn
 	condMap := mNode.Child[0].Val
-	if len(condMap.Shards) == 0 {
+	if condMap.IsEmpty() {
 		return errors.Errorf("Expected a value variable in %v but missing.", aggName)
 	}
 	varOne := mNode.Child[1].Val
@@ -252,7 +252,7 @@ func evalMathTree(mNode *mathTree) error {
 		return nil
 	}
 	if mNode.Var != "" {
-		if len(mNode.Val.Shards) == 0 {
+		if mNode.Val.IsEmpty() {
 			glog.V(2).Infof("Variable %v not yet populated or missing.", mNode.Var)
 		}
 		// This is a leaf node whose value is already populated. So return.
