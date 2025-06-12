@@ -422,7 +422,7 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 			BufferItems: 16,
 			Metrics:     true,
 			Cost: func(val *CachePL) int64 {
-				return 1
+				return int64(val.list.DeepSize())
 			},
 			ShouldUpdate: func(cur, prev *CachePL) bool {
 				return !(cur.list != nil && prev.list != nil && prev.list.maxTs > cur.list.maxTs)
