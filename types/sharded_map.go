@@ -12,7 +12,7 @@ import (
 )
 
 type ShardedMap struct {
-	Shards []map[uint64]Val
+	shards []map[uint64]Val
 }
 
 const NumShards = 30
@@ -22,26 +22,21 @@ func NewShardedMap() *ShardedMap {
 	for i := range shards {
 		shards[i] = make(map[uint64]Val)
 	}
-	return &ShardedMap{Shards: shards}
+	return &ShardedMap{shards: shards}
 }
 
 func (s *ShardedMap) Merge(other *ShardedMap, ag func(a, b Val) Val) {
+	// TODO: ideally othermap should be the one which is smaller in size.
 	var wg sync.WaitGroup
-	for i := range s.Shards {
+	for i := range s.shards {
 		wg.Add(1)
 		go func(i int) {
-			for k, v := range s.Shards[i] {
-				val, ok := other.Shards[i][k]
-				if !ok {
-					continue
+			for k, v := range other.shards[i] {
+				if _, ok := s.shards[i][k]; ok {
+					s.shards[i][k] = ag(s.shards[i][k], v)
+				} else {
+					s.shards[i][k] = v
 				}
-				s.Shards[i][k] = ag(val, v)
-			}
-			for k, v := range other.Shards[i] {
-				if _, ok := s.Shards[i][k]; ok {
-					continue
-				}
-				s.Shards[i][k] = v
 			}
 			wg.Done()
 		}(i)
@@ -54,7 +49,7 @@ func (s *ShardedMap) GetShardOrNil(key int) map[uint64]Val {
 	if s == nil {
 		return make(map[uint64]Val)
 	}
-	return s.Shards[key]
+	return s.shards[key]
 }
 
 func (s *ShardedMap) init() {
@@ -64,7 +59,7 @@ func (s *ShardedMap) init() {
 }
 
 func (s *ShardedMap) getShard(key uint64) map[uint64]Val {
-	return s.Shards[key%uint64(len(s.Shards))]
+	return s.shards[key%NumShards]
 }
 
 func (s *ShardedMap) Set(key uint64, value Val) {
@@ -89,7 +84,7 @@ func (s *ShardedMap) Len() int {
 		return 0
 	}
 	var count int
-	for _, shard := range s.Shards {
+	for _, shard := range s.shards {
 		count += len(shard)
 	}
 	return count
@@ -99,7 +94,7 @@ func (s *ShardedMap) Iterate(f func(uint64, Val) error) error {
 	if s == nil {
 		return nil
 	}
-	for _, shard := range s.Shards {
+	for _, shard := range s.shards {
 		for k, v := range shard {
 			if err := f(k, v); err != nil {
 				return err
