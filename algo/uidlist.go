@@ -389,143 +389,6 @@ func MergeSortedMoreMem(lists []*pb.List) *pb.List {
 	}
 }
 
-// MergeSorted merges sorted lists.
-func internalMergeSort(lists []*pb.List) *pb.List {
-	if len(lists) == 0 {
-		return new(pb.List)
-	}
-
-	h := &uint64Heap{}
-	heap.Init(h)
-	maxSz := 0
-
-	for i, l := range lists {
-		if l == nil {
-			continue
-		}
-		lenList := len(l.Uids)
-		if lenList > 0 {
-			heap.Push(h, elem{
-				val:     l.Uids[0],
-				listIdx: i,
-			})
-			if lenList > maxSz {
-				maxSz = lenList
-			}
-		}
-	}
-
-	// Our final output. Give it an approximate capacity as copies are expensive.
-	output := make([]uint64, 0, maxSz)
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
-	var last uint64   // Last element added to sorted / final output.
-	for h.Len() > 0 { // While heap is not empty.
-		me := (*h)[0] // Peek at the top element in heap.
-		if len(output) == 0 || me.val != last {
-			output = append(output, me.val) // Add if unique.
-			last = me.val
-		}
-		l := lists[me.listIdx]
-		if idx[me.listIdx] >= len(l.Uids)-1 {
-			heap.Pop(h)
-		} else {
-			idx[me.listIdx]++
-			val := l.Uids[idx[me.listIdx]]
-			(*h)[0].val = val
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
-		}
-	}
-	return &pb.List{Uids: output}
-}
-
-func MergeSorted(lists []*pb.List) *pb.List {
-	// Calculate total capacity needed
-	totalCap := 0
-	for _, l := range lists {
-		if l != nil {
-			totalCap += len(l.Uids)
-		}
-	}
-
-	// Pre-allocate one big buffer
-	bigBuffer := make([]uint64, totalCap)
-
-	result := mergeSortedWithBuffer(lists, bigBuffer)
-	return result
-}
-
-func mergeSortedWithBuffer(lists []*pb.List, buffer []uint64) *pb.List {
-	numThreads := 10
-	if len(lists) > numThreads*numThreads {
-		// Calculate how much buffer each goroutine needs
-		chunkSizes := make([]int, numThreads)
-		totalNeeded := 0
-
-		for i := 0; i < numThreads; i++ {
-			start := i * len(lists) / numThreads
-			end := (i + 1) * len(lists) / numThreads
-			if end > len(lists) {
-				end = len(lists)
-			}
-
-			chunkCap := 0
-			for j := start; j < end; j++ {
-				if lists[j] != nil {
-					chunkCap += len(lists[j].Uids)
-				}
-			}
-			chunkSizes[i] = chunkCap
-			totalNeeded += chunkCap
-		}
-
-		// Calculate buffer offsets for each goroutine
-		bufferOffsets := make([]int, numThreads)
-		bufferOffsets[0] = 0
-		for i := 1; i < numThreads; i++ {
-			bufferOffsets[i] = bufferOffsets[i-1] + chunkSizes[i-1]
-		}
-
-		// Distribute buffer slices to each goroutine
-		intermediateResults := make([]*pb.List, numThreads)
-		var wg sync.WaitGroup
-
-		wg.Add(numThreads)
-		for i := 0; i < numThreads; i++ {
-			go func(idx int) {
-				defer wg.Done()
-				start := idx * len(lists) / numThreads
-				end := (idx + 1) * len(lists) / numThreads
-				if end > len(lists) {
-					end = len(lists)
-				}
-
-				// Give this goroutine its slice of the big buffer
-				bufferStart := bufferOffsets[idx]
-				bufferEnd := bufferStart + chunkSizes[idx]
-				goroutineBuffer := buffer[bufferStart:bufferEnd:bufferEnd][:0]
-				result := internalMergeSortWithBuffer(lists[start:end], goroutineBuffer)
-				intermediateResults[idx] = result
-			}(i)
-		}
-		wg.Wait()
-
-		// Filter out nil results
-		validResults := make([]*pb.List, 0, numThreads)
-		for _, result := range intermediateResults {
-			if result != nil && len(result.Uids) > 0 {
-				validResults = append(validResults, result)
-			}
-		}
-
-		// Use the remaining part of buffer for final merge
-		finalBuffer := buffer[totalNeeded:][:0]
-		return internalMergeSortWithBuffer(validResults, finalBuffer)
-	} else {
-		return internalMergeSortWithBuffer(lists, buffer)
-	}
-}
-
 func internalMergeSortWithBuffer(lists []*pb.List, buffer []uint64) *pb.List {
 	if len(lists) == 0 {
 		return &pb.List{Uids: buffer[:0]}
@@ -567,6 +430,115 @@ func internalMergeSortWithBuffer(lists []*pb.List, buffer []uint64) *pb.List {
 	}
 
 	return &pb.List{Uids: output}
+}
+
+// MergeSorted merges sorted lists.
+func internalMergeSort(lists []*pb.List) *pb.List {
+	sz := 0
+	for _, l := range lists {
+		if l == nil || len(l.Uids) == 0 {
+			continue
+		}
+		sz += len(l.Uids)
+	}
+	buffer := make([]uint64, 0, sz)
+	return internalMergeSortWithBuffer(lists, buffer)
+}
+
+func MergeSorted(lists []*pb.List) *pb.List {
+	// Calculate total capacity needed
+	totalCap := 0
+	for _, l := range lists {
+		if l != nil {
+			totalCap += len(l.Uids)
+		}
+	}
+
+	// Pre-allocate one big buffer
+	bigBuffer := make([]uint64, totalCap)
+	return mergeSortedWithBuffer(lists, bigBuffer)
+}
+
+const numThreads = 10
+const numListPerThread = 10
+
+func mergeSortedWithBuffer(lists []*pb.List, buffer []uint64) *pb.List {
+	if len(lists) < numThreads*numListPerThread {
+		return internalMergeSort(lists)
+	}
+
+	// Calculate how much buffer each goroutine needs
+	chunkSizes := make([]int, numThreads)
+	totalNeeded := 0
+
+	chunkSize := (len(lists) + numThreads - 1) / numThreads
+
+	for i := 0; i < numThreads; i++ {
+		start := i * chunkSize
+		end := (i + 1) * chunkSize
+		if end > len(lists) {
+			end = len(lists)
+		}
+
+		if start > len(lists) {
+			continue
+		}
+
+		chunkCap := 0
+		for j := start; j < end; j++ {
+			if lists[j] != nil {
+				chunkCap += len(lists[j].Uids)
+			}
+		}
+		chunkSizes[i] = chunkCap
+		totalNeeded += chunkCap
+	}
+
+	// Calculate buffer offsets for each goroutine
+	bufferOffsets := make([]int, numThreads)
+	bufferOffsets[0] = 0
+	for i := 1; i < numThreads; i++ {
+		bufferOffsets[i] = bufferOffsets[i-1] + chunkSizes[i-1]
+	}
+
+	// Distribute buffer slices to each goroutine
+	intermediateResults := make([]*pb.List, numThreads)
+	var wg sync.WaitGroup
+
+	wg.Add(numThreads)
+	for i := 0; i < numThreads; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			start := idx * chunkSize
+			end := (idx + 1) * chunkSize
+			if end > len(lists) {
+				end = len(lists)
+			}
+			if start > len(lists) {
+				return
+			}
+
+			// Give this goroutine its slice of the big buffer
+			bufferStart := bufferOffsets[idx]
+			bufferEnd := bufferStart + chunkSizes[idx]
+			goroutineBuffer := buffer[bufferStart:bufferEnd:bufferEnd][:0]
+			result := internalMergeSortWithBuffer(lists[start:end], goroutineBuffer)
+			intermediateResults[idx] = result
+		}(i)
+	}
+	wg.Wait()
+
+	// Filter out nil results
+	validResults := make([]*pb.List, 0, numThreads)
+	for _, result := range intermediateResults {
+		if result != nil && len(result.Uids) > 0 {
+			validResults = append(validResults, result)
+		}
+	}
+
+	// Use the remaining part of buffer for final merge
+	finalBuffer := make([]uint64, 0, totalNeeded)
+	return internalMergeSortWithBuffer(validResults, finalBuffer)
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at

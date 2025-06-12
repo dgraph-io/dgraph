@@ -106,6 +106,36 @@ func BenchmarkMergeSorted(b *testing.B) {
 	})
 }
 
+func TestMergeSortedRandom(t *testing.T) {
+	createList := func(n int) *pb.List {
+		list := make([]uint64, n)
+		for i := range list {
+			list[i] = uint64(rand.Int63())
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i] < list[j]
+		})
+		return &pb.List{Uids: list}
+	}
+
+	input := []*pb.List{}
+	for i := 0; i < 1000; i++ {
+		input = append(input, createList(1000))
+	}
+
+	require.Equal(t, MergeSorted(input).Uids, internalMergeSort(input).Uids)
+}
+
+func TestMergeSorted7(t *testing.T) {
+	input := []*pb.List{
+		newList([]uint64{5, 6, 7}),
+		newList([]uint64{3, 4}),
+		newList([]uint64{1, 2}),
+		newList([]uint64{}),
+	}
+	require.Equal(t, MergeSorted(input).Uids, []uint64{1, 2, 3, 4, 5, 6, 7})
+}
+
 func TestMergeSorted8(t *testing.T) {
 	input := []*pb.List{}
 	require.Empty(t, MergeSorted(input).Uids)
