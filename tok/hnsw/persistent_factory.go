@@ -87,25 +87,27 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 func (hf *persistentIndexFactory[T]) Create(
 	name string,
 	o opt.Options,
-	floatBits int) (index.VectorIndex[T], error) {
+	floatBits int,
+	split int) (index.VectorIndex[T], error) {
 	hf.mu.Lock()
 	defer hf.mu.Unlock()
-	return hf.createWithLock(name, o, floatBits)
+	return hf.createWithLock(name, o, floatBits, split)
 }
 
 func (hf *persistentIndexFactory[T]) createWithLock(
 	name string,
 	o opt.Options,
-	floatBits int) (index.VectorIndex[T], error) {
-	if !hf.isNameAvailableWithLock(name) {
+	floatBits int,
+	split int) (index.VectorIndex[T], error) {
+	if !hf.isNameAvailableWithLock(fmt.Sprintf("%s-%d", name, split)) {
 		err := errors.New("index with name " + name + " already exists")
 		return nil, err
 	}
 	retVal := &persistentHNSW[T]{
 		pred:         name,
-		vecEntryKey:  ConcatStrings(name, VecEntry),
-		vecKey:       ConcatStrings(name, VecKeyword),
-		vecDead:      ConcatStrings(name, VecDead),
+		vecEntryKey:  ConcatStrings(name, VecEntry, fmt.Sprintf("_%d", split)),
+		vecKey:       ConcatStrings(name, VecKeyword, fmt.Sprintf("_%d", split)),
+		vecDead:      ConcatStrings(name, VecDead, fmt.Sprintf("_%d", split)),
 		floatBits:    floatBits,
 		nodeAllEdges: map[uint64][][]uint64{},
 	}
@@ -152,7 +154,8 @@ func (hf *persistentIndexFactory[T]) removeWithLock(name string) error {
 func (hf *persistentIndexFactory[T]) CreateOrReplace(
 	name string,
 	o opt.Options,
-	floatBits int) (index.VectorIndex[T], error) {
+	floatBits int,
+	split int) (index.VectorIndex[T], error) {
 	hf.mu.Lock()
 	defer hf.mu.Unlock()
 	vi, err := hf.findWithLock(name)
@@ -165,5 +168,5 @@ func (hf *persistentIndexFactory[T]) CreateOrReplace(
 			return nil, err
 		}
 	}
-	return hf.createWithLock(name, o, floatBits)
+	return hf.createWithLock(name, o, floatBits, split)
 }

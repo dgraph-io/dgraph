@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -360,20 +361,33 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			posting.NewViLocalCache(qs.cache),
 			args.q.ReadTs,
 		)
-		indexer, err := cspec.CreateIndex(args.q.Attr)
-		if err != nil {
-			return err
-		}
-		var nnUids []uint64
-		if srcFn.vectorInfo != nil {
-			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-				int(numNeighbors), index.AcceptAll[float32])
-		} else {
-			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-				int(numNeighbors), index.AcceptAll[float32])
-		}
 
-		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
+		var nnUids []uint64
+		var wg sync.WaitGroup
+		wg.Add(1000)
+		var mutex sync.Mutex
+		for i := range 1000 {
+			go func(idx int) {
+				nnuids := make([]uint64, 0)
+				indexer, _ := cspec.CreateIndex(args.q.Attr, i)
+				if srcFn.vectorInfo != nil {
+					nnuids, _ = indexer.Search(ctx, qc, srcFn.vectorInfo,
+						int(numNeighbors), index.AcceptAll[float32])
+				} else {
+					nnuids, _ = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+						int(numNeighbors), index.AcceptAll[float32])
+				}
+				mutex.Lock()
+				nnUids = append(nnUids, nnuids...)
+				mutex.Unlock()
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
+		indexer, _ := cspec.CreateIndex(args.q.Attr, 0)
+		nnUids, err = indexer.MergeResults(ctx, qc, nnUids, srcFn.vectorInfo,
+			int(numNeighbors), index.AcceptAll[float32])
+		if err != nil {
 			return err
 		}
 		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })

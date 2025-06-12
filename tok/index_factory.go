@@ -45,7 +45,7 @@ func (fcs *FactoryCreateSpec) Name() string {
 	return fcs.factory.Name() + fcs.factory.GetOptions(fcs.opts)
 }
 
-func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float32], error) {
+func (fcs *FactoryCreateSpec) CreateIndex(name string, split int) (index.VectorIndex[float32], error) {
 	if fcs == nil || fcs.factory == nil {
 		return nil,
 			errors.Errorf(
@@ -61,7 +61,7 @@ func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float3
 	//       has the downside of not allowing us to reuse the pre-existing
 	//       index.
 	// nil VectorSource at the moment.
-	return fcs.factory.CreateOrReplace(name, fcs.opts, 32)
+	return fcs.factory.CreateOrReplace(name, fcs.opts, 32, split)
 }
 
 func createIndexFactory(f index.IndexFactory[float32]) IndexFactory {
@@ -79,8 +79,9 @@ func (f *indexFactory) AllowedOptions() opts.AllowedOptions {
 func (f *indexFactory) Create(
 	name string,
 	o opts.Options,
-	floatBits int) (index.VectorIndex[float32], error) {
-	return f.delegate.Create(name, o, floatBits)
+	floatBits int,
+	split int) (index.VectorIndex[float32], error) {
+	return f.delegate.Create(name, o, floatBits, split)
 }
 func (f *indexFactory) Find(name string) (index.VectorIndex[float32], error) {
 	return f.delegate.Find(name)
@@ -91,8 +92,9 @@ func (f *indexFactory) Remove(name string) error {
 func (f *indexFactory) CreateOrReplace(
 	name string,
 	o opts.Options,
-	floatBits int) (index.VectorIndex[float32], error) {
-	return f.delegate.CreateOrReplace(name, o, floatBits)
+	floatBits int,
+	split int) (index.VectorIndex[float32], error) {
+	return f.delegate.CreateOrReplace(name, o, floatBits, split)
 }
 
 func (f *indexFactory) GetOptions(o opts.Options) string {

@@ -39,7 +39,7 @@ type IndexFactory[T c.Float] interface {
 	// same object.
 	// The set of vectors to use in the index process is defined by
 	// source.
-	Create(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
+	Create(name string, o opts.Options, floatBits int, split int) (VectorIndex[T], error)
 
 	// Find is expected to retrieve the VectorIndex corresponding with the
 	// name. If it attempts to find a name that does not exist, the VectorIndex
@@ -56,7 +56,7 @@ type IndexFactory[T c.Float] interface {
 	// CreateOrReplace will create a new index -- as defined by the Create
 	// function -- if it does not yet exist, otherwise, it will replace any
 	// index with the given name.
-	CreateOrReplace(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
+	CreateOrReplace(name string, o opts.Options, floatBits int, split int) (VectorIndex[T], error)
 }
 
 // SearchFilter defines a predicate function that we will use to determine
@@ -92,6 +92,9 @@ type OptionalIndexSupport[T c.Float] interface {
 // A VectorIndex can be used to Search for vectors and add vectors to an index.
 type VectorIndex[T c.Float] interface {
 	OptionalIndexSupport[T]
+
+	MergeResults(ctx context.Context, c CacheType, list []uint64, query []T, maxResults int,
+		filter SearchFilter[T]) ([]uint64, error)
 
 	// Search will find the uids for a given set of vectors based on the
 	// input query, limiting to the specified maximum number of results.

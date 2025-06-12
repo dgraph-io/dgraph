@@ -15,6 +15,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -33,8 +34,11 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/schema"
 	"github.com/hypermodeinc/dgraph/v25/tok"
 	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
+	"github.com/hypermodeinc/dgraph/v25/tok/index"
 	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/hypermodeinc/dgraph/v25/x"
+
+	"github.com/viterin/vek/vek32"
 )
 
 var emptyCountParams countParams
@@ -162,7 +166,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-			indexer, err := info.factorySpecs[0].CreateIndex(attr)
+			indexer, err := info.factorySpecs[0].CreateIndex(attr, 0)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
@@ -1361,6 +1365,198 @@ func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
 	return prefixes, nil
 }
 
+type vectorCentroids struct {
+	dimension  int
+	numCenters int
+
+	centroids [][]float32
+	counts    []int64
+	weights   [][]float32
+	mutexs    []*sync.Mutex
+}
+
+func (vc *vectorCentroids) findCentroid(input []float32) int {
+	minIdx := 0
+	minDist := math.MaxFloat32
+	for i, centroid := range vc.centroids {
+		dist := vek32.Distance(centroid, input)
+		if float64(dist) < minDist {
+			minDist = float64(dist)
+			minIdx = i
+		}
+	}
+	return minIdx
+}
+
+func (vc *vectorCentroids) addVector(vec []float32) {
+	idx := vc.findCentroid(vec)
+	vc.mutexs[idx].Lock()
+	defer vc.mutexs[idx].Unlock()
+	for i := 0; i < vc.dimension; i++ {
+		vc.weights[idx][i] += vec[i]
+	}
+	vc.counts[idx]++
+}
+
+func (vc *vectorCentroids) updateCentroids() {
+	for i := 0; i < vc.numCenters; i++ {
+		for j := 0; j < vc.dimension; j++ {
+			vc.centroids[i][j] = vc.weights[i][j] / float32(vc.counts[i])
+			vc.weights[i][j] = 0
+		}
+		fmt.Printf("%d, ", vc.counts[i])
+		vc.counts[i] = 0
+	}
+	fmt.Println()
+}
+
+func (vc *vectorCentroids) randomInit() {
+	vc.dimension = len(vc.centroids[0])
+	vc.numCenters = len(vc.centroids)
+	vc.centroids = make([][]float32, vc.numCenters)
+	vc.counts = make([]int64, vc.numCenters)
+	vc.weights = make([][]float32, vc.numCenters)
+	vc.mutexs = make([]*sync.Mutex, vc.numCenters)
+	for i := 0; i < vc.numCenters; i++ {
+		vc.weights[i] = make([]float32, vc.dimension)
+		vc.counts[i] = 0
+		vc.mutexs[i] = &sync.Mutex{}
+	}
+}
+
+func (vc *vectorCentroids) addSeedCentroid(vec []float32) {
+	vc.centroids = append(vc.centroids, vec)
+}
+
+const numCentroids = 1000
+
+func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSpec, rb *IndexRebuild) error {
+	pk := x.ParsedKey{Attr: rb.Attr}
+	vc := &vectorCentroids{}
+
+	MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+		Prefix:      pk.DataPrefix(),
+		ReadTs:      rb.StartTs,
+		AllVersions: false,
+		Reverse:     false,
+		CheckInclusion: func(uid uint64) error {
+			return nil
+		},
+		Function: func(l *List, pk x.ParsedKey) error {
+			val, err := l.Value(rb.StartTs)
+			if err != nil {
+				return err
+			}
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			vc.addSeedCentroid(inVec)
+			if len(vc.centroids) == numCentroids {
+				return ErrStopIteration
+			}
+			return nil
+		},
+		StartKey: x.DataKey(rb.Attr, 0),
+	})
+
+	vc.randomInit()
+
+	fmt.Println("Clustering Vectors")
+	for range 5 {
+		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+			edges := []*pb.DirectedEdge{}
+			val, err := pl.Value(txn.StartTs)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			vc.addVector(inVec)
+			return edges, nil
+		}
+
+		err := builder.RunWithoutTemp(ctx)
+		if err != nil {
+			return err
+		}
+
+		vc.updateCentroids()
+	}
+
+	tcs := make([]*hnsw.TxnCache, vc.numCenters)
+	txns := make([]*Txn, vc.numCenters)
+	indexers := make([]index.VectorIndex[float32], vc.numCenters)
+	for i := 0; i < vc.numCenters; i++ {
+		txns[i] = NewTxn(rb.StartTs)
+		tcs[i] = hnsw.NewTxnCache(NewViTxn(txns[i]), rb.StartTs)
+		indexers_i, err := factorySpecs[0].CreateIndex(pk.Attr, i)
+		if err != nil {
+			return err
+		}
+		vc.mutexs[i] = &sync.Mutex{}
+		indexers[i] = indexers_i
+	}
+
+	var edgesCreated atomic.Int64
+
+	numPasses := vc.numCenters / 100
+	for pass_idx := range numPasses {
+		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+			val, err := pl.Value(txn.StartTs)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			idx := vc.findCentroid(inVec)
+			if idx%numPasses != pass_idx {
+				return []*pb.DirectedEdge{}, nil
+			}
+			vc.mutexs[idx].Lock()
+			defer vc.mutexs[idx].Unlock()
+			_, err = indexers[idx].Insert(ctx, tcs[idx], uid, inVec)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			edgesCreated.Add(int64(1))
+			return nil, nil
+		}
+
+		err := builder.RunWithoutTemp(ctx)
+		if err != nil {
+			return err
+		}
+
+		for idx := range vc.counts {
+			if idx%numPasses != pass_idx {
+				continue
+			}
+			txns[idx].Update()
+			writer := NewTxnWriter(pstore)
+
+			x.ExponentialRetry(int(x.Config.MaxRetries),
+				20*time.Millisecond, func() error {
+					err := txns[idx].CommitToDisk(writer, rb.StartTs)
+					if err == badger.ErrBannedKey {
+						glog.Errorf("Error while writing to banned namespace.")
+						return nil
+					}
+					return err
+				})
+
+			txns[idx].cache.plists = nil
+			txns[idx] = nil
+			tcs[idx] = nil
+			indexers[idx] = nil
+		}
+
+		fmt.Printf("Created %d edges in pass %d out of %d\n", edgesCreated.Load(), pass_idx, numPasses)
+	}
+
+	return nil
+}
+
 // rebuildTokIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
@@ -1392,6 +1588,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	runForVectors := (len(factorySpecs) != 0)
+	if runForVectors {
+		return rebuildVectorIndex(ctx, factorySpecs, rb)
+	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}

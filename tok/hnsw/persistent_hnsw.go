@@ -8,6 +8,7 @@ package hnsw
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -252,6 +253,46 @@ func (ph *persistentHNSW[T]) Search(ctx context.Context, c index.CacheType, quer
 	maxResults int, filter index.SearchFilter[T]) (nnUids []uint64, err error) {
 	r, err := ph.SearchWithPath(ctx, c, query, maxResults, filter)
 	return r.Neighbors, err
+}
+
+type resultRow[T c.Float] struct {
+	uid  uint64
+	dist T
+}
+
+func (ph *persistentHNSW[T]) MergeResults(ctx context.Context, c index.CacheType, list []uint64, query []T, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
+	var result []resultRow[T]
+
+	for i := range list {
+		var vec []T
+		err := ph.getVecFromUid(list[i], c, &vec)
+		if err != nil {
+			return nil, err
+		}
+
+		dist, err := ph.simType.distanceScore(vec, query, ph.floatBits)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, resultRow[T]{
+			uid:  list[i],
+			dist: dist,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].dist < result[j].dist
+	})
+
+	uids := []uint64{}
+	for i := range maxResults {
+		if i > len(result) {
+			break
+		}
+		uids = append(uids, result[i].uid)
+	}
+
+	return uids, nil
 }
 
 // SearchWithUid searches the hnsw graph for the nearest neighbors of the query uid
