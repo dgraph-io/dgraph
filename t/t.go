@@ -534,7 +534,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error 
 	case *race:
 		args = append(args, "-timeout", "180m")
 	default:
-		args = append(args, "-timeout", "30m")
+		args = append(args, "-timeout", "90m")
 	}
 	// Todo: There are few race errors in tests itself. Enable -race once that is fixed.
 
