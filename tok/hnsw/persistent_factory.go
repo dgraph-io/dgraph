@@ -78,6 +78,17 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 	return retVal
 }
 
+func UpdateIndexSplit[T c.Float](vi index.VectorIndex[T], split int) error {
+	hnsw, ok := vi.(*persistentHNSW[T])
+	if !ok {
+		return errors.New("index is not a persistent HNSW index")
+	}
+	hnsw.vecEntryKey = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecEntry, split))
+	hnsw.vecKey = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecKeyword, split))
+	hnsw.vecDead = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecDead, split))
+	return nil
+}
+
 // Create is an implementation of the IndexFactory interface function, invoked by an HNSWIndexFactory
 // instance. It takes in a string name and a VectorSource implementation, and returns a VectorIndex and error
 // flag. It creates an HNSW instance using the index name and populates other parts of the HNSW struct such as
