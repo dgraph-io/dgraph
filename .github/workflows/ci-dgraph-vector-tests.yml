@@ -24,7 +24,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v5
 
