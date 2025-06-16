@@ -2,20 +2,20 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.22.15
+  version: 1.24.0
 
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
   sources:
     - id: trunk
-      ref: v1.6.8
+      ref: v1.7.0
       uri: https://github.com/trunk-io/plugins
 
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
     - go@1.24.3
-    - node@18.20.5
+    - node@22.16.0
     - python@3.10.8
 
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
@@ -27,22 +27,22 @@ lint:
         - protos/pb/pb.pb.go
   enabled:
     - golangci-lint2@2.1.6
-    - trivy@0.62.1
+    - trivy@0.63.0
     - actionlint@1.7.7
-    - checkov@3.2.421
+    - checkov@3.2.442
     - dotenv-linter@3.3.0
     - git-diff-check
     - gofmt@1.20.4
     - hadolint@2.12.1-beta
-    - markdownlint@0.44.0
-    - osv-scanner@2.0.2
+    - markdownlint@0.45.0
+    - osv-scanner@2.0.3
     - oxipng@9.1.5
     - prettier@3.5.3
-    - renovate@40.0.6
+    - renovate@40.57.1
     - shellcheck@0.10.0
     - shfmt@3.6.0
-    - tflint@0.57.0
-    - trufflehog@3.88.29
+    - tflint@0.58.0
+    - trufflehog@3.89.1
     - yamllint@1.37.1
 actions:
   enabled:
