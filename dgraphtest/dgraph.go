@@ -9,7 +9,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -369,6 +371,11 @@ func (a *alpha) zeroURL(c *LocalCluster) (string, error) {
 
 func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, error) {
 	// TODO(aman): we should cache the port information
+
+	if runtime.GOOS == "darwin" {
+		return getPortMappingsOnMac(dc.cid(), privatePort)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
@@ -393,6 +400,31 @@ func publicPort(dcli *docker.Client, dc dnode, privatePort string) (string, erro
 	}
 
 	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, dc.cname())
+}
+
+// getPortMappingsOnMac parses `docker ps` output to get accurate macOS mappings
+// because docker inspect does not know about port mappings at all.
+func getPortMappingsOnMac(containerID, privatePort string) (string, error) {
+	out, err := exec.Command("docker", "ps", "--format", "{{.ID}} {{.Ports}}").Output()
+	if err != nil {
+		return "", fmt.Errorf("docker ps failed: %w", err)
+	}
+
+	for line := range strings.SplitSeq(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !strings.HasPrefix(containerID, fields[0]) {
+			continue
+		}
+
+		// Example: "0.0.0.0:55069->8080/tcp," => "55069"
+		for _, part := range fields[1:] {
+			if strings.Contains(part, privatePort+"/tcp") {
+				return strings.Split(strings.Split(part, ":")[1], "->")[0], nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no mapping found for private port [%v] for container [%v]", privatePort, containerID)
 }
 
 func mountBinary(c *LocalCluster) (mount.Mount, error) {
