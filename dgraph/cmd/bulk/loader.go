@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgo/v250"
 	"github.com/hypermodeinc/dgraph/v25/chunker"
 	"github.com/hypermodeinc/dgraph/v25/enc"
 	"github.com/hypermodeinc/dgraph/v25/filestore"
@@ -38,7 +39,7 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/xidmap"
 )
 
-type options struct {
+type BulkOptions struct {
 	DataFiles        string
 	DataFormat       string
 	SchemaFile       string
@@ -55,6 +56,7 @@ type options struct {
 	Version          bool
 	StoreXids        bool
 	ZeroAddr         string
+	ConnStr          string
 	HttpAddr         string
 	IgnoreErrors     bool
 	CustomTokenizers string
@@ -78,7 +80,7 @@ type options struct {
 }
 
 type state struct {
-	opt           *options
+	opt           *BulkOptions
 	prog          *progress
 	xids          *xidmap.XidMap
 	schema        *schemaStore
@@ -95,32 +97,46 @@ type loader struct {
 	*state
 	mappers []*mapper
 	zero    *grpc.ClientConn
+	dg      *dgo.Dgraph
 }
 
-func newLoader(opt *options) *loader {
+func newLoader(opt *BulkOptions) *loader {
 	if opt == nil {
 		log.Fatalf("Cannot create loader with nil options.")
 	}
 
-	fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
+	var zero *grpc.ClientConn
+	if opt.ZeroAddr != "" {
+		fmt.Printf("Connecting to zero at %s\n", opt.ZeroAddr)
 
-	tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
-	x.Check(err)
-	dialOpts := []grpc.DialOption{}
-	if tlsConf != nil {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
-	} else {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		tlsConf, err := x.LoadClientTLSConfigForInternalPort(Bulk.Conf)
+		x.Check(err)
+		dialOpts := []grpc.DialOption{}
+		if tlsConf != nil {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConf)))
+		} else {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		}
+		zero, err = grpc.NewClient(opt.ZeroAddr, dialOpts...)
+		x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
 	}
-	zero, err := grpc.NewClient(opt.ZeroAddr, dialOpts...)
-	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.ZeroAddr)
+
+	var dg *dgo.Dgraph
+	if opt.ConnStr != "" {
+		fmt.Printf("Connecting to alpha at %s\n", opt.ConnStr)
+
+		var err error
+		dg, err = dgo.Open(opt.ConnStr)
+		x.Checkf(err, "Unable to connect to alpha, Is it running at %s?", opt.ConnStr)
+	}
+
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:       getWriteTimestamp(zero),
+		writeTs:       getWriteTimestamp(zero, dg),
 		namespaces:    &sync.Map{},
 	}
 	st.schema = newSchemaStore(readSchema(opt), opt, st)
@@ -128,6 +144,7 @@ func newLoader(opt *options) *loader {
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
 		zero:    zero,
+		dg:      dg,
 	}
 	for i := range opt.NumGoroutines {
 		ld.mappers[i] = newMapper(st)
@@ -136,16 +153,29 @@ func newLoader(opt *options) *loader {
 	return ld
 }
 
-func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
-	client := pb.NewZeroClient(zero)
+func getWriteTimestamp(zero *grpc.ClientConn, dg *dgo.Dgraph) uint64 {
+	if zero != nil {
+		client := pb.NewZeroClient(zero)
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
+			cancel()
+			if err == nil {
+				return ts.GetStartId()
+			}
+			fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+			time.Sleep(time.Second)
+		}
+	}
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
+		_, ts, err := dg.AllocateTimestamps(ctx, 1)
 		cancel()
 		if err == nil {
-			return ts.GetStartId()
+			return ts
 		}
-		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+		fmt.Printf("Error communicating with dgraph alpha, retrying: %v", err)
 		time.Sleep(time.Second)
 	}
 }
@@ -166,21 +196,37 @@ func (ld *loader) leaseNamespaces() {
 		return
 	}
 
-	client := pb.NewZeroClient(ld.zero)
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
-		cancel()
-		if err == nil {
-			fmt.Printf("Assigned namespaces till %d\n", ns.GetEndId())
-			return
+	if ld.zero != nil {
+		client := pb.NewZeroClient(ld.zero)
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ns, err := client.AssignIds(ctx, &pb.Num{Val: maxNs, Type: pb.Num_NS_ID})
+			cancel()
+			if err == nil {
+				fmt.Printf("Assigned namespaces till %d\n", ns.GetEndId())
+				return
+			}
+			fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
+			time.Sleep(time.Second)
 		}
-		fmt.Printf("Error communicating with dgraph zero, retrying: %v", err)
-		time.Sleep(time.Second)
+	}
+
+	if ld.dg != nil {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			_, end, err := ld.dg.AllocateTimestamps(ctx, maxNs)
+			cancel()
+			if err == nil {
+				fmt.Printf("Assigned namespaces till %d\n", end)
+				return
+			}
+			fmt.Printf("Error communicating with dgraph alpha, retrying: %v", err)
+			time.Sleep(time.Second)
+		}
 	}
 }
 
-func readSchema(opt *options) *schema.ParsedSchema {
+func readSchema(opt *BulkOptions) *schema.ParsedSchema {
 	if opt.SchemaFile == "" {
 		return genDQLSchema(opt)
 	}
@@ -212,7 +258,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	return result
 }
 
-func genDQLSchema(opt *options) *schema.ParsedSchema {
+func genDQLSchema(opt *BulkOptions) *schema.ParsedSchema {
 	gqlSchBytes := readGqlSchema(opt)
 	nsToSchemas := parseGqlSchema(string(gqlSchBytes))
 
@@ -251,6 +297,7 @@ func (ld *loader) mapStage() {
 	ld.xids = xidmap.New(xidmap.XidMapOptions{
 		UidAssigner: ld.zero,
 		DB:          db,
+		DgClient:    ld.dg,
 		Dir:         filepath.Join(ld.opt.TmpDir, bufferDir),
 	})
 
@@ -348,7 +395,7 @@ func parseGqlSchema(s string) map[uint64]string {
 	return schemaMap
 }
 
-func readGqlSchema(opt *options) []byte {
+func readGqlSchema(opt *BulkOptions) []byte {
 	f, err := filestore.Open(opt.GqlSchemaFile)
 	x.Check(err)
 	defer func() {
@@ -400,9 +447,11 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 		schema = strconv.Quote(schema)
 		switch loadType {
 		case chunker.RdfFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, ns, ns, schema, ns))))
+			_, err := fmt.Fprintf(gqlBuf, rdfSchema, ns, ns, schema, ns)
+			x.Check(err)
 		case chunker.JsonFormat:
-			x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(jsonSchema, ns, schema))))
+			_, err := fmt.Fprintf(gqlBuf, jsonSchema, ns, schema)
+			x.Check(err)
 		}
 		ld.readerChunkCh <- gqlBuf
 	}
