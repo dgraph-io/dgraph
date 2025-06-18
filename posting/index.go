@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -693,6 +694,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
+		}
+
+		if rand.Intn(10) > 2 {
+			return nil, nil
 		}
 
 		pk, err := x.Parse(key)
