@@ -21,9 +21,9 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-jose/go-jose/v4 v4.1.0
-	github.com/go-sql-driver/mysql v1.9.2
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/golang/geo v0.0.0-20250606134707-e8fe6a72b492
+	github.com/golang/geo v0.0.0-20250613135800-9e8e59d779cc
 	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v1.0.0
 	github.com/google/codesearch v1.2.0
@@ -33,8 +33,8 @@ require (
 	github.com/graph-gophers/graphql-go v1.6.0
 	github.com/hashicorp/vault/api v1.20.0
 	github.com/klauspost/compress v1.18.0
-	github.com/mark3labs/mcp-go v0.31.0
-	github.com/minio/minio-go/v7 v7.0.92
+	github.com/mark3labs/mcp-go v0.32.0
+	github.com/minio/minio-go/v7 v7.0.94
 	github.com/paulmach/go.geojson v1.5.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.7.0
