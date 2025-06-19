@@ -22,8 +22,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/systest/1million/common"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -37,8 +35,6 @@ type testcase struct {
 	err            string
 	encrypted      bool
 }
-
-var opts = grpc.WithTransportCredentials(insecure.NewCredentials())
 
 const expectedSchema = `{
 	"schema": [
