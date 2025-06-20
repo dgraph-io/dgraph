@@ -2158,7 +2158,7 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 		pred1Value := dql.TypeValFrom(pred1.ObjectValue).Value
 		for j := range qc.uniqueVars {
 			gmuIndex2, rdfIndex2 := decodeIndex(j)
-			if (len(qc.gmuList[gmuIndex2].Set) == 0) {
+			if len(qc.gmuList[gmuIndex2].Set) == 0 {
 				continue
 			}
 
