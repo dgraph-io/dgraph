@@ -1609,7 +1609,7 @@ type Token struct {
 	sync.RWMutex
 }
 
-func TestPanicWithConditionallyPrunedJsonMutations(t *testing.T) {Add commentMore actions
+func TestPanicWithConditionallyPrunedJsonMutations(t *testing.T) {
 	schema := `
 	email: string @index(term,hash) @upsert @unique .
 	identifier: string @index(term,hash) @upsert @unique .
@@ -1720,7 +1720,7 @@ func TestPanicWithConditionallyPrunedJsonMutations(t *testing.T) {Add commentMor
 			}
 		}
 		require.Equal(t, 1, createdNodeCountReq2, "Request 2, Attempt %d/%d: Expected 1 UID from the kept SetJson mutation (no panic occurred)", i+1, maxRetries)
-		t.Logf("Request 2, Attempt %d/%d completed successfully without panic.", i+1, maxRetries)Add commentMore actions
+		t.Logf("Request 2, Attempt %d/%d completed successfully without panic.", i+1, maxRetries)
 	}
 
 	t.Logf("Test completed %d attempts of Request 2 (initial create, then 1 KEPT Json / 2 PRUNED Json) without reproducing the panic.", maxRetries)
