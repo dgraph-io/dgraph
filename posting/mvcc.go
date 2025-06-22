@@ -495,8 +495,6 @@ func (ml *MemoryLayer) IterateDisk(ctx context.Context, f IterateDiskFunc) error
 				return nil
 			}
 		}
-
-		it.Next()
 	}
 	return nil
 }
