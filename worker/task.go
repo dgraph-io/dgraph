@@ -2598,19 +2598,25 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		glog.Infof("handleHasFunction query: %+v\n", q)
 	}
 
-	if q.Order != nil && len(q.Order.Order) > 0 {
-		isIndexed := schema.State().IsIndexed(ctx, q.Attr)
-		if isIndexed {
-			var order *pb.Order
-			for _, i := range q.Order.Order {
-				if i.Attr == q.Attr {
-					order = i
-					break
-				}
+	hasOrders := q.Order != nil && len(q.Order.Order) > 0
+
+	sch, ok := schema.State().Get(ctx, q.Attr)
+	isVectorPred := false
+	if ok {
+		isVectorPred = sch.ValueType == pb.Posting_VFLOAT
+	}
+
+	isIndexed := schema.State().IsIndexed(ctx, q.Attr)
+	if isIndexed && ok && !isVectorPred && hasOrders {
+		var order *pb.Order
+		for _, i := range q.Order.Order {
+			if i.Attr == q.Attr {
+				order = i
+				break
 			}
-			if order != nil {
-				return qs.handleHasWithOrderFunction(ctx, q, out, order.Desc, int(q.Order.Offset), int(q.Order.Count))
-			}
+		}
+		if order != nil {
+			return qs.handleHasWithOrderFunction(ctx, q, out, order.Desc, int(q.Order.Offset), int(q.Order.Count))
 		}
 	}
 
