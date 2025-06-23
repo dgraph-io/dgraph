@@ -16,14 +16,15 @@
 package pb
 
 import (
+	reflect "reflect"
+	sync "sync"
+
 	pb "github.com/dgraph-io/badger/v4/pb"
 	api "github.com/dgraph-io/dgo/v250/protos/api"
 	api_v2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	_ "google.golang.org/protobuf/types/descriptorpb"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
@@ -726,7 +727,7 @@ type Query struct {
 	First        int32        `protobuf:"varint,15,opt,name=first,proto3" json:"first,omitempty"` // used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
 	Offset int32        `protobuf:"varint,16,opt,name=offset,proto3" json:"offset,omitempty"` // offset helps in fetching lesser results for the has query when there is
-	Order  *SortMessage `protobuf:"bytes,17,opt,name=order,proto3" json:"order,omitempty"`
+	Order  *SortMessage `protobuf:"bytes,17,opt,name=order,proto3" json:"order,omitempty"`    // Order of the query. It will be used to help reduce the amount of computation
 }
 
 func (x *Query) Reset() {
