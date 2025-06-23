@@ -405,7 +405,7 @@ func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
 }
 
-type IterateDiskFunc struct {
+type IterateDiskArgs struct {
 	Prefix         []byte
 	Prefetch       bool
 	AllVersions    bool
@@ -417,7 +417,7 @@ type IterateDiskFunc struct {
 	StartKey []byte
 }
 
-func (ml *MemoryLayer) IterateDisk(ctx context.Context, f IterateDiskFunc) error {
+func (ml *MemoryLayer) IterateDisk(ctx context.Context, f IterateDiskArgs) error {
 	txn := pstore.NewTransactionAt(f.ReadTs, false)
 	defer txn.Discard()
 

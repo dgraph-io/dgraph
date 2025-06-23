@@ -2558,7 +2558,7 @@ func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Quer
 
 	cnt := int32(0)
 
-	iteratorFunc := &posting.IterateDiskFunc{
+	iteratorFunc := &posting.IterateDiskArgs{
 		Prefix:      prefix,
 		ReadTs:      q.ReadTs,
 		AllVersions: false,
@@ -2594,8 +2594,7 @@ func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Quer
 		StartKey: startKey,
 	}
 
-	err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc)
-	if err != nil {
+	if err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc); err != nil {
 		return err
 	}
 	sort.Slice(result.Uids, func(i, j int) bool {
@@ -2667,7 +2666,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 
 	cnt := int32(0)
 
-	iteratorFunc := &posting.IterateDiskFunc{
+	iteratorFunc := &posting.IterateDiskArgs{
 		Prefix:         prefix,
 		ReadTs:         q.ReadTs,
 		Reverse:        false,
@@ -2689,8 +2688,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		StartKey: startKey,
 	}
 
-	err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc)
-	if err != nil {
+	if err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc); err != nil {
 		return err
 	}
 	span.AddEvent("handleHasFunction result", trace.WithAttributes(
