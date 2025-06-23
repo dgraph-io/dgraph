@@ -2523,7 +2523,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 }
 
 func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Query, out *pb.Result,
-	rev bool, offset, first int) error {
+	rev bool, offset, first int, srcFn *functionContext) error {
 	if first == 0 {
 		first = math.MaxInt
 	}
@@ -2541,21 +2541,31 @@ func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Quer
 
 	result := &pb.List{}
 
+	lang := langForFunc(q.Langs)
+	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+
 	// This function checks if we should include uid in result or not when has is queried with
 	// @lang(eg: has(name@en)). We need to do this inside this function to return correct result
 	// for first.
 	checkInclusion := func(uid uint64) error {
-		return nil
+		if !needFiltering {
+			return nil
+		}
+
+		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
+		return err
 	}
 
 	cnt := int32(0)
 
 	iteratorFunc := &posting.IterateDiskFunc{
-		Prefix:         prefix,
-		ReadTs:         q.ReadTs,
-		AllVersions:    false,
-		Reverse:        rev,
-		CheckInclusion: checkInclusion,
+		Prefix:      prefix,
+		ReadTs:      q.ReadTs,
+		AllVersions: false,
+		Reverse:     rev,
+		CheckInclusion: func(uid uint64) error {
+			return nil
+		},
 		Function: func(l *posting.List, pk x.ParsedKey) error {
 			pl, err := l.Uids(posting.ListOptions{ReadTs: q.ReadTs})
 			if err != nil {
@@ -2567,9 +2577,15 @@ func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Quer
 				return nil
 			}
 
-			result.Uids = append(result.Uids, pl.Uids...)
+			for _, uid := range pl.Uids {
+				if err := checkInclusion(uid); err != nil {
+					continue
+				}
+				result.Uids = append(result.Uids, uid)
+			}
 
-			// We'll stop fetching if we fetch the required count.
+			// We'll stop fetching if we fetch the required count. We have to read all the uids in an index
+			// to return correct result for first.
 			if len(result.Uids) >= int(q.First) || len(result.Uids) >= (first+offset) {
 				return posting.ErrStopIteration
 			}
@@ -2601,13 +2617,13 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	hasOrders := q.Order != nil && len(q.Order.Order) > 0
 
 	sch, ok := schema.State().Get(ctx, q.Attr)
-	isVectorPred := false
+	isSortablePred := false
 	if ok {
-		isVectorPred = sch.ValueType == pb.Posting_VFLOAT
+		isSortablePred = (sch.ValueType == pb.Posting_INT || sch.ValueType == pb.Posting_FLOAT || sch.ValueType == pb.Posting_DATETIME)
 	}
 
 	isIndexed := schema.State().IsIndexed(ctx, q.Attr)
-	if isIndexed && ok && !isVectorPred && hasOrders {
+	if isIndexed && ok && isSortablePred && hasOrders {
 		var order *pb.Order
 		for _, i := range q.Order.Order {
 			if i.Attr == q.Attr {
@@ -2616,7 +2632,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 			}
 		}
 		if order != nil {
-			return qs.handleHasWithOrderFunction(ctx, q, out, order.Desc, int(q.Order.Offset), int(q.Order.Count))
+			return qs.handleHasWithOrderFunction(ctx, q, out, order.Desc, int(q.Order.Offset), int(q.Order.Count), srcFn)
 		}
 	}
 
