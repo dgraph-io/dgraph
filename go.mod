@@ -1,6 +1,8 @@
 module github.com/hypermodeinc/dgraph/v24
 
-go 1.22.12
+go 1.23.0
+
+toolchain go1.24.3
 
 require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
@@ -25,11 +27,11 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/golang/geo 9e8e59d779cc
+	github.com/golang/geo v0.0.0-20250613135800-9e8e59d779cc
 	github.com/golang/glog v1.2.5
 	github.com/golang/snappy v0.0.4
 	github.com/google/codesearch v1.2.0
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/graph-gophers/graphql-go v1.5.0
@@ -51,15 +53,15 @@ require (
 	go.etcd.io/etcd/raft/v3 v3.5.21
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.33.0
-	golang.org/x/exp b7579e27df2b
-	golang.org/x/mod v0.22.0
-	golang.org/x/net v0.35.0
-	golang.org/x/sync v0.11.0
-	golang.org/x/sys v0.30.0
-	golang.org/x/term v0.29.0
-	golang.org/x/text v0.22.0
-	golang.org/x/tools v0.29.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b
+	golang.org/x/mod v0.25.0
+	golang.org/x/net v0.41.0
+	golang.org/x/sync v0.15.0
+	golang.org/x/sys v0.33.0
+	golang.org/x/term v0.32.0
+	golang.org/x/text v0.26.0
+	golang.org/x/tools v0.34.0
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
@@ -115,7 +117,7 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/magiconair/properties v1.8.9 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
