@@ -6,7 +6,6 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -2523,38 +2522,24 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 	return nil
 }
 
-func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result,
-	srcFn *functionContext) error {
-	span := trace.SpanFromContext(ctx)
-	stop := x.SpanTimer(span, "handleHasFunction")
-	defer stop()
-	if glog.V(3) {
-		glog.Infof("handleHasFunction query: %+v\n", q)
+func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Query, out *pb.Result,
+	rev bool, offset, first int, srcFn *functionContext) error {
+	if first == 0 {
+		first = math.MaxInt
 	}
-
-	txn := pstore.NewTransactionAt(q.ReadTs, false)
-	defer txn.Discard()
 
 	initKey := x.ParsedKey{
 		Attr: q.Attr,
 	}
-	startKey := x.DataKey(q.Attr, q.AfterUid+1)
-	prefix := initKey.DataPrefix()
-	if q.Reverse {
-		// Reverse does not mean reverse iteration. It means we're looking for
-		// the reverse index.
-		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
-		prefix = initKey.ReversePrefix()
+
+	startKey := x.IndexKey(q.Attr, "")
+	if rev {
+		startKey = x.IndexKeyAfterAllTerms(q.Attr)
 	}
 
+	prefix := initKey.IndexPrefix()
+
 	result := &pb.List{}
-	var prevKey []byte
-	itOpt := badger.DefaultIteratorOptions
-	itOpt.PrefetchValues = false
-	itOpt.AllVersions = true
-	itOpt.Prefix = prefix
-	it := txn.NewIterator(itOpt)
-	defer it.Close()
 
 	lang := langForFunc(q.Langs)
 	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
@@ -2572,98 +2557,139 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	}
 
 	cnt := int32(0)
-loop:
-	// This function could be switched to the stream.Lists framework, but after the change to use
-	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
-	// occurs in filterStringFunction (like has(name) queries).
-	for it.Seek(startKey); it.Valid(); {
-		item := it.Item()
-		if bytes.Equal(item.Key(), prevKey) {
-			it.Next()
-			continue
-		}
-		prevKey = append(prevKey[:0], item.Key()...)
 
-		// Parse the key upfront, otherwise ReadPostingList would advance the
-		// iterator.
-		pk, err := x.Parse(item.Key())
-		if err != nil {
-			return err
-		}
-
-		if pk.HasStartUid {
-			// The keys holding parts of a split key should not be accessed here because
-			// they have a different prefix. However, the check is being added to guard
-			// against future bugs.
-			continue
-		}
-
-		// The following optimization speeds up this iteration considerably, because it avoids
-		// the need to run ReadPostingList.
-		if item.UserMeta()&posting.BitEmptyPosting > 0 {
-			// This is an empty posting list. So, it should not be included.
-			continue
-		}
-		if item.UserMeta()&posting.BitCompletePosting > 0 {
-			// This bit would only be set if there are valid uids in UidPack.
-			err := checkInclusion(pk.Uid)
-			switch {
-			case err == posting.ErrNoValue:
-				continue
-			case err != nil:
+	iteratorFunc := &posting.IterateDiskArgs{
+		Prefix:      prefix,
+		ReadTs:      q.ReadTs,
+		AllVersions: false,
+		Reverse:     rev,
+		CheckInclusion: func(uid uint64) error {
+			return nil
+		},
+		Function: func(l *posting.List, pk x.ParsedKey) error {
+			pl, err := l.Uids(posting.ListOptions{ReadTs: q.ReadTs})
+			if err != nil {
 				return err
 			}
-			// skip entries upto Offset and do not store in the result.
+
 			if cnt < q.Offset {
 				cnt++
-				continue
+				return nil
 			}
-			result.Uids = append(result.Uids, pk.Uid)
 
-			// We'll stop fetching if we fetch the required count.
-			if len(result.Uids) >= int(q.First) {
+			for _, uid := range pl.Uids {
+				if err := checkInclusion(uid); err != nil {
+					continue
+				}
+				result.Uids = append(result.Uids, uid)
+			}
+
+			// We'll stop fetching if we fetch the required count. We have to read all the uids in an index
+			// to return correct result for first.
+			if len(result.Uids) >= int(q.First) || len(result.Uids) >= (first+offset) {
+				return posting.ErrStopIteration
+			}
+			return nil
+		},
+		StartKey: startKey,
+	}
+
+	if err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc); err != nil {
+		return err
+	}
+	sort.Slice(result.Uids, func(i, j int) bool {
+		return result.Uids[i] < result.Uids[j]
+	})
+	out.UidMatrix = append(out.UidMatrix, result)
+	return nil
+}
+
+func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *pb.Result,
+	srcFn *functionContext) error {
+	span := trace.SpanFromContext(ctx)
+	stop := x.SpanTimer(span, "handleHasFunction")
+	defer stop()
+	if glog.V(3) {
+		glog.Infof("handleHasFunction query: %+v\n", q)
+	}
+
+	hasOrders := q.Order != nil && len(q.Order.Order) > 0
+
+	sch, ok := schema.State().Get(ctx, q.Attr)
+	isSortablePred := false
+	if ok {
+		isSortablePred = (sch.ValueType == pb.Posting_INT || sch.ValueType == pb.Posting_FLOAT || sch.ValueType == pb.Posting_DATETIME)
+	}
+
+	isIndexed := schema.State().IsIndexed(ctx, q.Attr)
+	if isIndexed && ok && isSortablePred && hasOrders {
+		var order *pb.Order
+		for _, i := range q.Order.Order {
+			if i.Attr == q.Attr {
+				order = i
 				break
 			}
-			continue
+		}
+		if order != nil {
+			return qs.handleHasWithOrderFunction(ctx, q, out, order.Desc, int(q.Order.Offset), int(q.Order.Count), srcFn)
+		}
+	}
+
+	initKey := x.ParsedKey{
+		Attr: q.Attr,
+	}
+	startKey := x.DataKey(q.Attr, q.AfterUid+1)
+	prefix := initKey.DataPrefix()
+	if q.Reverse {
+		// Reverse does not mean reverse iteration. It means we're looking for
+		// the reverse index.
+		startKey = x.ReverseKey(q.Attr, q.AfterUid+1)
+		prefix = initKey.ReversePrefix()
+	}
+
+	result := &pb.List{}
+
+	lang := langForFunc(q.Langs)
+	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
+
+	// This function checks if we should include uid in result or not when has is queried with
+	// @lang(eg: has(name@en)). We need to do this inside this function to return correct result
+	// for first.
+	checkInclusion := func(uid uint64) error {
+		if !needFiltering {
+			return nil
 		}
 
-		// We do need to copy over the key for ReadPostingList.
-		l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
-		if err != nil {
-			return err
-		}
-		empty, err := l.IsEmpty(q.ReadTs, 0)
-		switch {
-		case err != nil:
-			return err
-		case !empty:
-			err := checkInclusion(pk.Uid)
-			switch {
-			case err == posting.ErrNoValue:
-				continue
-			case err != nil:
-				return err
-			}
-			// skip entries upto Offset and do not store in the result.
+		_, err := qs.getValsForUID(q.Attr, lang, uid, q.ReadTs)
+		return err
+	}
+
+	cnt := int32(0)
+
+	iteratorFunc := &posting.IterateDiskArgs{
+		Prefix:         prefix,
+		ReadTs:         q.ReadTs,
+		Reverse:        false,
+		AllVersions:    true,
+		CheckInclusion: checkInclusion,
+		Function: func(l *posting.List, pk x.ParsedKey) error {
 			if cnt < q.Offset {
 				cnt++
-				continue
+				return nil
 			}
 			result.Uids = append(result.Uids, pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
 			if len(result.Uids) >= int(q.First) {
-				break loop
+				return posting.ErrStopIteration
 			}
-		}
+			return nil
+		},
+		StartKey: startKey,
+	}
 
-		if len(result.Uids)%100000 == 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-		}
+	if err := posting.MemLayerInstance.IterateDisk(ctx, *iteratorFunc); err != nil {
+		return err
 	}
 	span.AddEvent("handleHasFunction result", trace.WithAttributes(
 		attribute.Int("uid_count", len(result.Uids))))

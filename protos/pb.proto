@@ -61,6 +61,9 @@ message Query {
 	// field. Now, It's been used only for has query.
 	int32 offset = 16; // offset helps in fetching lesser results for the has query when there is
 	// no filter and order.
+
+  SortMessage order = 17; // Order of the query. It will be used to help reduce the amount of computation
+	// required to fetch the results.
 }
 
 message ValueList {

@@ -231,6 +231,19 @@ func ReverseKey(attr string, uid uint64) []byte {
 	return buf
 }
 
+func IndexKeyAfterAllTerms(attr string) []byte {
+	// Use a term with 0xFF to ensure lexicographically after any real term
+	sentinelTerm := []byte{0xFF}
+	extra := 1 + len(sentinelTerm) // ByteIndex + 0xFF
+	buf, prefixLen := generateKey(DefaultPrefix, attr, extra)
+
+	rest := buf[prefixLen:]
+	rest[0] = ByteIndex
+	copy(rest[1:], sentinelTerm)
+
+	return buf
+}
+
 // IndexKey generates a index key with the given attribute and term.
 // The structure of an index key is as follows:
 //
