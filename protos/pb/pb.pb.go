@@ -2491,10 +2491,10 @@ type RestoreRequest struct {
 	Location  string `protobuf:"bytes,3,opt,name=location,proto3" json:"location,omitempty"`
 	BackupId  string `protobuf:"bytes,4,opt,name=backup_id,json=backupId,proto3" json:"backup_id,omitempty"`
 	// Credentials when using a minio or S3 bucket as the backup location.
-	AccessKey    string    `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	AccessKey    string `protobuf:"bytes,5,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey    Sensitive `protobuf:"bytes,6,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	SessionToken Sensitive `protobuf:"bytes,7,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	Anonymous    bool      `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
+	Anonymous    bool   `protobuf:"varint,8,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
 	// Info needed to process encrypted backups.
 	EncryptionKeyFile string `protobuf:"bytes,9,opt,name=encryption_key_file,json=encryptionKeyFile,proto3" json:"encryption_key_file,omitempty"`
 	// Vault options
@@ -5161,12 +5161,12 @@ type BackupRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	ReadTs       uint64    `protobuf:"varint,1,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
-	SinceTs      uint64    `protobuf:"varint,2,opt,name=since_ts,json=sinceTs,proto3" json:"since_ts,omitempty"`
-	GroupId      uint32    `protobuf:"varint,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	UnixTs       string    `protobuf:"bytes,4,opt,name=unix_ts,json=unixTs,proto3" json:"unix_ts,omitempty"`
-	Destination  string    `protobuf:"bytes,5,opt,name=destination,proto3" json:"destination,omitempty"`
-	AccessKey    string    `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	ReadTs       uint64 `protobuf:"varint,1,opt,name=read_ts,json=readTs,proto3" json:"read_ts,omitempty"`
+	SinceTs      uint64 `protobuf:"varint,2,opt,name=since_ts,json=sinceTs,proto3" json:"since_ts,omitempty"`
+	GroupId      uint32 `protobuf:"varint,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	UnixTs       string `protobuf:"bytes,4,opt,name=unix_ts,json=unixTs,proto3" json:"unix_ts,omitempty"`
+	Destination  string `protobuf:"bytes,5,opt,name=destination,proto3" json:"destination,omitempty"`
+	AccessKey    string `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey    Sensitive `protobuf:"bytes,7,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	SessionToken Sensitive `protobuf:"bytes,8,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	// True if no credentials should be used to access the S3 or minio bucket.
@@ -5402,11 +5402,11 @@ type ExportRequest struct {
 	Format      string `protobuf:"bytes,4,opt,name=format,proto3" json:"format,omitempty"`
 	Destination string `protobuf:"bytes,5,opt,name=destination,proto3" json:"destination,omitempty"`
 	// These credentials are used to access the S3 or minio bucket.
-	AccessKey    string    `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
+	AccessKey    string `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey    Sensitive `protobuf:"bytes,7,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	SessionToken Sensitive `protobuf:"bytes,8,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
-	Anonymous    bool      `protobuf:"varint,9,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
-	Namespace    uint64    `protobuf:"varint,10,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Anonymous    bool   `protobuf:"varint,9,opt,name=anonymous,proto3" json:"anonymous,omitempty"`
+	Namespace    uint64 `protobuf:"varint,10,opt,name=namespace,proto3" json:"namespace,omitempty"`
 }
 
 func (x *ExportRequest) Reset() {
