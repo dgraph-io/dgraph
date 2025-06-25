@@ -19,7 +19,7 @@ import (
 const (
 	NumClustersOpt    string = "numClusters"
 	PartitionStratOpt string = "partitionStratOpt"
-	PartitionedHNSW   string = "partionedHNSW"
+	PartitionedHNSW   string = "partionedhnsw"
 )
 
 type partitionedHNSWIndexFactory[T c.Float] struct {
