@@ -7,6 +7,7 @@ package tok
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"plugin"
 	"strings"
@@ -156,6 +157,7 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 
 // GetIndexFactory returns IndexFactory given name.
 func GetIndexFactory(name string) (IndexFactory, bool) {
+	fmt.Println("HERE GET INDEX FACTORY", indexFactories)
 	f, found := indexFactories[name]
 	return f, found
 }
