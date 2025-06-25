@@ -33,6 +33,7 @@ type persistentHNSW[T c.Float] struct {
 	// layer for uuid 65443. The result will be a neighboring uuid.
 	nodeAllEdges map[uint64][][]uint64
 	deadNodes    map[uint64]struct{}
+	cache        index.CacheType
 }
 
 func GetPersistantOptions[T c.Float](o opt.Options) string {
@@ -110,6 +111,41 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
 	}
 	return nil
+}
+
+func (ph *persistentHNSW[T]) NumBuildPasses() int {
+	return 0
+}
+
+func (ph *persistentHNSW[T]) NumIndexPasses() int {
+	return 1
+}
+
+func (ph *persistentHNSW[T]) NumSeedVectors() int {
+	return 0
+}
+
+func (ph *persistentHNSW[T]) StartBuild(caches []index.CacheType) {
+	ph.nodeAllEdges = make(map[uint64][][]uint64)
+	ph.cache = caches[0]
+}
+
+func (ph *persistentHNSW[T]) EndBuild() []int {
+	ph.nodeAllEdges = nil
+	ph.cache = nil
+	return []int{0}
+}
+
+func (ph *persistentHNSW[T]) NumThreads() int {
+	return 1
+}
+
+func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []T) error {
+	_, err := ph.Insert(ctx, ph.cache, uid, vec)
+	return err
+}
+
+func (ph *persistentHNSW[T]) AddSeedVector(vec []T) {
 }
 
 func (ph *persistentHNSW[T]) emptyFinalResultWithError(e error) (

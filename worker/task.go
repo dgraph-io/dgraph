@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -362,34 +361,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			args.q.ReadTs,
 		)
 
-		var nnUids []uint64
-		var wg sync.WaitGroup
-		wg.Add(1000)
-		var mutex sync.Mutex
-		for i := range 1000 {
-			go func(idx int) {
-				nnuids := make([]uint64, 0)
-				indexer, _ := cspec.CreateIndex(args.q.Attr, i)
-				if srcFn.vectorInfo != nil {
-					nnuids, _ = indexer.Search(ctx, qc, srcFn.vectorInfo,
-						int(numNeighbors), index.AcceptAll[float32])
-				} else {
-					nnuids, _ = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-						int(numNeighbors), index.AcceptAll[float32])
-				}
-				mutex.Lock()
-				nnUids = append(nnUids, nnuids...)
-				mutex.Unlock()
-				wg.Done()
-			}(i)
+		indexer, err := cspec.CreateIndex(args.q.Attr)
+		if err != nil {
+			return err
 		}
-		wg.Wait()
-		indexer, _ := cspec.CreateIndex(args.q.Attr, 0)
-		nnUids, err = indexer.MergeResults(ctx, qc, nnUids, srcFn.vectorInfo,
+
+		nnUids, err := indexer.Search(ctx, qc, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll[float32])
 		if err != nil {
 			return err
 		}
+
 		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
 		return nil
