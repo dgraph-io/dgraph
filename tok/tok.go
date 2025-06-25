@@ -157,7 +157,7 @@ func GetTokenizer(name string) (Tokenizer, bool) {
 
 // GetIndexFactory returns IndexFactory given name.
 func GetIndexFactory(name string) (IndexFactory, bool) {
-	fmt.Println("HERE GET INDEX FACTORY", indexFactories)
+	fmt.Println("HERE GET INDEX FACTORY", indexFactories, name)
 	f, found := indexFactories[name]
 	return f, found
 }
