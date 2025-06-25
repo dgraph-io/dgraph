@@ -39,7 +39,7 @@ type IndexFactory[T c.Float] interface {
 	// same object.
 	// The set of vectors to use in the index process is defined by
 	// source.
-	Create(name string, o opts.Options, floatBits int, split int) (VectorIndex[T], error)
+	Create(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
 
 	// Find is expected to retrieve the VectorIndex corresponding with the
 	// name. If it attempts to find a name that does not exist, the VectorIndex
@@ -56,7 +56,7 @@ type IndexFactory[T c.Float] interface {
 	// CreateOrReplace will create a new index -- as defined by the Create
 	// function -- if it does not yet exist, otherwise, it will replace any
 	// index with the given name.
-	CreateOrReplace(name string, o opts.Options, floatBits int, split int) (VectorIndex[T], error)
+	CreateOrReplace(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
 }
 
 // SearchFilter defines a predicate function that we will use to determine
@@ -89,6 +89,17 @@ type OptionalIndexSupport[T c.Float] interface {
 		filter SearchFilter[T]) (*SearchPathResult, error)
 }
 
+type VectorPartitionStrat[T c.Float] interface {
+	FindIndexForSearch(vec []T) ([]int, error)
+	FindIndexForInsert(vec []T) (int, error)
+	NumPasses() int
+	NumSeedVectors() int
+	StartBuildPass()
+	EndBuildPass()
+	AddSeedVector(vec []T)
+	AddVector(vec []T) error
+}
+
 // A VectorIndex can be used to Search for vectors and add vectors to an index.
 type VectorIndex[T c.Float] interface {
 	OptionalIndexSupport[T]
@@ -119,6 +130,15 @@ type VectorIndex[T c.Float] interface {
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
 	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) ([]*KeyValue, error)
+
+	BuildInsert(ctx context.Context, uuid uint64, vec []T) error
+	AddSeedVector(vec []T)
+	NumBuildPasses() int
+	NumIndexPasses() int
+	NumSeedVectors() int
+	StartBuild(caches []CacheType)
+	EndBuild() []int
+	NumThreads() int
 }
 
 // A Txn is an interface representation of a persistent storage transaction,
