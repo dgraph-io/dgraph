@@ -21,7 +21,6 @@ type partitionedHNSW[T c.Float] struct {
 
 	clusterMap  map[int]index.VectorIndex[T]
 	numClusters int
-	factory     index.IndexFactory[T]
 	partition   index.VectorPartitionStrat[T]
 
 	hnswOptions    opt.Options
@@ -45,9 +44,9 @@ func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
 
 	ph.buildPass = 0
 	ph.hnswOptions = o
-	ph.factory = hnsw.CreateFactory[T](ph.floatBits)
 	for i := range ph.numClusters {
-		vi, err := ph.factory.Create(ph.pred, ph.hnswOptions, ph.floatBits)
+		factory := hnsw.CreateFactory[T](ph.floatBits)
+		vi, err := factory.Create(ph.pred, ph.hnswOptions, ph.floatBits)
 		if err != nil {
 			return err
 		}
