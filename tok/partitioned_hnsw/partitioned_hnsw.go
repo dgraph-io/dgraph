@@ -89,7 +89,7 @@ func (ph *partitionedHNSW[T]) NumIndexPasses() int {
 }
 
 func (ph *partitionedHNSW[T]) NumThreads() int {
-	return NUM_PASSES
+	return ph.numClusters
 }
 
 func (ph *partitionedHNSW[T]) NumSeedVectors() int {
