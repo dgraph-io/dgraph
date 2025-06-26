@@ -33,7 +33,7 @@ func (km *Kmeans[T]) AddVector(vec []T) error {
 }
 
 func (km *Kmeans[T]) FindIndexForSearch(vec []T) ([]int, error) {
-	res := make([]int, len(km.centroids.centroids))
+	res := make([]int, km.NumSeedVectors())
 	for i := range res {
 		res[i] = i
 	}
