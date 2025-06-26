@@ -108,10 +108,10 @@ func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 	}
 
 	for i := range ph.clusterMap {
+		ph.buildSyncMaps[i] = &sync.Mutex{}
 		if i%NUM_PASSES != (ph.buildPass - ph.partition.NumPasses()) {
 			continue
 		}
-		ph.buildSyncMaps[i] = &sync.Mutex{}
 		ph.clusterMap[i].StartBuild([]index.CacheType{ph.caches[i]})
 	}
 }
