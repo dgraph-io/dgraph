@@ -169,7 +169,7 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 		}(index)
 	}
 	wg.Wait()
-	fmt.Println("Result:", res)
+	fmt.Println("Result:", res, indexes)
 	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
 }
 
