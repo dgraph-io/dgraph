@@ -141,7 +141,20 @@ func (ph *persistentHNSW[T]) NumThreads() int {
 }
 
 func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []T) error {
-	_, err := ph.Insert(ctx, ph.cache, uid, vec)
+	newPh := &persistentHNSW[T]{
+		maxLevels:      ph.maxLevels,
+		efConstruction: ph.efConstruction,
+		efSearch:       ph.efSearch,
+		pred:           ph.pred,
+		vecEntryKey:    ph.vecEntryKey,
+		vecKey:         ph.vecKey,
+		vecDead:        ph.vecDead,
+		simType:        ph.simType,
+		floatBits:      ph.floatBits,
+		nodeAllEdges:   make(map[uint64][][]uint64),
+		cache:          ph.cache,
+	}
+	_, err := newPh.Insert(ctx, ph.cache, uid, vec)
 	return err
 }
 
