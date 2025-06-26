@@ -102,7 +102,7 @@ func (ph *partitionedHNSW[T]) NumSeedVectors() int {
 
 func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 	ph.caches = caches
-	if ph.buildPass <= ph.partition.NumPasses() {
+	if ph.buildPass < ph.partition.NumPasses() {
 		ph.partition.StartBuildPass()
 		return
 	}
@@ -119,7 +119,7 @@ func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 func (ph *partitionedHNSW[T]) EndBuild() []int {
 	res := []int{}
 
-	if ph.buildPass > ph.partition.NumPasses() {
+	if ph.buildPass >= ph.partition.NumPasses() {
 		for i := range ph.clusterMap {
 			if i%NUM_PASSES != (ph.buildPass - ph.partition.NumPasses()) {
 				continue
@@ -135,7 +135,7 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 		return res
 	}
 
-	if ph.buildPass <= ph.partition.NumPasses() {
+	if ph.buildPass < ph.partition.NumPasses() {
 		ph.partition.EndBuildPass()
 	}
 	return []int{}
