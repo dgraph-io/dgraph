@@ -163,11 +163,13 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 				return
 			}
 			mutex.Lock()
+			fmt.Println("Addign result:", ids)
 			res = append(res, ids...)
 			mutex.Unlock()
 		}(index)
 	}
 	wg.Wait()
+	fmt.Println("Result:", res)
 	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
 }
 
