@@ -96,9 +96,10 @@ func (hf *partitionedHNSWIndexFactory[T]) createWithLock(
 		return nil, err
 	}
 	retVal := &partitionedHNSW[T]{
-		pred:       name,
-		floatBits:  floatBits,
-		clusterMap: map[int]index.VectorIndex[T]{},
+		pred:          name,
+		floatBits:     floatBits,
+		clusterMap:    map[int]index.VectorIndex[T]{},
+		buildSyncMaps: map[int]*sync.Mutex{},
 	}
 	err := retVal.applyOptions(o)
 	if err != nil {
