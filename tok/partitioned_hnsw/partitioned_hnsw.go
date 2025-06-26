@@ -26,8 +26,9 @@ type partitionedHNSW[T c.Float] struct {
 	hnswOptions    opt.Options
 	partitionStrat string
 
-	caches    []index.CacheType
-	buildPass int
+	caches        []index.CacheType
+	buildPass     int
+	buildSyncMaps map[int]*sync.Mutex
 }
 
 func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
@@ -75,7 +76,10 @@ func (ph *partitionedHNSW[T]) BuildInsert(ctx context.Context, uuid uint64, vec 
 	if index%NUM_PASSES != passIdx {
 		return nil
 	}
-	return ph.clusterMap[index].BuildInsert(ctx, uuid, vec)
+	ph.buildSyncMaps[index].Lock()
+	defer ph.buildSyncMaps[index].Unlock()
+	_, err = ph.clusterMap[index].Insert(ctx, ph.caches[index], uuid, vec)
+	return err
 }
 
 const NUM_PASSES = 10
@@ -107,6 +111,7 @@ func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 		if i%NUM_PASSES != (ph.buildPass - ph.partition.NumPasses()) {
 			continue
 		}
+		ph.buildSyncMaps[i] = &sync.Mutex{}
 		ph.clusterMap[i].StartBuild([]index.CacheType{ph.caches[i]})
 	}
 }
