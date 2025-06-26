@@ -6,7 +6,6 @@ package partitioned_hnsw
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
@@ -159,17 +158,14 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 			defer wg.Done()
 			ids, err := ph.clusterMap[i].Search(ctx, txn, query, maxResults, filter)
 			if err != nil {
-				fmt.Println("Error", err)
 				return
 			}
 			mutex.Lock()
-			fmt.Println("Addign result:", ids)
 			res = append(res, ids...)
 			mutex.Unlock()
 		}(index)
 	}
 	wg.Wait()
-	fmt.Println("Result:", res, indexes)
 	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
 }
 
