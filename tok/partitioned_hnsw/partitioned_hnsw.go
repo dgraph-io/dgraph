@@ -6,6 +6,7 @@ package partitioned_hnsw
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
@@ -158,6 +159,7 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 			defer wg.Done()
 			ids, err := ph.clusterMap[i].Search(ctx, txn, query, maxResults, filter)
 			if err != nil {
+				fmt.Println("Error", err)
 				return
 			}
 			mutex.Lock()
