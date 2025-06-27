@@ -1511,6 +1511,8 @@ func (vt *VectorTransaction) Update() {
 		vt.txn.cache.deltas[string(x.DataKey(str, 1))] = data
 	}
 
+	fmt.Println("AFTER UPDATE", len(vt.txn.cache.deltas))
+
 	vt.vector = nil
 	vt.edges = nil
 	vt.others = nil
