@@ -1427,7 +1427,7 @@ func (vt *VectorTransaction) GetVector(uid uint64) *[]byte {
 	if ok {
 		return val
 	}
-	pl, err := vt.txn.GetScalarList(x.DataKey(vt.vecPred, uid))
+	pl, err := vt.txn.Get(x.DataKey(vt.vecPred, uid))
 	if err != nil {
 		return nil
 	}
@@ -1446,7 +1446,7 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 	if ok {
 		return val
 	}
-	pl, err := vt.txn.GetScalarList(x.DataKey(vt.edgePred, uid))
+	pl, err := vt.txn.Get(x.DataKey(vt.edgePred, uid))
 	if err != nil {
 		return nil
 	}
@@ -1465,7 +1465,7 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 	if ok {
 		return val
 	}
-	pl, err := vt.txn.GetScalarList(x.DataKey(key, 1))
+	pl, err := vt.txn.Get(x.DataKey(key, 1))
 	if err != nil {
 		return nil
 	}
