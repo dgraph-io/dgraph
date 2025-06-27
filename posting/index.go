@@ -1456,6 +1456,9 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
+	if len(value) == 0 {
+		return nil
+	}
 	vt.edges[uid] = &value
 	return &value
 }
@@ -1475,7 +1478,10 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
-	fmt.Println("GET OTHER: ", key, value)
+	//fmt.Println("GET OTHER: ", key, value)
+	if len(value) == 0 {
+		return nil
+	}
 	vt.others[key] = &value
 	return &value
 }
