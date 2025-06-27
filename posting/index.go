@@ -1551,6 +1551,10 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			edges:   make(map[uint64]*[]byte),
 			others:  make(map[string]*[]byte),
 		}
+		if len(caches) > 1 {
+			caches[i].(*VectorTransaction).vecPred = rb.Attr
+			caches[i].(*VectorTransaction).edgePred = fmt.Sprintf("%s_%d", rb.Attr, i)
+		}
 	}
 
 	for pass_idx := range indexer.NumBuildPasses() {
@@ -2041,10 +2045,11 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead)))
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword)))
 
-	for i := range hnsw.VectorIndexMaxLevels {
-		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
+	for i := range 1000 {
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprintf("_%d", i))))
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead, fmt.Sprintf("_%d", i))))
+		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecEntry, fmt.Sprintf("_%d", i))))
 	}
-
 	return prefixes
 }
 
