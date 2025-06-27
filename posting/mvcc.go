@@ -711,12 +711,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				if err := proto.Unmarshal(val, pl); err != nil {
 					return err
 				}
-				fmt.Println("HERE", pl)
 				pl.CommitTs = item.Version()
 				if l.mutationMap == nil {
 					l.mutationMap = newMutableLayer()
 				}
 				l.mutationMap.insertCommittedPostings(pl)
+				fmt.Println("HERE", pk, pl, l.mutationMap)
 				return nil
 			})
 			if err != nil {
