@@ -354,16 +354,20 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return err
 		}
-		//TODO: generate maxLevels from schema, filter, etc.
-		vt := &posting.VectorTransaction{}
-		vt.NewVT(q.ReadTs)
 
+		//TODO: generate maxLevels from schema, filter, etc.
 		indexer, err := cspec.CreateIndex(args.q.Attr)
 		if err != nil {
 			return err
 		}
 
-		nnUids, err := indexer.Search(ctx, vt, srcFn.vectorInfo,
+		caches := posting.GetVectorTransactions(indexer.NumThreads(), q.ReadTs, args.q.Attr)
+		for i := range caches {
+			caches[i].(*posting.VectorTransaction).SetCache(qs.cache)
+		}
+		indexer.SetCaches(caches)
+
+		nnUids, err := indexer.Search(ctx, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll[float32])
 		if err != nil {
 			return err

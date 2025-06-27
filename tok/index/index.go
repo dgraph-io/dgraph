@@ -113,7 +113,7 @@ type VectorIndex[T c.Float] interface {
 	// based on some input criteria. The maxResults count is counted *after*
 	// being filtered. In other words, we only count those results that had not
 	// been filtered out.
-	Search(ctx context.Context, c CacheType, query []T,
+	Search(ctx context.Context, query []T,
 		maxResults int,
 		filter SearchFilter[T]) ([]uint64, error)
 
@@ -129,16 +129,17 @@ type VectorIndex[T c.Float] interface {
 
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
-	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) error
+	Insert(ctx context.Context, uuid uint64, vec []T) error
 
 	BuildInsert(ctx context.Context, uuid uint64, vec []T) error
 	AddSeedVector(vec []T)
 	NumBuildPasses() int
 	NumIndexPasses() int
 	NumSeedVectors() int
-	StartBuild(caches []CacheType)
+	StartBuild()
 	EndBuild() []int
 	NumThreads() int
+	SetCaches(caches []CacheType)
 }
 
 // A Txn is an interface representation of a persistent storage transaction,

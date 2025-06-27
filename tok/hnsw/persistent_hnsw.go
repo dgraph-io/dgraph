@@ -128,8 +128,11 @@ func (ph *persistentHNSW[T]) NumSeedVectors() int {
 	return 0
 }
 
-func (ph *persistentHNSW[T]) StartBuild(caches []index.CacheType) {
-	ph.cache = caches[0]
+func (ph *persistentHNSW[T]) StartBuild() {
+}
+
+func (ph *persistentHNSW[T]) SetCaches(c []index.CacheType) {
+	ph.cache = c[0]
 }
 
 func (ph *persistentHNSW[T]) EndBuild() []int {
@@ -154,7 +157,7 @@ func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []
 		floatBits:      ph.floatBits,
 		cache:          ph.cache,
 	}
-	return newPh.Insert(ctx, ph.cache, uid, vec)
+	return newPh.Insert(ctx, uid, vec)
 }
 
 func (ph *persistentHNSW[T]) AddSeedVector(vec []T) {
@@ -288,9 +291,9 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 
 // Search searches the hnsw graph for the nearest neighbors of the query vector
 // and returns the traversal path and the nearest neighbors
-func (ph *persistentHNSW[T]) Search(ctx context.Context, c index.CacheType, query []T,
+func (ph *persistentHNSW[T]) Search(ctx context.Context, query []T,
 	maxResults int, filter index.SearchFilter[T]) (nnUids []uint64, err error) {
-	r, err := ph.SearchWithPath(ctx, c, query, maxResults, filter)
+	r, err := ph.SearchWithPath(ctx, ph.cache, query, maxResults, filter)
 	return r.Neighbors, err
 }
 
@@ -467,9 +470,9 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 
 // InsertToPersistentStorage inserts a node into the hnsw graph and returns the
 // traversal path and the edges created
-func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
+func (ph *persistentHNSW[T]) Insert(ctx context.Context,
 	inUuid uint64, inVec []T) error {
-	_, err := ph.insertHelper(ctx, c, inUuid, inVec)
+	_, err := ph.insertHelper(ctx, ph.cache, inUuid, inVec)
 	return err
 }
 

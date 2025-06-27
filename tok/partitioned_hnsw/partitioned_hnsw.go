@@ -99,8 +99,14 @@ func (ph *partitionedHNSW[T]) NumSeedVectors() int {
 	return ph.partition.NumSeedVectors()
 }
 
-func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
+func (ph *partitionedHNSW[T]) SetCaches(caches []index.CacheType) {
 	ph.caches = caches
+	for i := range ph.clusterMap {
+		ph.clusterMap[i].SetCaches([]index.CacheType{ph.caches[i]})
+	}
+}
+
+func (ph *partitionedHNSW[T]) StartBuild() {
 	if ph.buildPass < ph.partition.NumPasses() {
 		ph.partition.StartBuildPass()
 		return
@@ -111,7 +117,7 @@ func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 		if i%NUM_PASSES != (ph.buildPass - ph.partition.NumPasses()) {
 			continue
 		}
-		ph.clusterMap[i].StartBuild([]index.CacheType{ph.caches[i]})
+		ph.clusterMap[i].StartBuild()
 	}
 }
 
@@ -140,15 +146,15 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 	return []int{}
 }
 
-func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) error {
+func (ph *partitionedHNSW[T]) Insert(ctx context.Context, uid uint64, vec []T) error {
 	index, err := ph.partition.FindIndexForInsert(vec)
 	if err != nil {
 		return err
 	}
-	return ph.clusterMap[index].Insert(ctx, txn, uid, vec)
+	return ph.clusterMap[index].Insert(ctx, uid, vec)
 }
 
-func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, query []T, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
+func (ph *partitionedHNSW[T]) Search(ctx context.Context, query []T, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
 	indexes, err := ph.partition.FindIndexForSearch(query)
 	if err != nil {
 		return nil, err
@@ -160,7 +166,7 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			ids, err := ph.clusterMap[i].Search(ctx, txn, query, maxResults, filter)
+			ids, err := ph.clusterMap[i].Search(ctx, query, maxResults, filter)
 			if err != nil {
 				return
 			}
@@ -170,7 +176,7 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 		}(index)
 	}
 	wg.Wait()
-	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
+	return ph.clusterMap[0].MergeResults(ctx, ph.caches[0], res, query, maxResults, filter)
 }
 
 func (ph *partitionedHNSW[T]) SearchWithPath(ctx context.Context, txn index.CacheType, query []T, maxResults int, filter index.SearchFilter[T]) (*index.SearchPathResult, error) {

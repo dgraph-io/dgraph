@@ -163,15 +163,16 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			len(info.factorySpecs) > 0 {
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
-			vt := &VectorTransaction{
-				txn:     txn,
-				startTs: txn.StartTs,
-			}
 			indexer, err := info.factorySpecs[0].CreateIndex(attr)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
-			if err := indexer.Insert(ctx, vt, uid, inVec); err != nil {
+			caches := GetVectorTransactions(indexer.NumThreads(), txn.StartTs, attr)
+			for i := range caches {
+				caches[i].(*VectorTransaction).txn = txn
+			}
+			indexer.SetCaches(caches)
+			if err := indexer.Insert(ctx, uid, inVec); err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
 			return []*pb.DirectedEdge{}, nil
@@ -1362,6 +1363,18 @@ func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
 
 const numCentroids = 1000
 
+func GetVectorTransactions(n int, startTs uint64, pred string) []tokIndex.CacheType {
+	retVal := make([]tokIndex.CacheType, n)
+	for i := 0; i < n; i++ {
+		retVal[i] = &VectorTransaction{}
+		retVal[i].(*VectorTransaction).NewVT(startTs)
+		if n > 1 {
+			retVal[i].(*VectorTransaction).UpdateSplit(i, pred)
+		}
+	}
+	return retVal
+}
+
 type VectorTransaction struct {
 	txn      *Txn
 	startTs  uint64
@@ -1370,6 +1383,16 @@ type VectorTransaction struct {
 	vector   map[uint64]*[]byte
 	edges    map[uint64]*[]byte
 	others   map[string]*[]byte
+}
+
+func (vt *VectorTransaction) SetCache(cache *LocalCache) {
+	vt.txn = NewTxn(vt.startTs)
+	vt.txn.cache = cache
+}
+
+func (vt *VectorTransaction) UpdateSplit(i int, pred string) {
+	vt.vecPred = pred
+	vt.edgePred = fmt.Sprintf("%s_%d", pred, i)
 }
 
 func (vt *VectorTransaction) NewVT(startTs uint64) {
@@ -1542,25 +1565,16 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	for i := range txns {
 		txns[i] = NewTxn(rb.StartTs)
 	}
-	caches := make([]tokIndex.CacheType, indexer.NumThreads())
-	for i := range caches {
-		caches[i] = &VectorTransaction{
-			txn:     txns[i],
-			startTs: rb.StartTs,
-			vector:  make(map[uint64]*[]byte),
-			edges:   make(map[uint64]*[]byte),
-			others:  make(map[string]*[]byte),
-		}
-		if len(caches) > 1 {
-			caches[i].(*VectorTransaction).vecPred = rb.Attr
-			caches[i].(*VectorTransaction).edgePred = fmt.Sprintf("%s_%d", rb.Attr, i)
-		}
+	caches := GetVectorTransactions(indexer.NumThreads(), rb.StartTs, rb.Attr)
+	for i := range len(caches) {
+		caches[i].(*VectorTransaction).txn = txns[i]
 	}
+	indexer.SetCaches(caches)
 
 	for pass_idx := range indexer.NumBuildPasses() {
 		fmt.Println("Building pass", pass_idx)
 
-		indexer.StartBuild(caches)
+		indexer.StartBuild()
 
 		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
@@ -1586,7 +1600,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	for pass_idx := range indexer.NumIndexPasses() {
 		fmt.Println("Indexing pass", pass_idx)
 
-		indexer.StartBuild(caches)
+		indexer.StartBuild()
 
 		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
