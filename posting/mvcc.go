@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -298,8 +297,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
 				data := cache.deltas[key]
-				pk, _ := x.Parse([]byte(key))
-				fmt.Println(pk, data)
+				//pk, _ := x.Parse([]byte(key))
+				//fmt.Println(pk, data)
 				if len(data) == 0 {
 					continue
 				}
@@ -637,7 +636,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// lists ended up being rolled-up multiple times. This issue was caught by the
 	// uid-set Jepsen test.
 	pk, err := x.Parse(key)
-	fmt.Println("READING ", pk)
+	//fmt.Println("READING ", pk)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
 	}
@@ -716,7 +715,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					l.mutationMap = newMutableLayer()
 				}
 				l.mutationMap.insertCommittedPostings(pl)
-				fmt.Println("HERE", pk, pl, l.mutationMap)
+				//fmt.Println("HERE", pk, pl, l.mutationMap)
 				return nil
 			})
 			if err != nil {
