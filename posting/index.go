@@ -1436,7 +1436,7 @@ func (vt *VectorTransaction) GetVector(uid uint64) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
-	fmt.Println("GET VECTOR: ", uid, value, vt.vecPred)
+	//fmt.Println("GET VECTOR: ", uid, value, vt.vecPred)
 	vt.vector[uid] = &value
 	return &value
 }
