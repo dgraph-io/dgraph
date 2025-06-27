@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -297,6 +298,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
 				data := cache.deltas[key]
+				pk, _ := x.Parse([]byte(key))
+				fmt.Println(pk, data)
 				if len(data) == 0 {
 					continue
 				}

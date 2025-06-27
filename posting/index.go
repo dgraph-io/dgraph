@@ -1447,6 +1447,7 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return val
 	}
 	pl, err := vt.txn.GetScalarList(x.DataKey(vt.edgePred, uid))
+	fmt.Println("GET EDGE: ", uid, pl, err, vt.edgePred)
 	if err != nil {
 		return nil
 	}
@@ -1455,7 +1456,6 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
-	fmt.Println("GET EDGE: ", uid, value, vt.edgePred)
 	vt.edges[uid] = &value
 	return &value
 }
