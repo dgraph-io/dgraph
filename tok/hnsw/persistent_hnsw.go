@@ -403,7 +403,6 @@ func (ph *persistentHNSW[T]) PickStartNode(
 		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
 
-	fmt.Println("Start Node", data)
 	entry := BytesToUint64(*data)
 	if err := ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
 		return 0, err
