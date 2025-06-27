@@ -113,12 +113,11 @@ func (hf *persistentIndexFactory[T]) createWithLock(
 		return nil, err
 	}
 	retVal := &persistentHNSW[T]{
-		pred:         name,
-		vecEntryKey:  ConcatStrings(name, VecEntry),
-		vecKey:       ConcatStrings(name, VecKeyword),
-		vecDead:      ConcatStrings(name, VecDead),
-		floatBits:    floatBits,
-		nodeAllEdges: map[uint64][][]uint64{},
+		pred:        name,
+		vecEntryKey: ConcatStrings(name, VecEntry),
+		vecKey:      ConcatStrings(name, VecKeyword),
+		vecDead:     ConcatStrings(name, VecDead),
+		floatBits:   floatBits,
 	}
 	err := retVal.applyOptions(o)
 	if err != nil {

@@ -33,7 +33,6 @@ import (
 	"github.com/hypermodeinc/dgraph/v25/schema"
 	ctask "github.com/hypermodeinc/dgraph/v25/task"
 	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
 	"github.com/hypermodeinc/dgraph/v25/tok/index"
 	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/hypermodeinc/dgraph/v25/types/facets"
@@ -356,17 +355,15 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		//TODO: generate maxLevels from schema, filter, etc.
-		qc := hnsw.NewQueryCache(
-			posting.NewViLocalCache(qs.cache),
-			args.q.ReadTs,
-		)
+		vt := &posting.VectorTransaction{}
+		vt.NewVT(q.ReadTs)
 
 		indexer, err := cspec.CreateIndex(args.q.Attr)
 		if err != nil {
 			return err
 		}
 
-		nnUids, err := indexer.Search(ctx, qc, srcFn.vectorInfo,
+		nnUids, err := indexer.Search(ctx, vt, srcFn.vectorInfo,
 			int(numNeighbors), index.AcceptAll[float32])
 		if err != nil {
 			return err

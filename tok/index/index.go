@@ -129,7 +129,7 @@ type VectorIndex[T c.Float] interface {
 
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
-	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) ([]*KeyValue, error)
+	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) error
 
 	BuildInsert(ctx context.Context, uuid uint64, vec []T) error
 	AddSeedVector(vec []T)
@@ -144,18 +144,16 @@ type VectorIndex[T c.Float] interface {
 // A Txn is an interface representation of a persistent storage transaction,
 // where multiple operations are performed on a database
 type Txn interface {
-	// StartTs gets the exact time that the transaction started, returned in uint64 format
-	StartTs() uint64
 	// Get uses a []byte key to return the Value corresponding to the key
-	Get(key []byte) (rval []byte, rerr error)
+	//	Get(key []byte) (rval []byte, rerr error)
 	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
-	GetWithLockHeld(key []byte) (rval []byte, rerr error)
+	//	GetWithLockHeld(key []byte) (rval []byte, rerr error)
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
 	// Adds a mutation operation on a index.Txn interface, where the mutation
 	// is represented in the form of an index.DirectedEdge
-	AddMutation(ctx context.Context, key []byte, t *KeyValue) error
+	//	AddMutation(ctx context.Context, key []byte, t *KeyValue) error
 	// Same as AddMutation but with a mutex lock held
-	AddMutationWithLockHeld(ctx context.Context, key []byte, t *KeyValue) error
+	//	AddMutationWithLockHeld(ctx context.Context, key []byte, t *KeyValue) error
 	// mutex lock
 	LockKey(key []byte)
 	// mutex unlock
@@ -173,7 +171,13 @@ type LocalCache interface {
 
 // CacheType is an interface representation of the cache of a persistent storage system
 type CacheType interface {
-	Get(key []byte) (rval []byte, rerr error)
+	//	Get(key []byte) (rval []byte, rerr error)
 	Ts() uint64
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
+	SetVector(uid uint64, vec *[]byte)
+	SetEdge(uid uint64, edge *[]byte)
+	SetOther(key string, val *[]byte)
+	GetVector(uid uint64) *[]byte
+	GetEdge(uid uint64) *[]byte
+	GetOther(key string) *[]byte
 }

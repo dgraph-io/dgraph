@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -31,9 +32,11 @@ type persistentHNSW[T c.Float] struct {
 	floatBits      int
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for uuid 65443. The result will be a neighboring uuid.
-	nodeAllEdges map[uint64][][]uint64
-	deadNodes    map[uint64]struct{}
-	cache        index.CacheType
+	deadNodes map[uint64]struct{}
+	cache     index.CacheType
+
+	entryVec      []T
+	isEntryVecSet atomic.Bool
 }
 
 func GetPersistantOptions[T c.Float](o opt.Options) string {
@@ -126,12 +129,10 @@ func (ph *persistentHNSW[T]) NumSeedVectors() int {
 }
 
 func (ph *persistentHNSW[T]) StartBuild(caches []index.CacheType) {
-	ph.nodeAllEdges = make(map[uint64][][]uint64)
 	ph.cache = caches[0]
 }
 
 func (ph *persistentHNSW[T]) EndBuild() []int {
-	ph.nodeAllEdges = nil
 	ph.cache = nil
 	return []int{0}
 }
@@ -151,11 +152,9 @@ func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []
 		vecDead:        ph.vecDead,
 		simType:        ph.simType,
 		floatBits:      ph.floatBits,
-		nodeAllEdges:   make(map[uint64][][]uint64),
 		cache:          ph.cache,
 	}
-	_, err := newPh.Insert(ctx, ph.cache, uid, vec)
-	return err
+	return newPh.Insert(ctx, ph.cache, uid, vec)
 }
 
 func (ph *persistentHNSW[T]) AddSeedVector(vec []T) {
@@ -176,22 +175,13 @@ func (ph *persistentHNSW[T]) emptySearchResultWithError(e error) (*searchLayerRe
 // in persistent store) and false otherwise.
 // (Of course, it may also return an error if a problem was encountered).
 func (ph *persistentHNSW[T]) fillNeighborEdges(uuid uint64, c index.CacheType, edges *[][]uint64) (bool, error) {
-	var ok bool
-	*edges, ok = ph.nodeAllEdges[uuid]
-	if ok {
-		return true, nil
-	}
-
-	ok, err := populateEdgeDataFromKeyWithCacheType(ph.vecKey, uuid, c, edges)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
+	edge := ph.cache.GetEdge(uuid)
+	if edge == nil {
 		return false, nil
 	}
-
-	// add this to in mem storage of uid -> edges
-	ph.nodeAllEdges[uuid] = *edges
+	if err := decodeUint64MatrixUnsafe(*edge, edges); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -405,24 +395,20 @@ func (ph *persistentHNSW[T]) PickStartNode(
 	c index.CacheType,
 	startVec *[]T) (uint64, error) {
 
-	data, err := getDataFromKeyWithCacheType(ph.vecEntryKey, 1, c)
-	if err != nil {
-		if errors.Is(err, errFetchingPostingList) {
-			// The index might be empty
-			return ph.calculateNewEntryVec(ctx, c, startVec)
-		}
-		return 0, err
+	data := c.GetOther(ph.vecEntryKey)
+	if data == nil {
+		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
 
-	entry := BytesToUint64(data)
-	if err = ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
+	entry := BytesToUint64(*data)
+	if err := ph.getVecFromUid(entry, c, startVec); err != nil && !errors.Is(err, errNilVector) {
 		return 0, err
 	}
 
 	if len(*startVec) == 0 {
 		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
-	return entry, err
+	return entry, nil
 }
 
 // SearchWithPath allows persistentHNSW to implement index.OptionalIndexSupport.
@@ -482,25 +468,21 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 // InsertToPersistentStorage inserts a node into the hnsw graph and returns the
 // traversal path and the edges created
 func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
-	inUuid uint64, inVec []T) ([]*index.KeyValue, error) {
-	tc, ok := c.(*TxnCache)
-	if !ok {
-		return []*index.KeyValue{}, nil
-	}
-	_, edges, err := ph.insertHelper(ctx, tc, inUuid, inVec)
-	return edges, err
+	inUuid uint64, inVec []T) error {
+	_, err := ph.insertHelper(ctx, c, inUuid, inVec)
+	return err
 }
 
 // InsertToPersistentStorage inserts a node into the hnsw graph and returns the
 // traversal path and the edges created
-func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
-	inUuid uint64, inVec []T) ([]minPersistentHeapElement[T], []*index.KeyValue, error) {
+func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, c index.CacheType,
+	inUuid uint64, inVec []T) ([]minPersistentHeapElement[T], error) {
 
 	// return all the new edges created at all HNSW levels
 	var startVec []T
-	entry, edges, err := ph.createEntryAndStartNodes(ctx, tc, inUuid, &startVec)
-	if err != nil || len(edges) > 0 {
-		return []minPersistentHeapElement[T]{}, edges, err
+	entry, err := ph.createEntryAndStartNodes(ctx, c, inUuid, &startVec)
+	if err != nil {
+		return []minPersistentHeapElement[T]{}, err
 	}
 
 	if entry == inUuid {
@@ -508,7 +490,7 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 		// it'll just overwrite w the same info
 		// only situation where you can add duplicate nodes is if your
 		// mutation adds the same node as entry
-		return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, nil
+		return []minPersistentHeapElement[T]{}, nil
 	}
 
 	// startVecs: vectors used to calc where to start up until inLevel,
@@ -517,40 +499,33 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	// var nns []minPersistentHeapElement[T]
 	visited := []minPersistentHeapElement[T]{}
 	inLevel := getInsertLayer(ph.maxLevels) // calculate layer to insert node at (randomized every time)
-	var layerErr error
 
 	for level := range inLevel {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
-		err := ph.getVecFromUid(entry, tc, &startVec)
+		err := ph.getVecFromUid(entry, c, &startVec)
 		if err != nil {
-			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
+			return []minPersistentHeapElement[T]{}, err
 		}
-		layerResult, err := ph.searchPersistentLayer(tc, level, entry, startVec,
+		layerResult, err := ph.searchPersistentLayer(c, level, entry, startVec,
 			inVec, false, ph.efSearch, index.AcceptAll[T])
 		if err != nil {
-			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
+			return []minPersistentHeapElement[T]{}, err
 		}
 		entry = layerResult.bestNeighbor().index
-	}
-
-	emptyEdges := make([][]uint64, ph.maxLevels)
-	_, err = ph.addNeighbors(ctx, tc, inUuid, emptyEdges)
-	if err != nil {
-		return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
 	}
 
 	var outboundEdgesAllLayers = make([][]uint64, ph.maxLevels)
 	var inboundEdgesAllLayersMap = make(map[uint64][][]uint64)
 	nnUidArray := []uint64{}
 	for level := inLevel; level < ph.maxLevels; level++ {
-		err := ph.getVecFromUid(entry, tc, &startVec)
+		err := ph.getVecFromUid(entry, c, &startVec)
 		if err != nil {
-			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
+			return []minPersistentHeapElement[T]{}, err
 		}
-		layerResult, err := ph.searchPersistentLayer(tc, level, entry, startVec,
+		layerResult, err := ph.searchPersistentLayer(c, level, entry, startVec,
 			inVec, false, ph.efConstruction, index.AcceptAll[T])
 		if err != nil {
-			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, layerErr
+			return []minPersistentHeapElement[T]{}, err
 		}
 
 		entry = layerResult.bestNeighbor().index
@@ -569,19 +544,17 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 				append(outboundEdgesAllLayers[level], nns[i].index)
 		}
 	}
-	edge, err := ph.addNeighbors(ctx, tc, inUuid, outboundEdgesAllLayers)
-	for i := range nnUidArray {
-		edge, err := ph.addNeighbors(
-			ctx, tc, nnUidArray[i], inboundEdgesAllLayersMap[nnUidArray[i]])
-		if err != nil {
-			return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
-		}
-		edges = append(edges, edge)
-	}
+	err = ph.addNeighbors(ctx, c, inUuid, outboundEdgesAllLayers)
 	if err != nil {
-		return []minPersistentHeapElement[T]{}, []*index.KeyValue{}, err
+		return []minPersistentHeapElement[T]{}, err
 	}
-	edges = append(edges, edge)
+	for i := range nnUidArray {
+		err = ph.addNeighbors(
+			ctx, c, nnUidArray[i], inboundEdgesAllLayersMap[nnUidArray[i]])
+		if err != nil {
+			return []minPersistentHeapElement[T]{}, err
+		}
+	}
 
-	return visited, edges, nil
+	return visited, nil
 }

@@ -78,8 +78,7 @@ func (ph *partitionedHNSW[T]) BuildInsert(ctx context.Context, uuid uint64, vec 
 	}
 	ph.buildSyncMaps[index].Lock()
 	defer ph.buildSyncMaps[index].Unlock()
-	_, err = ph.clusterMap[index].Insert(ctx, ph.caches[index], uuid, vec)
-	return err
+	return ph.clusterMap[index].BuildInsert(ctx, uuid, vec)
 }
 
 const NUM_PASSES = 10
@@ -141,10 +140,10 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 	return []int{}
 }
 
-func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) ([]*index.KeyValue, error) {
+func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) error {
 	index, err := ph.partition.FindIndexForInsert(vec)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	return ph.clusterMap[index].Insert(ctx, txn, uid, vec)
 }

@@ -163,21 +163,18 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			len(info.factorySpecs) > 0 {
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
-			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+			vt := &VectorTransaction{
+				txn:     txn,
+				startTs: txn.StartTs,
+			}
 			indexer, err := info.factorySpecs[0].CreateIndex(attr)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
-			edges, err := indexer.Insert(ctx, tc, uid, inVec)
-			if err != nil {
+			if err := indexer.Insert(ctx, vt, uid, inVec); err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
-			pbEdges := []*pb.DirectedEdge{}
-			for _, e := range edges {
-				pbe := indexEdgeToPbEdge(e)
-				pbEdges = append(pbEdges, pbe)
-			}
-			return pbEdges, nil
+			return []*pb.DirectedEdge{}, nil
 		}
 	}
 
@@ -1365,6 +1362,147 @@ func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
 
 const numCentroids = 1000
 
+type VectorTransaction struct {
+	txn      *Txn
+	startTs  uint64
+	vecPred  string
+	edgePred string
+	vector   map[uint64]*[]byte
+	edges    map[uint64]*[]byte
+	others   map[string]*[]byte
+}
+
+func (vt *VectorTransaction) NewVT(startTs uint64) {
+	vt.txn = &Txn{
+		StartTs: startTs,
+		cache:   NewLocalCache(startTs),
+	}
+	vt.startTs = startTs
+	vt.vector = make(map[uint64]*[]byte)
+	vt.edges = make(map[uint64]*[]byte)
+	vt.others = make(map[string]*[]byte)
+}
+
+func (vt *VectorTransaction) Find(prefix []byte, filter func(val []byte) bool) (uint64, error) {
+	return vt.txn.cache.Find(prefix, filter)
+}
+
+func (vt *VectorTransaction) SetVector(uid uint64, vec *[]byte) {
+	vt.vector[uid] = vec
+}
+
+func (vt *VectorTransaction) SetEdge(uid uint64, edge *[]byte) {
+	vt.edges[uid] = edge
+}
+
+func (vt *VectorTransaction) SetOther(key string, val *[]byte) {
+	vt.others[key] = val
+}
+
+func (vt *VectorTransaction) GetVector(uid uint64) *[]byte {
+	val, ok := vt.vector[uid]
+	if ok {
+		return val
+	}
+	pl, err := vt.txn.GetScalarList(x.DataKey(vt.vecPred, uid))
+	if err != nil {
+		return nil
+	}
+	rval, err := pl.Value(vt.startTs)
+	if err != nil {
+		return nil
+	}
+	value := rval.Value.([]byte)
+	vt.vector[uid] = &value
+	return &value
+}
+
+func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
+	val, ok := vt.edges[uid]
+	if ok {
+		return val
+	}
+	pl, err := vt.txn.GetScalarList(x.DataKey(vt.edgePred, uid))
+	if err != nil {
+		return nil
+	}
+	rval, err := pl.Value(vt.startTs)
+	if err != nil {
+		return nil
+	}
+	value := rval.Value.([]byte)
+	vt.edges[uid] = &value
+	return &value
+}
+
+func (vt *VectorTransaction) GetOther(key string) *[]byte {
+	val, ok := vt.others[key]
+	if ok {
+		return val
+	}
+	pl, err := vt.txn.GetScalarList(x.DataKey(key, 1))
+	if err != nil {
+		return nil
+	}
+	rval, err := pl.Value(vt.startTs)
+	if err != nil {
+		return nil
+	}
+	value := rval.Value.([]byte)
+	vt.others[key] = &value
+	return &value
+}
+
+func (vt *VectorTransaction) Update() {
+	for uid, edges := range vt.edges {
+		posting := &pb.Posting{
+			Uid:     uid,
+			Op:      uint32(pb.DirectedEdge_SET),
+			Value:   *edges,
+			ValType: pb.Posting_BINARY,
+		}
+		pl := &pb.PostingList{
+			Postings: []*pb.Posting{posting},
+		}
+		data, err := proto.Marshal(pl)
+		if err != nil {
+			return
+		}
+		vt.txn.cache.deltas[string(x.DataKey(vt.edgePred, uid))] = data
+	}
+
+	for str, edges := range vt.others {
+		posting := &pb.Posting{
+			Uid:     1,
+			Op:      uint32(pb.DirectedEdge_SET),
+			Value:   *edges,
+			ValType: pb.Posting_BINARY,
+		}
+		pl := &pb.PostingList{
+			Postings: []*pb.Posting{posting},
+		}
+		data, err := proto.Marshal(pl)
+		if err != nil {
+			return
+		}
+		vt.txn.cache.deltas[string(x.DataKey(str, 1))] = data
+	}
+
+	vt.vector = nil
+	vt.edges = nil
+	vt.others = nil
+}
+
+func (vt *VectorTransaction) LockKey(key []byte) {
+}
+
+func (vt *VectorTransaction) UnlockKey(key []byte) {
+}
+
+func (vt *VectorTransaction) Ts() uint64 {
+	return vt.startTs
+}
+
 func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSpec, rb *IndexRebuild) error {
 	pk := x.ParsedKey{Attr: rb.Attr}
 
@@ -1406,7 +1544,13 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	}
 	caches := make([]tokIndex.CacheType, indexer.NumThreads())
 	for i := range caches {
-		caches[i] = hnsw.NewTxnCache(NewViTxn(txns[i]), rb.StartTs)
+		caches[i] = &VectorTransaction{
+			txn:     txns[i],
+			startTs: rb.StartTs,
+			vector:  make(map[uint64]*[]byte),
+			edges:   make(map[uint64]*[]byte),
+			others:  make(map[string]*[]byte),
+		}
 	}
 
 	for pass_idx := range indexer.NumBuildPasses() {
@@ -1460,6 +1604,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 
 		for _, idx := range indexer.EndBuild() {
 			txns[idx].Update()
+			caches[idx].(*VectorTransaction).Update()
 			writer := NewTxnWriter(pstore)
 
 			x.ExponentialRetry(int(x.Config.MaxRetries),
