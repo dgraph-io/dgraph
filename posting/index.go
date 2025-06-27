@@ -1466,11 +1466,11 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 		return val
 	}
 	pl, err := vt.txn.GetScalarList(x.DataKey(key, 1))
-	fmt.Println("GET OTHER: ", key, pl, err)
 	if err != nil {
 		return nil
 	}
 	rval, err := pl.Value(vt.startTs)
+	fmt.Println("GET OTHER: ", key, pl, rval, err)
 	if err != nil {
 		return nil
 	}
