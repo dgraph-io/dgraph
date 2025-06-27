@@ -637,6 +637,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	// lists ended up being rolled-up multiple times. This issue was caught by the
 	// uid-set Jepsen test.
 	pk, err := x.Parse(key)
+	fmt.Println("READING ", pk)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
 	}
@@ -710,6 +711,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				if err := proto.Unmarshal(val, pl); err != nil {
 					return err
 				}
+				fmt.Println("HERE", pl)
 				pl.CommitTs = item.Version()
 				if l.mutationMap == nil {
 					l.mutationMap = newMutableLayer()
