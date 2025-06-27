@@ -1451,7 +1451,7 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return nil
 	}
 	rval, err := pl.Value(vt.startTs)
-	fmt.Println("GET EDGE: ", uid, pl, err, vt.edgePred, rval)
+	//fmt.Println("GET EDGE: ", uid, pl, err, vt.edgePred, rval)
 	if err != nil {
 		return nil
 	}
@@ -1470,7 +1470,7 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 		return nil
 	}
 	rval, err := pl.Value(vt.startTs)
-	fmt.Println("GET OTHER: ", key, pl, rval, err)
+	//fmt.Println("GET OTHER: ", key, pl, rval, err)
 	if err != nil {
 		return nil
 	}
