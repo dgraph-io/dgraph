@@ -1482,10 +1482,10 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 func (vt *VectorTransaction) Update() {
 	for uid, edges := range vt.edges {
 		posting := &pb.Posting{
-			Uid:     uid,
-			Op:      uint32(pb.DirectedEdge_SET),
+			Op:      Set,
 			Value:   *edges,
 			ValType: pb.Posting_BINARY,
+			Uid:     math.MaxUint64,
 		}
 		pl := &pb.PostingList{
 			Postings: []*pb.Posting{posting},
@@ -1499,10 +1499,10 @@ func (vt *VectorTransaction) Update() {
 
 	for str, edges := range vt.others {
 		posting := &pb.Posting{
-			Uid:     1,
-			Op:      uint32(pb.DirectedEdge_SET),
+			Op:      Set,
 			Value:   *edges,
 			ValType: pb.Posting_BINARY,
+			Uid:     math.MaxUint64,
 		}
 		pl := &pb.PostingList{
 			Postings: []*pb.Posting{posting},
