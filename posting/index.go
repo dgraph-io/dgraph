@@ -1475,6 +1475,7 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
+	fmt.Println("GET OTHER: ", key, value)
 	vt.others[key] = &value
 	return &value
 }
