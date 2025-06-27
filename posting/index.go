@@ -1447,11 +1447,11 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return val
 	}
 	pl, err := vt.txn.GetScalarList(x.DataKey(vt.edgePred, uid))
-	fmt.Println("GET EDGE: ", uid, pl, err, vt.edgePred)
 	if err != nil {
 		return nil
 	}
 	rval, err := pl.Value(vt.startTs)
+	fmt.Println("GET EDGE: ", uid, pl, err, vt.edgePred, rval)
 	if err != nil {
 		return nil
 	}
