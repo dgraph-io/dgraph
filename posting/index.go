@@ -1436,6 +1436,7 @@ func (vt *VectorTransaction) GetVector(uid uint64) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
+	fmt.Println("GET VECTOR: ", uid, value, vt.vecPred)
 	vt.vector[uid] = &value
 	return &value
 }
@@ -1454,6 +1455,7 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 		return nil
 	}
 	value := rval.Value.([]byte)
+	fmt.Println("GET EDGE: ", uid, value, vt.edgePred)
 	vt.edges[uid] = &value
 	return &value
 }
