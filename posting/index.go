@@ -813,6 +813,8 @@ func printTreeStatsDeltas(txn *Txn) {
 				fmt.Println("Error while decoding", err)
 			}
 
+			fmt.Println(pk, temp)
+
 			for i := range temp {
 				if len(temp[i]) > 0 {
 					numNodes[i] += 1
