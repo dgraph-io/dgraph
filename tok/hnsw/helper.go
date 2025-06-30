@@ -520,7 +520,6 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, c index.CacheType
 
 				for _, e := range allLayerNeighbors[level] {
 					heap.Push(h, e)
-					heap.Pop(h)
 				}
 			}
 			allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]

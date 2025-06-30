@@ -81,7 +81,7 @@ func (ph *partitionedHNSW[T]) BuildInsert(ctx context.Context, uuid uint64, vec 
 	return ph.clusterMap[index].BuildInsert(ctx, uuid, vec)
 }
 
-const NUM_PASSES = 10
+const NUM_PASSES = 5
 
 func (ph *partitionedHNSW[T]) NumBuildPasses() int {
 	return ph.partition.NumPasses()
