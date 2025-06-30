@@ -1383,6 +1383,8 @@ type VectorTransaction struct {
 	vector   map[uint64]*[]byte
 	edges    map[uint64]*[]byte
 	others   map[string]*[]byte
+
+	readDisk bool
 }
 
 func (vt *VectorTransaction) SetCache(cache *LocalCache) {
@@ -1404,6 +1406,7 @@ func (vt *VectorTransaction) NewVT(startTs uint64) {
 	vt.vector = make(map[uint64]*[]byte)
 	vt.edges = make(map[uint64]*[]byte)
 	vt.others = make(map[string]*[]byte)
+	vt.readDisk = true
 }
 
 func (vt *VectorTransaction) Find(prefix []byte, filter func(val []byte) bool) (uint64, error) {
@@ -1427,6 +1430,9 @@ func (vt *VectorTransaction) GetVector(uid uint64) *[]byte {
 	if ok {
 		return val
 	}
+	if !vt.readDisk {
+		return nil
+	}
 	pl, err := vt.txn.Get(x.DataKey(vt.vecPred, uid))
 	if err != nil {
 		return nil
@@ -1445,6 +1451,9 @@ func (vt *VectorTransaction) GetEdge(uid uint64) *[]byte {
 	val, ok := vt.edges[uid]
 	if ok {
 		return val
+	}
+	if !vt.readDisk {
+		return nil
 	}
 	pl, err := vt.txn.Get(x.DataKey(vt.edgePred, uid))
 	if err != nil {
@@ -1467,6 +1476,9 @@ func (vt *VectorTransaction) GetOther(key string) *[]byte {
 	val, ok := vt.others[key]
 	if ok {
 		return val
+	}
+	if !vt.readDisk {
+		return nil
 	}
 	pl, err := vt.txn.Get(x.DataKey(key, 1))
 	if err != nil {
@@ -1580,6 +1592,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	caches := GetVectorTransactions(indexer.NumThreads(), rb.StartTs, rb.Attr)
 	for i := range len(caches) {
 		caches[i].(*VectorTransaction).txn = txns[i]
+		caches[i].(*VectorTransaction).readDisk = false
 	}
 	indexer.SetCaches(caches)
 
