@@ -794,6 +794,54 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 		})
 }
 
+func printTreeStatsDeltas(txn *Txn) {
+	txn.cache.Lock()
+
+	numLevels := 20
+	numNodes := make([]int, numLevels)
+	numConnections := make([]int, numLevels)
+
+	var temp [][]uint64
+	for key, plMarshalled := range txn.cache.deltas {
+		pk, _ := x.Parse([]byte(key))
+		var data pb.PostingList
+		proto.Unmarshal(plMarshalled, &data)
+		if strings.HasSuffix(pk.Attr, "__vector_") {
+			err := decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
+			if err != nil {
+				fmt.Println("Error while decoding", err)
+			}
+
+			for i := range temp {
+				if len(temp[i]) > 0 {
+					numNodes[i] += 1
+				}
+				numConnections[i] += len(temp[i])
+			}
+
+		}
+	}
+
+	for i := range numLevels {
+		fmt.Printf("%d, ", numNodes[i])
+	}
+	fmt.Println("")
+	for i := range numLevels {
+		fmt.Printf("%d, ", numConnections[i])
+	}
+	fmt.Println("")
+	for i := range numLevels {
+		if numNodes[i] == 0 {
+			fmt.Printf("0, ")
+			continue
+		}
+		fmt.Printf("%d, ", numConnections[i]/numNodes[i])
+	}
+	fmt.Println("")
+
+	txn.cache.Unlock()
+}
+
 func printTreeStats(txn *Txn) {
 	txn.cache.Lock()
 
@@ -1661,6 +1709,8 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 					return err
 				})
 
+			printTreeStatsDeltas(txns[idx])
+			txns[idx].cache.deltas = nil
 			txns[idx].cache.plists = nil
 			txns[idx] = nil
 		}
