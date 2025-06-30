@@ -497,6 +497,8 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, c index.CacheType
 		return nil
 	}
 
+	fmt.Println("allLayerEdges", uuid, allLayerEdges)
+
 	var inVec, outVec []T
 	for level := range ph.maxLevels {
 		var err error
