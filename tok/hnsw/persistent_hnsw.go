@@ -12,11 +12,13 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/golang/glog"
 	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
 	"github.com/hypermodeinc/dgraph/v25/tok/index"
 	opt "github.com/hypermodeinc/dgraph/v25/tok/options"
+	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/pkg/errors"
 )
 
@@ -145,6 +147,9 @@ func (ph *persistentHNSW[T]) NumThreads() int {
 }
 
 func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []T) error {
+	floatVec := *(*[]float32)(unsafe.Pointer(&vec))
+	vecBytes := types.FloatArrayAsBytes(floatVec)
+	ph.cache.SetVector(uid, &vecBytes)
 	newPh := &persistentHNSW[T]{
 		maxLevels:      ph.maxLevels,
 		efConstruction: ph.efConstruction,

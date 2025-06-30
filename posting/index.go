@@ -1418,7 +1418,7 @@ func (vt *VectorTransaction) SetVector(uid uint64, vec *[]byte) {
 }
 
 func (vt *VectorTransaction) SetEdge(uid uint64, edge *[]byte) {
-	fmt.Println("SETTING EDGE", uid, &edge)
+	fmt.Println("SETTING EDGE", uid, edge)
 	vt.edges[uid] = edge
 }
 
