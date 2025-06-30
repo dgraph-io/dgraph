@@ -542,7 +542,7 @@ func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, c index.CacheType
 	if ph.deadNodes == nil {
 		data := c.GetOther(ph.vecDead)
 		if data == nil {
-			return []uint64{}, nil
+			return nnEdges, nil
 		}
 
 		var deadNodes []uint64
