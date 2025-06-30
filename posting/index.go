@@ -806,7 +806,7 @@ func printTreeStats(txn *Txn) {
 	var temp [][]uint64
 	for key, pl := range txn.cache.plists {
 		pk, _ := x.Parse([]byte(key))
-		if strings.HasSuffix(pk.Attr, "__vector_") {
+		if strings.Contains(pk.Attr, "__vector_") && !strings.Contains(pk.Attr, hnsw.VecEntry) {
 			data := pl.getPosting(txn.cache.startTs)
 			if data == nil || len(data.Postings) == 0 {
 				continue
