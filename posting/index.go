@@ -806,6 +806,7 @@ func printTreeStatsDeltas(txn *Txn) {
 		pk, _ := x.Parse([]byte(key))
 		var data pb.PostingList
 		proto.Unmarshal(plMarshalled, &data)
+		fmt.Println("TREE STATS:", pk)
 		if strings.HasSuffix(pk.Attr, "__vector_") {
 			err := decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
 			if err != nil {
