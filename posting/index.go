@@ -1443,7 +1443,7 @@ func (vt *VectorTransaction) SetCache(cache *LocalCache) {
 
 func (vt *VectorTransaction) UpdateSplit(i int, pred string) {
 	vt.vecPred = pred
-	vt.edgePred = fmt.Sprintf("%s_%d", pred, i)
+	vt.edgePred = fmt.Sprintf("%s%s_%d", pred, hnsw.VecKeyword, i)
 }
 
 func (vt *VectorTransaction) NewVT(startTs uint64) {
