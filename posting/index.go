@@ -806,14 +806,11 @@ func printTreeStatsDeltas(txn *Txn) {
 		pk, _ := x.Parse([]byte(key))
 		var data pb.PostingList
 		proto.Unmarshal(plMarshalled, &data)
-		fmt.Println("TREE STATS:", pk)
 		if strings.Contains(pk.Attr, "__vector_") && !strings.Contains(pk.Attr, hnsw.VecEntry) {
 			err := decodeUint64MatrixUnsafe(data.Postings[0].Value, &temp)
 			if err != nil {
 				fmt.Println("Error while decoding", err)
 			}
-
-			fmt.Println(pk, temp)
 
 			for i := range temp {
 				if len(temp[i]) > 0 {

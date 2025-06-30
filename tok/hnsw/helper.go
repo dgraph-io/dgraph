@@ -497,8 +497,6 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, c index.CacheType
 		return nil
 	}
 
-	fmt.Println("allLayerEdges", uuid, allLayerEdges)
-
 	var inVec, outVec []T
 	for level := range ph.maxLevels {
 		var err error
@@ -528,8 +526,6 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, c index.CacheType
 			allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
 		}
 	}
-
-	fmt.Println("allLayerEdges", allLayerEdges, allLayerNeighbors)
 
 	inboundEdgesBytes := encodeUint64MatrixUnsafe(allLayerEdges)
 	c.SetEdge(uuid, &inboundEdgesBytes)
