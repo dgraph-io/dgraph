@@ -1459,6 +1459,8 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		}
 
 		for _, idx := range indexer.EndBuild() {
+			printTreeStats(txns[idx])
+
 			txns[idx].Update()
 			writer := NewTxnWriter(pstore)
 
