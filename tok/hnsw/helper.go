@@ -527,6 +527,8 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, c index.CacheType
 		}
 	}
 
+	fmt.Println("allLayerEdges", allLayerEdges, allLayerNeighbors)
+
 	inboundEdgesBytes := encodeUint64MatrixUnsafe(allLayerEdges)
 	c.SetEdge(uuid, &inboundEdgesBytes)
 	return nil
