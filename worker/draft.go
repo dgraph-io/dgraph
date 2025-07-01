@@ -881,8 +881,7 @@ func (n *node) processApplyCh() {
 		defer glog.V(3).Infof("done handling element in applyCh")
 
 		span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
-			attribute.Int64("numEntries", int64(len(entries))),
-			attribute.String("entries", fmt.Sprintf("%v", entries))))
+			attribute.Int64("numEntries", int64(len(entries)))))
 
 		var totalSize int64
 		for _, entry := range entries {
@@ -898,6 +897,12 @@ func (n *node) processApplyCh() {
 			x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
+
+			span.AddEvent("processing entry", trace.WithAttributes(
+				attribute.Int64("key", int64(key)),
+				attribute.Int64("index", int64(proposal.Index)),
+				attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
+			))
 
 			var perr error
 			p, ok := previous[key]
