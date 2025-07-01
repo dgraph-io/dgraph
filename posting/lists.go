@@ -20,6 +20,7 @@ import (
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/hypermodeinc/dgraph/v25/types"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
@@ -69,16 +70,88 @@ type LocalCache struct {
 	startTs  uint64
 	commitTs uint64
 
-	// The keys for these maps is a string representation of the Badger key for the posting list.
-	// deltas keep track of the updates made by txn. These must be kept around until written to disk
-	// during commit.
-	deltas map[string][]byte
+	deltas *Deltas
 
 	// max committed timestamp of the read posting lists.
 	maxVersions map[string]uint64
 
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
+}
+
+// The keys for these maps is a string representation of the Badger key for the posting list.
+// deltas keep track of the updates made by txn. These must be kept around until written to disk
+// during commit.
+type Deltas struct {
+	deltas *types.LockedShardedMap[string, []byte]
+
+	// We genereate indexes for the posting lists all at once. Moving them from this map to deltas
+	// map is uneccessary. More data can be stored per predicate later on.
+	indexMap map[string]*types.LockedShardedMap[string, *pb.PostingList]
+}
+
+func NewDeltas() *Deltas {
+	return &Deltas{
+		deltas:   types.NewLockedShardedMap[string, []byte](),
+		indexMap: map[string]*types.LockedShardedMap[string, *pb.PostingList]{},
+	}
+}
+
+// Call this function after taking a lock on the cache.
+func (d *Deltas) GetIndexMapForPredicate(pred string) *types.LockedShardedMap[string, *pb.PostingList] {
+	val, ok := d.indexMap[pred]
+	if !ok {
+		d.indexMap[pred] = types.NewLockedShardedMap[string, *pb.PostingList]()
+		return d.indexMap[pred]
+	}
+	return val
+}
+
+func (d *Deltas) Get(key string) ([]byte, bool) {
+	if d == nil {
+		return nil, false
+	}
+	val, ok := d.deltas.Get(key)
+	if !ok {
+		pk, err := x.Parse([]byte(key))
+		if err != nil {
+			return nil, false
+		}
+
+		if _, ok := d.indexMap[pk.Attr]; !ok {
+			return nil, false
+		}
+
+		value, ok := d.indexMap[pk.Attr].Get(key)
+		if !ok {
+			return nil, false
+		}
+		b, err := proto.Marshal(value)
+		if err != nil {
+			return nil, false
+		}
+		return b, true
+	}
+	return val, true
+}
+
+func (d *Deltas) AddToDeltas(key string, delta []byte) {
+	d.deltas.Set(key, delta)
+}
+
+func (d *Deltas) IterateBytes(fn func(key string, value []byte) error) {
+	for _, v := range d.indexMap {
+		v.Iterate(func(key string, value *pb.PostingList) error {
+			b, err := proto.Marshal(value)
+			if err != nil {
+				return err
+			}
+			return fn(key, b)
+		})
+	}
+	d.deltas.Iterate(func(key string, value []byte) error {
+		return fn(key, value)
+	})
 }
 
 // struct to implement LocalCache interface from vector-indexer
@@ -135,7 +208,7 @@ func NewViLocalCache(delegate *LocalCache) *viLocalCache {
 func NewLocalCache(startTs uint64) *LocalCache {
 	return &LocalCache{
 		startTs:     startTs,
-		deltas:      make(map[string][]byte),
+		deltas:      NewDeltas(),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
 	}
@@ -267,6 +340,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 			return getNew(key, pstore, lc.startTs, readUids)
 		}
 		if l, ok := lc.plists[skey]; ok {
+			if delta, ok := lc.deltas.Get(skey); ok && len(delta) > 0 {
+				l.setMutation(lc.startTs, delta)
+			}
 			return l, nil
 		}
 		return nil, nil
@@ -294,7 +370,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
 	lc.RLock()
-	if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+	if delta, ok := lc.deltas.Get(skey); ok && len(delta) > 0 {
 		pl.setMutation(lc.startTs, delta)
 	}
 	lc.RUnlock()
@@ -338,7 +414,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		lc.RLock()
 
 		pl := &pb.PostingList{}
-		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+		if delta, ok := lc.deltas.Get(string(key)); ok && len(delta) > 0 {
 			err := proto.Unmarshal(delta, pl)
 			lc.RUnlock()
 			return pl, err
@@ -365,26 +441,28 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		return lc.readPostingListAt(key)
 	}
 
+	pk, _ := x.Parse(key)
+
 	pl, err := getPostings()
 	if err == badger.ErrKeyNotFound {
+		fmt.Println("READING ", pk, nil)
 		return nil, nil
 	}
 	if err != nil {
+		fmt.Println("READING ", pk, err)
 		return nil, err
 	}
 
 	// Filter and remove STAR_ALL and OP_DELETE Postings
 	idx := 0
 	for _, postings := range pl.Postings {
-		if hasDeleteAll(postings) {
-			return nil, nil
-		}
 		if postings.Op != Del {
 			pl.Postings[idx] = postings
 			idx++
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
+	fmt.Println("READING ", pk, pl)
 	return pl, nil
 }
 
@@ -415,7 +493,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 	for key, pl := range lc.plists {
 		data := pl.getMutation(lc.startTs)
 		if len(data) > 0 {
-			lc.deltas[key] = data
+			lc.deltas.AddToDeltas(key, data)
 		}
 		lc.maxVersions[key] = pl.maxVersion()
 		// We can't run pl.release() here because LocalCache is still being used by other callers
@@ -428,16 +506,17 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 	lc.RLock()
 	defer lc.RUnlock()
-	for key := range lc.deltas {
+	lc.deltas.IterateBytes(func(key string, delta []byte) error {
 		pk, err := x.Parse([]byte(key))
 		x.Check(err)
 		if len(pk.Attr) == 0 {
-			continue
+			return nil
 		}
 		// Also send the group id that the predicate was being served by. This is useful when
 		// checking if Zero should allow a commit during a predicate move.
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
 		ctx.Preds = append(ctx.Preds, predKey)
-	}
+		return nil
+	})
 	ctx.Preds = x.Unique(ctx.Preds)
 }
