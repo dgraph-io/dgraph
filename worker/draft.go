@@ -1361,9 +1361,6 @@ func (n *node) Run() {
 		case rd := <-n.Raft().Ready():
 			// TODO(Aman): Based on the code here https://github.com/etcd-io/etcd/tree/raft/v3.5.9/raft,
 			// n.SaveToStorage should be called first before doing anything else.
-			t := time.Now()
-			fmt.Println("Ready", t)
-
 			timer.Start()
 			_, span := otel.Tracer("").Start(n.ctx, "Alpha.RunLoop")
 
@@ -1524,7 +1521,7 @@ func (n *node) Run() {
 					if pctx := n.Proposals.Get(key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := trace.SpanFromContext(pctx.Ctx); span != nil {
-							span.AddEvent("Proposal found in CommittedEntries")
+							span.AddEvent(fmt.Sprintf("Proposal found in CommittedEntries %d", len(rd.CommittedEntries)))
 						}
 					}
 					entries = append(entries, entry)
