@@ -1533,14 +1533,14 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
-				var pendingSize int64
-				for _, e := range entries {
-					pendingSize += int64(e.Size())
-				}
-				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
-					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
-				}
+				// rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
+				// var pendingSize int64
+				// for _, e := range entries {
+				// 	pendingSize += int64(e.Size())
+				// }
+				// if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
+				// 	glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
+				// }
 				n.applyCh <- entries
 			}
 
