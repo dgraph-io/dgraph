@@ -278,7 +278,21 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
 	}
+
+	go printMetrics()
 	return n
+}
+
+var puttingApplyCh atomic.Int64
+var processingApplyCh atomic.Int64
+
+func printMetrics() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		glog.Infof("puttingApplyCh: %d, processingApplyCh: %d", puttingApplyCh.Load()/5, processingApplyCh.Load()/5)
+		puttingApplyCh.Store(0)
+		processingApplyCh.Store(0)
+	}
 }
 
 func (n *node) Ctx(key uint64) context.Context {
@@ -885,6 +899,7 @@ func (n *node) processApplyCh() {
 
 		var totalSize int64
 		for _, entry := range entries {
+			processingApplyCh.Add(1)
 			x.AssertTrue(len(entry.Data) > 0)
 
 			// We use the size as a double check to ensure that we're
@@ -1564,6 +1579,7 @@ func (n *node) Run() {
 							span.AddEvent(fmt.Sprintf("Proposal found in CommittedEntries %d", len(rd.CommittedEntries)))
 						}
 					}
+					puttingApplyCh.Add(1)
 					entries = append(entries, entry)
 				}
 			}
@@ -1572,7 +1588,7 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
+				//rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
 				for _, e := range entries {
 					pendingSize += int64(e.Size())
