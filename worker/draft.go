@@ -1342,7 +1342,7 @@ func (n *node) Run() {
 
 	const applyChLen = 1000
 	var applyBuf = make([]raftpb.Entry, 0)
-	applyTicker := time.NewTicker(1 * time.Millisecond)
+	applyTicker := time.NewTicker(50 * time.Millisecond)
 	defer applyTicker.Stop()
 
 	var timer x.Timer
