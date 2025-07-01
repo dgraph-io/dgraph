@@ -944,13 +944,27 @@ func (n *node) processApplyCh() {
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
 
+	batchSize := 100
+	batch := make([]raftpb.Entry, 0, batchSize)
+	ticker := time.NewTicker(1 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case entries, ok := <-n.applyCh:
 			if !ok {
 				return
 			}
-			handle(entries)
+			batch = append(batch, entries...)
+			if len(batch) > batchSize {
+				handle(batch)
+				batch = batch[:0]
+			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				handle(batch)
+				batch = batch[:0]
+			}
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
