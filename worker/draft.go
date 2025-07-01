@@ -1341,7 +1341,7 @@ func (n *node) Run() {
 	}
 
 	const applyChLen = 1000
-	var applyBuf = make([]raftpb.Entry, applyChLen)
+	var applyBuf = make([]raftpb.Entry, 0)
 	applyTicker := time.NewTicker(1 * time.Millisecond)
 	defer applyTicker.Stop()
 
@@ -1351,7 +1351,7 @@ func (n *node) Run() {
 		case <-ticker.C:
 			if len(applyBuf) > 0 {
 				n.applyCh <- applyBuf
-				applyBuf = make([]raftpb.Entry, applyChLen)
+				applyBuf = make([]raftpb.Entry, 0)
 			}
 		case <-done:
 			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
@@ -1553,7 +1553,7 @@ func (n *node) Run() {
 				applyBuf = append(applyBuf, entries...)
 				if len(applyBuf) > applyChLen {
 					n.applyCh <- applyBuf
-					applyBuf = make([]raftpb.Entry, applyChLen)
+					applyBuf = make([]raftpb.Entry, 0)
 				}
 			}
 
