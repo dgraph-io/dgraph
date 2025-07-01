@@ -1586,11 +1586,12 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				applyBuf = append(applyBuf, entries...)
-				if len(applyBuf) > applyChLen {
-					n.applyCh <- applyBuf
-					applyBuf = make([]raftpb.Entry, 0)
-				}
+				n.applyCh <- entries
+				// applyBuf = append(applyBuf, entries...)
+				// if len(applyBuf) > applyChLen {
+				// 	n.applyCh <- applyBuf
+				// 	applyBuf = make([]raftpb.Entry, 0)
+				// }
 			}
 
 			for _, entry := range entries {
