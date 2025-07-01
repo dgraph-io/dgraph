@@ -873,21 +873,15 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
-		ctx := context.Background()
-		ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
-		defer span.End()
-
-		st := time.Now()
-
-		defer func() {
-			fmt.Println(time.Since(st), time.Now(), len(entries))
-		}()
+		// ctx := context.Background()
+		// ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
+		// defer span.End()
 
 		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
 		defer glog.V(3).Infof("done handling element in applyCh")
 
-		span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
-			attribute.Int64("numEntries", int64(len(entries)))))
+		// span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
+		// 	attribute.Int64("numEntries", int64(len(entries)))))
 
 		var totalSize int64
 		for _, entry := range entries {
@@ -904,11 +898,11 @@ func (n *node) processApplyCh() {
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
-			span.AddEvent("processing entry", trace.WithAttributes(
-				attribute.Int64("key", int64(key)),
-				attribute.Int64("index", int64(proposal.Index)),
-				attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
-			))
+			// span.AddEvent("processing entry", trace.WithAttributes(
+			// 	attribute.Int64("key", int64(key)),
+			// 	attribute.Int64("index", int64(proposal.Index)),
+			// 	attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
+			// ))
 
 			var perr error
 			p, ok := previous[key]
@@ -922,33 +916,33 @@ func (n *node) processApplyCh() {
 
 			} else {
 				// if this applyCommitted fails, how do we ensure
-				start := time.Now()
+				//start := time.Now()
 				perr = n.applyCommitted(&proposal, key)
 				if key != 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
 					previous[key] = p
 				}
-				span := trace.SpanFromContext(n.Ctx(key))
-				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
-					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
-				}
-				span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
-					trace.WithAttributes(
-						attribute.Int64("key", int64(key)),
-						attribute.Int64("index", int64(proposal.Index)),
-						attribute.Int64("numEntries", int64(len(entries))),
-					))
+				// span := trace.SpanFromContext(n.Ctx(key))
+				// if perr != nil {
+				// 	glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
+				// 	span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
+				// }
+				// span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
+				// 	trace.WithAttributes(
+				// 		attribute.Int64("key", int64(key)),
+				// 		attribute.Int64("index", int64(proposal.Index)),
+				// 		attribute.Int64("numEntries", int64(len(entries))),
+				// 	))
 
-				var tags []tag.Mutator
-				switch {
-				case proposal.Mutations != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-				case proposal.Delta != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
-				}
-				ms := x.SinceMs(start)
-				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				// var tags []tag.Mutator
+				// switch {
+				// case proposal.Mutations != nil:
+				// 	tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				// case proposal.Delta != nil:
+				// 	tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+				// }
+				// ms := x.SinceMs(start)
+				// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(key, perr)
