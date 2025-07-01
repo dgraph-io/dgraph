@@ -646,9 +646,12 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	// start ts is sufficient to wait for, to achieve lin reads.
 }
 
+var proposeRate atomic.Int64
+
 // proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
 // the leader of the group gid for proposing.
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
+	proposeRate.Add(1)
 	res := res{}
 	if groups().ServesGroup(gid) {
 		res.ctx = &api.TxnContext{}

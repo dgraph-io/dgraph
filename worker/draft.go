@@ -289,9 +289,10 @@ var processingApplyCh atomic.Int64
 func printMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
-		glog.Infof("puttingApplyCh: %d, processingApplyCh: %d", puttingApplyCh.Load()/5, processingApplyCh.Load()/5)
+		glog.Infof("puttingApplyCh: %d, processingApplyCh: %d, proposeRate: %d", puttingApplyCh.Load()/5, processingApplyCh.Load()/5, proposeRate.Load()/5)
 		puttingApplyCh.Store(0)
 		processingApplyCh.Store(0)
+		proposeRate.Store(0)
 	}
 }
 
@@ -887,15 +888,15 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
-		// ctx := context.Background()
-		// ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
-		// defer span.End()
+		ctx := context.Background()
+		ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
+		defer span.End()
 
 		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
 		defer glog.V(3).Infof("done handling element in applyCh")
 
-		// span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
-		// 	attribute.Int64("numEntries", int64(len(entries)))))
+		span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
+			attribute.Int64("numEntries", int64(len(entries)))))
 
 		var totalSize int64
 		for _, entry := range entries {
@@ -931,12 +932,12 @@ func (n *node) processApplyCh() {
 
 			} else {
 				// if this applyCommitted fails, how do we ensure
-				//start := time.Now()
-				perr = n.applyCommitted(&proposal, key)
-				if key != 0 {
-					p := &P{err: perr, size: psz, seen: time.Now()}
-					previous[key] = p
-				}
+				// start := time.Now()
+				// perr = n.applyCommitted(&proposal, key)
+				// if key != 0 {
+				// 	p := &P{err: perr, size: psz, seen: time.Now()}
+				// 	previous[key] = p
+				// }
 				// span := trace.SpanFromContext(n.Ctx(key))
 				// if perr != nil {
 				// 	glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
@@ -1596,12 +1597,12 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				n.applyCh <- entries
-				// applyBuf = append(applyBuf, entries...)
-				// if len(applyBuf) > applyChLen {
-				// 	n.applyCh <- applyBuf
-				// 	applyBuf = make([]raftpb.Entry, 0)
-				// }
+				// n.applyCh <- entries
+				applyBuf = append(applyBuf, entries...)
+				if len(applyBuf) > applyChLen {
+					n.applyCh <- applyBuf
+					applyBuf = make([]raftpb.Entry, 0)
+				}
 			}
 
 			for _, entry := range entries {
