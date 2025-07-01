@@ -881,7 +881,8 @@ func (n *node) processApplyCh() {
 		defer glog.V(3).Infof("done handling element in applyCh")
 
 		span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
-			attribute.Int64("numEntries", int64(len(entries)))))
+			attribute.Int64("numEntries", int64(len(entries))),
+			attribute.String("entries", fmt.Sprintf("%v", entries))))
 
 		var totalSize int64
 		for _, entry := range entries {
