@@ -877,6 +877,12 @@ func (n *node) processApplyCh() {
 		ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
 		defer span.End()
 
+		st := time.Now()
+
+		defer func() {
+			fmt.Println(time.Since(st), len(entries))
+		}()
+
 		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
 		defer glog.V(3).Infof("done handling element in applyCh")
 
