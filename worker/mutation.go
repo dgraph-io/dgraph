@@ -942,9 +942,14 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	// might be wrong because we might be missing out a commit which has updated the value. This
 	// wait here ensures that the proposal would only be registered after seeing txn status of all
 	// pending transactions. Thus, the ordering would be correct.
+	span := trace.SpanFromContext(ctx)
+	startTime := time.Now()
 	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
 		return err
 	}
+	span.AddEvent("Waiting for ts", trace.WithAttributes(
+		attribute.Int64("ts", int64(m.StartTs)),
+		attribute.String("duration", time.Since(startTime).String())))
 
 	node := groups().Node
 	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
