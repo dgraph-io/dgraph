@@ -944,9 +944,9 @@ func (n *node) processApplyCh() {
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
 
-	batchSize := 100
+	batchSize := 1000
 	batch := make([]raftpb.Entry, 0, batchSize)
-	ticker := time.NewTicker(1 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
