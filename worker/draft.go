@@ -880,7 +880,7 @@ func (n *node) processApplyCh() {
 		st := time.Now()
 
 		defer func() {
-			fmt.Println(time.Since(st), len(entries))
+			fmt.Println(time.Since(st), time.Now(), len(entries))
 		}()
 
 		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
