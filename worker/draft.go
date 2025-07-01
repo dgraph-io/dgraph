@@ -944,27 +944,13 @@ func (n *node) processApplyCh() {
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
 
-	batchSize := 1000
-	batch := make([]raftpb.Entry, 0, batchSize)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case entries, ok := <-n.applyCh:
 			if !ok {
 				return
 			}
-			batch = append(batch, entries...)
-			if len(batch) > batchSize {
-				handle(batch)
-				batch = batch[:0]
-			}
-		case <-ticker.C:
-			if len(batch) > 0 {
-				handle(batch)
-				batch = batch[:0]
-			}
+			handle(entries)
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -1354,9 +1340,19 @@ func (n *node) Run() {
 		glog.Infof("Found Raft progress: %d", applied)
 	}
 
+	const applyChLen = 1000
+	var applyBuf = make([]raftpb.Entry, applyChLen)
+	applyTicker := time.NewTicker(1 * time.Millisecond)
+	defer applyTicker.Stop()
+
 	var timer x.Timer
 	for {
 		select {
+		case <-ticker.C:
+			if len(applyBuf) > 0 {
+				n.applyCh <- applyBuf
+				applyBuf = make([]raftpb.Entry, applyChLen)
+			}
 		case <-done:
 			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
 			// leadership in a goroutine. The push to n.applyCh happens in this loop, so the close
@@ -1554,7 +1550,11 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				n.applyCh <- entries
+				applyBuf = append(applyBuf, entries...)
+				if len(applyBuf) > applyChLen {
+					n.applyCh <- applyBuf
+					applyBuf = make([]raftpb.Entry, applyChLen)
+				}
 			}
 
 			for _, entry := range entries {
