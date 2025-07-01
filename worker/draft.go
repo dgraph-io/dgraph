@@ -873,8 +873,15 @@ func (n *node) processApplyCh() {
 
 	// This function must be run serially.
 	handle := func(entries []raftpb.Entry) {
+		ctx := context.Background()
+		ctx, span := otel.Tracer("applyCh").Start(ctx, "Alpha.processApplyCh")
+		defer span.End()
+
 		glog.V(3).Infof("handling element in applyCh with #entries %v", len(entries))
 		defer glog.V(3).Infof("done handling element in applyCh")
+
+		span.AddEvent("handling element in applyCh with #entries %v", trace.WithAttributes(
+			attribute.Int64("numEntries", int64(len(entries)))))
 
 		var totalSize int64
 		for _, entry := range entries {
@@ -1351,6 +1358,15 @@ func (n *node) Run() {
 		select {
 		case <-ticker.C:
 			if len(applyBuf) > 0 {
+				for _, entry := range applyBuf {
+					key := binary.BigEndian.Uint64(entry.Data[:8])
+					if pctx := n.Proposals.Get(key); pctx != nil {
+						if span := trace.SpanFromContext(pctx.Ctx); span != nil {
+							span.AddEvent("Adding to apply Ch.",
+								trace.WithAttributes(attribute.Int("count", len(applyBuf))))
+						}
+					}
+				}
 				n.applyCh <- applyBuf
 				applyBuf = make([]raftpb.Entry, 0)
 			}
