@@ -625,6 +625,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 	ctx := n.Ctx(key)
 	span := trace.SpanFromContext(ctx)
+	fmt.Println("FOUND SPAN", span)
 	span.AddEvent("Node.applyCommited", trace.WithAttributes(
 		attribute.Int64("node id", int64(n.Id)),
 		attribute.Int64("Group Id", int64(n.gid)),
