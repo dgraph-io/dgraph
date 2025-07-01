@@ -932,33 +932,33 @@ func (n *node) processApplyCh() {
 
 			} else {
 				// if this applyCommitted fails, how do we ensure
-				// start := time.Now()
-				// perr = n.applyCommitted(&proposal, key)
-				// if key != 0 {
-				// 	p := &P{err: perr, size: psz, seen: time.Now()}
-				// 	previous[key] = p
-				// }
-				// span := trace.SpanFromContext(n.Ctx(key))
-				// if perr != nil {
-				// 	glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
-				// 	span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
-				// }
-				// span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
-				// 	trace.WithAttributes(
-				// 		attribute.Int64("key", int64(key)),
-				// 		attribute.Int64("index", int64(proposal.Index)),
-				// 		attribute.Int64("numEntries", int64(len(entries))),
-				// 	))
+				start := time.Now()
+				perr = n.applyCommitted(&proposal, key)
+				if key != 0 {
+					p := &P{err: perr, size: psz, seen: time.Now()}
+					previous[key] = p
+				}
+				span := trace.SpanFromContext(n.Ctx(key))
+				if perr != nil {
+					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
+					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
+				}
+				span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
+					trace.WithAttributes(
+						attribute.Int64("key", int64(key)),
+						attribute.Int64("index", int64(proposal.Index)),
+						attribute.Int64("numEntries", int64(len(entries))),
+					))
 
-				// var tags []tag.Mutator
-				// switch {
-				// case proposal.Mutations != nil:
-				// 	tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-				// case proposal.Delta != nil:
-				// 	tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
-				// }
-				// ms := x.SinceMs(start)
-				// _ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				var tags []tag.Mutator
+				switch {
+				case proposal.Mutations != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+				case proposal.Delta != nil:
+					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+				}
+				ms := x.SinceMs(start)
+				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 
 			n.Proposals.Done(key, perr)
@@ -1377,7 +1377,7 @@ func (n *node) Run() {
 		glog.Infof("Found Raft progress: %d", applied)
 	}
 
-	const applyChLen = 1000
+	const applyChLen = 100000
 	var applyBuf = make([]raftpb.Entry, 0)
 	applyTicker := time.NewTicker(100 * time.Millisecond)
 	defer applyTicker.Stop()
