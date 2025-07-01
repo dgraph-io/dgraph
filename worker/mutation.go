@@ -944,9 +944,9 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	// pending transactions. Thus, the ordering would be correct.
 	span := trace.SpanFromContext(ctx)
 	startTime := time.Now()
-	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
-		return err
-	}
+	// if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
+	// 	return err
+	// }
 	span.AddEvent("Waiting for ts", trace.WithAttributes(
 		attribute.Int64("ts", int64(m.StartTs)),
 		attribute.String("duration", time.Since(startTime).String())))
