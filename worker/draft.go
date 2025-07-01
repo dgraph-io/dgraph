@@ -1557,9 +1557,14 @@ func (n *node) Run() {
 				n.applyCh <- entries
 			}
 
-			if span != nil {
-				span.AddEvent("Handled %d committed entries.",
-					trace.WithAttributes(attribute.Int("count", len(rd.CommittedEntries))))
+			for _, entry := range entries {
+				key := binary.BigEndian.Uint64(entry.Data[:8])
+				if pctx := n.Proposals.Get(key); pctx != nil {
+					if span := trace.SpanFromContext(pctx.Ctx); span != nil {
+						span.AddEvent("Handled %d committed entries.",
+							trace.WithAttributes(attribute.Int("count", len(rd.CommittedEntries))))
+					}
+				}
 			}
 
 			if !leader {
