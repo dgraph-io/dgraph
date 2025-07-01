@@ -909,7 +909,7 @@ func (n *node) processApplyCh() {
 					p := &P{err: perr, size: psz, seen: time.Now()}
 					previous[key] = p
 				}
-				span := trace.SpanFromContext(n.ctx)
+				span := trace.SpanFromContext(n.Ctx(key))
 				if perr != nil {
 					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
 					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
@@ -918,6 +918,7 @@ func (n *node) processApplyCh() {
 					trace.WithAttributes(
 						attribute.Int64("key", int64(key)),
 						attribute.Int64("index", int64(proposal.Index)),
+						attribute.Int64("numEntries", int64(len(entries))),
 					))
 
 				var tags []tag.Mutator
@@ -1342,7 +1343,7 @@ func (n *node) Run() {
 
 	const applyChLen = 1000
 	var applyBuf = make([]raftpb.Entry, 0)
-	applyTicker := time.NewTicker(1000 * time.Millisecond)
+	applyTicker := time.NewTicker(100 * time.Millisecond)
 	defer applyTicker.Stop()
 
 	var timer x.Timer
