@@ -983,37 +983,44 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	x.PrintOracleDelta(delta)
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
-	// toDisk := func(start, commit uint64) {
-	// 	txn := posting.Oracle().GetTxn(start)
-	// 	if txn == nil || commit == 0 {
-	// 		return
-	// 	}
-	// 	// If the transaction has failed, we dont need to update it.
-	// 	if commit != 0 {
-	// 		txn.Update()
-	// 	}
-	// 	// We start with 20 ms, so that we end up waiting 5 mins by the end.
-	// 	// If there is any transient issue, it should get fixed within that timeframe.
-	// 	err := x.ExponentialRetry(int(x.Config.MaxRetries),
-	// 		20*time.Millisecond, func() error {
-	// 			err := txn.CommitToDisk(writer, commit)
-	// 			if err == badger.ErrBannedKey {
-	// 				glog.Errorf("Error while writing to banned namespace.")
-	// 				return nil
-	// 			}
-	// 			return err
-	// 		})
+	toDisk := func(start, commit uint64) {
+		txn := posting.Oracle().GetTxn(start)
+		if txn == nil || commit == 0 {
+			return
+		}
+		// If the transaction has failed, we dont need to update it.
+		if commit != 0 {
+			txn.Update()
+		}
+		// We start with 20 ms, so that we end up waiting 5 mins by the end.
+		// If there is any transient issue, it should get fixed within that timeframe.
+		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+			20*time.Millisecond, func() error {
+				err := txn.CommitToDisk(writer, commit)
+				if err == badger.ErrBannedKey {
+					glog.Errorf("Error while writing to banned namespace.")
+					return nil
+				}
+				return err
+			})
 
-	// 	if err != nil {
-	// 		glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-	// 			start, commit, err)
-	// 		panic(err)
-	// 	}
-	// }
+		if err != nil {
+			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
+			panic(err)
+		}
+	}
 
-	// for _, status := range delta.Txns {
-	// 	toDisk(status.StartTs, status.CommitTs)
-	// }
+	var wg sync.WaitGroup
+	for _, status := range delta.Txns {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			toDisk(status.StartTs, status.CommitTs)
+		}()
+	}
+	wg.Wait()
+
 	if err := writer.Flush(); err != nil {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
