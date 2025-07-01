@@ -876,6 +876,29 @@ func updateStartTs(p *pb.Proposal) {
 	}
 }
 
+func (n *node) processMutation(entries []raftpb.Entry) {
+	var totalSize int64
+
+	for _, entry := range entries {
+		psz := entry.Size()
+		totalSize += int64(psz)
+
+		processingApplyCh.Add(1)
+		var proposal pb.Proposal
+		key := binary.BigEndian.Uint64(entry.Data[:8])
+		x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
+		proposal.Index = entry.Index
+		updateStartTs(&proposal)
+
+		n.applyCommitted(&proposal, key)
+
+	}
+
+	if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
+		glog.Warningf("Pending size should remain above zero: %d", sz)
+	}
+}
+
 func (n *node) processApplyCh() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -1396,8 +1419,8 @@ func (n *node) Run() {
 						}
 					}
 				}
-				n.applyCh <- applyBuf
-				applyBuf = make([]raftpb.Entry, 0)
+				n.processMutation(applyBuf)
+				applyBuf = applyBuf[:0]
 			}
 		case <-done:
 			// We use done channel here instead of closer.HasBeenClosed so that we can transfer
@@ -1597,12 +1620,7 @@ func (n *node) Run() {
 				if sz := atomic.AddInt64(&n.pendingSize, pendingSize); sz > 2*maxPendingSize {
 					glog.Warningf("Inflight proposal size: %d. There would be some throttling.", sz)
 				}
-				// n.applyCh <- entries
 				applyBuf = append(applyBuf, entries...)
-				if len(applyBuf) > applyChLen {
-					n.applyCh <- applyBuf
-					applyBuf = make([]raftpb.Entry, 0)
-				}
 			}
 
 			for _, entry := range entries {
