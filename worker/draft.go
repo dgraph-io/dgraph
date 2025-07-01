@@ -625,7 +625,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 	ctx := n.Ctx(key)
 	span := trace.SpanFromContext(ctx)
-	fmt.Println("FOUND SPAN", span, ctx, key)
 	span.AddEvent("Node.applyCommited", trace.WithAttributes(
 		attribute.Int64("node id", int64(n.Id)),
 		attribute.Int64("Group Id", int64(n.gid)),
@@ -1362,6 +1361,8 @@ func (n *node) Run() {
 		case rd := <-n.Raft().Ready():
 			// TODO(Aman): Based on the code here https://github.com/etcd-io/etcd/tree/raft/v3.5.9/raft,
 			// n.SaveToStorage should be called first before doing anything else.
+			t := time.Now()
+			fmt.Println("Ready", t)
 
 			timer.Start()
 			_, span := otel.Tracer("").Start(n.ctx, "Alpha.RunLoop")
@@ -1534,7 +1535,7 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If we do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				// rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
+				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
 				for _, e := range entries {
 					pendingSize += int64(e.Size())
