@@ -1024,7 +1024,6 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	defer span.End()
 	x.PrintOracleDelta(delta)
 	// First let's commit all mutations to disk.
-	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
 		t1 := time.Now()
 		defer func() {
@@ -1047,12 +1046,15 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
 			20*time.Millisecond, func() error {
+				writer := posting.NewTxnWriter(pstore)
 				err := txn.CommitToDisk(writer, commit)
-				if err == badger.ErrBannedKey {
-					glog.Errorf("Error while writing to banned namespace.")
-					return nil
+				if err != nil && err != badger.ErrBannedKey {
+					return err
 				}
-				return err
+				if err := writer.Flush(); err != nil {
+					return errors.Wrapf(err, "while flushing to disk")
+				}
+				return nil
 			})
 
 		if err != nil {
@@ -1061,6 +1063,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			panic(err)
 		}
 	}
+
+	t1 := time.Now()
 
 	var wg sync.WaitGroup
 	for _, status := range delta.Txns {
@@ -1072,11 +1076,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	}
 	wg.Wait()
 
-	t1 := time.Now()
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
-	}
-	span.AddEvent("flush", trace.WithAttributes(
+	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
 	))
 
