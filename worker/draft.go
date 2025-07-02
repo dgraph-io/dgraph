@@ -1020,10 +1020,20 @@ func (n *node) processApplyCh() {
 
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
+	_, span := otel.Tracer("alpha.CommitLoop").Start(context.Background(), "commitOrAbort")
 	x.PrintOracleDelta(delta)
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
+		t1 := time.Now()
+		defer func() {
+			span.AddEvent("toDisk", trace.WithAttributes(
+				attribute.Int64("start", int64(start)),
+				attribute.Int64("commit", int64(commit)),
+				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+			))
+		}()
+
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil || commit == 0 {
 			return
@@ -1061,9 +1071,13 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	}
 	wg.Wait()
 
+	t1 := time.Now()
 	if err := writer.Flush(); err != nil {
 		return errors.Wrapf(err, "while flushing to disk")
 	}
+	span.AddEvent("flush", trace.WithAttributes(
+		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+	))
 
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
@@ -1081,6 +1095,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		txn := posting.Oracle().GetTxn(status.StartTs)
 		txn.UpdateCachedKeys(status.CommitTs)
 	}
+	span.AddEvent("updateCachedKeys", trace.WithAttributes(
+		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+	))
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
