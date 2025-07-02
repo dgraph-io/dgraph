@@ -1400,7 +1400,7 @@ func (n *node) Run() {
 		glog.Infof("Found Raft progress: %d", applied)
 	}
 
-	const applyChLen = 100000
+	const applyChLen = 1000
 	var applyBuf = make([]raftpb.Entry, 0)
 	applyTicker := time.NewTicker(100 * time.Millisecond)
 	defer applyTicker.Stop()
