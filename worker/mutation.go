@@ -59,10 +59,6 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
 	ctx = schema.GetWriteContext(ctx)
 
-	if 1 == 1 {
-		return nil
-	}
-
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 	su, ok := schema.State().Get(ctx, edge.Attr)

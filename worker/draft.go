@@ -899,69 +899,81 @@ func (n *node) processApplyCh() {
 			attribute.Int64("numEntries", int64(len(entries)))))
 
 		var totalSize int64
+		var wg sync.WaitGroup
+		for _, ent := range entries {
+			wg.Add(1)
+			go func(entry raftpb.Entry) {
+				processingApplyCh.Add(1)
+				x.AssertTrue(len(entry.Data) > 0)
+
+				// We use the size as a double check to ensure that we're
+				// working with the same proposal as before.
+				psz := entry.Size()
+				totalSize += int64(psz)
+
+				var proposal pb.Proposal
+				key := binary.BigEndian.Uint64(entry.Data[:8])
+				x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
+				proposal.Index = entry.Index
+				updateStartTs(&proposal)
+
+				// span.AddEvent("processing entry", trace.WithAttributes(
+				// 	attribute.Int64("key", int64(key)),
+				// 	attribute.Int64("index", int64(proposal.Index)),
+				// 	attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
+				// ))
+
+				var perr error
+				p, ok := previous[key]
+				if ok && p.err == nil && p.size == psz {
+					msg := fmt.Sprintf("Proposal with key: %d already applied. Skipping index: %d."+
+						" Delta: %+v Snapshot: %+v.\n",
+						key, proposal.Index, proposal.Delta, proposal.Snapshot)
+					glog.Infof(msg)
+					previous[key].seen = time.Now() // Update the ts.
+					// Don't break here. We still need to call the Done below.
+
+				} else {
+					// if this applyCommitted fails, how do we ensure
+					start := time.Now()
+					perr = n.applyCommitted(&proposal, key)
+					if key != 0 {
+						p := &P{err: perr, size: psz, seen: time.Now()}
+						previous[key] = p
+					}
+					span := trace.SpanFromContext(n.Ctx(key))
+					if perr != nil {
+						glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
+						span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
+					}
+					span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
+						trace.WithAttributes(
+							attribute.Int64("key", int64(key)),
+							attribute.Int64("index", int64(proposal.Index)),
+							attribute.Int64("numEntries", int64(len(entries))),
+						))
+
+					var tags []tag.Mutator
+					switch {
+					case proposal.Mutations != nil:
+						tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
+					case proposal.Delta != nil:
+						tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
+					}
+					ms := x.SinceMs(start)
+					_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
+				}
+			}(ent)
+		}
+		wg.Done()
+
 		for _, entry := range entries {
-			processingApplyCh.Add(1)
-			x.AssertTrue(len(entry.Data) > 0)
-
-			// We use the size as a double check to ensure that we're
-			// working with the same proposal as before.
-			psz := entry.Size()
-			totalSize += int64(psz)
-
 			var proposal pb.Proposal
 			key := binary.BigEndian.Uint64(entry.Data[:8])
 			x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
 			proposal.Index = entry.Index
-			updateStartTs(&proposal)
 
-			// span.AddEvent("processing entry", trace.WithAttributes(
-			// 	attribute.Int64("key", int64(key)),
-			// 	attribute.Int64("index", int64(proposal.Index)),
-			// 	attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
-			// ))
-
-			var perr error
-			p, ok := previous[key]
-			if ok && p.err == nil && p.size == psz {
-				msg := fmt.Sprintf("Proposal with key: %d already applied. Skipping index: %d."+
-					" Delta: %+v Snapshot: %+v.\n",
-					key, proposal.Index, proposal.Delta, proposal.Snapshot)
-				glog.Infof(msg)
-				previous[key].seen = time.Now() // Update the ts.
-				// Don't break here. We still need to call the Done below.
-
-			} else {
-				// if this applyCommitted fails, how do we ensure
-				start := time.Now()
-				perr = n.applyCommitted(&proposal, key)
-				if key != 0 {
-					p := &P{err: perr, size: psz, seen: time.Now()}
-					previous[key] = p
-				}
-				span := trace.SpanFromContext(n.Ctx(key))
-				if perr != nil {
-					glog.Errorf("Applying proposal. Error: %v. Proposal: %q.", perr, &proposal)
-					span.AddEvent(fmt.Sprintf("Applying proposal failed. Error: %v Proposal: %q", perr, &proposal))
-				}
-				span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
-					trace.WithAttributes(
-						attribute.Int64("key", int64(key)),
-						attribute.Int64("index", int64(proposal.Index)),
-						attribute.Int64("numEntries", int64(len(entries))),
-					))
-
-				var tags []tag.Mutator
-				switch {
-				case proposal.Mutations != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-				case proposal.Delta != nil:
-					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
-				}
-				ms := x.SinceMs(start)
-				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
-			}
-
-			n.Proposals.Done(key, perr)
+			n.Proposals.Done(key, nil)
 			n.Applied.Done(proposal.Index)
 			ostats.Record(context.Background(), x.RaftAppliedIndex.M(int64(n.Applied.DoneUntil())))
 		}
