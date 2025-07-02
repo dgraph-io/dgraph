@@ -941,14 +941,12 @@ func (n *node) processApplyCh() {
 					t := time.Now()
 					perr = n.applyCommitted(proposal, key)
 					duration := time.Since(t)
-					fmt.Println(duration)
 					span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
 						trace.WithAttributes(
 							attribute.Int64("key", int64(key)),
 							attribute.Int64("index", int64(proposal.Index)),
 							attribute.Int64("numEntries", int64(len(entries))),
 							attribute.Int64("time", duration.Milliseconds()),
-							attribute.String("error", perr.Error()),
 						))
 
 				}(&proposal, key)
