@@ -890,8 +890,9 @@ func (n *node) processMutation(entries []raftpb.Entry) {
 		proposal.Index = entry.Index
 		updateStartTs(&proposal)
 
-		n.applyCommitted(&proposal, key)
-
+		perr := n.applyCommitted(&proposal, key)
+		n.Proposals.Done(key, perr)
+		n.Applied.Done(proposal.Index)
 	}
 
 	if sz := atomic.AddInt64(&n.pendingSize, -totalSize); sz < 0 {
