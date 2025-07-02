@@ -915,11 +915,11 @@ func (n *node) processApplyCh() {
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
-			// span.AddEvent("processing entry", trace.WithAttributes(
-			// 	attribute.Int64("key", int64(key)),
-			// 	attribute.Int64("index", int64(proposal.Index)),
-			// 	attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
-			// ))
+			span.AddEvent("processing entry", trace.WithAttributes(
+				attribute.Int64("key", int64(key)),
+				attribute.Int64("index", int64(proposal.Index)),
+				attribute.String("proposal", fmt.Sprintf("%+v", proposal)),
+			))
 
 			var perr error
 			p, ok := previous[key]
@@ -938,7 +938,17 @@ func (n *node) processApplyCh() {
 				wg.Add(1)
 				go func(proposal *pb.Proposal, key uint64) {
 					defer wg.Done()
+					t := time.Now()
 					perr = n.applyCommitted(proposal, key)
+					span.AddEvent("Applied proposal with key: %d, index: %d. Err: %v",
+						trace.WithAttributes(
+							attribute.Int64("key", int64(key)),
+							attribute.Int64("index", int64(proposal.Index)),
+							attribute.Int64("numEntries", int64(len(entries))),
+							attribute.String("time", time.Since(t).String()),
+							attribute.String("error", perr.Error()),
+						))
+
 				}(&proposal, key)
 				if key != 0 {
 					p := &P{err: perr, size: psz, seen: time.Now()}
