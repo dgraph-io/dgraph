@@ -937,6 +937,7 @@ func (n *node) processApplyCh() {
 
 				wg.Add(1)
 				go func(proposal *pb.Proposal, key uint64) {
+					defer wg.Done()
 					perr = n.applyCommitted(proposal, key)
 				}(&proposal, key)
 				if key != 0 {
