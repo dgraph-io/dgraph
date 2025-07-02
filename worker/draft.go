@@ -967,7 +967,7 @@ func (n *node) processApplyCh() {
 				_ = ostats.RecordWithTags(context.Background(), tags, x.LatencyMs.M(ms))
 			}
 		}
-		wg.Done()
+		wg.Wait()
 
 		for _, entry := range entries {
 			var proposal pb.Proposal
