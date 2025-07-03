@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/skl"
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
@@ -54,6 +55,8 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+
+	SL *skl.Skiplist
 }
 
 // struct to implement Txn interface from vector-indexer

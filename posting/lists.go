@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -17,8 +19,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/skl"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/ristretto/v2/z"
+	"github.com/golang/glog"
 	"github.com/hypermodeinc/dgraph/v25/protos/pb"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
@@ -423,6 +428,52 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 		// TODO: Find another way to reuse postings via postingPool.
 	}
 	lc.plists = make(map[string]*List)
+}
+
+// ToSkiplist replaces CommitToDisk. ToSkiplist creates a Badger usable Skiplist from the Txn, so
+// it can be passed over to Badger after commit. This only stores deltas to the commit timestamps.
+// It does not try to generate a state. State generation is done via rollups, which happen when a
+// snapshot is created.  Don't call this for schema mutations. Directly commit them.
+func (txn *Txn) ToSkiplist() error {
+	cache := txn.cache
+	cache.Lock()
+	defer cache.Unlock()
+
+	var keys []string
+	for key := range cache.deltas {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	// defer func() {
+	// Add these keys to be rolled up after we're done writing. This is the right place for them
+	// to be rolled up, because we just pushed these deltas over to Badger.
+	// TODO: This is no longer the right place. Figure out a new place for these keys.
+	// for _, key := range keys {
+	// 	IncrRollup.addKeyToBatch([]byte(key), 1)
+	// }
+	// }()
+
+	b := skl.NewSkiplist(1 << 20)
+	for _, key := range keys {
+		k := []byte(key)
+		data := cache.deltas[key]
+		if len(data) == 0 {
+			continue
+		}
+
+		if err := badger.ValidEntry(pstore, k, data); err != nil {
+			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
+			continue
+		}
+		b.Put(y.KeyWithTs(k, math.MaxUint64),
+			y.ValueStruct{
+				Value:    data,
+				UserMeta: BitDeltaPosting,
+			})
+	}
+	txn.SL = b
+	return nil
 }
 
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {

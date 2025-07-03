@@ -1023,6 +1023,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	_, span := otel.Tracer("alpha.CommitLoop").Start(context.Background(), "commitOrAbort")
 	defer span.End()
 	x.PrintOracleDelta(delta)
+
+	var wg sync.WaitGroup
+
 	// First let's commit all mutations to disk.
 	toDisk := func(start, commit uint64) {
 		t1 := time.Now()
@@ -1042,22 +1045,21 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}()
 
 		// If the transaction has failed, we dont need to update it.
-		if commit != 0 {
-			txn.Update()
+		if commit == 0 {
+			wg.Done()
+			return
 		}
+
+		txn.Update()
+		txn.ToSkiplist()
+
 		// We start with 20 ms, so that we end up waiting 5 mins by the end.
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
 			20*time.Millisecond, func() error {
-				writer := posting.NewTxnWriter(pstore)
-				err := txn.CommitToDisk(writer, commit)
-				if err != nil && err != badger.ErrBannedKey {
-					return err
-				}
-				if err := writer.Flush(); err != nil {
-					return errors.Wrapf(err, "while flushing to disk")
-				}
-				return nil
+				return pstore.HandoverSkiplist(txn.SL, func() {
+					wg.Done()
+				})
 			})
 
 		if err != nil {
@@ -1069,11 +1071,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 
 	t1 := time.Now()
 
-	var wg sync.WaitGroup
 	for _, status := range delta.Txns {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			toDisk(status.StartTs, status.CommitTs)
 		}()
 	}
