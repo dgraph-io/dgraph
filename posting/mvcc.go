@@ -598,6 +598,14 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 	}
 }
 
+func (txn *Txn) Deltas() int64 {
+	res := 0
+	for _, val := range txn.cache.deltas {
+		res += len(val)
+	}
+	return int64(res)
+}
+
 // RemoveCachedKeys will delete the cached list by this txn.
 func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	if txn == nil || txn.cache == nil {

@@ -1026,18 +1026,21 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	toDisk := func(start, commit uint64) {
 		t1 := time.Now()
-		defer func() {
-			span.AddEvent("toDisk", trace.WithAttributes(
-				attribute.Int64("start", int64(start)),
-				attribute.Int64("commit", int64(commit)),
-				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
-			))
-		}()
 
 		txn := posting.Oracle().GetTxn(start)
 		if txn == nil || commit == 0 {
 			return
 		}
+
+		defer func() {
+			span.AddEvent("toDisk", trace.WithAttributes(
+				attribute.Int64("start", int64(start)),
+				attribute.Int64("commit", int64(commit)),
+				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+				attribute.Int64("deltas", int64(txn.Deltas())),
+			))
+		}()
+
 		// If the transaction has failed, we dont need to update it.
 		if commit != 0 {
 			txn.Update()

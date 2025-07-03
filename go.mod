@@ -8,7 +8,7 @@ require (
 	github.com/IBM/sarama v1.45.2
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/blevesearch/bleve/v2 v2.5.2
-	github.com/dgraph-io/badger/v4 v4.6.1-0.20250703043134-57f9a4a55f44
+	github.com/dgraph-io/badger/v4 v4.6.1-0.20250703163604-21ee02721eac
 	github.com/dgraph-io/dgo/v250 v250.0.0-preview4.0.20250619041351-4a519e53fb9d
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
