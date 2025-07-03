@@ -1057,7 +1057,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
 			20*time.Millisecond, func() error {
+				fmt.Println("STARTING")
 				return pstore.HandoverSkiplist(txn.SL, func() {
+					fmt.Println("ENDING")
 					wg.Done()
 				})
 			})
@@ -1077,7 +1079,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			toDisk(status.StartTs, status.CommitTs)
 		}()
 	}
+	fmt.Println("Legends say we are still waiting here")
 	wg.Wait()
+	fmt.Println("OMG WAIT OVER")
 
 	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
