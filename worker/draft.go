@@ -1025,7 +1025,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	defer span.End()
 	x.PrintOracleDelta(delta)
 
-	sl := skl.NewSkiplist(1 << 40)
+	sl := skl.NewSkiplist(1 << 30)
 
 	// First let's commit all mutations to disk.
 	toDisk := func(start, commit uint64) {
