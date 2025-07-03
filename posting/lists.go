@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"sync"
 	"time"
@@ -434,7 +433,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 // it can be passed over to Badger after commit. This only stores deltas to the commit timestamps.
 // It does not try to generate a state. State generation is done via rollups, which happen when a
 // snapshot is created.  Don't call this for schema mutations. Directly commit them.
-func (txn *Txn) ToSkiplist() error {
+func (txn *Txn) ToSkiplist(b *skl.Skiplist, commit uint64) (*skl.Skiplist, error) {
 	cache := txn.cache
 	cache.Lock()
 	defer cache.Unlock()
@@ -454,7 +453,6 @@ func (txn *Txn) ToSkiplist() error {
 	// }
 	// }()
 
-	b := skl.NewSkiplist(1 << 20)
 	for _, key := range keys {
 		k := []byte(key)
 		data := cache.deltas[key]
@@ -466,14 +464,13 @@ func (txn *Txn) ToSkiplist() error {
 			glog.Errorf("Invalid Entry. len(key): %d len(val): %d\n", len(k), len(data))
 			continue
 		}
-		b.Put(y.KeyWithTs(k, math.MaxUint64),
+		b.Put(y.KeyWithTs(k, commit),
 			y.ValueStruct{
 				Value:    data,
 				UserMeta: BitDeltaPosting,
 			})
 	}
-	txn.SL = b
-	return nil
+	return b, nil
 }
 
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {

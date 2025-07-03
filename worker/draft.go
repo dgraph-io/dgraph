@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/badger/v4/skl"
 	"github.com/dgraph-io/ristretto/v2/z"
 	"github.com/hypermodeinc/dgraph/v25/conn"
 	"github.com/hypermodeinc/dgraph/v25/posting"
@@ -1024,7 +1025,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	defer span.End()
 	x.PrintOracleDelta(delta)
 
-	var wg sync.WaitGroup
+	sl := skl.NewSkiplist(1 << 20)
 
 	// First let's commit all mutations to disk.
 	toDisk := func(start, commit uint64) {
@@ -1046,42 +1047,34 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 
 		// If the transaction has failed, we dont need to update it.
 		if commit == 0 {
-			wg.Done()
 			return
 		}
 
 		txn.Update()
-		txn.ToSkiplist()
-
-		// We start with 20 ms, so that we end up waiting 5 mins by the end.
-		// If there is any transient issue, it should get fixed within that timeframe.
-		err := x.ExponentialRetry(int(x.Config.MaxRetries),
-			20*time.Millisecond, func() error {
-				fmt.Println("STARTING")
-				return pstore.HandoverSkiplist(txn.SL, func() {
-					fmt.Println("ENDING")
-					wg.Done()
-				})
-			})
-
-		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-			panic(err)
-		}
+		txn.ToSkiplist(sl, commit)
 	}
 
 	t1 := time.Now()
 
 	for _, status := range delta.Txns {
-		wg.Add(1)
-		go func() {
-			toDisk(status.StartTs, status.CommitTs)
-		}()
+		toDisk(status.StartTs, status.CommitTs)
 	}
-	fmt.Println("Legends say we are still waiting here")
-	wg.Wait()
-	fmt.Println("OMG WAIT OVER")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// We start with 20 ms, so that we end up waiting 5 mins by the end.
+	// If there is any transient issue, it should get fixed within that timeframe.
+	err := x.ExponentialRetry(int(x.Config.MaxRetries),
+		20*time.Millisecond, func() error {
+			return pstore.HandoverSkiplist(sl, func() {
+				wg.Done()
+			})
+		})
+
+	if err != nil {
+		panic(err)
+	}
 
 	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
