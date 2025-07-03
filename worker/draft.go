@@ -1076,6 +1076,8 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		panic(err)
 	}
 
+	wg.Wait()
+
 	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
 	))
