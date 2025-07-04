@@ -273,7 +273,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:    make(chan []raftpb.Entry, 1000000),
+		applyCh:    make(chan []raftpb.Entry, 1000),
 		closer:     z.NewCloser(4), // Matches CLOSER:1
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
