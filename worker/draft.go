@@ -543,6 +543,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return ei.GetEntity() < ej.GetEntity()
 	})
 
+	fmt.Println("HERE applyDelta", m.StartTs)
+
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.AddEvent("Txn should abort.", trace.WithAttributes(
@@ -934,7 +936,6 @@ func (n *node) processApplyCh() {
 			} else {
 				// if this applyCommitted fails, how do we ensure
 				start := time.Now()
-				fmt.Println("HERE applyCommitted", proposal.StartTs)
 
 				wg.Add(1)
 				go func(proposal *pb.Proposal, key uint64) {

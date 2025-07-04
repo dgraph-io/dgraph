@@ -236,7 +236,12 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			attribute.Int64("key", int64(key)),
 			attribute.String("timeout", timeout.String())))
 
-		fmt.Println("HERE proposing", proposal.StartTs)
+		if proposal != nil && proposal.Mutations != nil {
+			fmt.Println("HERE proposing", proposal.Mutations.StartTs)
+		}
+		if proposal != nil && proposal.Delta != nil {
+			fmt.Println("HERE proposing deltas", proposal.Delta)
+		}
 
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
