@@ -1023,6 +1023,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	_, span := otel.Tracer("alpha.CommitLoop").Start(context.Background(), "commitOrAbort")
 	defer span.End()
 	x.PrintOracleDelta(delta)
+	writer := posting.NewTxnWriter(pstore)
 	// First let's commit all mutations to disk.
 	toDisk := func(start, commit uint64) {
 		t1 := time.Now()
@@ -1049,13 +1050,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// If there is any transient issue, it should get fixed within that timeframe.
 		err := x.ExponentialRetry(int(x.Config.MaxRetries),
 			20*time.Millisecond, func() error {
-				writer := posting.NewTxnWriter(pstore)
 				err := txn.CommitToDisk(writer, commit)
 				if err != nil && err != badger.ErrBannedKey {
 					return err
-				}
-				if err := writer.Flush(); err != nil {
-					return errors.Wrapf(err, "while flushing to disk")
 				}
 				return nil
 			})
@@ -1078,6 +1075,14 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		}()
 	}
 	wg.Wait()
+
+	defer func() {
+		if err := writer.Flush(); err != nil {
+			glog.Errorf("Error while flushing to disk: %v", err)
+			panic(err)
+		}
+		posting.Oracle().DeleteTxns(delta)
+	}()
 
 	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),

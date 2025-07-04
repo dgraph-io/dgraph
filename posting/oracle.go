@@ -306,6 +306,20 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	}
 }
 
+func (o *oracle) DeleteTxns(delta *pb.OracleDelta) {
+	o.Lock()
+	defer o.Unlock()
+	for _, status := range delta.Txns {
+		txn := o.pendingTxns[status.StartTs]
+		if txn != nil && status.CommitTs > 0 {
+			for k := range txn.cache.deltas {
+				IncrRollup.addKeyToBatch([]byte(k), 0)
+			}
+		}
+		delete(o.pendingTxns, status.StartTs)
+	}
+}
+
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	if glog.V(3) {
 		glog.Infof("ProcessDelta: Max Assigned: %d", delta.MaxAssigned)
@@ -319,17 +333,6 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		}
 	}
 
-	o.Lock()
-	defer o.Unlock()
-	for _, status := range delta.Txns {
-		txn := o.pendingTxns[status.StartTs]
-		if txn != nil && status.CommitTs > 0 {
-			for k := range txn.cache.deltas {
-				IncrRollup.addKeyToBatch([]byte(k), 0)
-			}
-		}
-		delete(o.pendingTxns, status.StartTs)
-	}
 	curMax := o.MaxAssigned()
 	if delta.MaxAssigned < curMax {
 		return
