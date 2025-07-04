@@ -1040,6 +1040,13 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
 				attribute.Int64("deltas", int64(txn.Deltas())),
 			))
+			span1 := trace.SpanFromContext(n.Ctx(start))
+			span1.AddEvent("toDisk", trace.WithAttributes(
+				attribute.Int64("start", int64(start)),
+				attribute.Int64("commit", int64(commit)),
+				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+				attribute.Int64("deltas", int64(txn.Deltas())),
+			))
 		}()
 
 		// If the transaction has failed, we dont need to update it.
@@ -1080,6 +1087,14 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if err := writer.Flush(); err != nil {
 			glog.Errorf("Error while flushing to disk: %v", err)
 			panic(err)
+		}
+		for _, status := range delta.Txns {
+			span1 := trace.SpanFromContext(n.Ctx(status.StartTs))
+			span1.AddEvent("flushing on disk", trace.WithAttributes(
+				attribute.Int64("start", int64(status.StartTs)),
+				attribute.Int64("commit", int64(status.CommitTs)),
+				attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
+			))
 		}
 		posting.Oracle().DeleteTxns(delta)
 	}()
