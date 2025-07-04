@@ -8,6 +8,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -234,6 +235,8 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		span.AddEvent("Proposing", trace.WithAttributes(
 			attribute.Int64("key", int64(key)),
 			attribute.String("timeout", timeout.String())))
+
+		fmt.Println("HERE proposing", proposal.StartTs)
 
 		if err = n.Raft().Propose(cctx, data); err != nil {
 			return errors.Wrapf(err, "While proposing")
