@@ -1373,6 +1373,40 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		return err
 	}
 
+	numVectorsToCheck := 100
+	lenFreq := make(map[int]int, numVectorsToCheck)
+	maxFreq := 0
+	dimension := 0
+	MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+		Prefix:      pk.DataPrefix(),
+		ReadTs:      rb.StartTs,
+		AllVersions: false,
+		Reverse:     false,
+		CheckInclusion: func(uid uint64) error {
+			return nil
+		},
+		Function: func(l *List, pk x.ParsedKey) error {
+			val, err := l.Value(rb.StartTs)
+			if err != nil {
+				return err
+			}
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			lenFreq[len(inVec)] += 1
+			if lenFreq[len(inVec)] > maxFreq {
+				maxFreq = lenFreq[len(inVec)]
+				dimension = len(inVec)
+			}
+			numVectorsToCheck -= 1
+			if numVectorsToCheck <= 0 {
+				return ErrStopIteration
+			}
+			return nil
+		},
+		StartKey: x.DataKey(rb.Attr, 0),
+	})
+
+	fmt.Println("Selecting vector dimension to be:", dimension)
+
 	if indexer.NumSeedVectors() > 0 {
 		count := 0
 		MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
@@ -1389,6 +1423,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 					return err
 				}
 				inVec := types.BytesAsFloatArray(val.Value.([]byte))
+				if len(inVec) != dimension {
+					return nil
+				}
 				count += 1
 				indexer.AddSeedVector(inVec)
 				if count == indexer.NumSeedVectors() {
@@ -1423,6 +1460,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			}
 
 			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			if len(inVec) != dimension {
+				return []*pb.DirectedEdge{}, nil
+			}
 			indexer.BuildInsert(ctx, uid, inVec)
 			return edges, nil
 		}
@@ -1449,6 +1489,12 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			}
 
 			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			if len(inVec) != dimension {
+				if pass_idx == 0 {
+					glog.Warningf("Skipping vector with invalid dimension uid: %d, dimension: %d", uid, len(inVec))
+				}
+				return []*pb.DirectedEdge{}, nil
+			}
 			indexer.BuildInsert(ctx, uid, inVec)
 			return edges, nil
 		}

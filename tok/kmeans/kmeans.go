@@ -7,6 +7,7 @@ import (
 
 	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
 	"github.com/hypermodeinc/dgraph/v25/tok/index"
+	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type Kmeans[T c.Float] struct {
@@ -106,8 +107,13 @@ func (vc *vectorCentroids[T]) addVector(vec []T) error {
 }
 
 func (vc *vectorCentroids[T]) updateCentroids() {
+	x.AssertTrue(len(vc.centroids) == vc.numCenters)
+	x.AssertTrue(len(vc.counts) == vc.numCenters)
+	x.AssertTrue(len(vc.weights) == vc.numCenters)
 	for i := 0; i < vc.numCenters; i++ {
 		for j := 0; j < vc.dimension; j++ {
+			x.AssertTrue(len(vc.centroids[i]) == vc.dimension)
+			x.AssertTrue(len(vc.weights[i]) == vc.dimension)
 			vc.centroids[i][j] = vc.weights[i][j] / T(vc.counts[i])
 			vc.weights[i][j] = 0
 		}
@@ -119,6 +125,9 @@ func (vc *vectorCentroids[T]) updateCentroids() {
 
 func (vc *vectorCentroids[T]) randomInit() {
 	vc.dimension = len(vc.centroids[0])
+	for i := range vc.centroids {
+		x.AssertTrue(len(vc.centroids[i]) == vc.dimension)
+	}
 	vc.numCenters = len(vc.centroids)
 	vc.counts = make([]int64, vc.numCenters)
 	vc.weights = make([][]T, vc.numCenters)
