@@ -333,6 +333,9 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 		}
 	}
 
+	o.Lock()
+	defer o.Unlock()
+
 	curMax := o.MaxAssigned()
 	if delta.MaxAssigned < curMax {
 		return

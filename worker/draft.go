@@ -1095,7 +1095,6 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
 		))
 	}
-	posting.Oracle().DeleteTxns(delta)
 
 	span.AddEvent("toDisk", trace.WithAttributes(
 		attribute.Int64("time", int64(time.Since(t1).Milliseconds())),
@@ -1122,6 +1121,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	))
 
 	// Now advance Oracle(), so we can service waiting reads.
+	posting.Oracle().DeleteTxns(delta)
 	posting.Oracle().ProcessDelta(delta)
 	return nil
 }
