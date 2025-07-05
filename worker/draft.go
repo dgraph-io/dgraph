@@ -1000,9 +1000,13 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
-	}
+
+	defer func() {
+		if err := writer.Flush(); err != nil {
+			glog.Errorf("Error while flushing to disk: %v", err)
+			panic(err)
+		}
+	}()
 
 	if x.WorkerConfig.HardSync {
 		if err := pstore.Sync(); err != nil {
