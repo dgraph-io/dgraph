@@ -279,6 +279,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		closer:     z.NewCloser(4), // Matches CLOSER:1
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
+		startTsKey: make(map[uint64]uint64),
 	}
 	return n
 }
@@ -939,6 +940,7 @@ func (n *node) processApplyCh() {
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
 					span.SetAttributes(attribute.Int64("start_ts", int64(proposal.Mutations.StartTs)))
 					n.startTsKey[proposal.Mutations.StartTs] = key
+					fmt.Println("Setting proposal key", proposal.Mutations.StartTs, key)
 				case proposal.Delta != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
 				}
@@ -1020,7 +1022,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		))
 
 		spani := trace.SpanFromContext(n.Ctx(n.startTsKey[start]))
-		fmt.Println("FIRST", spani)
+		fmt.Println("FIRST", spani, n.startTsKey[start], start)
 		spani.AddEvent("Committed txn with start_ts: %d, commit_ts: %d", trace.WithAttributes(
 			attribute.Int64("start_ts", int64(start)),
 			attribute.Int64("commit_ts", int64(commit)),
@@ -1042,6 +1044,7 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			attribute.Int64("start_ts", int64(status.StartTs)),
 			attribute.Int64("commit_ts", int64(status.CommitTs)),
 		))
+		delete(n.startTsKey, status.StartTs)
 	}
 
 	if x.WorkerConfig.HardSync {
