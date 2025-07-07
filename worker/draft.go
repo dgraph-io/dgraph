@@ -1018,10 +1018,12 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			attribute.Int64("commit_ts", int64(commit)),
 		))
 
-		txn.Span.AddEvent("Committed txn with start_ts: %d, commit_ts: %d", trace.WithAttributes(
-			attribute.Int64("start_ts", int64(start)),
-			attribute.Int64("commit_ts", int64(commit)),
-		))
+		if txn.Span != nil {
+			txn.Span.AddEvent("Committed txn with start_ts: %d, commit_ts: %d", trace.WithAttributes(
+				attribute.Int64("start_ts", int64(start)),
+				attribute.Int64("commit_ts", int64(commit)),
+			))
+		}
 	}
 
 	for _, status := range delta.Txns {
@@ -1034,10 +1036,12 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	span.AddEvent("Flushed to disk")
 	for _, status := range delta.Txns {
 		txn := posting.Oracle().GetTxn(status.StartTs)
-		txn.Span.AddEvent("Flushed txn with start_ts: %d, commit_ts: %d", trace.WithAttributes(
-			attribute.Int64("start_ts", int64(status.StartTs)),
-			attribute.Int64("commit_ts", int64(status.CommitTs)),
-		))
+		if txn.Span != nil {
+			txn.Span.AddEvent("Flushed txn with start_ts: %d, commit_ts: %d", trace.WithAttributes(
+				attribute.Int64("start_ts", int64(status.StartTs)),
+				attribute.Int64("commit_ts", int64(status.CommitTs)),
+			))
+		}
 	}
 
 	if x.WorkerConfig.HardSync {
