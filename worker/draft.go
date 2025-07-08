@@ -328,14 +328,24 @@ func detectPendingTxns(attr string) error {
 	return errHasPendingTxns
 }
 
+func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
+	for _, mutation := range proposal.Mutations {
+		rerr = n.applyMutation(ctx, mutation)
+		if rerr != nil {
+			return rerr
+		}
+	}
+	return nil
+}
+
 // We don't support schema mutations across nodes in a transaction.
 // Wait for all transactions to either abort or complete and all write transactions
 // involving the predicate are aborted until schema mutations are done.
-func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr error) {
+func (n *node) applyMutation(ctx context.Context, mutation *pb.Mutations) (rerr error) {
 	span := trace.SpanFromContext(ctx)
 
-	if proposal.Mutations.DropOp == pb.Mutations_ALL_IN_NS {
-		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+	if mutation.DropOp == pb.Mutations_ALL_IN_NS {
+		ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
 		if err != nil {
 			return err
 		}
@@ -370,8 +380,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	if proposal.Mutations.DropOp == pb.Mutations_DATA {
-		ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
+	if mutation.DropOp == pb.Mutations_DATA {
+		ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
 		if err != nil {
 			return err
 		}
@@ -387,7 +397,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	if proposal.Mutations.DropOp == pb.Mutations_ALL {
+	if mutation.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
@@ -420,39 +430,39 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	if proposal.Mutations.DropOp == pb.Mutations_TYPE {
-		return schema.State().DeleteType(proposal.Mutations.DropValue, proposal.StartTs)
+	if mutation.DropOp == pb.Mutations_TYPE {
+		return schema.State().DeleteType(mutation.DropValue, mutation.StartTs)
 	}
 
-	if proposal.Mutations.StartTs == 0 {
+	if mutation.StartTs == 0 {
 		return errors.New("StartTs must be provided")
 	}
 
-	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+	if len(mutation.Schema) > 0 || len(mutation.Types) > 0 {
 		// MaxAssigned would ensure that everything that's committed up until this point
 		// would be picked up in building indexes. Any uncommitted txns would be cancelled
 		// by detectPendingTxns below.
 		startTs := posting.Oracle().MaxAssigned()
 
 		span.AddEvent("Applying schema and types")
-		for _, supdate := range proposal.Mutations.Schema {
+		for _, supdate := range mutation.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
 		}
 
-		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+		if err := runSchemaMutation(ctx, mutation.Schema, startTs); err != nil {
 			return err
 		}
 
 		// Clear the entire cache if there is a schema update because the index rebuild
 		// will invalidate the state.
-		if len(proposal.Mutations.Schema) > 0 {
+		if len(mutation.Schema) > 0 {
 			posting.ResetCache()
 		}
 
-		for _, tupdate := range proposal.Mutations.Types {
+		for _, tupdate := range mutation.Types {
 			if err := runTypeMutation(ctx, tupdate, startTs); err != nil {
 				return err
 			}
@@ -469,7 +479,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	// Stores a map of predicate and type of first mutation for each predicate.
 	schemaMap := make(map[string]types.TypeID)
-	for _, edge := range proposal.Mutations.Edges {
+	for _, edge := range mutation.Edges {
 		if edge.Entity == 0 && bytes.Equal(edge.Value, []byte(x.Star)) {
 			// We should only drop the predicate if there is no pending
 			// transaction.
@@ -478,7 +488,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 			span.AddEvent("Deleting predicate")
-			return posting.DeletePredicate(ctx, edge.Attr, proposal.StartTs)
+			return posting.DeletePredicate(ctx, edge.Attr, mutation.StartTs)
 		}
 		// Don't derive schema when doing deletion.
 		if edge.Op == pb.DirectedEdge_DEL {
@@ -489,7 +499,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 	}
 
-	total := len(proposal.Mutations.Edges)
+	total := len(mutation.Edges)
 
 	// TODO: Active mutations values can go up or down but with
 	// OpenCensus stats bucket boundaries start from 0, hence
@@ -505,16 +515,16 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			hint := pb.Metadata_DEFAULT
-			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
+			if mutHint, ok := mutation.GetMetadata().GetPredHints()[attr]; ok {
 				hint = mutHint
 			}
-			if err = createSchema(attr, storageType, hint, proposal.StartTs); err != nil {
+			if err = createSchema(attr, storageType, hint, mutation.StartTs); err != nil {
 				return err
 			}
 		}
 	}
 
-	m := proposal.Mutations
+	m := mutation
 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
@@ -846,7 +856,10 @@ func (n *node) processTabletSizes() {
 func updateStartTs(p *pb.Proposal) {
 	switch {
 	case p.Mutations != nil:
-		p.StartTs = p.Mutations.StartTs
+		for _, mutation := range p.Mutations {
+			p.StartTs = mutation.StartTs
+			break
+		}
 	case p.Snapshot != nil:
 		p.StartTs = p.Snapshot.ReadTs
 	case p.Delta != nil:
@@ -935,10 +948,12 @@ func (n *node) processApplyCh() {
 				switch {
 				case proposal.Mutations != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
-					span.SetAttributes(attribute.Int64("start_ts", int64(proposal.Mutations.StartTs)))
-					txn := posting.Oracle().GetTxn(proposal.Mutations.StartTs)
-					if txn != nil {
-						txn.Span = span
+					for _, mutation := range proposal.Mutations {
+						span.SetAttributes(attribute.Int64("start_ts", int64(mutation.StartTs)))
+						txn := posting.Oracle().GetTxn(mutation.StartTs)
+						if txn != nil {
+							txn.Span = span
+						}
 					}
 
 				case proposal.Delta != nil:
@@ -1887,9 +1902,11 @@ func (n *node) calculateSnapshot(startIdx, lastIdx, minPendingStart uint64) (*pb
 
 			var start uint64
 			if proposal.Mutations != nil {
-				start = proposal.Mutations.StartTs
-				if start >= minPendingStart && snapshotIdx == 0 {
-					snapshotIdx = entry.Index - 1
+				for _, mutation := range proposal.Mutations {
+					start = mutation.StartTs
+					if start >= minPendingStart && snapshotIdx == 0 {
+						snapshotIdx = entry.Index - 1
+					}
 				}
 			}
 			if proposal.Delta != nil {

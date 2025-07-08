@@ -235,43 +235,45 @@ func (cdc *CDC) processCDCEvents() {
 			return
 		}
 		if proposal.Mutations != nil {
-			events := toCDCEvent(entry.Index, proposal.Mutations)
-			if len(events) == 0 {
-				return
-			}
-			edges := proposal.Mutations.Edges
-			switch {
-			case proposal.Mutations.DropOp != pb.Mutations_NONE: // this means its a drop operation
-				// if there is DROP ALL or DROP DATA operation, clear pending events also.
-				if proposal.Mutations.DropOp == pb.Mutations_ALL {
-					cdc.resetPendingEvents()
-				} else if proposal.Mutations.DropOp == pb.Mutations_DATA {
-					ns, err := strconv.ParseUint(proposal.Mutations.DropValue, 0, 64)
-					if err != nil {
-						glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
-						return
-					}
-					cdc.resetPendingEventsForNs(ns)
-				}
-				if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
-					rerr = errors.Wrapf(err, "unable to send messages to sink")
+			for _, mutation := range proposal.Mutations {
+				events := toCDCEvent(entry.Index, mutation)
+				if len(events) == 0 {
 					return
 				}
-				// If drop predicate, then mutation only succeeds if there were no pending txn
-				// This check ensures then event will only be send if there were no pending txns
-			case len(edges) == 1 &&
-				edges[0].Entity == 0 &&
-				bytes.Equal(edges[0].Value, []byte(x.Star)):
-				// If there are no pending txn send the events else
-				// return as the mutation must have errored out in that case.
-				if !cdc.hasPending(x.ParseAttr(edges[0].Attr)) {
-					if err := sendToSink(events, proposal.Mutations.StartTs); err != nil {
-						rerr = errors.Wrapf(err, "unable to send messages to sink")
+				edges := mutation.Edges
+				switch {
+				case mutation.DropOp != pb.Mutations_NONE: // this means its a drop operation
+					// if there is DROP ALL or DROP DATA operation, clear pending events also.
+					if mutation.DropOp == pb.Mutations_ALL {
+						cdc.resetPendingEvents()
+					} else if mutation.DropOp == pb.Mutations_DATA {
+						ns, err := strconv.ParseUint(mutation.DropValue, 0, 64)
+						if err != nil {
+							glog.Warningf("CDC: parsing namespace failed with error %v. Ignoring.", err)
+							return
+						}
+						cdc.resetPendingEventsForNs(ns)
 					}
+					if err := sendToSink(events, mutation.StartTs); err != nil {
+						rerr = errors.Wrapf(err, "unable to send messages to sink")
+						return
+					}
+					// If drop predicate, then mutation only succeeds if there were no pending txn
+					// This check ensures then event will only be send if there were no pending txns
+				case len(edges) == 1 &&
+					edges[0].Entity == 0 &&
+					bytes.Equal(edges[0].Value, []byte(x.Star)):
+					// If there are no pending txn send the events else
+					// return as the mutation must have errored out in that case.
+					if !cdc.hasPending(x.ParseAttr(edges[0].Attr)) {
+						if err := sendToSink(events, mutation.StartTs); err != nil {
+							rerr = errors.Wrapf(err, "unable to send messages to sink")
+						}
+					}
+					return
+				default:
+					cdc.addToPending(mutation.StartTs, events)
 				}
-				return
-			default:
-				cdc.addToPending(proposal.Mutations.StartTs, events)
 			}
 		}
 

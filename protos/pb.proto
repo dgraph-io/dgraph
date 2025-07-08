@@ -307,7 +307,7 @@ message RestoreRequest {
 
 message Proposal {
   reserved 7;  // Was used for string key.
-  Mutations mutations = 2;
+  repeated Mutations mutations = 2;
   repeated badgerpb4.KV kv = 4;
   MembershipState state = 5;
   string clean_predicate =
@@ -322,7 +322,7 @@ message Proposal {
   DeleteNsRequest delete_ns = 14;  // Used to delete namespace.
   // Skipping 15 as it is used for uint64 key in master and might be needed later here.
   uint64 start_ts = 16;
- api.v2.UpdateExtSnapshotStreamingStateRequest ext_snapshot_state = 17;
+  api.v2.UpdateExtSnapshotStreamingStateRequest ext_snapshot_state = 17;
 }
 
 message CDCState {

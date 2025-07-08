@@ -165,7 +165,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// be persisted, we do best effort schema check while writing
 	ctx = schema.GetWriteContext(ctx)
 	if proposal.Mutations != nil {
-		for _, edge := range proposal.Mutations.Edges {
+		for _, edge := range proposal.Mutations[0].Edges {
 			if err := checkTablet(edge.Attr); err != nil {
 				return err
 			}
@@ -185,7 +185,7 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 		}
 
-		for _, schema := range proposal.Mutations.Schema {
+		for _, schema := range proposal.Mutations[0].Schema {
 			if err := checkTablet(schema.Predicate); err != nil {
 				return err
 			}

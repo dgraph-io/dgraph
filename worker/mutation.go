@@ -947,7 +947,7 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	}
 
 	node := groups().Node
-	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: m})
+	err := node.proposeAndWait(ctx, &pb.Proposal{Mutations: []*pb.Mutations{m}})
 	// When we are filling txn context, we don't need to update latest delta if the transaction has failed.
 	fillTxnContext(txnCtx, m.StartTs, err != nil)
 	return err
