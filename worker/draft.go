@@ -51,6 +51,7 @@ type mutationProposal struct {
 	mutation *pb.Mutations
 	ctx      context.Context
 	errCh    chan error
+	span     trace.Span
 }
 
 type node struct {
