@@ -121,6 +121,122 @@ func uniqueKey() uint64 {
 var errInternalRetry = errors.New("Retry Raft proposal internally")
 var errUnableToServe = errors.New("Server overloaded with pending proposals. Please retry later")
 
+const maxMutationProposal = 10
+
+func (n *node) processMutationProposalCh() error {
+	ticker := time.NewTicker(time.Millisecond * 100)
+	defer ticker.Stop()
+
+	allMutations := []*mutationProposal{}
+
+	sendError := func(err error, mutations []*mutationProposal) {
+		for _, mutation := range mutations {
+			mutation.errCh <- err
+		}
+	}
+
+	proposeWithTimeout := func(mutations []*mutationProposal, timeout time.Duration) error {
+		proposal := &pb.Proposal{Mutations: []*pb.Mutations{}}
+
+		var finalDeadline time.Time
+		for _, mutation := range mutations {
+			deadline, ok := mutation.ctx.Deadline()
+			if ok {
+				if finalDeadline.IsZero() || deadline.After(finalDeadline) {
+					finalDeadline = deadline
+				}
+			}
+			proposal.Mutations = append(proposal.Mutations, mutation.mutation)
+		}
+
+		key := uniqueKey()
+		sz := proto.Size(proposal)
+		data := make([]byte, 8+sz)
+		binary.BigEndian.PutUint64(data, key)
+		_, err := x.MarshalToSizedBuffer(data[8:], proposal)
+		if err != nil {
+			glog.Errorf("Error marshaling proposal: %v", err)
+			return err
+		}
+
+		// Trim data to the new size after Marshal.
+		data = data[:8+sz]
+
+		userContext := context.Background()
+		if !finalDeadline.IsZero() {
+			userContext, _ = context.WithDeadline(userContext, finalDeadline)
+		}
+
+		transactionContext, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		transactionContext = trace.ContextWithSpan(transactionContext, mutations[0].span)
+
+		errCh := make(chan error, 1)
+		pctx := &conn.ProposalCtx{
+			ErrCh: errCh,
+			Ctx:   transactionContext,
+		}
+		x.AssertTruef(n.Proposals.Store(key, pctx), "Found existing proposal with key: [%x]", key)
+		defer n.Proposals.Delete(key) // Ensure that it gets deleted on return.
+
+		if err = n.Raft().Propose(transactionContext, data); err != nil {
+			return err
+		}
+
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+
+		for {
+			select {
+			case err = <-errCh:
+				// We arrived here by a call to n.Proposals.Done().
+				return err
+			case <-userContext.Done():
+				glog.Warningf("Context expired while processing proposal %v", userContext.Err())
+				return userContext.Err()
+			case <-timer.C:
+				if atomic.LoadUint32(&pctx.Found) > 0 {
+					// We found the proposal in CommittedEntries. No need to retry.
+				} else {
+					cancel()
+				}
+			case <-transactionContext.Done():
+				glog.Warningf("Internal context expired while processing proposal %v", transactionContext.Err())
+				return errInternalRetry
+			}
+		}
+	}
+
+	propose := func(mutations []*mutationProposal) {
+		for i := range 3 {
+			if err := proposeWithTimeout(mutations, newTimeout(i)); err != errInternalRetry {
+				sendError(err, mutations)
+				return
+			}
+		}
+		sendError(errUnableToServe, mutations)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			if len(allMutations) == 0 {
+				continue
+			}
+			defer propose(allMutations)
+			allMutations = []*mutationProposal{}
+
+		case mutation := <-n.mutationProposalCh:
+			allMutations = append(allMutations, &mutation)
+			if len(allMutations) >= maxMutationProposal {
+				defer propose(allMutations)
+				allMutations = []*mutationProposal{}
+			}
+		}
+	}
+}
+
 // proposeAndWait sends a proposal through RAFT. It waits on a channel for the proposal
 // to be applied(written to WAL) to all the nodes in the group.
 func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr error) {
@@ -196,6 +312,32 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		}
 	}
 
+	span := trace.SpanFromContext(ctx)
+	stop := x.SpanTimer(span, "n.proposeAndWait")
+	defer stop()
+
+	if !noTimeout && proposal.Mutations != nil {
+		mp := mutationProposal{
+			ctx:      ctx,
+			mutation: proposal.Mutations[0],
+			errCh:    make(chan error, maxMutationProposal),
+			span:     span,
+		}
+		n.mutationProposalCh <- mp
+
+		select {
+		case err := <-mp.errCh:
+			// We arrived here by a call to n.Proposals.Done().
+			return err
+		case <-ctx.Done():
+			glog.Warningf("Context expired while processing proposal %v", ctx.Err())
+			return ctx.Err()
+		case <-mp.ctx.Done():
+			glog.Warningf("Internal context expired while processing proposal %v", mp.ctx.Err())
+			return errInternalRetry
+		}
+	}
+
 	// Let's keep the same key, so multiple retries of the same proposal would
 	// have this shared key. Thus, each server in the group can identify
 	// whether it has already done this work, and if so, skip it.
@@ -210,10 +352,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 	// Trim data to the new size after Marshal.
 	data = data[:8+sz]
-
-	span := trace.SpanFromContext(ctx)
-	stop := x.SpanTimer(span, "n.proposeAndWait")
-	defer stop()
 
 	propose := func(timeout time.Duration) error {
 		// We don't need to extend from base ctx as it might have a timeout. This timeout

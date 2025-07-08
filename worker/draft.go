@@ -47,6 +47,12 @@ type operation struct {
 	ts uint64
 }
 
+type mutationProposal struct {
+	mutation *pb.Mutations
+	ctx      context.Context
+	errCh    chan error
+}
+
 type node struct {
 	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
 	pendingSize int64
@@ -68,6 +74,8 @@ type node struct {
 	opsLock     sync.Mutex
 	cdcTracker  *CDC
 	canCampaign bool
+
+	mutationProposalCh chan mutationProposal
 }
 
 type op int
