@@ -936,7 +936,10 @@ func (n *node) processApplyCh() {
 				case proposal.Mutations != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Mutations"))
 					span.SetAttributes(attribute.Int64("start_ts", int64(proposal.Mutations.StartTs)))
-					posting.Oracle().GetTxn(proposal.Mutations.StartTs).Span = span
+					txn := posting.Oracle().GetTxn(proposal.Mutations.StartTs)
+					if txn != nil {
+						txn.Span = span
+					}
 
 				case proposal.Delta != nil:
 					tags = append(tags, tag.Upsert(x.KeyMethod, "apply.Delta"))
