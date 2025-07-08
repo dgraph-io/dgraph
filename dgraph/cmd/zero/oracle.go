@@ -229,7 +229,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		newDelta := &pb.OracleDelta{}
 		useNewDelta := false
 		if o.doneUntil.DoneUntil() < waitFor() {
-			if len(delta.Txns) > 5 {
+			if len(delta.Txns) > 10 {
 				replacementTxn := []*pb.TxnStatus{}
 
 				ts := o.doneUntil.DoneUntil()
