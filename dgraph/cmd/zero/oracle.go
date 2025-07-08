@@ -272,7 +272,9 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			}
 		}
 		o.Unlock()
-		delta = &pb.OracleDelta{}
+		if useNewDelta {
+			delta = &pb.OracleDelta{}
+		}
 	}
 }
 
