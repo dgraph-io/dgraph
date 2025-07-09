@@ -48,6 +48,7 @@ const (
 	IdentSha       = 0xC
 	IdentBigFloat  = 0xD
 	IdentVFloat    = 0xE
+	IdentShingles  = 0xF
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
@@ -98,6 +99,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
+	registerTokenizer(ShinglesTokenizer{})
 	registerTokenizer(Sha256Tokenizer{})
 	setupBleve()
 }
@@ -423,6 +425,57 @@ func (t ExactTokenizer) Prefix() []byte {
 	prefix = append(prefix, IdentDelimiter)
 	return prefix
 }
+
+type ShinglesTokenizer struct {
+	lang string
+}
+
+func (t ShinglesTokenizer) Name() string { return "shingles" }
+func (t ShinglesTokenizer) Type() string { return "string" }
+func (t ShinglesTokenizer) Tokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	lang := LangBase(t.lang)
+
+	// Step 1: Lowercase, normalize, basic tokenization
+	tokens := fulltextAnalyzer.Analyze([]byte(str))
+
+	// Step 2: Remove stopwords
+	tokens = filterStopwords(lang, tokens)
+
+	// Step 3: Apply stemming
+	tokens = filterStemmers(lang, tokens)
+
+	// Step 4: Generate shingles (bigrams and trigrams)
+	shingled := make([]string, 0, len(tokens))
+	n := len(tokens)
+
+	for i := 0; i < n; i++ {
+		// unigram
+		shingled = append(shingled, string(tokens[i].Term))
+
+		// bigram
+		if i+1 < n {
+			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term))
+		}
+		// trigram
+		if i+2 < n {
+			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term)+" "+string(tokens[i+2].Term))
+		}
+
+		if i+3 < n {
+			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term)+" "+string(tokens[i+2].Term)+" "+string(tokens[i+3].Term))
+		}
+	}
+
+	// Step 5: Deduplicate
+	return x.RemoveDuplicates(shingled), nil
+}
+func (t ShinglesTokenizer) Identifier() byte { return IdentShingles }
+func (t ShinglesTokenizer) IsSortable() bool { return false }
+func (t ShinglesTokenizer) IsLossy() bool    { return true }
 
 // FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }
