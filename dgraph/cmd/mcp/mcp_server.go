@@ -11,6 +11,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/hypermodeinc/dgraph/v25/dql"
 	"github.com/hypermodeinc/dgraph/v25/x"
 
 	"github.com/golang/glog"
@@ -71,6 +72,64 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			OpenWorldHint:   &False,
 		}),
 	)
+
+	queryCheckTool := mcp.NewTool("check_query",
+		mcp.WithDescription("Check if the Dgraph DQL Query is valid"),
+		mcp.WithString("query",
+			mcp.Required(),
+			mcp.Description("The query to perform"),
+		),
+		mcp.WithString("variables",
+			mcp.Description("The variables to be used in the query. Should be in json format to be unmarshalled into map[string]string"),
+		),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{
+			ReadOnlyHint:    &True,
+			DestructiveHint: &False,
+			IdempotentHint:  &True,
+			OpenWorldHint:   &False,
+		}),
+	)
+
+	s.AddTool(queryCheckTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := request.GetArguments()
+		if args == nil {
+			return mcp.NewToolResultError("Query must be present"), nil
+		}
+		queryArg, ok := args["query"]
+		if !ok || queryArg == nil {
+			return mcp.NewToolResultError("Query must be present"), nil
+		}
+
+		op, ok := queryArg.(string)
+		if !ok {
+			return mcp.NewToolResultError("Query must be a string"), nil
+		}
+
+		var variablesMap map[string]string
+		variablesArg, ok := args["variables"]
+		if ok && variablesArg != nil {
+			variables, ok := variablesArg.(string)
+			if !ok {
+				return mcp.NewToolResultError("Variables must be a string"), nil
+			}
+
+			if err := json.Unmarshal([]byte(variables), &variablesMap); err != nil {
+				return mcp.NewToolResultErrorFromErr("Error unmarshalling variables", err), nil
+			}
+		}
+
+		req := &dql.Request{
+			Str:       op,
+			Variables: variablesMap,
+		}
+
+		_, err := dql.Parse(*req)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("Error parsing query", err), nil
+		}
+
+		return mcp.NewToolResultText("Query is valid"), nil
+	})
 
 	queryTool := mcp.NewTool("run_query",
 		mcp.WithDescription("Run DQL Query on Dgraph"),
