@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -75,6 +76,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("The query to perform"),
+		),
+		mcp.WithString("variables",
+			mcp.Required(),
+			mcp.Description("parameters to pass to the query in json format"),
 		),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
 			ReadOnlyHint:    &True,
@@ -202,7 +207,21 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		if !ok {
 			return mcp.NewToolResultError("Query must be a string"), nil
 		}
-		resp, err := txn.Query(ctx, op)
+		// variable handling
+		// if variables arg is not present, use an empty map
+		// if present, parse the JSON string parameter 'variables'
+		// and pass the var map to QueryWithVars
+		// return an error if the arg 'variables' is not a valid JSON
+		vars := make(map[string]string)
+		variablesArg, ok := args["variables"]
+		if ok && variablesArg != nil {
+			variables, _ := variablesArg.(string)
+			// create a map of variables from JSON string
+			if err := json.Unmarshal([]byte(variables), &vars); err != nil {
+				return mcp.NewToolResultErrorFromErr("Error parsing variables", err), nil
+			}
+		}
+		resp, err := txn.QueryWithVars(ctx, op, vars)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error running query", err), nil
 		}
