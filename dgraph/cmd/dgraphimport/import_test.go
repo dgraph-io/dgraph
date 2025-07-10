@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration2
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
@@ -79,7 +79,8 @@ func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := dgraphtest.NewClusterConfig().WithNumAlphas(tt.numAlphas).WithNumZeros(tt.numZeros).WithReplicas(tt.replicas)
+			conf := dgraphtest.NewClusterConfig().WithNumAlphas(tt.numAlphas).
+				WithNumZeros(tt.numZeros).WithReplicas(tt.replicas)
 			c, err := dgraphtest.NewLocalCluster(conf)
 			require.NoError(t, err)
 			defer func() { c.Cleanup(t.Failed()) }()
@@ -284,7 +285,6 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.ErrorContains(t, err, tt.err)
 		return
 	}
-
 	require.NoError(t, Import(context.Background(), connectionString, outDir))
 
 	for group, alphas := range alphaGroups {
@@ -347,7 +347,9 @@ func setupBulkCluster(t *testing.T, numAlphas int, encrypted bool) (*dgraphtest.
 }
 
 // setupTargetCluster creates and starts a cluster that will receive the imported data
-func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (*dgraphtest.LocalCluster, *dgraphapi.GrpcClient, func()) {
+func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (
+	*dgraphtest.LocalCluster, *dgraphapi.GrpcClient, func()) {
+
 	conf := dgraphtest.NewClusterConfig().
 		WithNumAlphas(numAlphas).
 		WithNumZeros(3).
