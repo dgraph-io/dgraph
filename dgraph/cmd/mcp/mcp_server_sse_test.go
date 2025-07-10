@@ -176,7 +176,7 @@ func TestMCPSSE(t *testing.T) {
 
 	t.Run("AlterSchema", func(t *testing.T) {
 		args := map[string]interface{}{
-			"schema": "n: string @index(term) .",
+			"schema": "n: string @index(term) .\nm: int @index(int) .\np: float @index(float) .",
 		}
 		resultText, err := callTool("alter_schema", args)
 
@@ -190,7 +190,9 @@ func TestMCPSSE(t *testing.T) {
   "set": [
     {
       "uid": "_:1",
-      "n": "Foo"
+      "n": "Foo",
+      "m": 20,
+      "p": 3.14
     }
   ]
 }`,
@@ -200,6 +202,21 @@ func TestMCPSSE(t *testing.T) {
 		require.NoError(t, err, "RunMutation should not fail")
 		require.Equal(t, "Mutation completed, 1 UIDs created", resultText, "Should receive run mutation result")
 	})
+
+	checkUIDResult := func(t *testing.T, resultText string) {
+		require.NotEmpty(t, resultText, "Should receive run query result")
+
+		var result map[string][]map[string]string
+		err := json.Unmarshal([]byte(resultText), &result)
+		require.NoError(t, err, "Should be able to parse JSON response")
+
+		require.Contains(t, result, "q", "Response should contain 'q' field")
+		require.Len(t, result["q"], 1, "Should have exactly one result")
+		require.Contains(t, result["q"][0], "uid", "Result should have 'uid' field")
+
+		uidValue := result["q"][0]["uid"]
+		require.Regexp(t, `^0x[0-9a-f]+$`, uidValue, "UID should be in the format 0x followed by hexadecimal digits")
+	}
 
 	t.Run("RunQuery", func(t *testing.T) {
 		args := map[string]interface{}{
@@ -228,6 +245,55 @@ func TestMCPSSE(t *testing.T) {
 
 		require.Error(t, err, "RunQueryWithEmptyArgs should fail")
 		require.Contains(t, err.Error(), "Query must be present")
+	})
+
+	t.Run("RunQueryWithVars", func(t *testing.T) {
+		t.Run("StringVars", func(t *testing.T) {
+			args := map[string]interface{}{
+				"query":     `query me($name: string) {q(func: allofterms(n, $name)) { uid }}`,
+				"variables": `{"$name": "Foo"}`,
+			}
+			resultText, err := callTool("run_query", args)
+
+			require.NoError(t, err, "RunQueryWithVars should not fail")
+			require.NotEmpty(t, resultText, "Should receive run query result")
+			checkUIDResult(t, resultText)
+		})
+
+		t.Run("IntVars", func(t *testing.T) {
+			args := map[string]interface{}{
+				"query":     `query me($age: int) {q(func: eq(m, $age)) { uid }}`,
+				"variables": `{"$age": 20}`,
+			}
+			resultText, err := callTool("run_query", args)
+
+			require.NoError(t, err, "RunQueryWithVars should not fail")
+			require.NotEmpty(t, resultText, "Should receive run query result")
+			checkUIDResult(t, resultText)
+		})
+
+		t.Run("FloatVars", func(t *testing.T) {
+			args := map[string]interface{}{
+				"query":     `query me($v: float) {q(func: eq(p, $v)) { uid }}`,
+				"variables": `{"$v": 3.14}`,
+			}
+			resultText, err := callTool("run_query", args)
+
+			require.NoError(t, err, "RunQueryWithVars should not fail")
+			require.NotEmpty(t, resultText, "Should receive run query result")
+			checkUIDResult(t, resultText)
+		})
+
+		t.Run("InvalidVars", func(t *testing.T) {
+			args := map[string]interface{}{
+				"query":     `query me($name: string) {q(func: allofterms(n, $name)) { uid }}`,
+				"variables": `{"$name": {"bar": "Foo"}}`, // embedded map should fail
+			}
+			_, err := callTool("run_query", args)
+
+			require.Error(t, err, "RunQueryWithVars should fail")
+			require.Contains(t, err.Error(), "could not convert complex variable")
+		})
 	})
 
 	t.Run("RunGetCommonQueries", func(t *testing.T) {
