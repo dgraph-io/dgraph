@@ -151,6 +151,10 @@ func streamSnapshotForGroup(ctx context.Context, dc apiv2.DgraphClient, pdir str
 	if err := out.Send(groupReq); err != nil {
 		return fmt.Errorf("failed to send request for group ID [%v] to the server: %w", groupId, err)
 	}
+	if _, err := out.Recv(); err != nil {
+		return fmt.Errorf("failed to receive response for group ID [%v] from the server: %w", groupId, err)
+	}
+	glog.Infof("[import] Group [%v]: Received ACK for sending group request", groupId)
 
 	// Configure and start the BadgerDB stream
 	glog.Infof("[import] Starting BadgerDB stream for group [%v]", groupId)
