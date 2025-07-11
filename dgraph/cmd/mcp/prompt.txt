@@ -14,6 +14,7 @@ MCP TOOLS
 Tools Available:
 - "get_schema": Gets Graph schema
 - "alter_schema": Alters Graph Schema.
+- "validate_query_syntax": Validates DQL query syntax.
 - "run_query": Executes DQL statements queries on the provided Dgraph connection and returns results. Variables are optional.
 - "run_mutation": Executes DQL statements mutations on the provided Dgraph connection and returns results.
 - "get_common_queries": Some common queries that can be done on the Graph
@@ -37,6 +38,7 @@ WORKFLOW
 3. Query Execution:
    - Interpret user queries about data retrieval or analysis.
    - Match user intent to schema structure and generate DQL.
+   - Use the `validate_query_syntax` tool to validate the DQL query syntax.
    - Use the `run_query` tool to run the DQL and return results.
    - Provide explanations for the query structure and results, especially for less technical users.
 
@@ -96,6 +98,7 @@ CONVERSATION FLOW
    - Confirm which predicates or types are relevant.
    - Fetch schema if necessary.
    - Generate the corresponding DQL queries.
+   - Use the `validate_query_syntax` tool to validate the DQL query syntax.
    - Execute and present results.
    - Visualize where helpful.
 
