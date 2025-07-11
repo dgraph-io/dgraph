@@ -11,6 +11,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+
 	"github.com/hypermodeinc/dgraph/v25/dql"
 	"github.com/hypermodeinc/dgraph/v25/x"
 
@@ -73,14 +74,14 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		}),
 	)
 
-	queryCheckTool := mcp.NewTool("check_query",
-		mcp.WithDescription("Check if the Dgraph DQL Query is valid"),
+	validateQuerySyntaxTool := mcp.NewTool("validate_query_syntax",
+		mcp.WithDescription("Check if a Dgraph DQL Query is valid"),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("The query to perform"),
+			mcp.Description("The query to validate"),
 		),
 		mcp.WithString("variables",
-			mcp.Description("The variables to be used in the query. Should be in json format to be unmarshalled into map[string]string"),
+			mcp.Description("The variables to be used in the query. Should be in JSON format to be unmarshalled into map[string]string"),
 		),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
 			ReadOnlyHint:    &True,
@@ -90,7 +91,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		}),
 	)
 
-	s.AddTool(queryCheckTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.AddTool(validateQuerySyntaxTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := request.GetArguments()
 		if args == nil {
 			return mcp.NewToolResultError("Query must be present"), nil
@@ -112,7 +113,6 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			if !ok {
 				return mcp.NewToolResultError("Variables must be a string"), nil
 			}
-
 			if err := json.Unmarshal([]byte(variables), &variablesMap); err != nil {
 				return mcp.NewToolResultErrorFromErr("Error unmarshalling variables", err), nil
 			}
@@ -122,12 +122,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			Str:       op,
 			Variables: variablesMap,
 		}
-
 		_, err := dql.Parse(*req)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error parsing query", err), nil
 		}
-
 		return mcp.NewToolResultText("Query is valid"), nil
 	})
 
@@ -135,10 +133,9 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		mcp.WithDescription("Run DQL Query on Dgraph"),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("The query to perform"),
+			mcp.Description("The query to run"),
 		),
 		mcp.WithString("variables",
-			mcp.Required(),
 			mcp.Description("The parameters to pass to the query in JSON format. The JSON should be a map of string keys to string, number or boolean values. Example: {\"$param1\": \"value1\", \"$param2\": 123, \"$param3\": true}"),
 		),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
@@ -192,11 +189,14 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			return mcp.NewToolResultText("Schema updated successfully"), nil
 		})
 
+		mutationArgumentDescription := `The mutation to perform in JSON format.
+		For example: {"set": [{ "uid": "_:1", "n": "Foo", "m": 20, "p": 3.14 }]} to set a node with blank identifier _:1 with name "Foo", m=20 and p=3.14
+		Another example: { "delete": [{ "uid": "0xfa12" }]} to delete a node with uid 0xfa12`
 		mutationTool := mcp.NewTool("run_mutation",
 			mcp.WithDescription("Run DQL Mutation on Dgraph"),
 			mcp.WithString("mutation",
 				mcp.Required(),
-				mcp.Description("The mutation to perform in JSON format"),
+				mcp.Description(mutationArgumentDescription),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    &False,
