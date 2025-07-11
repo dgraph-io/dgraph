@@ -3,7 +3,9 @@ package mcp
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -71,10 +73,14 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 	)
 
 	queryTool := mcp.NewTool("run_query",
-		mcp.WithDescription("Run Dgraph DQL Query on dgraph db"),
+		mcp.WithDescription("Run DQL Query on Dgraph"),
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("The query to perform"),
+		),
+		mcp.WithString("variables",
+			mcp.Required(),
+			mcp.Description("The parameters to pass to the query in JSON format. The JSON should be a map of string keys to string, number or boolean values. Example: {\"$param1\": \"value1\", \"$param2\": 123, \"$param3\": true}"),
 		),
 		mcp.WithToolAnnotation(mcp.ToolAnnotation{
 			ReadOnlyHint:    &True,
@@ -86,10 +92,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 
 	if !readOnly {
 		alterSchemaTool := mcp.NewTool("alter_schema",
-			mcp.WithDescription("Alter Dgraph DQL Schema in dgraph db"),
+			mcp.WithDescription("Alter DQL Schema in Dgraph"),
 			mcp.WithString("schema",
 				mcp.Required(),
-				mcp.Description("Updated schema to insert inside the db"),
+				mcp.Description("DQL Schema to apply"),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    &False,
@@ -128,10 +134,10 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		})
 
 		mutationTool := mcp.NewTool("run_mutation",
-			mcp.WithDescription("Run DQL Mutation on dgraph db"),
+			mcp.WithDescription("Run DQL Mutation on Dgraph"),
 			mcp.WithString("mutation",
 				mcp.Required(),
-				mcp.Description("The mutation to perform in json format"),
+				mcp.Description("The mutation to perform in JSON format"),
 			),
 			mcp.WithToolAnnotation(mcp.ToolAnnotation{
 				ReadOnlyHint:    &False,
@@ -183,7 +189,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error opening connection with Dgraph Alpha", err), nil
 		}
-		txn := conn.NewTxn()
+		txn := conn.NewReadOnlyTxn()
 		defer func() {
 			err := txn.Discard(ctx)
 			if err != nil {
@@ -202,7 +208,35 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		if !ok {
 			return mcp.NewToolResultError("Query must be a string"), nil
 		}
-		resp, err := txn.Query(ctx, op)
+		vars := make(map[string]any)
+		variablesArg, ok := args["variables"]
+		if ok && variablesArg != nil {
+			variables, ok := variablesArg.(string)
+			if !ok {
+				return mcp.NewToolResultError("Variables must be a JSON-formatted string"), nil
+			}
+			// create a map of variables from JSON string
+			if err := json.Unmarshal([]byte(variables), &vars); err != nil {
+				return mcp.NewToolResultErrorFromErr("Error parsing variables", err), nil
+			}
+		}
+		// convert vars map[string]any to map[string]string as required by txn.QueryWithVars
+		varsString := make(map[string]string)
+		for k, v := range vars {
+			switch val := v.(type) {
+			case string:
+				varsString[k] = val
+			case float64:
+				varsString[k] = strconv.FormatFloat(val, 'f', -1, 64)
+			case bool:
+				varsString[k] = strconv.FormatBool(val)
+			case nil:
+				varsString[k] = "null"
+			default:
+				return mcp.NewToolResultError(fmt.Sprintf("could not convert complex variable %q to string", k)), nil
+			}
+		}
+		resp, err := txn.QueryWithVars(ctx, op, varsString)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error running query", err), nil
 		}
@@ -214,7 +248,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("Error opening connection with Dgraph Alpha", err), nil
 		}
-		txn := conn.NewTxn()
+		txn := conn.NewReadOnlyTxn()
 		defer func() {
 			err := txn.Discard(ctx)
 			if err != nil {
