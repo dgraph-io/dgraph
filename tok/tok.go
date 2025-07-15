@@ -449,29 +449,44 @@ func (t ShinglesTokenizer) Tokens(v interface{}) ([]string, error) {
 	tokens = filterStemmers(lang, tokens)
 
 	// Step 4: Generate shingles (bigrams and trigrams)
-	shingled := make([]string, 0, len(tokens))
+
+	shingled := make(map[string]struct{}, len(tokens))
 	n := len(tokens)
+
+	addToRes := func(token string) {
+		if len(token) < 30 {
+			shingled[token] = struct{}{}
+			return
+		}
+
+		hash := blake2b.Sum256([]byte(token))
+		shingled[string(hash[:])] = struct{}{}
+	}
 
 	for i := 0; i < n; i++ {
 		// unigram
-		shingled = append(shingled, string(tokens[i].Term))
+		addToRes(string(tokens[i].Term))
 
 		// bigram
 		if i+1 < n {
-			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term))
+			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term))
 		}
 		// trigram
 		if i+2 < n {
-			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term)+" "+string(tokens[i+2].Term))
+			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term))
 		}
 
 		if i+3 < n {
-			shingled = append(shingled, string(tokens[i].Term)+" "+string(tokens[i+1].Term)+" "+string(tokens[i+2].Term)+" "+string(tokens[i+3].Term))
+			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term) + " " + string(tokens[i+3].Term))
 		}
 	}
 
-	// Step 5: Deduplicate
-	return x.RemoveDuplicates(shingled), nil
+	res := make([]string, 0, len(shingled))
+	for k := range shingled {
+		res = append(res, k)
+	}
+
+	return res, nil
 }
 func (t ShinglesTokenizer) Identifier() byte { return IdentShingles }
 func (t ShinglesTokenizer) IsSortable() bool { return false }
