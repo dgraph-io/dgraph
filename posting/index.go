@@ -900,8 +900,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLoggingLevel(badger.WARNING).
 		WithMetricsEnabled(false)
 	dbOpts.DetectConflicts = false
-	dbOpts.NumLevelZeroTables = 5
-	dbOpts.NumLevelZeroTablesStall = 25
+	dbOpts.NumLevelZeroTables = 200
+	dbOpts.NumLevelZeroTablesStall = 400
 	dbOpts.BaseLevelSize = 5 * 128 << 20
 	dbOpts.BaseTableSize = 128 << 20
 	dbOpts.MemTableSize = 128 << 20
