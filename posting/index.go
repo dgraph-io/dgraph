@@ -902,7 +902,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if skipPhase1 {
 		tmpIndexDir = x.WorkerConfig.TmpDir + "/" + dirName
 	} else {
-		tmpIndexDir, err := os.MkdirTemp(x.WorkerConfig.TmpDir, "dgraph_index_")
+		tmpIndexDir, err = os.MkdirTemp(x.WorkerConfig.TmpDir, "dgraph_index_")
 		if err != nil {
 			return errors.Wrap(err, "error creating temp dir for reindexing")
 		}
