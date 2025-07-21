@@ -58,7 +58,7 @@ func verifyCustomIndex(ctx context.Context, attr string, tokenizerName string) b
 
 // Return string tokens from function arguments. It maps function type to correct tokenizer.
 // Note: regexp functions require regexp compilation of argument, not tokenization.
-func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]string, error) {
+func getStringTokens(funcArgs []string, lang string, funcType FuncType, query bool) ([]string, error) {
 	if lang == "." {
 		lang = "en"
 	}
@@ -66,7 +66,11 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 		return tok.GetFullTextTokens(funcArgs, lang)
 	}
 	if funcType == shinglesFn {
-		return tok.GetShinglesTokens(funcArgs, lang)
+		if query {
+			return tok.GetShinglesTokens(funcArgs, lang)
+		} else {
+			return tok.GetSinglesQueryTokens(funcArgs, lang)
+		}
 	}
 	return tok.GetTermTokens(funcArgs)
 }
