@@ -63,6 +63,10 @@ func GetShinglesTokens(funcArgs []string, lang string) ([]string, error) {
 	return BuildTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
 }
 
+func GetSinglesQueryTokens(funcArgs []string, lang string) ([]string, error) {
+	return BuildShinglesQueryTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
+}
+
 // GetFullTextTokens returns the full-text tokens for the given value.
 func GetFullTextTokens(funcArgs []string, lang string) ([]string, error) {
 	if l := len(funcArgs); l != 1 {

@@ -2043,7 +2043,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
 				required)
 		}
-		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType); err != nil {
+		if fc.tokens, err = getStringTokens(q.SrcFunc.Args, langForFunc(q.Langs), fnType, true); err != nil {
 			return nil, err
 		}
 		fc.intersectDest = needsIntersect(f)

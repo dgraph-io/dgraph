@@ -118,6 +118,18 @@ func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
 	return tokens, nil
 }
 
+func BuildShinglesQueryTokens(val interface{}, t ShinglesTokenizer) ([]string, error) {
+	tokens, err := t.QueryTokens(val)
+	if err != nil {
+		return nil, err
+	}
+	id := t.Identifier()
+	for i := range tokens {
+		tokens[i] = encodeToken(tokens[i], id)
+	}
+	return tokens, nil
+}
+
 // LoadCustomTokenizer reads and loads a custom tokenizer from the given file.
 func LoadCustomTokenizer(soFile string) {
 	glog.Infof("Loading custom tokenizer from %q", soFile)
@@ -428,6 +440,62 @@ func (t ExactTokenizer) Prefix() []byte {
 
 type ShinglesTokenizer struct {
 	lang string
+}
+
+func (t ShinglesTokenizer) QueryTokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	lang := LangBase(t.lang)
+
+	// Step 1: Lowercase, normalize, basic tokenization
+	tokens := fulltextAnalyzer.Analyze([]byte(str))
+
+	// Step 2: Remove stopwords
+	tokens = filterStopwords(lang, tokens)
+
+	// Step 3: Apply stemming
+	tokens = filterStemmers(lang, tokens)
+
+	// Step 4: Generate shingles (bigrams and trigrams)
+	shingled := make(map[string]struct{}, len(tokens))
+	n := len(tokens)
+
+	addToRes := func(token string) {
+		if len(token) < 30 {
+			shingled[token] = struct{}{}
+			return
+		}
+
+		hash := blake2b.Sum256([]byte(token))
+		shingled[string(hash[:])] = struct{}{}
+	}
+
+	gram := 3
+	if n < 3 {
+		gram = n
+	}
+
+	for i := 0; i < n; i++ {
+		if i+gram < n {
+			var builder strings.Builder
+			for j := 0; j < gram; j++ {
+				builder.Write(tokens[i+j].Term)
+				if j != (gram - 1) {
+					builder.Write([]byte(" "))
+				}
+			}
+			addToRes(builder.String())
+		}
+	}
+
+	res := make([]string, 0, len(shingled))
+	for k := range shingled {
+		res = append(res, k)
+	}
+
+	return res, nil
 }
 
 func (t ShinglesTokenizer) Name() string { return "shingles" }
