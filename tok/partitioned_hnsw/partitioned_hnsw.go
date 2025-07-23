@@ -94,6 +94,10 @@ func (ph *partitionedHNSW[T]) Dimension() int {
 	return ph.vectorDimension
 }
 
+func (ph *partitionedHNSW[T]) SetDimension(dimension int) {
+	ph.vectorDimension = dimension
+}
+
 func (ph *partitionedHNSW[T]) NumIndexPasses() int {
 	return NUM_PASSES
 }

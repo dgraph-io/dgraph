@@ -121,6 +121,10 @@ func (ph *persistentHNSW[T]) Dimension() int {
 	return 0
 }
 
+func (ph *persistentHNSW[T]) SetDimension(dimension int) {
+	glog.Info("not implemented")
+}
+
 func (ph *persistentHNSW[T]) NumIndexPasses() int {
 	return 1
 }

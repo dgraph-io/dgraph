@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1405,6 +1406,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			},
 			StartKey: x.DataKey(rb.Attr, 0),
 		})
+
+		indexer.SetDimension(dimension)
+		addDimensionOptionInSchema(rb.CurrentSchema, dimension)
 	}
 
 	fmt.Println("Selecting vector dimension to be:", dimension)
@@ -1648,6 +1652,17 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	// }
 
 	// return nil
+}
+
+func addDimensionOptionInSchema(schema *pb.SchemaUpdate, dimension int) {
+	for _, vs := range schema.IndexSpecs {
+		if vs.Name == "partionedhnsw" {
+			vs.Options = append(vs.Options, &pb.OptionPair{
+				Key:   "dimension",
+				Value: strconv.Itoa(dimension),
+			})
+		}
+	}
 }
 
 // rebuildTokIndex rebuilds index for a given attribute.
