@@ -8,6 +8,7 @@ package hnsw
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -341,7 +342,7 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 		skey := string(key[:])
 		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[skey], &float1, 64)
 		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[skey], &float2, 64)
-		if !equalFloat64Slice(float1, float2) {
+		if !slices.Equal(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
 				"not equivalent. Start Value: %v\n, End Value: %v\n %v\n %v", flatPh.pred, tsDbs[0].inMemTestDb[skey],
 				tsDbs[99].inMemTestDb[skey], float1, float2)
@@ -351,7 +352,7 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 			edgeName := edge.Attr + "_" + fmt.Sprint(edge.Entity)
 			edgesNameList = append(edgesNameList, edgeName)
 		}
-		if !equalStringSlice(edgesNameList, test.expectedEdgesList) {
+		if !slices.Equal(edgesNameList, test.expectedEdgesList) {
 			t.Errorf("Edges created during insert is incorrect. Expected: %v, Got: %v", test.expectedEdgesList, edgesNameList)
 		}
 		entryKey := DataKey(ConcatStrings(flatPh.pred, VecEntry), 1)
@@ -437,7 +438,7 @@ func TestNonflatEntryInsertToPersistentFlatStorage(t *testing.T) {
 		var float1, float2 = []float64{}, []float64{}
 		index.BytesAsFloatArray(tsDbs[0].inMemTestDb[string(key[:])], &float1, 64)
 		index.BytesAsFloatArray(tsDbs[99].inMemTestDb[string(key[:])], &float2, 64)
-		if !equalFloat64Slice(float1, float2) {
+		if !slices.Equal(float1, float2) {
 			t.Errorf("Vector value for predicate %q at beginning and end of database were "+
 				"not equivalent. Start Value: %v, End Value: %v", flatPh.pred, tsDbs[0].inMemTestDb[flatPh.pred],
 				tsDbs[99].inMemTestDb[flatPh.pred])
@@ -531,7 +532,7 @@ func RunFlatSearchTests(t *testing.T, test searchPersistentFlatStorageTest, flat
 			t.Errorf("Output %q not equal to expected %q", err, test.expectedErr)
 		}
 	}
-	if !equalUint64Slice(nns, test.expectedNns) {
+	if !slices.Equal(nns, test.expectedNns) {
 		t.Errorf("Nearest neighbors expected value: %v, Got: %v", test.expectedNns, nns)
 	}
 }

@@ -232,41 +232,6 @@ func (c *inMemLocalCache) GetWithLockHeld(key []byte) (rval []byte, rerr error) 
 	return val, nil
 }
 
-func equalFloat64Slice(a, b []float64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func equalStringSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func equalUint64Slice(a, b []uint64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
 
 // floatArrayAsBytes(v) will create a byte array encoding
 // v using LittleEndian format. This is sort of the inverse
