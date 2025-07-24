@@ -139,6 +139,8 @@ type VectorIndex[T c.Float] interface {
 	StartBuild(caches []CacheType)
 	EndBuild() []int
 	NumThreads() int
+	Dimension() int
+	SetDimension(dimension int)
 }
 
 // A Txn is an interface representation of a persistent storage transaction,
