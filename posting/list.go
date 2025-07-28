@@ -155,7 +155,7 @@ func (mm *MutableLayer) setCurrentEntries(ts uint64, pl *pb.PostingList) {
 		return
 	}
 	if mm.readTs != 0 {
-		x.AssertTrue(mm.readTs == ts)
+		x.AssertTruef(mm.readTs == ts, "List object reused for a different transaction %d %d", mm.readTs, ts)
 	}
 
 	mm.readTs = ts
@@ -353,7 +353,7 @@ func (mm *MutableLayer) populateUidMap(pl *pb.PostingList) {
 // insertPosting inserts a new posting in the mutable layers. It updates the currentUids map.
 func (mm *MutableLayer) insertPosting(mpost *pb.Posting, hasCountIndex bool) {
 	if mm.readTs != 0 {
-		x.AssertTrue(mpost.StartTs == mm.readTs)
+		x.AssertTruef(mpost.StartTs == mm.readTs, "Diffrenent read ts and start ts found %d %d", mpost.StartTs, mm.readTs)
 	}
 
 	mm.readTs = mpost.StartTs
@@ -2003,7 +2003,10 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 
 	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
 	// means we need to return l.plist
-	return l.plist
+	if l.plist != nil && len(l.plist.Postings) > 0 {
+		return l.plist
+	}
+	return nil
 }
 
 // Value returns the default value from the posting list. The default value is
