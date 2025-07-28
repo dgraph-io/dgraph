@@ -410,7 +410,7 @@ func (mm *MutableLayer) print() string {
 		mm.deleteAllMarker)
 }
 
-func (l *List) print() string {
+func (l *List) Print() string {
 	return fmt.Sprintf("minTs: %d, plist: %+v, mutationMap: %s", l.minTs, l.plist, l.mutationMap.print())
 }
 
@@ -699,6 +699,7 @@ func (it *pIterator) posting() *pb.Posting {
 		it.pidx++
 	}
 	it.uidPosting.Uid = uid
+	it.uidPosting.ValType = pb.Posting_UID
 	return it.uidPosting
 }
 
@@ -1152,7 +1153,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	// pitr iterates through immutable postings
 	err = pitr.seek(l, afterUid, deleteBelowTs)
 	if err != nil {
-		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate %v", l.print())
+		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate %v", l.Print())
 	}
 
 loop:
