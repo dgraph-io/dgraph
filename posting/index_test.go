@@ -184,6 +184,7 @@ func TestTokensTable(t *testing.T) {
 	attr := x.GalaxyAttr("name")
 	key := x.DataKey(attr, 1)
 	l, err := getNew(key, ps, math.MaxUint64)
+	l.mutationMap.readTs = 1
 	require.NoError(t, err)
 
 	edge := &pb.DirectedEdge{
