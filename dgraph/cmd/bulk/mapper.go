@@ -160,7 +160,6 @@ func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
 	st := time.Now()
 	defer func() {
 		fmt.Println("Time taken to write map entries to file for shard", shardIdx, time.Since(st))
-		m.shards[shardIdx].mu.Unlock() // Locked by caller.
 		if err := cbuf.Release(); err != nil {
 			glog.Warningf("error in releasing buffer: %v", err)
 		}
@@ -261,6 +260,8 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		nquads.Flush()
 	}()
 
+	var wg sync.WaitGroup
+
 	for nqs := range nquads.Ch() {
 		for _, nq := range nqs {
 			if err := facets.SortAndValidate(nq.Facets); err != nil {
@@ -278,10 +279,15 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 			sh := &m.shards[i]
 			if uint64(sh.cbuf.LenNoPadding()) >= m.opt.MapBufSize {
 				sh.mu.Lock() // One write at a time.
-				go m.writeMapEntriesToFile(sh.cbuf, i)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					m.writeMapEntriesToFile(sh.cbuf, i)
+				}()
 				// Clear the entries and encodedSize for the next batch.
 				// Proactively allocate 32 slots to bootstrap the entries slice.
 				sh.cbuf = newMapperBuffer(m.opt)
+				sh.mu.Unlock()
 			}
 		}
 	}
@@ -290,14 +296,20 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		sh := &m.shards[i]
 		if sh.cbuf.LenNoPadding() > 0 {
 			sh.mu.Lock() // One write at a time.
-			m.writeMapEntriesToFile(sh.cbuf, i)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				m.writeMapEntriesToFile(sh.cbuf, i)
+			}()
+			sh.mu.Unlock()
 		} else {
 			if err := sh.cbuf.Release(); err != nil {
 				glog.Warningf("error in releasing buffer: %v", err)
 			}
 		}
-		m.shards[i].mu.Lock() // Ensure that the last file write finishes.
 	}
+
+	wg.Wait()
 }
 
 func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
