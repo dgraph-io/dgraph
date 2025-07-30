@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -155,7 +156,10 @@ func (m *mapper) openOutputFile(shardIdx int) (*os.File, error) {
 }
 
 func (m *mapper) writeMapEntriesToFile(cbuf *z.Buffer, shardIdx int) {
+	fmt.Println("Writing map entries to file for shard", shardIdx)
+	st := time.Now()
 	defer func() {
+		fmt.Println("Time taken to write map entries to file for shard", shardIdx, time.Since(st))
 		m.shards[shardIdx].mu.Unlock() // Locked by caller.
 		if err := cbuf.Release(); err != nil {
 			glog.Warningf("error in releasing buffer: %v", err)

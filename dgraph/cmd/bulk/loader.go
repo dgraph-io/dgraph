@@ -289,9 +289,10 @@ func (ld *loader) mapStage() {
 
 	var mapperWg sync.WaitGroup
 	mapperWg.Add(len(ld.mappers))
-	for _, m := range ld.mappers {
+	for i, m := range ld.mappers {
 		go func(m *mapper) {
 			m.run(loadType)
+			fmt.Println("MAPPER ", i, " done")
 			mapperWg.Done()
 		}(m)
 	}
