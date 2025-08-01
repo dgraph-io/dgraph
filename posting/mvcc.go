@@ -275,6 +275,10 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	cache.Lock()
 	defer cache.Unlock()
 
+	if len(cache.deltas) >= 100 {
+		return nil
+	}
+
 	var keys []string
 	for key := range cache.deltas {
 		keys = append(keys, key)
