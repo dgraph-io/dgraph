@@ -263,6 +263,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 
 func findSingleValueInPostingList(pb *pb.PostingList) *pb.Posting {
 	for _, p := range pb.Postings {
+		fmt.Println(p)
 		if p.Op == Set {
 			return p
 		}
@@ -341,6 +342,7 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 			return
 		}
 
+		fmt.Println(list, list.Print())
 		oldValList, err := list.StaticValue(mp.txn.StartTs - 1)
 		if err != nil {
 			pipeline.errCh <- err
