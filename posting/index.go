@@ -157,10 +157,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				Tid:   types.TypeID(posting.ValType),
 				Value: posting.Value,
 			}
+			info.val = val
+
 			indexEdge.Op = GetPostingOp(posting.Op)
 			indexEdge.Value = posting.Value
 			indexEdge.ValueId = posting.Uid
-			info.val = val
 			info.edge = indexEdge
 
 			tokens, erri := indexTokens(ctx, info)
