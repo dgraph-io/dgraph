@@ -67,6 +67,8 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 		return nil, err
 	}
 
+	fmt.Println("REACHES HERE", sv, info)
+
 	var tokens []string
 	for _, it := range info.tokenizers {
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
