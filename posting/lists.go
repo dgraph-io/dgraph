@@ -267,11 +267,9 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 			return getNew(key, pstore, lc.startTs, readUids)
 		}
 		if l, ok := lc.plists[skey]; ok {
-			lc.RLock()
 			if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
 				l.setMutation(lc.startTs, delta)
 			}
-			lc.RUnlock()
 			return l, nil
 		}
 		return nil, nil
