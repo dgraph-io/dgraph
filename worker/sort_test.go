@@ -122,6 +122,7 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
+			fmt.Println("ADDING EDGE", edge)
 			require.NoError(t, newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
@@ -204,6 +205,8 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 
 	reverseUids, err := listRev.Uids(posting.ListOptions{ReadTs: 10})
 	require.NoError(t, err)
+
+	fmt.Println("AMANDAS", listRev.Print(), reverseUids.Uids)
 
 	require.Equal(t, []uint64{uidAmanda}, reverseUids.Uids, "Only Amanda should be assigned on reverse edge")
 }

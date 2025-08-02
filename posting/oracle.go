@@ -82,13 +82,12 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 			return err
 		}
 		p1.Postings = append(p1.Postings, pl.Postings...)
-		pl, err := proto.Marshal(p1)
+		newPl, err := proto.Marshal(p1)
 		if err != nil {
 			glog.Errorf("Error marshalling posting list: %v", err)
 			return err
 		}
-		txn.cache.deltas[key] = pl
-		return nil
+		txn.cache.deltas[key] = newPl
 	} else {
 		p, err := proto.Marshal(&pl)
 		if err != nil {
@@ -96,6 +95,10 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 			return err
 		}
 		txn.cache.deltas[key] = p
+	}
+	list, listOk := txn.cache.plists[key]
+	if listOk {
+		list.setMutation(txn.StartTs, txn.cache.deltas[key])
 	}
 	return nil
 }
