@@ -130,7 +130,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			indexEdge.ValueId = uid
 
 			mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge)
-			fmt.Println("INDEX POSTINGS CREASTED", mpost, posting)
+			fmt.Println("INDEX POSTINGS CREATED", mpost, "posting:", posting)
 			valPl.Postings = append(valPl.Postings, mpost)
 			values[string(posting.Value)] = valPl
 		}
@@ -167,7 +167,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 			tokens, erri := indexTokens(ctx, info)
 			if erri != nil {
-				fmt.Println("erri", erri, val.Tid, val.Value, valPl, posting, *postings)
+				fmt.Println("erri", erri, val.Tid, val.Value, valPl, posting)
 				continue
 				//pipeline.errCh <- erri
 				//return
