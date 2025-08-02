@@ -445,18 +445,17 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			return
 		}
 
-		fmt.Println("BEFORE VALIDATE: ", edge)
 		if err := ValidateAndConvert(edge, &su); err != nil {
 			pipeline.errCh <- err
 			return
 		}
-		fmt.Println("AFTER VALIDATE:", edge)
 
 		uid := edge.Entity
 		pl, exists := postings[uid]
 
 		setPosting := func() {
 			mpost := makePostingFromEdge(mp.txn.StartTs, edge)
+			fmt.Println("CREATED POSTING", mpost)
 			if len(pl.Postings) == 0 {
 				pl = &pb.PostingList{
 					Postings: []*pb.Posting{mpost},
