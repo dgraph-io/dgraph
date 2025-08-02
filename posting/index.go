@@ -166,7 +166,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 			tokens, erri := indexTokens(ctx, info)
 			if erri != nil {
-				fmt.Println("erri", erri, val.Tid, val.Value)
+				fmt.Println("erri", erri, val.Tid, val.Value, valPl, posting)
 				continue
 				//pipeline.errCh <- erri
 				//return
