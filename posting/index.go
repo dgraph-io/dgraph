@@ -136,7 +136,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	numGo := 20
+	numGo := 5
 	wg := &sync.WaitGroup{}
 
 	strings := make([]string, 0, len(values))
@@ -146,6 +146,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 	process := func(start int) {
 		defer wg.Done()
+		localMap := make(map[string]*pb.PostingList, len(values)/numGo)
 		for i := start; i < len(values); i += numGo {
 			token := strings[i]
 			valPl := values[token]
@@ -173,12 +174,20 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 			for _, token := range tokens {
 				key := x.IndexKey(pipeline.attr, token)
-				if err := mp.txn.AddDelta(string(key), *valPl); err != nil {
-					pipeline.errCh <- err
-					continue
+				val, ok := localMap[string(key)]
+				if !ok {
+					val = &pb.PostingList{}
 				}
+				val.Postings = append(val.Postings, posting)
+				localMap[string(key)] = val
 			}
+		}
 
+		for key, val := range localMap {
+			if err := mp.txn.AddDelta(key, *val); err != nil {
+				pipeline.errCh <- err
+				continue
+			}
 		}
 	}
 
