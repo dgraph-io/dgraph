@@ -406,20 +406,18 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 				}
 			}
 		} else {
-			for uid, postingList := range *postings {
-				binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-				list, err := mp.txn.Get(dataKey)
-				if err != nil {
-					pipeline.errCh <- err
-					return
-				}
-				list.RLock()
-				prevCount = list.GetLength(mp.txn.StartTs)
-				list.RUnlock()
-				newCount = prevCount
-				for _, post := range postingList.Postings {
-					newCount += getLengthDelta(post.Op)
-				}
+			binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+			list, err := mp.txn.Get(dataKey)
+			if err != nil {
+				pipeline.errCh <- err
+				return
+			}
+			list.RLock()
+			prevCount = list.GetLength(mp.txn.StartTs)
+			list.RUnlock()
+			newCount = prevCount
+			for _, post := range postingList.Postings {
+				newCount += getLengthDelta(post.Op)
 			}
 		}
 
