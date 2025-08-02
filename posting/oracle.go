@@ -71,29 +71,33 @@ func (txn *Txn) GetPointers() [](*[]byte) {
 	return txn.pointers
 }
 
-func (txn *Txn) AddDelta(key string, pl []byte) {
-	p := new(pb.PostingList)
-	if err := proto.Unmarshal(pl, p); err != nil {
-		glog.Errorf("Error unmarshalling posting list: %v", err)
-		return
-	}
+func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
+	txn.Lock()
+	defer txn.Unlock()
 	prevDelta, ok := txn.cache.deltas[key]
 	if ok {
 		p1 := new(pb.PostingList)
 		if err := proto.Unmarshal(prevDelta, p1); err != nil {
 			glog.Errorf("Error unmarshalling posting list: %v", err)
-			return
+			return err
 		}
-		p1.Postings = append(p1.Postings, p.Postings...)
+		p1.Postings = append(p1.Postings, pl.Postings...)
 		pl, err := proto.Marshal(p1)
 		if err != nil {
 			glog.Errorf("Error marshalling posting list: %v", err)
-			return
+			return err
 		}
 		txn.cache.deltas[key] = pl
-		return
+		return nil
+	} else {
+		p, err := proto.Marshal(&pl)
+		if err != nil {
+			glog.Errorf("Error marshalling posting list: %v", err)
+			return err
+		}
+		txn.cache.deltas[key] = p
 	}
-	txn.cache.deltas[key] = pl
+	return nil
 }
 
 func (txn *Txn) LockCache() {

@@ -171,17 +171,12 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				//return
 			}
 
-			data, err := proto.Marshal(valPl)
-			if err != nil {
-				pipeline.errCh <- err
-				continue
-			}
-
 			for _, token := range tokens {
 				key := x.IndexKey(pipeline.attr, token)
-				mp.txn.LockCache()
-				mp.txn.AddDelta(string(key), data)
-				mp.txn.UnlockCache()
+				if err := mp.txn.AddDelta(string(key), *valPl); err != nil {
+					pipeline.errCh <- err
+					continue
+				}
 			}
 
 		}
@@ -251,15 +246,11 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 			continue
 		}
 
-		data, err := proto.Marshal(pl)
-
-		if err != nil {
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		if err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
 			pipeline.errCh <- err
 			continue
 		}
-
-		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), data)
 	}
 
 	pipeline.errCh <- nil
@@ -308,15 +299,11 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 		if len(pl.Postings) == 0 {
 			continue
 		}
-		data, err := proto.Marshal(pl)
-		if err != nil {
+		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
+		if err := mp.txn.AddDelta(string(key), *pl); err != nil {
 			pipeline.errCh <- err
 			continue
 		}
-		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		mp.txn.LockCache()
-		mp.txn.AddDelta(string(key), data)
-		mp.txn.UnlockCache()
 	}
 }
 
@@ -441,13 +428,11 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	defer mp.txn.UnlockCache()
 
 	for c, pl := range countMap {
-		data, err := proto.Marshal(pl)
-		if err != nil {
-			pipeline.errCh <- nil
+		ck := x.CountKey(pipeline.attr, uint32(c), reverse)
+		if err := mp.txn.AddDelta(string(ck), *pl); err != nil {
+			pipeline.errCh <- err
 			return
 		}
-		ck := x.CountKey(pipeline.attr, uint32(c), reverse)
-		mp.txn.AddDelta(string(ck), data)
 	}
 }
 
@@ -547,15 +532,11 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
 	for uid, pl := range postings {
-		data, err := proto.Marshal(pl)
-
-		if err != nil {
-			pipeline.errCh <- err
-			continue
-		}
-
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), data)
+		if err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
+			pipeline.errCh <- err
+			return
+		}
 	}
 
 	pipeline.errCh <- nil
