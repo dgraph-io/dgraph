@@ -236,9 +236,6 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		mp.ProcessCount(ctx, pipeline, &postings, false, false)
 	}
 
-	mp.txn.LockCache()
-	defer mp.txn.UnlockCache()
-
 	dataKey := x.DataKey(pipeline.attr, 0)
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
@@ -425,9 +422,6 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		}
 	}
 
-	mp.txn.LockCache()
-	defer mp.txn.UnlockCache()
-
 	for c, pl := range countMap {
 		ck := x.CountKey(pipeline.attr, uint32(c), reverse)
 		if err := mp.txn.AddDelta(string(ck), *pl); err != nil {
@@ -526,9 +520,6 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	if count {
 		mp.ProcessCount(ctx, pipeline, &postings, true, false)
 	}
-
-	mp.txn.LockCache()
-	defer mp.txn.UnlockCache()
 
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
