@@ -309,6 +309,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 func makePostingFromEdge(startTs uint64, edge *pb.DirectedEdge) *pb.Posting {
 	mpost := NewPosting(edge)
 	mpost.StartTs = startTs
+	mpost.ValType = edge.ValueType
 	if mpost.PostingType != pb.Posting_REF {
 		edge.ValueId = FingerprintEdge(edge)
 		mpost.Uid = edge.ValueId
