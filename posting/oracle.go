@@ -72,8 +72,8 @@ func (txn *Txn) GetPointers() [](*[]byte) {
 }
 
 func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
-	txn.Lock()
-	defer txn.Unlock()
+	txn.cache.Lock()
+	defer txn.cache.Unlock()
 	prevDelta, ok := txn.cache.deltas[key]
 	if ok {
 		p1 := new(pb.PostingList)
