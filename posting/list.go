@@ -2015,12 +2015,10 @@ func (l *List) StaticValue(readTs uint64) (*pb.PostingList, error) {
 
 func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	l.AssertRLock()
-	fmt.Println("LIST:", l.Print())
 
 	if l.mutationMap == nil {
 		// If mutation map is empty, check if there is some data, and return it.
 		if l.plist != nil && len(l.plist.Postings) > 0 {
-			fmt.Println("RETURNING HERE 1")
 			return l.plist
 		}
 		return nil
@@ -2028,18 +2026,15 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 
 	// Return readTs is if it's present in the mutation. It's going to be the latest value.
 	if l.mutationMap.currentEntries != nil && l.mutationMap.readTs == readTs {
-		fmt.Println("RETURNING HERE 2")
 		return l.mutationMap.currentEntries
 	}
 
 	// If maxTs < readTs then we need to read maxTs
 	if l.maxTs <= readTs {
 		if l.mutationMap.lastEntry != nil {
-			fmt.Println("RETURNING HERE 3")
 			return l.mutationMap.lastEntry
 		}
 		if mutation := l.mutationMap.get(l.maxTs); mutation != nil {
-			fmt.Println("RETURNING HERE 4")
 			return mutation
 		}
 	}
@@ -2055,18 +2050,15 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 		}
 	}, readTs)
 	if mutation != nil {
-		fmt.Println("RETURNING HERE 5")
 		return mutation
 	}
 
 	// If we reach here, that means that there was no entry in mutation map which is less than readTs. That
 	// means we need to return l.plist
 	if l.plist != nil && len(l.plist.Postings) > 0 {
-		fmt.Println("RETURNING HERE 6")
 		return l.plist
 	}
 	if l.plist != nil && l.plist.Pack != nil {
-		fmt.Println("RETURNING HERE 7")
 		uids := codec.Decode(l.plist.Pack, 0)
 		return &pb.PostingList{
 			Postings: []*pb.Posting{
