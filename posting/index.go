@@ -128,6 +128,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			indexEdge.Op = GetPostingOp(posting.Op)
 			indexEdge.Value = posting.Value
 			indexEdge.ValueId = uid
+			indexEdge.ValueType = posting.ValType
 
 			mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge)
 			fmt.Println("INDEX POSTINGS CREATED", mpost, "posting:", posting)
@@ -309,7 +310,6 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 func makePostingFromEdge(startTs uint64, edge *pb.DirectedEdge) *pb.Posting {
 	mpost := NewPosting(edge)
 	mpost.StartTs = startTs
-	mpost.ValType = edge.ValueType
 	if mpost.PostingType != pb.Posting_REF {
 		edge.ValueId = FingerprintEdge(edge)
 		mpost.Uid = edge.ValueId
