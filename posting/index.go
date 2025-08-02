@@ -445,10 +445,12 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			return
 		}
 
+		fmt.Println("BEFORE VALIDATE: ", edge)
 		if err := ValidateAndConvert(edge, &su); err != nil {
 			pipeline.errCh <- err
 			return
 		}
+		fmt.Println("AFTER VALIDATE:", edge)
 
 		uid := edge.Entity
 		pl, exists := postings[uid]

@@ -90,6 +90,51 @@ func TestEmptyTypeSchema(t *testing.T) {
 	x.ParseNamespaceAttr(types[0].TypeName)
 }
 
+func TestDatetime(t *testing.T) {
+	// Setup temporary directory for Badger DB
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	require.NoError(t, err)
+	posting.Init(ps, 0, false)
+	Init(ps)
+
+	// Set schema
+	schemaTxt := `
+		t: datetime @index(year) .
+	`
+	err = schema.ParseBytes([]byte(schemaTxt), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		for _, edge := range edges {
+			fmt.Println("ADDING EDGE", edge)
+			require.NoError(t, newRunMutation(ctx, edge, txn))
+		}
+		txn.Update()
+		writer := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+		txn.UpdateCachedKeys(commitTs)
+	}
+
+	newRunMutation(1, 3, []*pb.DirectedEdge{
+		{
+			Entity:    1,
+			Attr:      x.AttrInRootNamespace("t"),
+			Value:     []byte("2020-01-01T00:00:00Z"),
+			ValueType: pb.Posting_DEFAULT,
+			Op:        pb.DirectedEdge_SET,
+		},
+	})
+
+}
+
 func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	// Setup temporary directory for Badger DB
 	dir, err := os.MkdirTemp("", "storetest_")
