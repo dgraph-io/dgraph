@@ -64,7 +64,7 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Cannot convert value to scalar type")
 	}
 
 	fmt.Println("REACHES HERE", sv, info)
@@ -73,7 +73,7 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 	for _, it := range info.tokenizers {
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
-			return tokens, err
+			return tokens, errors.Wrapf(err, "Cannot build tokens for attribute %s", attr)
 		}
 		tokens = append(tokens, toks...)
 	}
