@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -275,10 +276,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	cache.Lock()
 	defer cache.Unlock()
 
-	if len(cache.deltas) >= 100 {
-		return nil
-	}
-
 	var keys []string
 	for key := range cache.deltas {
 		keys = append(keys, key)
@@ -304,6 +301,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if len(data) == 0 {
 					continue
 				}
+				pl := new(pb.PostingList)
+				if err := proto.Unmarshal(data, pl); err != nil {
+					return err
+				}
+				pk, _ := x.Parse([]byte(key))
+				fmt.Println(pk, pl)
 				if ts := cache.maxVersions[key]; ts >= commitTs {
 					// Skip write because we already have a write at a higher ts.
 					// Logging here can cause a lot of output when doing Raft log replay. So, let's

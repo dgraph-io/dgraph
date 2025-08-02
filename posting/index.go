@@ -135,7 +135,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	numGo := 10
+	numGo := 20
 	wg := &sync.WaitGroup{}
 
 	strings := make([]string, 0, len(values))
@@ -237,7 +237,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	}
 
 	if count {
-		mp.ProcessCount(ctx, pipeline, &postings, true, false)
+		mp.ProcessCount(ctx, pipeline, &postings, false, false)
 	}
 
 	mp.txn.LockCache()
@@ -247,6 +247,10 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
 	for uid, pl := range postings {
+		if len(pl.Postings) == 0 {
+			continue
+		}
+
 		data, err := proto.Marshal(pl)
 
 		if err != nil {
@@ -296,21 +300,23 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 		}
 	}
 
-	baseKey := string(key[:len(key)-8])
+	if count {
+		mp.ProcessCount(ctx, pipeline, &reverseredMap, false, true)
+	}
+
 	for uid, pl := range reverseredMap {
-		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
+		if len(pl.Postings) == 0 {
+			continue
+		}
 		data, err := proto.Marshal(pl)
 		if err != nil {
 			pipeline.errCh <- err
 			continue
 		}
+		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
 		mp.txn.LockCache()
-		mp.txn.AddDelta(baseKey+string(key[len(key)-8:]), data)
+		mp.txn.AddDelta(string(key), data)
 		mp.txn.UnlockCache()
-	}
-
-	if count {
-		mp.ProcessCount(ctx, pipeline, &reverseredMap, !list, true)
 	}
 }
 
@@ -385,9 +391,9 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		countMap[count] = c
 	}
 
-	prevCount := 0
-	newCount := 0
 	for uid, postingList := range *postings {
+		prevCount := 0
+		newCount := 0
 		if isSingle {
 			val := findSingleValueInPostingList(postingList)
 			if val == nil {
@@ -410,8 +416,16 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 				list.RLock()
 				prevCount = list.GetLength(mp.txn.StartTs)
 				list.RUnlock()
-				newCount = prevCount + len(postingList.Postings)
+				newCount = prevCount
+				for _, post := range postingList.Postings {
+					newCount += getLengthDelta(post.Op)
+				}
 			}
+		}
+
+		if newCount < 0 {
+			(*postings)[uid].Postings = []*pb.Posting{}
+			continue
 		}
 
 		edge.ValueId = uid
@@ -754,7 +768,7 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 			if errs == nil {
 				errs = errors.New("Got error while running mutation")
 			}
-			errs = errors.Wrapf(err, errs.Error())
+			errs = errors.Wrapf(errs, "%v", err)
 		}
 	}
 	return errs
