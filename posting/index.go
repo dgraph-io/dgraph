@@ -119,7 +119,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	for uid, postingList := range *postings {
-		fmt.Println("POSTING", uid, postingList)
+		//fmt.Println("POSTING", uid, postingList)
 		for _, posting := range postingList.Postings {
 			valPl, ok := values[string(posting.Value)]
 			if !ok {
@@ -171,6 +171,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			info.edge = indexEdge
 
 			tokens, erri := indexTokens(ctx, info)
+			//fmt.Println("TOKENS", token, , tokens)
 			if erri != nil {
 				pipeline.errCh <- erri
 				return
@@ -182,7 +183,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				if !ok {
 					val = &pb.PostingList{}
 				}
-				val.Postings = append(val.Postings, posting)
+				val.Postings = append(val.Postings, valPl.Postings...)
 				localMap[string(key)] = val
 			}
 		}
@@ -206,8 +207,8 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	wg.Wait()
 
 	for key, val := range globalMap {
-		pk, _ := x.Parse([]byte(key))
-		fmt.Println("INDEX MAP", pk, val)
+		//pk, _ := x.Parse([]byte(key))
+		//fmt.Println("INDEX MAP", pk, val)
 		if err := mp.txn.AddDelta(key, *val); err != nil {
 			pipeline.errCh <- err
 			continue
