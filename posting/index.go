@@ -419,6 +419,10 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		newCount := list.GetLength(mp.txn.StartTs)
 		list.Unlock()
 
+		if newCount == prevCount {
+			continue
+		}
+
 		edge.ValueId = uid
 		edge.Op = pb.DirectedEdge_DEL
 		if prevCount > 0 {
@@ -445,13 +449,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	postings := make(map[uint64]*pb.PostingList, 1000)
 
 	dataKey := x.DataKey(pipeline.attr, 0)
-
-	insertDeleteAllEdge := false
-	if index || reverse || count {
-		mp.handleOldDeleteForSingle(pipeline, postings)
-	} else {
-		insertDeleteAllEdge = true
-	}
+	insertDeleteAllEdge := !(index || reverse || count) 
 
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
@@ -528,6 +526,10 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		} else {
 			setPosting()
 		}
+	}
+
+	if index || reverse || count {
+		mp.handleOldDeleteForSingle(pipeline, postings)
 	}
 
 	if index {

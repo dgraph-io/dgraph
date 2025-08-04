@@ -8,7 +8,6 @@ package posting
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -140,13 +139,11 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	}
 	txn := Oracle().RegisterStartTs(startTs)
 	txn.cache.SetIfAbsent(string(l.key), l)
-	fmt.Println("ADDING MUTATION", l.key, edge)
 
 	mp := NewMutationPipeline(txn)
 	err := mp.Process(context.Background(), []*pb.DirectedEdge{edge})
 	require.NoError(t, err)
 	txn.Update()
-	fmt.Println(txn.cache.deltas)
 	txn.UpdateCachedKeys(commitTs)
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, commitTs))

@@ -836,12 +836,12 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate, hasCountI
 		// The current value should be deleted in favor of this value. This needs to
 		// be done because the fingerprint for the value is not math.MaxUint64 as is
 		// the case with the rest of the scalar predicates.
-		newPlist := &pb.PostingList{}
-		if mpost.Op != Del {
-			// If we are setting a new value then we can just delete all the older values.
-			newPlist.Postings = append(newPlist.Postings, createDeleteAllPosting())
+		newPlist := &pb.PostingList{
+			Postings: []*pb.Posting{createDeleteAllPosting()},
 		}
-		newPlist.Postings = append(newPlist.Postings, mpost)
+		if mpost.Op != Del {
+			newPlist.Postings = append(newPlist.Postings, mpost)
+		}
 		l.mutationMap.setCurrentEntries(mpost.StartTs, newPlist)
 		return nil
 	}

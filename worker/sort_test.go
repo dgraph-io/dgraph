@@ -7,7 +7,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -113,7 +112,6 @@ func TestDatetime(t *testing.T) {
 	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			fmt.Println("ADDING EDGE", edge)
 			require.NoError(t, newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
@@ -167,7 +165,6 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			fmt.Println("ADDING EDGE", edge)
 			require.NoError(t, newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
@@ -251,8 +248,6 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	reverseUids, err := listRev.Uids(posting.ListOptions{ReadTs: 10})
 	require.NoError(t, err)
 
-	fmt.Println("AMANDAS", listRev.Print(), reverseUids.Uids)
-
 	require.Equal(t, []uint64{uidAmanda}, reverseUids.Uids, "Only Amanda should be assigned on reverse edge")
 }
 
@@ -308,7 +303,6 @@ func TestGetScalarList(t *testing.T) {
 	require.Nil(t, err)
 	uids, err := l.Uids(posting.ListOptions{ReadTs: 13})
 	require.Nil(t, err)
-	fmt.Println(l.Print())
 	require.Equal(t, 1, len(uids.Uids))
 }
 
@@ -794,7 +788,6 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("benchmarkadd: string @index(term) ."), 1)
-	fmt.Println(err)
 	if err != nil {
 		panic(err)
 	}

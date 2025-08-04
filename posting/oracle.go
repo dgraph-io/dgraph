@@ -112,9 +112,6 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 
 	p1.Postings = SortAndDedupPostings(p1.Postings)
 
-	//pk, _ := x.Parse([]byte(key))
-	//fmt.Println("ADD DELTA", pk, p1.Postings)
-
 	newPl, err := proto.Marshal(p1)
 	if err != nil {
 		glog.Errorf("Error marshalling posting list: %v", err)
