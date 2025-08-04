@@ -397,6 +397,9 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList) {
 	txn.Lock()
 	defer txn.Unlock()
+	if txn.conflicts == nil {
+		txn.conflicts = make(map[uint64]struct{})
+	}
 	keyHash := farm.Fingerprint64(key)
 	for _, post := range pl.Postings {
 		txn.conflicts[keyHash^post.Uid] = struct{}{}
