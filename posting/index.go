@@ -136,7 +136,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	numGo := 1
+	numGo := 100
 	wg := &sync.WaitGroup{}
 
 	strings := make([]string, 0, len(values))
@@ -204,6 +204,8 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 	wg.Wait()
 
+	fmt.Println("POSTINGS:", postings)
+	fmt.Println("GLOBAL MAP:", globalMap)
 	for key, val := range globalMap {
 		if err := mp.txn.AddDelta(key, *val); err != nil {
 			pipeline.errCh <- err
