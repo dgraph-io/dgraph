@@ -94,7 +94,7 @@ func SortAndDedupPostings(postings []*pb.Posting) []*pb.Posting {
 	return postings[:n]
 }
 
-func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
+func (txn *Txn) AddDelta(key string, pl pb.PostingList) (*pb.PostingList, error) {
 	txn.cache.Lock()
 	defer txn.cache.Unlock()
 	prevDelta, ok := txn.cache.deltas[key]
@@ -103,7 +103,7 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 		p1 = new(pb.PostingList)
 		if err := proto.Unmarshal(prevDelta, p1); err != nil {
 			glog.Errorf("Error unmarshalling posting list: %v", err)
-			return err
+			return nil, err
 		}
 		p1.Postings = append(p1.Postings, pl.Postings...)
 	} else {
@@ -115,7 +115,7 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 	newPl, err := proto.Marshal(p1)
 	if err != nil {
 		glog.Errorf("Error marshalling posting list: %v", err)
-		return err
+		return nil, err
 	}
 	txn.cache.deltas[key] = newPl
 
@@ -123,7 +123,7 @@ func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 	if listOk {
 		list.setMutation(txn.StartTs, txn.cache.deltas[key])
 	}
-	return nil
+	return p1, nil
 }
 
 func (txn *Txn) LockCache() {

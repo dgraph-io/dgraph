@@ -20,6 +20,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
@@ -210,11 +211,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	wg.Wait()
 
 	for key, val := range globalMap {
-		//pk, _ := x.Parse([]byte(key))
-		//fmt.Println("INDEX MAP", pk, val)
-		if err := mp.txn.AddDelta(key, *val); err != nil {
+		if newPl, err := mp.txn.AddDelta(key, *val); err != nil {
 			pipeline.errCh <- err
 			continue
+		} else {
+			mp.txn.addConflictKeyWithUid([]byte(key), newPl)
 		}
 	}
 }
@@ -276,9 +277,11 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		}
 
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
 			pipeline.errCh <- err
 			continue
+		} else {
+			mp.txn.addConflictKeyWithUid(dataKey, newPl)
 		}
 	}
 
@@ -330,9 +333,11 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			continue
 		}
 		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		if err := mp.txn.AddDelta(string(key), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(key), *pl); err != nil {
 			pipeline.errCh <- err
 			continue
+		} else {
+			mp.txn.addConflictKeyWithUid(key, newPl)
 		}
 	}
 }
@@ -389,6 +394,15 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 	}
 }
 
+func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList) {
+	txn.Lock()
+	defer txn.Unlock()
+	keyHash := farm.Fingerprint64(key)
+	for _, post := range pl.Postings {
+		txn.conflicts[keyHash^post.Uid] = struct{}{}
+	}
+}
+
 func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, isSingle bool, reverse bool) {
 	dataKey := x.DataKey(pipeline.attr, 0)
 	if reverse {
@@ -437,7 +451,16 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		}
 		
 		newCount := list.GetLength(mp.txn.StartTs)
+		updated := list.mutationMap.currentEntries != nil
 		list.Unlock()
+
+		if updated {
+			if isSingle {
+				mp.txn.addConflictKey(farm.Fingerprint64(dataKey))
+			} else {
+				mp.txn.addConflictKeyWithUid(dataKey, postingList)
+			}
+		}
 
 		if newCount == prevCount {
 			continue
@@ -456,9 +479,11 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 
 	for c, pl := range countMap {
 		ck := x.CountKey(pipeline.attr, uint32(c), reverse)
-		if err := mp.txn.AddDelta(string(ck), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(ck), *pl); err != nil {
 			pipeline.errCh <- err
 			return
+		} else {
+			mp.txn.addConflictKeyWithUid(ck, newPl)
 		}
 	}
 }
@@ -571,7 +596,11 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	for uid, pl := range postings {
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
+		key := baseKey+string(dataKey[len(dataKey)-8:])
+
+		mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
+		
+		if _, err := mp.txn.AddDelta(key, *pl); err != nil {
 			pipeline.errCh <- err
 			return
 		}
