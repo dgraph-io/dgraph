@@ -136,7 +136,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	numGo := 2
+	numGo := 10
 	wg := &sync.WaitGroup{}
 
 	strings := make([]string, 0, len(values))
