@@ -137,7 +137,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			newPosting := new(pb.Posting)
 			newPosting.ValType = posting.ValType
 			newPosting.Value = posting.Value
-			newPosting.Uid = posting.Uid
+			newPosting.LangTag = posting.LangTag
 			valPost[string(posting.Value)] = newPosting
 		}
 	}
@@ -170,9 +170,8 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			}
 			info.val = val
 
-			indexEdge.Op = GetPostingOp(posting.Op)
 			indexEdge.Value = posting.Value
-			indexEdge.ValueId = posting.Uid
+			indexEdge.Lang = string(posting.LangTag)
 			info.edge = indexEdge
 
 			tokens, erri := indexTokens(ctx, info)
