@@ -144,6 +144,9 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		strings = append(strings, i)
 	}
 
+	globalMap := make(map[string]*pb.PostingList, len(values))
+	var m sync.Mutex
+
 	process := func(start int) {
 		defer wg.Done()
 		localMap := make(map[string]*pb.PostingList, len(values)/numGo)
@@ -183,12 +186,15 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			}
 		}
 
+		m.Lock()
 		for key, val := range localMap {
-			if err := mp.txn.AddDelta(key, *val); err != nil {
-				pipeline.errCh <- err
-				continue
+			if _, ok := globalMap[key]; ok {
+				globalMap[key].Postings = append(globalMap[key].Postings, val.Postings...)
+			} else {
+				globalMap[key] = val
 			}
 		}
+		m.Unlock()
 	}
 
 	for i := range numGo {
@@ -197,6 +203,13 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	wg.Wait()
+
+	for key, val := range globalMap {
+		if err := mp.txn.AddDelta(key, *val); err != nil {
+			pipeline.errCh <- err
+			continue
+		}
+	}
 }
 
 func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *PredicatePipeline, index bool, reverse bool, count bool) {
