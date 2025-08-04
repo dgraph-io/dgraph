@@ -171,7 +171,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			info.val = val
 
 			indexEdge.Value = posting.Value
-			indexEdge.Lang = string(posting.LangTag)
 			info.edge = indexEdge
 
 			tokens, erri := indexTokens(ctx, info)
