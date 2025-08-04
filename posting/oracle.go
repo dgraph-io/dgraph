@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,31 +72,56 @@ func (txn *Txn) GetPointers() [](*[]byte) {
 	return txn.pointers
 }
 
+func SortAndDedupPostings(postings []*pb.Posting) []*pb.Posting {
+	// Sort postings by UID
+	sort.Slice(postings, func(i, j int) bool {
+		return postings[i].Uid < postings[j].Uid
+	})
+
+	// In-place filtering: keep only the last occurrence for each UID
+	n := 0 // write index
+	for i := 0; i < len(postings); {
+		j := i + 1
+		// Skip all postings with same UID
+		for j < len(postings) && postings[j].Uid == postings[i].Uid {
+			j++
+		}
+		// Keep only the last posting for this UID
+		postings[n] = postings[j-1]
+		n++
+		i = j
+	}
+	return postings[:n]
+}
+
 func (txn *Txn) AddDelta(key string, pl pb.PostingList) error {
 	txn.cache.Lock()
 	defer txn.cache.Unlock()
 	prevDelta, ok := txn.cache.deltas[key]
+	var p1 *pb.PostingList
 	if ok {
-		p1 := new(pb.PostingList)
+		p1 = new(pb.PostingList)
 		if err := proto.Unmarshal(prevDelta, p1); err != nil {
 			glog.Errorf("Error unmarshalling posting list: %v", err)
 			return err
 		}
 		p1.Postings = append(p1.Postings, pl.Postings...)
-		newPl, err := proto.Marshal(p1)
-		if err != nil {
-			glog.Errorf("Error marshalling posting list: %v", err)
-			return err
-		}
-		txn.cache.deltas[key] = newPl
 	} else {
-		p, err := proto.Marshal(&pl)
-		if err != nil {
-			glog.Errorf("Error marshalling posting list: %v", err)
-			return err
-		}
-		txn.cache.deltas[key] = p
+		p1 = &pl
 	}
+
+	p1.Postings = SortAndDedupPostings(p1.Postings)
+
+	//pk, _ := x.Parse([]byte(key))
+	//fmt.Println("ADD DELTA", pk, p1.Postings)
+
+	newPl, err := proto.Marshal(p1)
+	if err != nil {
+		glog.Errorf("Error marshalling posting list: %v", err)
+		return err
+	}
+	txn.cache.deltas[key] = newPl
+
 	list, listOk := txn.cache.plists[key]
 	if listOk {
 		list.setMutation(txn.StartTs, txn.cache.deltas[key])

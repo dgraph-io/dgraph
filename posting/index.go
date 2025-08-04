@@ -242,6 +242,9 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 
 	if count {
 		mp.ProcessCount(ctx, pipeline, &postings, false, false)
+		// Count should take care of updating the posting list
+		pipeline.errCh <- nil
+		return
 	}
 
 	dataKey := x.DataKey(pipeline.attr, 0)
@@ -299,6 +302,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 
 	if count {
 		mp.ProcessCount(ctx, pipeline, &reverseredMap, false, true)
+		return
 	}
 
 	for uid, pl := range reverseredMap {
@@ -343,7 +347,7 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 			return
 		}
 
-		oldValList, err := list.StaticValue(mp.txn.StartTs - 1)
+		oldValList, err := list.StaticValue(mp.txn.StartTs)
 		if err != nil {
 			pipeline.errCh <- err
 			return
@@ -356,6 +360,8 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 		}
 		edge.Op = pb.DirectedEdge_DEL
 		edge.Value = oldVal.Value
+		edge.ValueType = oldVal.ValType
+		edge.ValueId = oldVal.Uid
 
 		mpost := makePostingFromEdge(mp.txn.StartTs, edge)
 		postingList.Postings = append(postingList.Postings, mpost)
@@ -385,39 +391,33 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	}
 
 	for uid, postingList := range *postings {
-		prevCount := 0
-		newCount := 0
-		if isSingle {
-			val := findSingleValueInPostingList(postingList)
-			if val == nil {
-				prevCount = 1
-				newCount = 0
-			} else {
-				newCount = 1
-				if len(postingList.Postings) > 1 {
-					prevCount = 1
-				}
-			}
-		} else {
-			binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-			list, err := mp.txn.Get(dataKey)
-			if err != nil {
-				pipeline.errCh <- err
-				return
-			}
-			list.RLock()
-			prevCount = list.GetLength(mp.txn.StartTs)
-			list.RUnlock()
-			newCount = prevCount
-			for _, post := range postingList.Postings {
-				newCount += getLengthDelta(post.Op)
-			}
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		list, err := mp.txn.Get(dataKey)
+		if err != nil {
+			pipeline.errCh <- err
+			return
 		}
 
-		if newCount < 0 {
-			(*postings)[uid].Postings = []*pb.Posting{}
-			continue
+		list.Lock()
+		prevCount := list.GetLength(mp.txn.StartTs)
+	
+		for _, post := range postingList.Postings {
+			found, _, _ := list.findPosting(post.StartTs, post.Uid)
+			if found {
+				if post.Op == Set {
+					post.Op = Ovr     
+				}
+			} else {
+				if post.Op == Del {
+					continue
+				}
+			}
+
+			list.updateMutationLayer(post, isSingle, true)	
 		}
+		
+		newCount := list.GetLength(mp.txn.StartTs)
+		list.Unlock()
 
 		edge.ValueId = uid
 		edge.Op = pb.DirectedEdge_DEL
@@ -446,6 +446,13 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	dataKey := x.DataKey(pipeline.attr, 0)
 
+	insertDeleteAllEdge := false
+	if index || reverse || count {
+		mp.handleOldDeleteForSingle(pipeline, postings)
+	} else {
+		insertDeleteAllEdge = true
+	}
+
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
 		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
@@ -464,11 +471,21 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		setPosting := func() {
 			mpost := makePostingFromEdge(mp.txn.StartTs, edge)
 			if len(pl.Postings) == 0 {
-				pl = &pb.PostingList{
-					Postings: []*pb.Posting{mpost},
+				if insertDeleteAllEdge {
+					pl = &pb.PostingList{
+						Postings: []*pb.Posting{createDeleteAllPosting(), mpost},
+					}
+				} else {
+					pl = &pb.PostingList{
+						Postings: []*pb.Posting{mpost},
+					}
 				}
 			} else {
-				pl.Postings[0] = mpost
+				if pl.Postings[len(pl.Postings)-1].Op == Set {
+					pl.Postings[len(pl.Postings)-1] = mpost
+				} else {
+					pl.Postings = append(pl.Postings, mpost)
+				}
 			}
 			postings[uid] = pl
 		}
@@ -513,10 +530,6 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		}
 	}
 
-	if index || reverse || count {
-		mp.handleOldDeleteForSingle(pipeline, postings)
-	}
-
 	if index {
 		mp.InsertTokenizerIndexes(ctx, pipeline, &postings)
 	}
@@ -527,6 +540,9 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	if count {
 		mp.ProcessCount(ctx, pipeline, &postings, true, false)
+		// Count should take care of updating the posting list
+		pipeline.errCh <- nil
+		return
 	}
 
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion

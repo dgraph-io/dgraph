@@ -7,6 +7,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -117,6 +118,7 @@ func TestReverseEdgeSetDel(t *testing.T) {
 	pl.RLock()
 	c := pl.GetLength(5)
 	pl.RUnlock()
+	fmt.Println(pl.Print())
 	require.Equal(t, 2, c)
 }
 

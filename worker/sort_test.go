@@ -308,6 +308,7 @@ func TestGetScalarList(t *testing.T) {
 	require.Nil(t, err)
 	uids, err := l.Uids(posting.ListOptions{ReadTs: 13})
 	require.Nil(t, err)
+	fmt.Println(l.Print())
 	require.Equal(t, 1, len(uids.Uids))
 }
 
