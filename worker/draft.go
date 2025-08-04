@@ -984,6 +984,23 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		if commit != 0 {
 			txn.Update()
 		}
+		// We start with 20 ms, so that we end up waiting 5 mins by the end.
+		// If there is any transient issue, it should get fixed within that timeframe.
+		err := x.ExponentialRetry(int(x.Config.MaxRetries),
+			20*time.Millisecond, func() error {
+				err := txn.CommitToDisk(writer, commit)
+				if err == badger.ErrBannedKey {
+					glog.Errorf("Error while writing to banned namespace.")
+					return nil
+				}
+				return err
+			})
+
+		if err != nil {
+			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
+				start, commit, err)
+			panic(err)
+		}
 	}
 
 	for _, status := range delta.Txns {
