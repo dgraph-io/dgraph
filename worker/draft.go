@@ -516,18 +516,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	m := proposal.Mutations
 
-	// It is possible that the user gives us multiple versions of the same edge, one with no facets
-	// and another with facets. In that case, use stable sort to maintain the ordering given to us
-	// by the user.
-	sort.SliceStable(m.Edges, func(i, j int) bool {
-		ei := m.Edges[i]
-		ej := m.Edges[j]
-		if ei.GetAttr() != ej.GetAttr() {
-			return ei.GetAttr() < ej.GetAttr()
-		}
-		return ei.GetEntity() < ej.GetEntity()
-	})
-
 	txn := posting.Oracle().RegisterStartTs(m.StartTs)
 	if txn.ShouldAbort() {
 		span.AddEvent("Txn should abort.", trace.WithAttributes(
@@ -543,6 +531,18 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		mp := posting.NewMutationPipeline(txn)
 		return mp.Process(ctx, m.Edges)
 	}
+
+	// It is possible that the user gives us multiple versions of the same edge, one with no facets
+	// and another with facets. In that case, use stable sort to maintain the ordering given to us
+	// by the user.
+	sort.SliceStable(m.Edges, func(i, j int) bool {
+		ei := m.Edges[i]
+		ej := m.Edges[j]
+		if ei.GetAttr() != ej.GetAttr() {
+			return ei.GetAttr() < ej.GetAttr()
+		}
+		return ei.GetEntity() < ej.GetEntity()
+	})
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
@@ -983,23 +983,6 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 		// If the transaction has failed, we dont need to update it.
 		if commit != 0 {
 			txn.Update()
-		}
-		// We start with 20 ms, so that we end up waiting 5 mins by the end.
-		// If there is any transient issue, it should get fixed within that timeframe.
-		err := x.ExponentialRetry(int(x.Config.MaxRetries),
-			20*time.Millisecond, func() error {
-				err := txn.CommitToDisk(writer, commit)
-				if err == badger.ErrBannedKey {
-					glog.Errorf("Error while writing to banned namespace.")
-					return nil
-				}
-				return err
-			})
-
-		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-			panic(err)
 		}
 	}
 

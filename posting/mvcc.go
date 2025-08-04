@@ -288,10 +288,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		}
 	}()
 
-	if len(keys)> 10 {
-		return nil
-	}
-
 	var idx int
 	for idx < len(keys) {
 		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
