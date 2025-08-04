@@ -136,7 +136,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	numGo := 2
+	numGo := 10
 	wg := &sync.WaitGroup{}
 
 	strings := make([]string, 0, len(values))
@@ -624,12 +624,21 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 		hasReversedIndex = schema.State().IsReversed(ctx, pipeline.attr)
 	}
 
-	if ok && isList {
+
+	runListFn := false
+
+	if ok {
+		if (isList || su.Lang) {
+			runListFn = true
+		}
+	}
+
+	if runListFn {
 		mp.ProcessList(ctx, pipeline, hasIndex, hasReversedIndex, hasCountIndex)
 		return
 	}
 
-	if ok && !isList {
+	if ok && !runListFn {
 		mp.ProcessSingle(ctx, pipeline, hasIndex, hasReversedIndex, hasCountIndex)
 		return
 	}
