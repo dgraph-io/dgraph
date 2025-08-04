@@ -112,6 +112,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	values := make(map[string]*pb.PostingList, len(tokenizers)*len(*postings))
+	valPost := make(map[string]*pb.Posting)
 	info := &indexMutationInfo{
 		tokenizers:   tokenizers,
 		factorySpecs: factorySpecs,
@@ -127,13 +128,17 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			}
 
 			indexEdge.Op = GetPostingOp(posting.Op)
-			indexEdge.Value = posting.Value
 			indexEdge.ValueId = uid
-			indexEdge.ValueType = posting.ValType
 
 			mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge)
 			valPl.Postings = append(valPl.Postings, mpost)
 			values[string(posting.Value)] = valPl
+
+			newPosting := new(pb.Posting)
+			newPosting.ValType = posting.ValType
+			newPosting.Value = posting.Value
+			newPosting.Uid = posting.Uid
+			valPost[string(posting.Value)] = newPosting
 		}
 	}
 
@@ -158,7 +163,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				continue
 			}
 
-			posting := valPl.Postings[0]
+			posting := valPost[token]
 			val := types.Val{
 				Tid:   types.TypeID(posting.ValType),
 				Value: posting.Value,
