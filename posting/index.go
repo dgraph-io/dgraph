@@ -238,7 +238,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	mp.txn.cache.globalMap[pipeline.attr] = globalMap
 	mp.txn.cache.RUnlock()
 
-	fmt.Println("Took time to create global map", time.Since(startTime), len(globalMap))
+	fmt.Println("Took time to create global map", time.Since(startTime), len(globalMap), globalMap)
 
 	// for key, val := range globalMap {
 	// 	if _, err := mp.txn.AddDelta(key, *val); err != nil {
