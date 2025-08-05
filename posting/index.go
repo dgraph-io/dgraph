@@ -222,11 +222,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	fmt.Println("Took time to create global map", time.Since(startTime))
 
 	for key, val := range globalMap {
-		if newPl, err := mp.txn.AddDelta(key, *val); err != nil {
+		if _, err := mp.txn.AddDelta(key, *val); err != nil {
 			pipeline.errCh <- err
 			continue
 		} else {
-			mp.txn.addConflictKeyWithUid([]byte(key), newPl)
+			//mp.txn.addConflictKeyWithUid([]byte(key), newPl)
 		}
 	}
 }
