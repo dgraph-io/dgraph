@@ -276,19 +276,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	cache.Lock()
 	defer cache.Unlock()
 
-	var keys []string
-	for key := range cache.deltas {
-		keys = append(keys, key)
-	}
-
-	defer func() {
-		// Add these keys to be rolled up after we're done writing. This is the right place for them
-		// to be rolled up, because we just pushed these deltas over to Badger.
-		for _, key := range keys {
-			IncrRollup.addKeyToBatch([]byte(key), 1)
-		}
-	}()
-
 	runFor := func(imap map[string]*pb.PostingList) error {
 		var ki []string
 		for key := range imap {
@@ -296,13 +283,13 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		}
 
 		var idx int
-		for idx < len(keys) {
+		for idx < len(ki) {
 			// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
 			// that error, writer.update would still commit the transaction and return any error. If
 			// nil, we continue to process the remaining keys.
 			err := writer.update(commitTs, func(btxn *badger.Txn) error {
-				for ; idx < len(keys); idx++ {
-					key := keys[idx]
+				for ; idx < len(ki); idx++ {
+					key := ki[idx]
 					dataB := imap[key]
 					if dataB == nil || len(dataB.Postings) == 0 {
 						continue
@@ -346,6 +333,19 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			return err
 		}
 	}
+
+	var keys []string
+	for key := range cache.deltas {
+		keys = append(keys, key)
+	}
+
+	defer func() {
+		// Add these keys to be rolled up after we're done writing. This is the right place for them
+		// to be rolled up, because we just pushed these deltas over to Badger.
+		for _, key := range keys {
+			IncrRollup.addKeyToBatch([]byte(key), 1)
+		}
+	}()
 
 	var idx int
 	for idx < len(keys) {
