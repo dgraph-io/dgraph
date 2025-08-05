@@ -157,7 +157,20 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		strings = append(strings, i)
 	}
 
-	globalMap := make(map[string]*pb.PostingList, len(values))
+	mp.txn.cache.RLock()
+
+	if mp.txn.cache.globalMap == nil {
+		mp.txn.cache.globalMap = make(map[string]map[string]*pb.PostingList)
+	}
+
+	globalMap := mp.txn.cache.globalMap[pipeline.attr]
+	if globalMap == nil {
+		globalMap = make(map[string]*pb.PostingList)
+		mp.txn.cache.globalMap[pipeline.attr] = globalMap
+	}
+
+	mp.txn.cache.RUnlock()
+
 	var m sync.Mutex
 
 	process := func(start int) {
@@ -221,14 +234,14 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	wg.Wait()
 	fmt.Println("Took time to create global map", time.Since(startTime))
 
-	for key, val := range globalMap {
-		if _, err := mp.txn.AddDelta(key, *val); err != nil {
-			pipeline.errCh <- err
-			continue
-		} else {
-			//mp.txn.addConflictKeyWithUid([]byte(key), newPl)
-		}
-	}
+	// for key, val := range globalMap {
+	// 	if _, err := mp.txn.AddDelta(key, *val); err != nil {
+	// 		pipeline.errCh <- err
+	// 		continue
+	// 	} else {
+	// 		//mp.txn.addConflictKeyWithUid([]byte(key), newPl)
+	// 	}
+	// }
 }
 
 func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *PredicatePipeline, index bool, reverse bool, count bool) {

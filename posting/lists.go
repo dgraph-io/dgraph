@@ -74,6 +74,8 @@ type LocalCache struct {
 	// during commit.
 	deltas map[string][]byte
 
+	globalMap map[string]map[string]*pb.PostingList
+
 	// max committed timestamp of the read posting lists.
 	maxVersions map[string]uint64
 
