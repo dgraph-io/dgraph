@@ -288,6 +288,62 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		}
 	}()
 
+	runFor := func(imap map[string]*pb.PostingList) error {
+		var ki []string
+		for key := range imap {
+			ki = append(ki, key)
+		}
+
+
+		var idx int
+		for idx < len(keys) {
+			// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
+			// that error, writer.update would still commit the transaction and return any error. If
+			// nil, we continue to process the remaining keys.
+			err := writer.update(commitTs, func(btxn *badger.Txn) error {
+				for ; idx < len(keys); idx++ {
+					key := keys[idx]
+					dataB := imap[key]
+					if len(dataB.Postings) == 0 {
+						continue
+					}
+					data, err := proto.Marshal(dataB)
+					if err != nil {
+						return err
+					}
+					if ts := cache.maxVersions[key]; ts >= commitTs {
+						// Skip write because we already have a write at a higher ts.
+						// Logging here can cause a lot of output when doing Raft log replay. So, let's
+						// not output anything here.
+						continue
+					}
+					err = btxn.SetEntry(&badger.Entry{
+						Key:      []byte(key),
+						Value:    data,
+						UserMeta: BitDeltaPosting,
+					})
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		
+
+		return nil
+	}
+
+	for _, imap := range cache.globalMap {
+		err := runFor(imap)
+		if err != nil {
+			return err
+		}
+	}
+
 	var idx int
 	for idx < len(keys) {
 		// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
