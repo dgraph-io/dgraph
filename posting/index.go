@@ -99,6 +99,11 @@ func (pp *PredicatePipeline) close() {
 }
 
 func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList) {
+	startTime := time.Now()
+	defer func() {
+		fmt.Println("Inserting tokenizer indexes for predicate", pipeline.attr, "took", time.Since(startTime))
+	}()
+	
 	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
 	factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
 	if err != nil {
@@ -142,6 +147,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			valPost[string(posting.Value)] = newPosting
 		}
 	}
+	fmt.Println("Took time to create first map", time.Since(startTime))
 
 	numGo := 1
 	wg := &sync.WaitGroup{}
@@ -155,6 +161,10 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	var m sync.Mutex
 
 	process := func(start int) {
+		startTime := time.Now()
+		defer func() {
+			fmt.Println("Took time to process inner thread", start, time.Since(startTime))
+		}()
 		defer wg.Done()
 		localMap := make(map[string]*pb.PostingList, len(values)/numGo)
 		for i := start; i < len(values); i += numGo {
@@ -209,6 +219,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	wg.Wait()
+	fmt.Println("Took time to create global map", time.Since(startTime))
 
 	for key, val := range globalMap {
 		if newPl, err := mp.txn.AddDelta(key, *val); err != nil {
