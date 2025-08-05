@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -294,8 +293,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					if dataB == nil || len(dataB.Postings) == 0 {
 						continue
 					}
-					pk, _ := x.Parse([]byte(key))
-					fmt.Println("PK", pk, dataB)
 					data, err := proto.Marshal(dataB)
 					if err != nil {
 						return err
