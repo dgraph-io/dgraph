@@ -295,9 +295,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			ki = append(ki, key)
 		}
 
-		fmt.Println("IMAP", imap)
-
-
 		var idx int
 		for idx < len(keys) {
 			// writer.update can return early from the loop in case we encounter badger.ErrTxnTooBig. On
@@ -340,7 +337,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		return nil
 	}
 
-	for _, imap := range cache.globalMap {
+	for key, imap := range cache.globalMap {
+		fmt.Println("RUNFOR", key, imap)
 		err := runFor(imap)
 		if err != nil {
 			return err
