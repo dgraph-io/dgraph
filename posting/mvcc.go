@@ -304,7 +304,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				for ; idx < len(keys); idx++ {
 					key := keys[idx]
 					dataB := imap[key]
-					if len(dataB.Postings) == 0 {
+					if dataB == nil || len(dataB.Postings) == 0 {
 						continue
 					}
 					data, err := proto.Marshal(dataB)
