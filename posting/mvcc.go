@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -293,6 +294,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		for key := range imap {
 			ki = append(ki, key)
 		}
+
+		fmt.Println("IMAP", imap)
 
 
 		var idx int

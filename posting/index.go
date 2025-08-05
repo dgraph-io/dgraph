@@ -181,13 +181,13 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		defer wg.Done()
 		localMap := make(map[string]*pb.PostingList, len(values)/numGo)
 		for i := start; i < len(values); i += numGo {
-			token := strings[i]
-			valPl := values[token]
+			strVal := strings[i]
+			valPl := values[strVal]
 			if len(valPl.Postings) == 0 {
 				continue
 			}
 
-			posting := valPost[token]
+			posting := valPost[strVal]
 			val := types.Val{
 				Tid:   types.TypeID(posting.ValType),
 				Value: posting.Value,
