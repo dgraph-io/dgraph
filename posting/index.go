@@ -149,13 +149,13 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 	fmt.Println("Took time to create first map", time.Since(startTime))
 
+	strings := make([]string, 0, len(values))
+	for i := range values {
+		strings = append(strings, i)
+	}
+
 	runOnce := func(numGo int) map[string]*pb.PostingList {
 		wg := &sync.WaitGroup{}
-
-		strings := make([]string, 0, len(values))
-		for i := range values {
-			strings = append(strings, i)
-		}
 
 		mp.txn.cache.RLock()
 
