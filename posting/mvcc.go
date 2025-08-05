@@ -307,6 +307,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					if dataB == nil || len(dataB.Postings) == 0 {
 						continue
 					}
+					pk, _ := x.Parse([]byte(key))
+					fmt.Println("PK", pk, dataB)
 					data, err := proto.Marshal(dataB)
 					if err != nil {
 						return err
@@ -337,8 +339,8 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		return nil
 	}
 
-	for key, imap := range cache.globalMap {
-		fmt.Println("RUNFOR", key, imap)
+	for _, imap := range cache.globalMap {
+		//fmt.Println("RUNFOR", key, imap)
 		err := runFor(imap)
 		if err != nil {
 			return err
