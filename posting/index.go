@@ -151,118 +151,95 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		strings = append(strings, i)
 	}
 
-	runOnce := func(numGo int) map[string]*pb.PostingList {
-		wg := &sync.WaitGroup{}
-
-		mp.txn.cache.RLock()
-
-		if mp.txn.cache.globalMap == nil {
-			mp.txn.cache.globalMap = make(map[string]map[string]*pb.PostingList)
-		}
-
-		globalMap := make(map[string]*pb.PostingList, len(values))
-
-		// globalMap := mp.txn.cache.globalMap[pipeline.attr]
-		// if globalMap == nil {
-		// 	globalMap = make(map[string]*pb.PostingList)
-		// 	mp.txn.cache.globalMap[pipeline.attr] = globalMap
-		// }
-
-		mp.txn.cache.RUnlock()
-
-		var m sync.Mutex
-
-		process := func(start int) {
-			startTime := time.Now()
-			defer func() {
-				fmt.Println("Took time to process inner thread", start, time.Since(startTime))
-			}()
-			defer wg.Done()
-			localMap := make(map[string]*pb.PostingList, len(values)/numGo)
-			indexEdge := &pb.DirectedEdge{
-				Attr: pipeline.attr,
-			}
-			info := &indexMutationInfo{
-				tokenizers:   tokenizers,
-				factorySpecs: factorySpecs,
-				op:           pb.DirectedEdge_SET,
-			}
-			for i := start; i < len(values); i += numGo {
-				strVal := strings[i]
-				valPl := values[strVal]
-				if len(valPl.Postings) == 0 {
-					continue
-				}
-
-				posting := valPost[strVal]
-				val := types.Val{
-					Tid:   types.TypeID(posting.ValType),
-					Value: posting.Value,
-				}
-				info.val = val
-
-				indexEdge.Value = posting.Value
-				info.edge = indexEdge
-
-				tokens, erri := indexTokens(ctx, info)
-				if erri != nil {
-					pipeline.errCh <- erri
-					return
-				}
-
-				for j, token := range tokens {
-					key := x.IndexKey(pipeline.attr, token)
-					pk, _ := x.Parse(key)
-					fmt.Println("TOKENS", pk, strVal, i, len(tokens), numGo, j, info.val, info.edge)
-					val, ok := localMap[string(key)]
-					if !ok {
-						val = &pb.PostingList{}
-					}
-					val.Postings = append(val.Postings, valPl.Postings...)
-					localMap[string(key)] = val
-				}
-			}
-
-			m.Lock()
-			for key, val := range localMap {
-				if _, ok := globalMap[key]; ok {
-					globalMap[key].Postings = append(globalMap[key].Postings, val.Postings...)
-				} else {
-					globalMap[key] = val
-				}
-			}
-			m.Unlock()
-		}
-
-		for i := range numGo {
-			wg.Add(1)
-			go process(i)
-		}
-
-		wg.Wait()
-
-		return globalMap
-	}
-
-	globalMap := runOnce(1)
-	anotherGlobalMap := runOnce(100)
-
-	for ak1, av1 := range anotherGlobalMap {
-		pk, _ := x.Parse([]byte(ak1))
-		if val, ok := globalMap[ak1]; ok {
-			if len(av1.Postings) != len(val.Postings) {
-				fmt.Println("Mismatched values", pk, len(av1.Postings), len(val.Postings))
-				x.Panic(errors.Errorf("Mismatched values %s %d %d", pk, len(av1.Postings), len(val.Postings)))
-			}
-		} else {
-			fmt.Println("Missing key", pk)
-			x.Panic(errors.Errorf("Missing key %s", pk))
-		}
-	}
+	numGo := 100
+	wg := &sync.WaitGroup{}
 
 	mp.txn.cache.RLock()
-	mp.txn.cache.globalMap[pipeline.attr] = globalMap
+
+	if mp.txn.cache.globalMap == nil {
+		mp.txn.cache.globalMap = make(map[string]map[string]*pb.PostingList)
+	}
+
+	globalMap := mp.txn.cache.globalMap[pipeline.attr]
+	if globalMap == nil {
+		globalMap = make(map[string]*pb.PostingList)
+		mp.txn.cache.globalMap[pipeline.attr] = globalMap
+	}
+
 	mp.txn.cache.RUnlock()
+
+	var m sync.Mutex
+
+	process := func(start int) {
+		startTime := time.Now()
+		defer func() {
+			fmt.Println("Took time to process inner thread", start, time.Since(startTime))
+		}()
+		defer wg.Done()
+		localMap := make(map[string]*pb.PostingList, len(values)/numGo)
+		indexEdge := &pb.DirectedEdge{
+			Attr: pipeline.attr,
+		}
+		info := &indexMutationInfo{
+			tokenizers:   tokenizers,
+			factorySpecs: factorySpecs,
+			op:           pb.DirectedEdge_SET,
+		}
+		for i := start; i < len(values); i += numGo {
+			strVal := strings[i]
+			valPl := values[strVal]
+			if len(valPl.Postings) == 0 {
+				continue
+			}
+
+			posting := valPost[strVal]
+			val := types.Val{
+				Tid:   types.TypeID(posting.ValType),
+				Value: posting.Value,
+			}
+			info.val = val
+
+			indexEdge.Value = posting.Value
+			info.edge = indexEdge
+
+			tokens, erri := indexTokens(ctx, info)
+			if erri != nil {
+				pipeline.errCh <- erri
+				return
+			}
+
+			for _, token := range tokens {
+				key := x.IndexKey(pipeline.attr, token)
+				val, ok := localMap[string(key)]
+				if !ok {
+					val = &pb.PostingList{}
+				}
+				val.Postings = append(val.Postings, valPl.Postings...)
+				localMap[string(key)] = val
+			}
+		}
+
+		m.Lock()
+		for key, val := range localMap {
+			if _, ok := globalMap[key]; ok {
+				keyHash := farm.Fingerprint64([]byte(key))
+				for _, posting := range val.Postings {
+					mp.txn.addConflictKey(keyHash^posting.Uid)
+				}
+				globalMap[key].Postings = append(globalMap[key].Postings, val.Postings...)
+			} else {
+				globalMap[key] = val
+			}
+		}
+		m.Unlock()
+	}
+
+	for i := range numGo {
+		wg.Add(1)
+		go process(i)
+	}
+
+	wg.Wait()
 
 	fmt.Println("Took time to create global map", time.Since(startTime), len(globalMap))
 
