@@ -221,11 +221,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 		m.Lock()
 		for key, val := range localMap {
+			keyHash := farm.Fingerprint64([]byte(key))
+			for _, posting := range val.Postings {
+				mp.txn.addConflictKey(keyHash^posting.Uid)
+			}
 			if _, ok := globalMap[key]; ok {
-				keyHash := farm.Fingerprint64([]byte(key))
-				for _, posting := range val.Postings {
-					mp.txn.addConflictKey(keyHash^posting.Uid)
-				}
 				globalMap[key].Postings = append(globalMap[key].Postings, val.Postings...)
 			} else {
 				globalMap[key] = val
