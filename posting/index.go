@@ -205,10 +205,10 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 					return
 				}
 
-				for _, token := range tokens {
+				for j, token := range tokens {
 					key := x.IndexKey(pipeline.attr, token)
 					pk, _ := x.Parse(key)
-					fmt.Println("TOKENS", pk, strVal, i, len(tokens), numGo, info.val)
+					fmt.Println("TOKENS", pk, strVal, i, len(tokens), numGo, j, info.val, info.edge)
 					val, ok := localMap[string(key)]
 					if !ok {
 						val = &pb.PostingList{}
