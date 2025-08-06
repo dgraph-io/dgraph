@@ -117,11 +117,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 	values := make(map[string]*pb.PostingList, len(tokenizers)*len(*postings))
 	valPost := make(map[string]*pb.Posting)
-	info := &indexMutationInfo{
-		tokenizers:   tokenizers,
-		factorySpecs: factorySpecs,
-		op:           pb.DirectedEdge_SET,
-	}
+
 
 	for uid, postingList := range *postings {
 		indexEdge := &pb.DirectedEdge{
@@ -185,6 +181,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			localMap := make(map[string]*pb.PostingList, len(values)/numGo)
 			indexEdge := &pb.DirectedEdge{
 				Attr: pipeline.attr,
+			}
+			info := &indexMutationInfo{
+				tokenizers:   tokenizers,
+				factorySpecs: factorySpecs,
+				op:           pb.DirectedEdge_SET,
 			}
 			for i := start; i < len(values); i += numGo {
 				strVal := strings[i]
