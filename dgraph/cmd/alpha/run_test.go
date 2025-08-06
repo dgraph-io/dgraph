@@ -1635,7 +1635,7 @@ func TestWithConditionallyPrunedMutations(t *testing.T) {
 		SetJson:   []byte(`{"dgraph.type":["User"],"username":"user-A","uid":"_:user-A"}`),
 		CommitNow: true,
 	}
-	_, err := dg.NewTxn().Mutate(ctx, initialMutation)
+	_, err = dg.NewTxn().Mutate(ctx, initialMutation)
 	require.NoError(t, err, "Setup mutation to create user-A failed")
 
 	// Send a request with one mutation to be pruned and one to be kept.
