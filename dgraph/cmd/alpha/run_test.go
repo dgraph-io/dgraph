@@ -1618,6 +1618,9 @@ func TestGeoValidWkbData(t *testing.T) {
 // TestWithConditionallyPrunedMutations provides a minimal test case to verify that the server
 // does not panic when a mutation with a unique predicate is conditionally pruned.
 func TestWithConditionallyPrunedMutations(t *testing.T) {
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
 	schema := `
 		username: string @index(term,hash) @upsert @unique .
 		type User {
