@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project will
 adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
+## Unreleased
+
+- **Fixed**
+  - fix(core): fix panic in verifyUniqueWithinMutation when mutation is conditionally pruned (#9450)
+
 ## [v24.1.1] - 2025-03-20
 
 [v24.1.1]: https://github.com/hypermodeinc/dgraph/compare/v24.1.0...v24.1.1
@@ -29,6 +34,8 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 - **Core**
   - Adds support for BigFloat https://github.com/hypermodeinc/dgraph/pull/3981
 - **GraphQL**
+  - feat(graphql): adds translated DQL to extensions response when the "--graphql debug" super flag
+    is set to true (#9280)
   - feat(graphql): adds @default directive to graphql (#8017)
     https://github.com/hypermodeinc/dgraph/pull/8837
   - feat(graphql): output translated DQL query when the graphql debug superflag is set
@@ -643,7 +650,6 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 
   - <details>
      <summary>CVE Fixes (31 total)</summary>
-
     - CVE-2013-4235
     - CVE-2016-20013
     - CVE-2016-2781
