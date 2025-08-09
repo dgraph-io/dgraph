@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v240/protos/api"
 	"github.com/hypermodeinc/dgraph/v24/chunker"
+	"github.com/hypermodeinc/dgraph/v24/dql"
 	"github.com/hypermodeinc/dgraph/v24/schema"
 	"github.com/hypermodeinc/dgraph/v24/worker"
 	"github.com/hypermodeinc/dgraph/v24/x"
@@ -216,4 +217,83 @@ func TestGetHash(t *testing.T) {
 
 	worker.Config.AclSecretKeyBytes = x.Sensitive("123456789")
 	require.Equal(t, hex.EncodeToString(h.Sum(nil)), getHash(10, 20))
+}
+
+func TestVerifyUniqueWithinMutationBoundsChecks(t *testing.T) {
+	t.Run("gmuIndex out of bounds", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:   "_:a",
+							Predicate: "username",
+							ObjectValue: &api.Value{
+								Val: &api.Value_StrVal{StrVal: "user1"},
+							},
+						},
+					},
+				},
+			},
+			// Reference gmuList[1], which is out of bounds.
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(1, 0): {},
+			},
+		}
+		err := verifyUniqueWithinMutation(qc)
+		require.NoError(t, err)
+	})
+
+	t.Run("rdfIndex out of bounds", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: []*api.NQuad{
+						// Only one element at index 0.
+						{
+							Subject:   "_:a",
+							Predicate: "username",
+							ObjectValue: &api.Value{
+								Val: &api.Value_StrVal{StrVal: "user1"},
+							},
+						},
+					},
+				},
+			},
+			// Reference Set[1], which is out of bounds.
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 1): {},
+			},
+		}
+		err := verifyUniqueWithinMutation(qc)
+		require.NoError(t, err)
+	})
+
+	t.Run("gmuList element is nil", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				nil, // Element at index 0 is nil.
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+			},
+		}
+		err := verifyUniqueWithinMutation(qc)
+		require.NoError(t, err)
+	})
+
+	t.Run("Set slice is nil", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: nil, // Set slice is nil.
+				},
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+			},
+		}
+		err := verifyUniqueWithinMutation(qc)
+		require.NoError(t, err)
+	})
 }
