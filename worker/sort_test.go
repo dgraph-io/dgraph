@@ -123,9 +123,9 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	attrRoom := x.AttrInRootNamespace("room")
-	attrPerson := x.AttrInRootNamespace("person")
-	attrOffice := x.AttrInRootNamespace("office")
+	attrRoom := x.GalaxyAttr("room")
+	attrPerson := x.GalaxyAttr("person")
+	attrOffice := x.GalaxyAttr("office")
 
 	uidRoom := uint64(1)
 	uidJohn := uint64(2)
