@@ -580,6 +580,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
+	l.mutationMap = newMutableLayer()
 	l.minTs = 0
 
 	// We use the following block of code to trigger incremental rollup on this key.
@@ -626,9 +627,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 					return err
 				}
 				pl.CommitTs = item.Version()
-				if l.mutationMap == nil {
-					l.mutationMap = newMutableLayer()
-				}
 				l.mutationMap.insertCommittedPostings(pl)
 				return nil
 			})
