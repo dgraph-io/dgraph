@@ -295,6 +295,19 @@ func pipeTwoStream(in apiv2.Dgraph_StreamExtSnapshotServer,
 	return nil
 }
 
+func (w *grpcWorker) ProposeSnapshotAndWait(ctx context.Context,
+	req *apiv2.UpdateExtSnapshotStreamingStateRequest) error {
+	glog.Errorf("[import] Applying import mode proposal: %+v", req)
+	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{ExtSnapshotState: req})
+
+	if err != nil {
+		glog.Errorf("[import] failed to force snapshot: %v", err)
+		return err
+	}
+
+	return groups().Node.forceSnapshot()
+}
+
 func (w *grpcWorker) UpdateExtSnapshotStreamingState(ctx context.Context,
 	req *apiv2.UpdateExtSnapshotStreamingStateRequest) (*pb.Status, error) {
 
@@ -315,14 +328,7 @@ func (w *grpcWorker) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 		for _, gid := range currentGroups {
 			if groups().ServesGroup(gid) && groups().Node.AmLeader() {
-				glog.Errorf("[import] Applying import mode proposal: %+v", req)
-				err := groups().Node.proposeAndWait(ctx, &pb.Proposal{ExtSnapshotState: req})
-
-				err = groups().Node.forceSnapshot()
-				if err != nil {
-					glog.Errorf("[import] failed to force snapshot: %v", err)
-					return nil, err
-				}
+				w.ProposeSnapshotAndWait(ctx, req)
 				continue
 			}
 
@@ -335,7 +341,7 @@ func (w *grpcWorker) UpdateExtSnapshotStreamingState(ctx context.Context,
 			c := pb.NewWorkerClient(pl.Get())
 			glog.Infof("[import:apply-drainmode] Successfully connected to leader of group [%v]", gid)
 
-			_, err := c.UpdateExtSnapshotStreamingState(ctx, req)
+			_, err := c.ProposeSnapshotAndWait(ctx, req)
 			if err != nil {
 				glog.Errorf("[import] failed to update ext snapshot streaming state: %v", err)
 				return nil, err
