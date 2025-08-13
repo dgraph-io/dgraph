@@ -478,7 +478,7 @@ func (t ShinglesTokenizer) QueryTokens(v interface{}) ([]string, error) {
 	}
 
 	for i := 0; i < n; i++ {
-		if i+gram < n {
+		if i+gram <= n {
 			var builder strings.Builder
 			for j := 0; j < gram; j++ {
 				builder.Write(tokens[i+j].Term)

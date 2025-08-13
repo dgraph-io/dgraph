@@ -8,6 +8,7 @@ package tok
 import (
 	"math"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -324,6 +325,330 @@ func checkSortedAndUnique(t *testing.T, tokens []string) {
 		}
 		set[tok] = struct{}{}
 	}
+}
+
+func TestShinglesTokenizer(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens("quick brown fox", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 0)
+
+	id := tokenizer.Identifier()
+
+	expectedTokens := []string{
+		encodeToken("quick", id),
+		encodeToken("brown", id),
+		encodeToken("fox", id),
+		encodeToken("quick brown", id),
+		encodeToken("brown fox", id),
+		encodeToken("quick brown fox", id),
+	}
+
+	for _, expected := range expectedTokens {
+		require.Contains(t, tokens, expected, "Expected token %s not found", expected)
+	}
+
+	// Shingles tokens are not guaranteed to be sorted, just check uniqueness
+	set := make(map[string]struct{})
+	for _, token := range tokens {
+		if _, exists := set[token]; exists {
+			t.Error("tokens are not unique")
+		}
+		set[token] = struct{}{}
+	}
+}
+
+func TestShinglesTokenizerEmpty(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens("", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens), "Expected 0 tokens for empty string")
+
+	tokens, err = BuildTokens("   ", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens), "Expected 0 tokens for whitespace only")
+}
+
+func TestShinglesTokenizerSingleWord(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens("hello", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 0)
+
+	id := tokenizer.Identifier()
+	require.Contains(t, tokens, encodeToken("hello", id), "Expected token not found")
+	checkSortedAndUnique(t, tokens)
+}
+
+func TestShinglesTokenizerStopwords(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens("the quick brown fox", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 0, "Expected non-empty tokens for phrase")
+
+	id := tokenizer.Identifier()
+
+	require.NotContains(t, tokens, encodeToken("the", id), "Expected token not found")
+	require.NotContains(t, tokens, encodeToken("the quick", id), "Expected token not found")
+	require.Contains(t, tokens, encodeToken("quick", id), "Expected token not found")
+	require.Contains(t, tokens, encodeToken("brown", id), "Expected token not found")
+	require.Contains(t, tokens, encodeToken("fox", id), "Expected token not found")
+
+	set := make(map[string]struct{})
+	for _, token := range tokens {
+		if _, exists := set[token]; exists {
+			t.Error("tokens are not unique")
+		}
+		set[token] = struct{}{}
+	}
+}
+
+func TestShinglesTokenizerStemming(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens("running quickly", GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 0, "Expected non-empty tokens for phrase")
+
+	id := tokenizer.Identifier()
+
+	require.Contains(t, tokens, encodeToken("run", id), "Expected token not found")         // "running" -> "run"
+	require.Contains(t, tokens, encodeToken("quickli", id), "Expected token not found")     // "quickly" -> "quickli"
+	require.Contains(t, tokens, encodeToken("run quickli", id), "Expected token not found") // bigram with stemmed words
+
+	set := make(map[string]struct{})
+	for _, token := range tokens {
+		if _, exists := set[token]; exists {
+			t.Error("tokens are not unique")
+		}
+		set[token] = struct{}{}
+	}
+}
+
+func TestShinglesTokenizerLongText(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	longText := "The quick brown fox jumps over the lazy dog. This is a test sentence with multiple words."
+	tokens, err := BuildTokens(longText, GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 10, "Expected non-empty tokens for phrase")
+
+	id := tokenizer.Identifier()
+
+	testPhrases := []string{
+		"quick",
+		"brown",
+		"fox",
+		"quick brown",
+		"brown fox",
+		"quick brown fox",
+		"sentence multiple words",
+		"lazy dog test sentence",
+	}
+
+	for _, phrase := range testPhrases {
+		expectedTokens, err := BuildTokens(phrase, GetTokenizerForLang(tokenizer, "en"))
+		require.NoError(t, err, "Failed to tokenize phrase: %s", phrase)
+
+		// Find the appropriate token (could be unigram, bigram, trigram, etc.)
+		var expectedToken string
+		if strings.Contains(phrase, " ") {
+			// For multi-word phrases, find the longest token (likely the full phrase)
+			for _, token := range expectedTokens {
+				if len(strings.TrimPrefix(token, string(byte(id)))) > len(strings.TrimPrefix(expectedToken, string(byte(id)))) {
+					expectedToken = token
+				}
+			}
+		} else {
+			// For single words, just take the first token
+			if len(expectedTokens) > 0 {
+				expectedToken = expectedTokens[0]
+			}
+		}
+
+		require.NotEmpty(t, expectedToken, "Should find a token for phrase: %s", phrase)
+		require.Contains(t, tokens, expectedToken, "Should contain token for phrase: %s", phrase)
+	}
+
+	set := make(map[string]struct{})
+	for _, token := range tokens {
+		if _, exists := set[token]; exists {
+			t.Error("tokens are not unique")
+		}
+		set[token] = struct{}{}
+	}
+}
+
+func TestShinglesTokenizerQueryTokens(t *testing.T) {
+	tokenizer := ShinglesTokenizer{lang: "en"}
+
+	queryTokens, err := BuildShinglesQueryTokens("quick brown fox", tokenizer)
+	require.NoError(t, err)
+	require.Greater(t, len(queryTokens), 0, "QueryTokens should return tokens for trigram input")
+
+	id := tokenizer.Identifier()
+	require.Contains(t, queryTokens, encodeToken("quick brown fox", id))
+
+	queryTokens2, err := BuildShinglesQueryTokens("hello", tokenizer)
+	require.NoError(t, err)
+	require.Greater(t, len(queryTokens2), 0, "QueryTokens should return tokens for single word")
+	require.Contains(t, queryTokens2, encodeToken("hello", id))
+
+	queryTokens3, err := BuildShinglesQueryTokens("", tokenizer)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(queryTokens3), "QueryTokens should return empty for empty string")
+}
+
+func TestShinglesTokenizerQueryTokensVariousInputs(t *testing.T) {
+	tokenizer := ShinglesTokenizer{lang: "en"}
+
+	testCases := []struct {
+		input            string
+		description      string
+		expectedNGrams   int
+		expectedContains []string
+	}{
+		{
+			input:            "quick brown fox",
+			description:      "3 words should generate 1 trigram",
+			expectedNGrams:   1,
+			expectedContains: []string{"quick brown fox"},
+		},
+		{
+			input:            "hello world",
+			description:      "2 words should generate 1 bigram",
+			expectedNGrams:   1,
+			expectedContains: []string{"hello world"},
+		},
+		{
+			input:            "single",
+			description:      "1 word should generate 1 unigram",
+			expectedNGrams:   1,
+			expectedContains: []string{"single"},
+		},
+		{
+			input:            "one two three four",
+			description:      "4 words should generate 2 trigrams",
+			expectedNGrams:   2,
+			expectedContains: []string{"one two three", "two three four"},
+		},
+		{
+			input:            "the quick brown fox jumps",
+			description:      "5 words should generate 2 trigrams (after stopword removal)",
+			expectedNGrams:   2,
+			expectedContains: []string{"quick brown fox", "brown fox jump"}, // "the" is a stopword
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			queryTokens, err := BuildShinglesQueryTokens(tc.input, tokenizer)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expectedNGrams, len(queryTokens),
+				"Expected %d n-grams for '%s', got %d", tc.expectedNGrams, tc.input, len(queryTokens))
+
+			id := tokenizer.Identifier()
+			for _, expectedNGram := range tc.expectedContains {
+				stemmedTokens, err := tokenizer.Tokens(expectedNGram)
+				require.NoError(t, err)
+				if len(stemmedTokens) > 0 {
+					// Find the appropriate n-gram token from the stemmed results
+					found := false
+					for _, token := range stemmedTokens {
+						encodedToken := encodeToken(token, id)
+						for _, queryToken := range queryTokens {
+							if queryToken == encodedToken {
+								found = true
+								break
+							}
+						}
+						if found {
+							break
+						}
+					}
+					require.True(t, found, "Expected to find stemmed version of '%s' in query tokens", expectedNGram)
+				}
+			}
+		})
+	}
+}
+
+func TestShinglesTokenizerLanguageSupport(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	// Test with different languages
+	languages := []string{"en", "es", "fr", "de"}
+	for _, lang := range languages {
+		tokens, err := BuildTokens("hello world", GetTokenizerForLang(tokenizer, lang))
+		require.NoError(t, err, "Failed for language: %s", lang)
+		require.Greater(t, len(tokens), 0, "No tokens generated for language: %s", lang)
+
+		set := make(map[string]struct{})
+		for _, token := range tokens {
+			if _, exists := set[token]; exists {
+				t.Error("tokens are not unique")
+			}
+			set[token] = struct{}{}
+		}
+	}
+}
+
+func TestShinglesTokenizerLongTokenHashing(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	// Create a very long text that will generate tokens > 30 characters
+	longWords := "supercalifragilisticexpialidocious antidisestablishmentarianism pneumonoultramicroscopicsilicovolcanoconiosiss"
+	tokens, err := BuildTokens(longWords, GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Greater(t, len(tokens), 0)
+
+	set := make(map[string]struct{})
+	for _, token := range tokens {
+		if _, exists := set[token]; exists {
+			t.Error("tokens are not unique")
+		}
+		set[token] = struct{}{}
+	}
+
+	id := tokenizer.Identifier()
+	for _, token := range tokens {
+		require.Equal(t, byte(id), token[0], "Token should start with correct identifier")
+	}
+}
+
+func TestShinglesTokenizerNonStringInput(t *testing.T) {
+	tokenizer, has := GetTokenizer("shingles")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+
+	tokens, err := BuildTokens(123, GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens), "Expected empty tokens for non-string input")
+
+	tokens2, err := BuildTokens(nil, GetTokenizerForLang(tokenizer, "en"))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens2), "Expected empty tokens for nil input")
 }
 
 func BenchmarkTermTokenizer(b *testing.B) {
