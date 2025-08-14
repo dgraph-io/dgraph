@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestShinglesBasic(t *testing.T) {
+func TestNGramBasic(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "quick brown fox")) {
+		me(func: ngram(description, "quick brown fox")) {
 			uid
 			description
 		}
@@ -29,10 +29,10 @@ func TestShinglesBasic(t *testing.T) {
 	require.Contains(t, js, "A quick brown fox leaps over a sleeping dog")
 }
 
-func TestShinglesCountAtRoot(t *testing.T) {
+func TestNGramCountAtRoot(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "quick brown")) {
+		me(func: ngram(description, "quick brown")) {
 			count(uid)
 		}
 	}
@@ -41,10 +41,10 @@ func TestShinglesCountAtRoot(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"count": 2}]}}`, js)
 }
 
-func TestShinglesWithFilter(t *testing.T) {
+func TestNGramWithFilter(t *testing.T) {
 	query := `
 	{
-		me(func: has(description)) @filter(shingles(description, "brown fox")) {
+		me(func: has(description)) @filter(ngram(description, "brown fox")) {
 			uid
 			description
 		}
@@ -56,10 +56,10 @@ func TestShinglesWithFilter(t *testing.T) {
 	require.Contains(t, js, "Brown foxes are quick and agile animals")
 }
 
-func TestShinglesMultipleTerms(t *testing.T) {
+func TestNGramMultipleTerms(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "machine learning algorithms")) {
+		me(func: ngram(description, "machine learning algorithms")) {
 			uid
 			description
 		}
@@ -72,10 +72,10 @@ func TestShinglesMultipleTerms(t *testing.T) {
 	require.NotContains(t, js, "Advanced machine learning techniques improve accuracy")
 }
 
-func TestShinglesEmptyQuery(t *testing.T) {
+func TestNGramEmptyQuery(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "")) {
+		me(func: ngram(description, "")) {
 			count(uid)
 		}
 	}
@@ -85,10 +85,10 @@ func TestShinglesEmptyQuery(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"count": 0}]}}`, js)
 }
 
-func TestShinglesNonExistentTerms(t *testing.T) {
+func TestNGramNonExistentTerms(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "nonexistent randomword")) {
+		me(func: ngram(description, "nonexistent randomword")) {
 			uid
 			description
 		}
@@ -98,10 +98,10 @@ func TestShinglesNonExistentTerms(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
-func TestShinglesWithVariables(t *testing.T) {
+func TestNGramWithVariables(t *testing.T) {
 	query := `
 	{
-		var(func: shingles(description, "lazy dogs")) {
+		var(func: ngram(description, "lazy dogs")) {
 			d as uid
 		}
 		
@@ -116,10 +116,10 @@ func TestShinglesWithVariables(t *testing.T) {
 	require.Contains(t, js, "The lazy dog sleeps under the warm sun")
 }
 
-func TestShinglesAggregation(t *testing.T) {
+func TestNGramAggregation(t *testing.T) {
 	query := `
 	{
-		var(func: shingles(description, "quick brown fox")) {
+		var(func: ngram(description, "quick brown fox")) {
 			total as count(uid)
 		}
 		
@@ -132,10 +132,10 @@ func TestShinglesAggregation(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[{"count": 2}]}}`, js)
 }
 
-func TestShinglesLongPhrase(t *testing.T) {
+func TestNGramLongPhrase(t *testing.T) {
 	query := `
 	{
-		me(func: shingles(description, "natural language processing advanced algorithms")) {
+		me(func: ngram(description, "natural language processing advanced algorithms")) {
 			uid
 			description
 		}

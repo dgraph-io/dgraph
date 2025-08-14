@@ -48,7 +48,7 @@ const (
 	IdentSha       = 0xC
 	IdentBigFloat  = 0xD
 	IdentVFloat    = 0xE
-	IdentShingles  = 0xF
+	IdentNGram     = 0xF
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
@@ -99,7 +99,7 @@ func init() {
 	registerTokenizer(HashTokenizer{})
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
-	registerTokenizer(ShinglesTokenizer{})
+	registerTokenizer(NGramTokenizer{})
 	registerTokenizer(Sha256Tokenizer{})
 	setupBleve()
 }
@@ -118,7 +118,7 @@ func BuildTokens(val interface{}, t Tokenizer) ([]string, error) {
 	return tokens, nil
 }
 
-func BuildShinglesQueryTokens(val interface{}, t ShinglesTokenizer) ([]string, error) {
+func BuildNGramQueryTokens(val interface{}, t NGramTokenizer) ([]string, error) {
 	tokens, err := t.QueryTokens(val)
 	if err != nil {
 		return nil, err
@@ -438,11 +438,11 @@ func (t ExactTokenizer) Prefix() []byte {
 	return prefix
 }
 
-type ShinglesTokenizer struct {
+type NGramTokenizer struct {
 	lang string
 }
 
-func (t ShinglesTokenizer) QueryTokens(v interface{}) ([]string, error) {
+func (t NGramTokenizer) QueryTokens(v interface{}) ([]string, error) {
 	str, ok := v.(string)
 	if !ok || str == "" {
 		return []string{}, nil
@@ -458,7 +458,7 @@ func (t ShinglesTokenizer) QueryTokens(v interface{}) ([]string, error) {
 	// Step 3: Apply stemming
 	tokens = filterStemmers(lang, tokens)
 
-	// Step 4: Generate shingles (bigrams and trigrams)
+	// Step 4: Generate ngram (bigrams and trigrams)
 	shingled := make(map[string]struct{}, len(tokens))
 	n := len(tokens)
 
@@ -498,9 +498,9 @@ func (t ShinglesTokenizer) QueryTokens(v interface{}) ([]string, error) {
 	return res, nil
 }
 
-func (t ShinglesTokenizer) Name() string { return "shingles" }
-func (t ShinglesTokenizer) Type() string { return "string" }
-func (t ShinglesTokenizer) Tokens(v interface{}) ([]string, error) {
+func (t NGramTokenizer) Name() string { return "ngram" }
+func (t NGramTokenizer) Type() string { return "string" }
+func (t NGramTokenizer) Tokens(v interface{}) ([]string, error) {
 	str, ok := v.(string)
 	if !ok || str == "" {
 		return []string{}, nil
@@ -516,7 +516,7 @@ func (t ShinglesTokenizer) Tokens(v interface{}) ([]string, error) {
 	// Step 3: Apply stemming
 	tokens = filterStemmers(lang, tokens)
 
-	// Step 4: Generate shingles (bigrams and trigrams)
+	// Step 4: Generate ngram (bigrams and trigrams)
 
 	shingled := make(map[string]struct{}, len(tokens))
 	n := len(tokens)
@@ -556,9 +556,9 @@ func (t ShinglesTokenizer) Tokens(v interface{}) ([]string, error) {
 
 	return res, nil
 }
-func (t ShinglesTokenizer) Identifier() byte { return IdentShingles }
-func (t ShinglesTokenizer) IsSortable() bool { return false }
-func (t ShinglesTokenizer) IsLossy() bool    { return true }
+func (t NGramTokenizer) Identifier() byte { return IdentNGram }
+func (t NGramTokenizer) IsSortable() bool { return false }
+func (t NGramTokenizer) IsLossy() bool    { return true }
 
 // FullTextTokenizer generates full-text tokens from string data.
 type FullTextTokenizer struct{ lang string }

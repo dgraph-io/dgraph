@@ -334,7 +334,7 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
-description                    : string @index(shingles) .
+description                    : string @index(ngram) .
 
 DispatchBoard.column: uid @reverse .
 order: int .
@@ -977,7 +977,7 @@ func populateCluster(dc dgraphapi.Cluster) {
 	`)
 	x.Panic(err)
 
-	// Add data for shingles tests
+	// Add data for ngram tests
 	err = addTriplesToCluster(`
 		<401> <description> "The quick brown fox jumps over the lazy dog" .
 		<402> <description> "A quick brown fox leaps over a sleeping dog" .

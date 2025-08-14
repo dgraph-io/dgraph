@@ -59,12 +59,12 @@ func GetTermTokens(funcArgs []string) ([]string, error) {
 	return GetTokens(IdentTerm, funcArgs...)
 }
 
-func GetShinglesTokens(funcArgs []string, lang string) ([]string, error) {
-	return BuildTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
+func GetNGramTokens(funcArgs []string, lang string) ([]string, error) {
+	return BuildTokens(funcArgs[0], NGramTokenizer{lang: lang})
 }
 
-func GetShinglesQueryTokens(funcArgs []string, lang string) ([]string, error) {
-	return BuildShinglesQueryTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
+func GetNGramQueryTokens(funcArgs []string, lang string) ([]string, error) {
+	return BuildNGramQueryTokens(funcArgs[0], NGramTokenizer{lang: lang})
 }
 
 // GetFullTextTokens returns the full-text tokens for the given value.

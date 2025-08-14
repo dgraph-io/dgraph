@@ -31,8 +31,8 @@ func (o byEnc) Swap(i, j int) {
 	o.tokens[i], o.tokens[j] = o.tokens[j], o.tokens[i]
 }
 
-func BenchmarkShinglesTokenizer(b *testing.B) {
-	tokenizer := ShinglesTokenizer{}
+func BenchmarkNGramTokenizer(b *testing.B) {
+	tokenizer := NGramTokenizer{}
 	for i := 0; i < b.N; i++ {
 		_, err := BuildTokens("economy series like brother evening tough guess attorney student ago article own identify where care allow pay access decade period during pass fail term real report identify security manage try past account care off rock subject chance seek over effect address article full most believe feel court six involve miss country try if threat care same available tell such process language agreement access poor strong reach cold section past way my seem order live consumer home imagine think return couple office majority answer discover figure college girl Republican enter form recently year experience economic read show necessary general lot bag buy along their painting player information certainly ground soon learn without write determine sure choice sell love subject decide ball death leave happy worry know early main address condition west room he plan weight step loss actually ready provide far fine best nice fund great your scene woman service check feel song ahead material hot leg contain knowledge article lawyer cold", tokenizer)
 		require.NoError(b, err)
@@ -328,8 +328,8 @@ func checkSortedAndUnique(t *testing.T, tokens []string) {
 	}
 }
 
-func TestShinglesTokenizer(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizer(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -352,7 +352,7 @@ func TestShinglesTokenizer(t *testing.T) {
 		require.Contains(t, tokens, expected, "Expected token %s not found", expected)
 	}
 
-	// Shingles tokens are not guaranteed to be sorted, just check uniqueness
+	// ngram tokens are not guaranteed to be sorted, just check uniqueness
 	set := make(map[string]struct{})
 	for _, token := range tokens {
 		if _, exists := set[token]; exists {
@@ -362,8 +362,8 @@ func TestShinglesTokenizer(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerEmpty(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerEmpty(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -376,8 +376,8 @@ func TestShinglesTokenizerEmpty(t *testing.T) {
 	require.Equal(t, 0, len(tokens), "Expected 0 tokens for whitespace only")
 }
 
-func TestShinglesTokenizerSingleWord(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerSingleWord(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -390,8 +390,8 @@ func TestShinglesTokenizerSingleWord(t *testing.T) {
 	checkSortedAndUnique(t, tokens)
 }
 
-func TestShinglesTokenizerStopwords(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerStopwords(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -416,8 +416,8 @@ func TestShinglesTokenizerStopwords(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerStemming(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerStemming(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -440,8 +440,8 @@ func TestShinglesTokenizerStemming(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerLongText(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerLongText(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -496,28 +496,28 @@ func TestShinglesTokenizerLongText(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerQueryTokens(t *testing.T) {
-	tokenizer := ShinglesTokenizer{lang: "en"}
+func TestNGramTokenizerQueryTokens(t *testing.T) {
+	tokenizer := NGramTokenizer{lang: "en"}
 
-	queryTokens, err := BuildShinglesQueryTokens("quick brown fox", tokenizer)
+	queryTokens, err := BuildNGramQueryTokens("quick brown fox", tokenizer)
 	require.NoError(t, err)
 	require.Greater(t, len(queryTokens), 0, "QueryTokens should return tokens for trigram input")
 
 	id := tokenizer.Identifier()
 	require.Contains(t, queryTokens, encodeToken("quick brown fox", id))
 
-	queryTokens2, err := BuildShinglesQueryTokens("hello", tokenizer)
+	queryTokens2, err := BuildNGramQueryTokens("hello", tokenizer)
 	require.NoError(t, err)
 	require.Greater(t, len(queryTokens2), 0, "QueryTokens should return tokens for single word")
 	require.Contains(t, queryTokens2, encodeToken("hello", id))
 
-	queryTokens3, err := BuildShinglesQueryTokens("", tokenizer)
+	queryTokens3, err := BuildNGramQueryTokens("", tokenizer)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(queryTokens3), "QueryTokens should return empty for empty string")
 }
 
-func TestShinglesTokenizerQueryTokensVariousInputs(t *testing.T) {
-	tokenizer := ShinglesTokenizer{lang: "en"}
+func TestNGramTokenizerQueryTokensVariousInputs(t *testing.T) {
+	tokenizer := NGramTokenizer{lang: "en"}
 
 	testCases := []struct {
 		input            string
@@ -559,7 +559,7 @@ func TestShinglesTokenizerQueryTokensVariousInputs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			queryTokens, err := BuildShinglesQueryTokens(tc.input, tokenizer)
+			queryTokens, err := BuildNGramQueryTokens(tc.input, tokenizer)
 			require.NoError(t, err)
 
 			require.Equal(t, tc.expectedNGrams, len(queryTokens),
@@ -591,8 +591,8 @@ func TestShinglesTokenizerQueryTokensVariousInputs(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerLanguageSupport(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerLanguageSupport(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -613,8 +613,8 @@ func TestShinglesTokenizerLanguageSupport(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerLongTokenHashing(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerLongTokenHashing(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
@@ -638,8 +638,8 @@ func TestShinglesTokenizerLongTokenHashing(t *testing.T) {
 	}
 }
 
-func TestShinglesTokenizerNonStringInput(t *testing.T) {
-	tokenizer, has := GetTokenizer("shingles")
+func TestNGramTokenizerNonStringInput(t *testing.T) {
+	tokenizer, has := GetTokenizer("ngram")
 	require.True(t, has)
 	require.NotNil(t, tokenizer)
 
