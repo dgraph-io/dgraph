@@ -67,9 +67,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType, query bo
 	}
 	if funcType == shinglesFn {
 		if query {
-			return tok.GetShinglesTokens(funcArgs, lang)
+			return tok.GetShinglesQueryTokens(funcArgs, lang)
 		} else {
-			return tok.GetSinglesQueryTokens(funcArgs, lang)
+			return tok.GetShinglesTokens(funcArgs, lang)
 		}
 	}
 	return tok.GetTermTokens(funcArgs)

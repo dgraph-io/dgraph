@@ -63,7 +63,7 @@ func GetShinglesTokens(funcArgs []string, lang string) ([]string, error) {
 	return BuildTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
 }
 
-func GetSinglesQueryTokens(funcArgs []string, lang string) ([]string, error) {
+func GetShinglesQueryTokens(funcArgs []string, lang string) ([]string, error) {
 	return BuildShinglesQueryTokens(funcArgs[0], ShinglesTokenizer{lang: lang})
 }
 
