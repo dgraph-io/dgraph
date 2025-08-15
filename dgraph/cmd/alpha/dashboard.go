@@ -86,6 +86,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"min",
 		"mutation",
 		"near",
+		"ngram",
 		"not",
 		"offset",
 		"or",
