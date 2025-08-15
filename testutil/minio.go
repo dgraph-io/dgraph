@@ -13,8 +13,7 @@ import (
 // NewMinioClient returns a minio client.
 func NewMinioClient() (*minio.Client, error) {
 	return minio.New(MinioInstance, &minio.Options{
-		Creds:      credentials.NewStaticV4("accesskey", "secretkey", ""),
-		Secure:     false,
-		MaxRetries: 20,
+		Creds:  credentials.NewStaticV4("accesskey", "secretkey", ""),
+		Secure: false,
 	})
 }
