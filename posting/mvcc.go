@@ -554,7 +554,9 @@ func NewCachePL() *CachePL {
 }
 
 func checkForRollup(key []byte, l *List) {
+	l.RLock()
 	deltaCount := l.mutationMap.len()
+	l.RUnlock()
 	// If deltaCount is high, send it to high priority channel instead.
 	if deltaCount > 500 {
 		IncrRollup.addKeyToBatch(key, 0)
