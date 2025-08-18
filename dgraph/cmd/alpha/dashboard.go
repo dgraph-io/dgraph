@@ -52,7 +52,6 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"@normalize",
 		"after",
 		"allofterms",
-		"shingles",
 		"alloftext",
 		"and",
 		"anyofterms",
