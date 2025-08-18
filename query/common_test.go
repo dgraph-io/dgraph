@@ -19,6 +19,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
+	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
 	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
@@ -334,7 +335,7 @@ tweet-c                        : string @index(fulltext) .
 tweet-d                        : string @index(trigram) .
 name2                          : string @index(term)  .
 age2                           : int @index(int) .
-description                    : string @index(ngram) .
+description                    : string .
 
 DispatchBoard.column: uid @reverse .
 order: int .
@@ -349,6 +350,7 @@ type DispatchBoardCard {
 }
 
 `
+const ngramVersionHash = "5d9fd2ed444b9ca1d3b03e7a51f5f92fc407cbaa"
 
 func populateCluster(dc dgraphapi.Cluster) {
 	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
@@ -381,7 +383,15 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// 	}`
 	// }
 	setSchema(testSchema)
-	err := addTriplesToCluster(`
+
+	// Ngram indexing handling
+	ngramSupport, err := dgraphtest.IsHigherVersion(dc.GetVersion(), ngramVersionHash)
+	x.Panic(err)
+	if ngramSupport {
+		x.Panic(client.Alter(context.Background(), &api.Operation{Schema: `description: string @index(ngram) .`}))
+	}
+
+	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
