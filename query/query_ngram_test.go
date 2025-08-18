@@ -1,4 +1,4 @@
-//go:build integration || cloud || upgrade
+//go:build integration || cloud
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
