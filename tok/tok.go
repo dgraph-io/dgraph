@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blevesearch/bleve/v2/analysis"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/twpayne/go-geom"
@@ -442,10 +443,11 @@ type NGramTokenizer struct {
 	lang string
 }
 
-func (t NGramTokenizer) QueryTokens(v interface{}) ([]string, error) {
+// processTokens handles the common preprocessing steps for both QueryTokens and Tokens
+func (t NGramTokenizer) processTokens(v interface{}) (analysis.TokenStream, error) {
 	str, ok := v.(string)
 	if !ok || str == "" {
-		return []string{}, nil
+		return nil, nil
 	}
 	lang := LangBase(t.lang)
 
@@ -458,9 +460,16 @@ func (t NGramTokenizer) QueryTokens(v interface{}) ([]string, error) {
 	// Step 3: Apply stemming
 	tokens = filterStemmers(lang, tokens)
 
-	// Step 4: Generate ngram (bigrams and trigrams)
+	return tokens, nil
+}
+
+// generateNGrams creates n-grams from tokens and returns deduplicated results
+func (t NGramTokenizer) generateNGrams(tokens analysis.TokenStream, ngramFunc func(analysis.TokenStream, func(string))) []string {
+	if len(tokens) == 0 {
+		return []string{}
+	}
+
 	shingled := make(map[string]struct{}, len(tokens))
-	n := len(tokens)
 
 	addToRes := func(token string) {
 		if len(token) < 30 {
@@ -472,89 +481,72 @@ func (t NGramTokenizer) QueryTokens(v interface{}) ([]string, error) {
 		shingled[string(hash[:])] = struct{}{}
 	}
 
-	gram := 3
-	if n < 3 {
-		gram = n
-	}
-
-	for i := 0; i < n; i++ {
-		if i+gram <= n {
-			var builder strings.Builder
-			for j := 0; j < gram; j++ {
-				builder.Write(tokens[i+j].Term)
-				if j != (gram - 1) {
-					builder.Write([]byte(" "))
-				}
-			}
-			addToRes(builder.String())
-		}
-	}
+	ngramFunc(tokens, addToRes)
 
 	res := make([]string, 0, len(shingled))
 	for k := range shingled {
 		res = append(res, k)
 	}
 
-	return res, nil
+	return res
+}
+
+func (t NGramTokenizer) QueryTokens(v interface{}) ([]string, error) {
+	tokens, err := t.processTokens(v)
+	if err != nil || tokens == nil {
+		return []string{}, err
+	}
+
+	return t.generateNGrams(tokens, func(tokens analysis.TokenStream, addToRes func(string)) {
+		n := len(tokens)
+		gram := 3
+		if n < 3 {
+			gram = n
+		}
+
+		for i := 0; i < n; i++ {
+			if i+gram <= n {
+				var builder strings.Builder
+				for j := 0; j < gram; j++ {
+					builder.Write(tokens[i+j].Term)
+					if j != (gram - 1) {
+						builder.Write([]byte(" "))
+					}
+				}
+				addToRes(builder.String())
+			}
+		}
+	}), nil
 }
 
 func (t NGramTokenizer) Name() string { return "ngram" }
 func (t NGramTokenizer) Type() string { return "string" }
 func (t NGramTokenizer) Tokens(v interface{}) ([]string, error) {
-	str, ok := v.(string)
-	if !ok || str == "" {
-		return []string{}, nil
-	}
-	lang := LangBase(t.lang)
-
-	// Step 1: Lowercase, normalize, basic tokenization
-	tokens := fulltextAnalyzer.Analyze([]byte(str))
-
-	// Step 2: Remove stopwords
-	tokens = filterStopwords(lang, tokens)
-
-	// Step 3: Apply stemming
-	tokens = filterStemmers(lang, tokens)
-
-	// Step 4: Generate ngram (bigrams and trigrams)
-
-	shingled := make(map[string]struct{}, len(tokens))
-	n := len(tokens)
-
-	addToRes := func(token string) {
-		if len(token) < 30 {
-			shingled[token] = struct{}{}
-			return
-		}
-
-		hash := blake2b.Sum256([]byte(token))
-		shingled[string(hash[:])] = struct{}{}
+	tokens, err := t.processTokens(v)
+	if err != nil || tokens == nil {
+		return []string{}, err
 	}
 
-	for i := 0; i < n; i++ {
-		// unigram
-		addToRes(string(tokens[i].Term))
+	return t.generateNGrams(tokens, func(tokens analysis.TokenStream, addToRes func(string)) {
+		n := len(tokens)
+		for i := 0; i < n; i++ {
+			// unigram
+			addToRes(string(tokens[i].Term))
 
-		// bigram
-		if i+1 < n {
-			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term))
+			// bigram
+			if i+1 < n {
+				addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term))
+			}
+			// trigram
+			if i+2 < n {
+				addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term))
+			}
+
+			if i+3 < n {
+				addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term) + " " + string(tokens[i+3].Term))
+			}
 		}
-		// trigram
-		if i+2 < n {
-			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term))
-		}
-
-		if i+3 < n {
-			addToRes(string(tokens[i].Term) + " " + string(tokens[i+1].Term) + " " + string(tokens[i+2].Term) + " " + string(tokens[i+3].Term))
-		}
-	}
-
-	res := make([]string, 0, len(shingled))
-	for k := range shingled {
-		res = append(res, k)
-	}
-
-	return res, nil
+	}), nil
 }
 func (t NGramTokenizer) Identifier() byte { return IdentNGram }
 func (t NGramTokenizer) IsSortable() bool { return false }
