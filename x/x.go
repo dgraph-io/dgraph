@@ -1227,6 +1227,7 @@ func StoreSync(db DB, closer *z.Closer) {
 	// We technically don't need to call this due to mmap being able to survive process crashes.
 	// But, once a minute is infrequent enough that we won't lose any performance due to this.
 	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
