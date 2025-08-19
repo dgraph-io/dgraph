@@ -1010,7 +1010,7 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	if refresh {
 		newMap := make(map[uint64]*pb.Posting, len(l.mutationMap.committedUids))
 		for uid, post := range l.mutationMap.committedUids {
-			newMap[uid] = post
+			newMap[uid] = proto.Clone(post).(*pb.Posting)
 		}
 		l.mutationMap.committedUids = newMap
 	}
