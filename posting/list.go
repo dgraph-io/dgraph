@@ -2242,6 +2242,7 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 			hex.EncodeToString(l.key), startUid)
 	}
 	txn := pstore.NewTransactionAt(l.minTs, false)
+	defer txn.Discard()
 	item, err := txn.Get(key)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read list part with key %s",

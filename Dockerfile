@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl=8.5.0-2ubuntu10.6 \
     htop=3.3.0-4build1 \
     iputils-ping=3:20240117-1build1 \
-    jq=1.7.1-3build1 \
+    jq=1.7.1-3ubuntu0.24.04.1 \
     less=590-2ubuntu2.1 \
     sysstat=12.6.1-2 \
     && rm -rf /var/lib/apt/lists/*
