@@ -53,9 +53,8 @@ func (l *List) DeepSize() uint64 {
 		hmap := reflect.ValueOf(l.mutationMap)
 		// Note: this will fail if the -race detector flag is used with go tools (test, run),
 		// see: https://github.com/golang/go/issues/48501
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(
-			unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		numBuckets := int(math.Pow(2, float64(*(*uint8)(unsafe.Add(unsafe.Pointer(hmap.Pointer()), 9)))))
+		numOldBuckets := *(*uint16)(unsafe.Add(unsafe.Pointer(hmap.Pointer()), 10))
 		size += uint64(numOldBuckets * sizeOfBucket)
 		if l.mutationMap.len() > 0 || numBuckets > 1 {
 			size += uint64(numBuckets * sizeOfBucket)

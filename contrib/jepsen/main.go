@@ -238,15 +238,18 @@ func jepsenServe() error {
 		// command to finish.
 		_ = cmd.Start()
 		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		timeout := time.NewTimer(5 * time.Minute)
+		defer timeout.Stop()
 		for {
 			select {
-			case <-time.After(5 * time.Minute):
+			case <-timeout.C:
 				wg.Done()
 				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
 				return
 			case <-ticker.C:
 				if err := checkServing(); err == nil {
-					ticker.Stop()
 					wg.Done()
 					errCh <- nil
 					return

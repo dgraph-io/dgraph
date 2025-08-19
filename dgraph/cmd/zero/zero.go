@@ -106,8 +106,11 @@ func (s *Server) periodicallyPostTelemetry() {
 
 	glog.Infof("Starting telemetry data collection for zero...")
 
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
 	var lastPostedAt time.Time
-	for ; true; <-time.Tick(time.Hour * 6) {
+	for range ticker.C {
 		if !s.Node.AmLeader() {
 			continue
 		}
