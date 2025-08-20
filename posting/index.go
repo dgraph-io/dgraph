@@ -1027,7 +1027,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	stream.Send = func(buf *z.Buffer) error {
 		t1 := time.Now()
 		defer func() {
-			glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger %d bytes took %v", r.attr, len(buf.Bytes()), time.Since(t1))
+			glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger %d bytes took %v",
+				r.attr, len(buf.Bytes()), time.Since(t1))
 		}()
 		if err := tmpWriter.Write(buf); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
