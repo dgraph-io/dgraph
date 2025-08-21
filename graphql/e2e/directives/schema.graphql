@@ -424,3 +424,9 @@ type LibraryManager  {
     name: String! @id
     manages: [LibraryMember]
 }
+
+type Article {
+    id: ID!
+    title: String! @search(by: [ngram, regexp])
+    summaries: [String] @search(by: [ngram])
+}

@@ -4093,3 +4093,236 @@ func queryWithIDFieldAndInterfaceArg(t *testing.T) {
 	// Cleanup
 	DeleteGqlType(t, "LibraryMember", map[string]interface{}{}, 1, nil)
 }
+
+func ngramFilters(t *testing.T) {
+	// Test 1: Single word queries
+	queryArticleByTitle(t, "Running", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleByTitle(t, "Training", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleByTitle(t, "Nutrition", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test 2: Two word queries
+	queryArticleByTitle(t, "Cardiovascular Health", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleByTitle(t, "Muscle Building", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleByTitle(t, "Eating Habits", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test 3: Three word queries
+	queryArticleByTitle(t, "Weight Training and", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+}
+
+func ngramStemming(t *testing.T) {
+	// Test stemming with single words
+	queryArticleByTitle(t, "run", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleByTitle(t, "train", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleByTitle(t, "eat", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test stemming in array field
+	queryArticleBySummaries(t, "strengthen", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleBySummaries(t, "build", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleBySummaries(t, "maintain", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+}
+
+func ngramStopWords(t *testing.T) {
+	// Test stop words in two word queries
+	queryArticleByTitle(t, "for Health", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleByTitle(t, "and Muscle", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleByTitle(t, "and Healthy", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test stop words in summaries with longer phrases
+	queryArticleBySummaries(t, "is the best", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleBySummaries(t, "for beginners and", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleBySummaries(t, "that support long-term", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+}
+
+func ngramCaseInsensitive(t *testing.T) {
+	// Test case insensitivity in titles
+	queryArticleByTitle(t, "RUNNING", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleByTitle(t, "weight training", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleByTitle(t, "NUTRITION AND HEALTHY", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test case insensitivity in summaries
+	queryArticleBySummaries(t, "CARDIOVASCULAR BENEFITS", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleBySummaries(t, "strength training", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+}
+
+func ngramCompoundWords(t *testing.T) {
+	// Test compound words and hyphenated terms
+	queryArticleBySummaries(t, "long-term", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test compound concepts
+	queryArticleByTitle(t, "Cardiovascular", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	// Test multi-word technical terms
+	queryArticleBySummaries(t, "bone density", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleBySummaries(t, "heart health", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+}
+
+func ngramArrayFields(t *testing.T) {
+	// Test ngram search specifically on array field (summaries)
+	queryArticleBySummaries(t, "exercise", []*article{
+		{Title: "Running for Cardiovascular Health"},
+	})
+
+	queryArticleBySummaries(t, "muscle mass", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	queryArticleBySummaries(t, "optimal performance", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test array field with multiple word phrases
+	queryArticleBySummaries(t, "progressive resistance", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+}
+
+func ngramLinguisticVariations(t *testing.T) {
+	// Test negative cases - should return empty results
+	queryArticleByTitle(t, "nonexistent", []*article{})
+	queryArticleBySummaries(t, "swimming", []*article{})
+
+	// Test partial word boundaries
+	queryArticleBySummaries(t, "wellness", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test technical terminology variations
+	queryArticleBySummaries(t, "nutritional guideline", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+
+	// Test cross-phrase matching in array field
+	queryArticleBySummaries(t, "advanced athletes", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+
+	// Test punctuation variations
+	queryArticleBySummaries(t, " beginners advanced", []*article{
+		{Title: "Weight Training and Muscle Building"},
+	})
+	queryArticleBySummaries(t, "eat nutrition healthy", []*article{
+		{Title: "Nutrition and Healthy Eating Habits"},
+	})
+}
+
+func queryArticleByTitle(t *testing.T, title string, expectedArticles []*article) {
+	getArticleParams := &GraphQLParams{
+		Query: `query queryArticle($title: String!) {
+			queryArticle(filter: { title: { ngram: $title } }) {
+				title
+			}
+		}`,
+		Variables: map[string]interface{}{"title": title},
+	}
+
+	gqlResponse := getArticleParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryArticle []*article
+	}
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+
+	opt := cmpopts.IgnoreFields(article{}, "ID")
+	if diff := cmp.Diff(expectedArticles, result.QueryArticle, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func queryArticleBySummaries(t *testing.T, summaries string, expectedArticles []*article) {
+	getArticleParams := &GraphQLParams{
+		Query: `query queryArticle($summaries: String!) {
+			queryArticle(filter: { summaries: { ngram: $summaries } }) {
+				title
+			}
+		}`,
+		Variables: map[string]interface{}{"summaries": summaries},
+	}
+
+	gqlResponse := getArticleParams.ExecuteAsPost(t, GraphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		QueryArticle []*article
+	}
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+
+	opt := cmpopts.IgnoreFields(article{}, "ID")
+	if diff := cmp.Diff(expectedArticles, result.QueryArticle, opt); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
