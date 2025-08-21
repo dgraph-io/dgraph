@@ -366,6 +366,10 @@ input StringRegExpFilter {
 	regexp: String
 }
 
+input StringNgramFilter {
+	ngram: String
+}
+
 input StringFullTextFilter {
 	alloftext: String
 	anyoftext: String
@@ -451,6 +455,7 @@ var supportedSearches = map[string]searchTypeIndex{
 	"fulltext":     {"String", "fulltext"},
 	"trigram":      {"String", "trigram"},
 	"regexp":       {"String", "trigram"},
+	"ngram":        {"String", "ngram"},
 	"year":         {"DateTime", "year"},
 	"month":        {"DateTime", "month"},
 	"day":          {"DateTime", "day"},
@@ -512,6 +517,7 @@ var enumDirectives = map[string]bool{
 	"hash":    true,
 	"exact":   true,
 	"regexp":  true,
+	"ngram":   true,
 }
 
 // index name -> GraphQL input filter for that index
@@ -527,6 +533,7 @@ var builtInFilters = map[string]string{
 	"term":         "StringTermFilter",
 	"trigram":      "StringRegExpFilter",
 	"regexp":       "StringRegExpFilter",
+	"ngram":        "StringNgramFilter",
 	"fulltext":     "StringFullTextFilter",
 	"exact":        "StringExactFilter",
 	"hash":         "StringHashFilter",

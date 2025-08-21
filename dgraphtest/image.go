@@ -154,6 +154,7 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error while building dgraph binary\noutput:%v", string(out))
 	}

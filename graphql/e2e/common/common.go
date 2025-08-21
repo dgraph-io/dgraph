@@ -196,6 +196,13 @@ type movie struct {
 	Director []*director `json:"moviedirector,omitempty"`
 }
 
+// Ngram test struct definitions
+type article struct {
+	ID        string   `json:"id,omitempty"`
+	Title     string   `json:"title,omitempty"`
+	Summaries []string `json:"summaries,omitempty"`
+}
+
 type director struct {
 	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
@@ -818,6 +825,13 @@ func RunAll(t *testing.T) {
 	t.Run("enum filter", enumFilter)
 	t.Run("default enum filter", defaultEnumFilter)
 	t.Run("query by multiple invalid ids", queryByMultipleInvalidIds)
+	t.Run("ngram filters", ngramFilters)
+	t.Run("ngram stemming", ngramStemming)
+	t.Run("ngram stop words", ngramStopWords)
+	t.Run("ngram array fields", ngramArrayFields)
+	t.Run("ngram case insensitive", ngramCaseInsensitive)
+	t.Run("ngram compound words", ngramCompoundWords)
+	t.Run("ngram linguistic variations", ngramLinguisticVariations)
 	t.Run("query typename", queryTypename)
 	t.Run("query nested typename", queryNestedTypename)
 	t.Run("typename for interface", typenameForInterface)
