@@ -253,13 +253,6 @@ func IsHigherVersion(higher, lower string) (bool, error) {
 	cmd := exec.Command("git", "merge-base", "--is-ancestor", lower, higher)
 	cmd.Dir = repoDir
 	if out, err := cmd.CombinedOutput(); err != nil {
-		// This can happen in CI environments that do a shallow clone. If a commit
-		// doesn't exist, git returns a non-zero exit code. We check for the error
-		// message and assume that the local version is higher if the commit is not found.
-		if strings.Contains(string(out), "Not a valid commit name") {
-			return true, nil
-		}
-
 		if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
 			return false, nil
 		}
