@@ -80,12 +80,14 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 				if aerr := checkACL(body); aerr == nil {
 					return nil
 				} else {
-					fmt.Printf("waiting for login to work: %v\n", aerr)
+					if maxAttempts > 10 {
+						fmt.Printf("waiting for login to work: %v\n", aerr)
+					}
 					time.Sleep(time.Second)
 					continue
 				}
 			}
-			if !strings.Contains(string(body), "Please retry again") {
+			if maxAttempts > 10 {
 				fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 			}
 			time.Sleep(500 * time.Millisecond)
