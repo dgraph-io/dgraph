@@ -67,9 +67,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 		return nil
 	}
 
-	maxAttempts := 60
 	tryWith := func(host string) error {
-		for range maxAttempts {
+		maxAttempts := 60
+		for attempt := range maxAttempts {
 			resp, err := http.Get("http://" + host + ":" + port + "/health")
 			var body []byte
 			if resp != nil && resp.Body != nil {
@@ -80,14 +80,14 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 				if aerr := checkACL(body); aerr == nil {
 					return nil
 				} else {
-					if maxAttempts > 10 {
+					if attempt > 10 {
 						fmt.Printf("waiting for login to work: %v\n", aerr)
 					}
 					time.Sleep(time.Second)
 					continue
 				}
 			}
-			if maxAttempts > 10 {
+			if attempt > 10 {
 				fmt.Printf("Health for %s failed: %v. Response: %q. Retrying...\n", in, err, body)
 			}
 			time.Sleep(500 * time.Millisecond)
