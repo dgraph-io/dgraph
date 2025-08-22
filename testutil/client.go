@@ -107,7 +107,6 @@ func init() {
 // This uses sync.Once to ensure thread-safe lazy initialization
 func ensureAddressesInitialized() {
 	addressInitOnce.Do(func() {
-		// If DockerPrefix is empty, provide fallback default addresses
 		if DockerPrefix == "" {
 			// Use default ports when no Docker containers are available
 			MinioInstance = "localhost:9001"
@@ -134,6 +133,8 @@ func ensureAddressesInitialized() {
 			sockAddrZero4 = "localhost:5080"
 			sockAddrZero4Http = "localhost:6080"
 		} else {
+			Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
+
 			// Define container configurations for multi-threaded resolution
 			type containerConfig struct {
 				name         string
@@ -179,9 +180,6 @@ func ensureAddressesInitialized() {
 					}
 				}(config)
 			}
-
-			// Set Instance separately as it's not a container address
-			Instance = fmt.Sprintf("%s_%s_1", DockerPrefix, "alpha1")
 
 			// Wait for all goroutines to complete
 			wg.Wait()
