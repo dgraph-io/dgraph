@@ -359,6 +359,8 @@ func TestMain(m *testing.M) {
 	alphaName = testutil.Instance
 	alphaService = testutil.GetSockAddr()
 
+	fmt.Println("⚠️ load_test.go/TestMain, alphaName: ", alphaName, " alphaService: ", alphaService)
+
 	x.AssertTrue(strings.Count(alphaName, "_") == 2)
 	left := strings.Index(alphaName, "_")
 	right := strings.LastIndex(alphaName, "_")
