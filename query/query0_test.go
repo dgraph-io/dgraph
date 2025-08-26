@@ -625,7 +625,7 @@ func TestLevelBasedFacetVarAggSum(t *testing.T) {
 				  "path|weight": 0.7
 				}
 			  ],
-			  "sumw": 0.8
+			  "sumw": 0.7999999999999999
 			}
 		  ]
 		}
@@ -661,7 +661,7 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		            "path": [
 		              {
 		                "count(follow)": 1,
-		                "val(L4)": 1.2,
+		                "val(L4)": 1.2000000000000002,
 		                "path|weight": 0.1
 		              },
 		              {
@@ -692,7 +692,7 @@ func TestLevelBasedFacetVarSum(t *testing.T) {
 		      },
 		      {
 		        "name": "Matt",
-		        "val(L4)": 1.2
+		        "val(L4)": 1.2000000000000002
 		      }
 		    ]
 		  }
@@ -914,19 +914,19 @@ func TestQueryConstMathVal(t *testing.T) {
 				"AgeOrder":[
 					{
 						"name":"Michonne",
-						"val(a)":9.000000
+						"val(a)":9
 					},
 					{
 						"name":"Rick Grimes",
-						"val(a)":9.000000
+						"val(a)":9
 					},
 					{
 						"name":"Andrea",
-						"val(a)":9.000000
+						"val(a)":9
 					},
 					{
 						"name":"Andrea With no friends",
-						"val(a)":9.000000
+						"val(a)":9
 					}
 				]
 			}
@@ -986,7 +986,7 @@ func TestQueryVarValAggNestedFuncConst(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"MaxMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(p)":25.000000,"val(s)":38},{"name":"Andrea","val(a)":19,"val(n)":15,"val(p)":29.000000,"val(s)":15},{"name":"Michonne","val(a)":38,"val(n)":15,"val(p)":52.000000,"val(s)":19}],"MinMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(q)":-21660.000000,"val(s)":38},{"name":"Michonne","val(a)":38,"val(n)":15,"val(q)":-10830.000000,"val(s)":19},{"name":"Andrea","val(a)":19,"val(n)":15,"val(q)":-4275.000000,"val(s)":15}]}}`,
+		`{"data": {"MaxMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(p)":25,"val(s)":38},{"name":"Andrea","val(a)":19,"val(n)":15,"val(p)":29,"val(s)":15},{"name":"Michonne","val(a)":38,"val(n)":15,"val(p)":52,"val(s)":19}],"MinMe":[{"name":"Rick Grimes","val(a)":15,"val(n)":38,"val(q)":-21660,"val(s)":38},{"name":"Michonne","val(a)":38,"val(n)":15,"val(q)":-10830,"val(s)":19},{"name":"Andrea","val(a)":19,"val(n)":15,"val(q)":-4275,"val(s)":15}]}}`,
 		js)
 }
 
@@ -1057,7 +1057,7 @@ func TestQueryVarValAggNestedFuncConditional(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"ExpMe":[{"name":"Michonne","val(a)":38,"val(condExp)":1.000000,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condExp)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1.000000,"val(n)":15}],"LogMe":[{"name":"Michonne","val(a)":38,"val(condLog)":1.682606,"val(n)":15},{"name":"Andrea","val(a)":19,"val(condLog)":1.682606,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condLog)":2.260159,"val(n)":38}]}}`,
+		`{"data": {"ExpMe":[{"name":"Michonne","val(a)":38,"val(condExp)":1,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condExp)":1,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1,"val(n)":15}],"LogMe":[{"name":"Michonne","val(a)":38,"val(condLog)":1.6826061944859854,"val(n)":15},{"name":"Andrea","val(a)":19,"val(condLog)":1.6826061944859854,"val(n)":15},{"name":"Rick Grimes","val(a)":15,"val(condLog)":2.2601593585085435,"val(n)":38}]}}`,
 		js)
 }
 
@@ -1091,7 +1091,7 @@ func TestQueryVarValAggNestedFuncConditional2(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(condExp)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1.000000,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condExp)":5.477226,"val(n)":15}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(condLog)":1.000000,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condLog)":1.000000,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condLog)":7.500000,"val(n)":15}]}}`,
+		`{"data": {"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(condExp)":1,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condExp)":1,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condExp)":5.477225575051661,"val(n)":15}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(condLog)":1,"val(n)":38},{"name":"Andrea","val(a)":19,"val(condLog)":1,"val(n)":15},{"name":"Michonne","val(a)":38,"val(condLog)":7.5,"val(n)":15}]}}`,
 		js)
 }
 
@@ -1128,7 +1128,7 @@ func TestQueryVarValAggNestedFuncUnary(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(combiExp)":16.000000,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiExp)":20.000000,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiExp)":92.598150,"val(n)":15,"val(s)":19}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiLog)":39.386294,"val(n)":15,"val(s)":19}]}}`,
+		`{"data": {"ExpMe":[{"name":"Rick Grimes","val(a)":15,"val(combiExp)":16,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiExp)":20,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiExp)":92.59815003314424,"val(n)":15,"val(s)":19}],"LogMe":[{"name":"Rick Grimes","val(a)":15,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368,"val(n)":38,"val(s)":38},{"name":"Andrea","val(a)":19,"val(combiLog)":-179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368,"val(n)":15,"val(s)":15},{"name":"Michonne","val(a)":38,"val(combiLog)":39.38629436111989,"val(n)":15,"val(s)":19}]}}`,
 		js)
 }
 
@@ -1257,7 +1257,7 @@ func TestQueryVarValAggMul(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Andrea","val(mul)":19.000000,"val(n)":19,"val(s)":1},{"name":"Rick Grimes","val(mul)":15.000000,"val(n)":15,"val(s)":1},{"name":"Glenn Rhee","val(mul)":0.000000,"val(n)":15,"val(s)":0},{"name":"Daryl Dixon","val(mul)":0.000000,"val(n)":17,"val(s)":0},{"val(mul)":0.000000,"val(s)":0}]}}`,
+		`{"data": {"me":[{"name":"Andrea","val(mul)":19,"val(n)":19,"val(s)":1},{"name":"Rick Grimes","val(mul)":15,"val(n)":15,"val(s)":1},{"name":"Glenn Rhee","val(mul)":0,"val(n)":15,"val(s)":0},{"name":"Daryl Dixon","val(mul)":0,"val(n)":17,"val(s)":0},{"val(mul)":0,"val(s)":0}]}}`,
 		js)
 }
 
@@ -1371,7 +1371,7 @@ func TestQueryVarValAggOrderDesc(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"info":[{"friend":[{"age":15,"count(friend)":1,"val(sum)":16.000000},{"age":15,"count(friend)":0,"val(sum)":15.000000},{"age":17,"count(friend)":0,"val(sum)":17.000000},{"age":19,"count(friend)":1,"val(sum)":20.000000},{"count(friend)":0,"val(sum)":0.000000}]}],"me":[{"age":19,"count(friend)":1,"name":"Andrea"},{"age":17,"count(friend)":0,"name":"Daryl Dixon"},{"age":15,"count(friend)":1,"name":"Rick Grimes"},{"age":15,"count(friend)":0,"name":"Glenn Rhee"},{"count(friend)":0}]}}`,
+		`{"data": {"info":[{"friend":[{"age":15,"count(friend)":1,"val(sum)":16},{"age":15,"count(friend)":0,"val(sum)":15},{"age":17,"count(friend)":0,"val(sum)":17},{"age":19,"count(friend)":1,"val(sum)":20},{"count(friend)":0,"val(sum)":0}]}],"me":[{"age":19,"count(friend)":1,"name":"Andrea"},{"age":17,"count(friend)":0,"name":"Daryl Dixon"},{"age":15,"count(friend)":1,"name":"Rick Grimes"},{"age":15,"count(friend)":0,"name":"Glenn Rhee"},{"count(friend)":0}]}}`,
 		js)
 }
 
@@ -1395,7 +1395,7 @@ func TestQueryVarValAggOrderAsc(t *testing.T) {
 	`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"age":15,"name":"Rick Grimes","survival_rate":1.600000},{"age":15,"name":"Glenn Rhee","survival_rate":1.600000},{"age":17,"name":"Daryl Dixon","survival_rate":1.600000},{"age":19,"name":"Andrea","survival_rate":1.600000}]}}`,
+		`{"data": {"me":[{"age":15,"name":"Rick Grimes","survival_rate":1.6},{"age":15,"name":"Glenn Rhee","survival_rate":1.6},{"age":17,"name":"Daryl Dixon","survival_rate":1.6},{"age":19,"name":"Andrea","survival_rate":1.6}]}}`,
 		js)
 }
 
@@ -2140,7 +2140,7 @@ func TestVarInIneqScore(t *testing.T) {
 		}
   `
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Daryl Dixon","val(a)":17,"val(s)":0,"val(score)":35.000000},{"name":"Andrea","val(a)":19,"val(s)":1,"val(score)":42.000000}]}}`,
+	require.JSONEq(t, `{"data": {"me":[{"name":"Daryl Dixon","val(a)":17,"val(s)":0,"val(score)":35},{"name":"Andrea","val(a)":19,"val(s)":1,"val(score)":42}]}}`,
 		js)
 }
 
@@ -3082,7 +3082,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"noindex_salary":589.040000},{"noindex_salary":967.680000}]}}`,
+			`{"data":{"me":[{"noindex_salary":589.04},{"noindex_salary":967.68}]}}`,
 		},
 		{
 			`Test gt filter on non-indexed float`,
@@ -3093,7 +3093,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"noindex_salary":967.680000}]}}`,
+			`{"data":{"me":[{"noindex_salary":967.68}]}}`,
 		},
 		{
 			`Test le filter on non-indexed float`,
@@ -3104,7 +3104,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"noindex_salary":501.230000},{"noindex_salary":589.040000},{"noindex_salary":459.470000}]}}`,
+			`{"data":{"me":[{"noindex_salary":501.23},{"noindex_salary":589.04},{"noindex_salary":459.47}]}}`,
 		},
 		{
 			`Test lt filter on non-indexed float`,
@@ -3115,7 +3115,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			},
 			`,
-			`{"data":{"me":[{"noindex_salary":501.230000},{"noindex_salary":459.470000}]}}`,
+			`{"data":{"me":[{"noindex_salary":501.23},{"noindex_salary":459.47}]}}`,
 		},
 		{
 			`Test eq filter on non-indexed float`,
@@ -3126,7 +3126,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"noindex_salary":589.040000}]}}`,
+			`{"data":{"me":[{"noindex_salary":589.04}]}}`,
 		},
 		{
 			`Test eq filter on non-indexed bool`,
@@ -3153,7 +3153,7 @@ func TestFilterNonIndexedPredicate(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"friend":[{"name":"Rick Grimes","survival_rate":1.600000},{"name":"Glenn Rhee","survival_rate":1.600000},{"name":"Daryl Dixon","survival_rate":1.600000},{"name":"Andrea","survival_rate":1.600000}]}]}}`,
+			`{"data":{"me":[{"friend":[{"name":"Rick Grimes","survival_rate":1.6},{"name":"Glenn Rhee","survival_rate":1.6},{"name":"Daryl Dixon","survival_rate":1.6},{"name":"Andrea","survival_rate":1.6}]}]}}`,
 		},
 	}
 
@@ -3271,7 +3271,7 @@ func TestBetweenFloat(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"uid":"0x2710","salary":10000.000000},{"uid":"0x2712","salary":10002.000000}]}}`,
+			`{"data":{"me":[{"uid":"0x2710","salary":10000},{"uid":"0x2712","salary":10002}]}}`,
 		},
 		{
 			`Test between salary 1 result`,
@@ -3283,7 +3283,7 @@ func TestBetweenFloat(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"uid":"0x2712","salary":10002.000000}]}}`,
+			`{"data":{"me":[{"uid":"0x2712","salary":10002}]}}`,
 		},
 		{
 			`Test between salary empty response`,
@@ -3319,7 +3319,7 @@ func TestBetweenFloat(t *testing.T) {
 				}
 			}
 			`,
-			`{"data":{"me":[{"uid":"0x4e20","average":[46.930000,55.100000]},{"uid":"0x4e21","average":[35.200000,49.330000]}]}}`,
+			`{"data":{"me":[{"uid":"0x4e20","average":[46.93,55.1]},{"uid":"0x4e21","average":[35.2,49.33]}]}}`,
 		},
 	}
 

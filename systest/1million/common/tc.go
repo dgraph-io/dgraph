@@ -8962,7 +8962,7 @@ var OneMillionTCs = []struct {
 			"avs": [
 				{
 					"name": "Steven Spielberg",
-					"average_actors": 51.733333,
+					"average_actors": 51.733333333333334,
 					"num_films": 30
 				},
 				{

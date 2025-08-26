@@ -109,7 +109,7 @@ func TestFloatConverstion(t *testing.T) {
 	       }
 	       `
 		js := processQueryNoErr(t, query)
-		require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":14}]}}`, js)
 	})
 
 	t.Run("Int aggregation only", func(t *testing.T) {
@@ -129,7 +129,7 @@ func TestFloatConverstion(t *testing.T) {
 	       }
 	       `
 		js := processQueryNoErr(t, query)
-		require.JSONEq(t, `{"data": {"me":[{"ceilAge":13.000000}]}}`, js)
+		require.JSONEq(t, `{"data": {"me":[{"ceilAge":13}]}}`, js)
 	})
 }
 
