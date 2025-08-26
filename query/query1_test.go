@@ -806,7 +806,7 @@ func TestMathVarAlias(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"f":[{"a":76.000000,"age":38},{"a":30.000000,"age":15},{"a":38.000000,"age":19}]}}`, js)
+	require.JSONEq(t, `{"data": {"f":[{"a":76,"age":38},{"a":30,"age":15},{"a":38,"age":19}]}}`, js)
 }
 
 func TestMathVarAlias2(t *testing.T) {
@@ -824,7 +824,7 @@ func TestMathVarAlias2(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"age":38,"doubleAge":76.000000},{"age":15,"doubleAge":30.000000},{"age":19,"doubleAge":38.000000}],"me2":[{"val(a)":76.000000},{"val(a)":30.000000},{"val(a)":38.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"age":38,"doubleAge":76},{"age":15,"doubleAge":30},{"age":19,"doubleAge":38}],"me2":[{"val(a)":76},{"val(a)":30},{"val(a)":38}]}}`, js)
 }
 
 func TestMathVar3(t *testing.T) {
@@ -842,7 +842,7 @@ func TestMathVar3(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"age":38,"val(a)":76.000000},{"age":15,"val(a)":30.000000},{"age":19,"val(a)":38.000000}],"me2":[{"val(a)":76.000000},{"val(a)":30.000000},{"val(a)":38.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"age":38,"val(a)":76},{"age":15,"val(a)":30},{"age":19,"val(a)":38}],"me2":[{"val(a)":76},{"val(a)":30},{"val(a)":38}]}}`, js)
 }
 
 func TestMultipleEquality(t *testing.T) {
@@ -1424,7 +1424,7 @@ func TestAggregateRoot2(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":24.000000},{"min(val(a))":15},{"max(val(a))":38}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"avg(val(a))":24},{"min(val(a))":15},{"max(val(a))":38}]}}`, js)
 }
 
 func TestAggregateRoot3(t *testing.T) {
@@ -1460,7 +1460,7 @@ func TestAggregateRoot4(t *testing.T) {
 		}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"min(val(a))":15},{"max(val(a))":38},{"Sum":53.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"min(val(a))":15},{"max(val(a))":38},{"Sum":53}]}}`, js)
 }
 
 func TestAggregateRoot5(t *testing.T) {
@@ -1713,7 +1713,7 @@ func TestMathCeil2(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14.000000}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"ceilAge":14}]}}`, js)
 }
 
 func TestUidAttr(t *testing.T) {
@@ -1954,7 +1954,7 @@ func TestMultiSort4(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	// Null value for third Alice comes at last.
-	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":75},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75},{"name":"Elizabeth","age":25}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":25,"salary":10000},{"name":"Alice","age":75,"salary":10002},{"name":"Alice","age":75},{"name":"Bob","age":75},{"name":"Bob","age":25},{"name":"Colin","age":25},{"name":"Elizabeth","age":75},{"name":"Elizabeth","age":25}]}}`, js)
 }
 
 func TestMultiSort5(t *testing.T) {
@@ -1968,7 +1968,7 @@ func TestMultiSort5(t *testing.T) {
 	}`
 	js := processQueryNoErr(t, query)
 	// Null value for third Alice comes at first.
-	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75,"salary":10002.000000},{"name":"Alice","age":25,"salary":10000.000000},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Alice","age":75,"salary":10002},{"name":"Alice","age":25,"salary":10000},{"name":"Alice","age":75},{"name":"Bob","age":25},{"name":"Bob","age":75},{"name":"Colin","age":25},{"name":"Elizabeth","age":25},{"name":"Elizabeth","age":75}]}}`, js)
 }
 
 func TestMultiSort6Paginate(t *testing.T) {
@@ -2422,7 +2422,7 @@ func TestMathAlias(t *testing.T) {
 	}`
 
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"count(friend)":5,"score":6.000000,"name":"Michonne"}]}}`, js)
+	require.JSONEq(t, `{"data": {"me":[{"count(friend)":5,"score":6,"name":"Michonne"}]}}`, js)
 }
 
 func TestUidVariable(t *testing.T) {

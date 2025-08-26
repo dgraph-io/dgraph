@@ -348,7 +348,7 @@ func TestKShortestPathWeighted(t *testing.T) {
 		          "path|weight": 0.1
 		        },
 		        "uid": "0x1",
-		        "_weight_": 0.3
+		        "_weight_": 0.30000000000000004
 		      }
 		    ]
 		  }
@@ -385,7 +385,7 @@ func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
 		          "path|weight": 0.1
 		        },
 		        "uid": "0x1",
-		        "_weight_": 0.3
+		        "_weight_": 0.30000000000000004
 		      }
 		    ]
 		  }
@@ -1572,7 +1572,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"val(f)":0.200000}]}}`,
+		`{"data": {"me":[{"val(f)":0.2}]}}`,
 		js)
 }
 
@@ -1592,7 +1592,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Andrea","val(f)":0.100000},{"name":"Glenn Rhee","val(f)":0.200000}]}}`,
+		`{"data": {"me":[{"name":"Andrea","val(f)":0.1},{"name":"Glenn Rhee","val(f)":0.2}]}}`,
 		js)
 }
 
@@ -2257,7 +2257,7 @@ func TestMinSchema(t *testing.T) {
         `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.6},{"survival_rate":1.6},{"survival_rate":1.6},{"survival_rate":1.6}],"min(val(x))":1.6}]}}`,
 		js)
 
 	setSchema(`survival_rate: int .`)
@@ -2286,7 +2286,7 @@ func TestAvg(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"alive":true,"avg(val(x))":9.000000,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"alive":true,"avg(val(x))":9,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 

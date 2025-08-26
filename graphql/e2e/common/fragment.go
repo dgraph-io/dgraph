@@ -99,7 +99,7 @@ func fragmentInQuery(t *testing.T) {
 		"queryStarship":[{
 			"id":"%s",
 			"name":"Millennium Falcon",
-			"length":2.000000
+			"length":2
 		}]
 	}`, newStarship.ID)
 
@@ -270,9 +270,9 @@ func fragmentInQueryOnInterface(t *testing.T) {
 					"__typename":"Starship",
 					"id":"%s",
 					"name":"Millennium Falcon",
-					"length":2.000000
+					"length":2
 				}],
-				"totalCredits":10.000000,
+				"totalCredits":10,
 				"ename":"Han_employee"
 			},
 			{
@@ -325,7 +325,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		"qcRep1":[
 			{
 				"name":"Han",
-				"totalCredits":10.000000
+				"totalCredits":10
 			},
 			{
 				"name":"R2-D2",
@@ -334,7 +334,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		],
 		"qcRep2":[
 			{
-				"totalCredits":10.000000,
+				"totalCredits":10,
 				"name":"Han"
 			},
 			{
@@ -547,9 +547,9 @@ func fragmentInQueryOnObject(t *testing.T) {
 					"__typename":"Starship",
 					"id":"%s",
 					"name":"Millennium Falcon",
-					"length":2.000000
+					"length":2
 				}],
-				"totalCredits":10.000000,
+				"totalCredits":10,
 				"ename":"Han_employee"
 			}
 		]
@@ -590,7 +590,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 				{"id":"%s",
 				"__typename":"Starship",
 				"name":"Millennium Falcon",
-				"length":2.000000}]
+				"length":2}]
 				}
 			]
 		}
