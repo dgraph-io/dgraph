@@ -99,11 +99,92 @@ func (pp *PredicatePipeline) close() {
 	pp.wg.Done()
 }
 
+func (mp *MutationPipeline) InsertVectorIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
+	factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
+	if err != nil {
+		return err
+	}
+
+	if len(factorySpecs) == 0 {
+		return nil
+	}
+	indexer, err := factorySpecs[0].CreateIndex(pipeline.attr)
+	if err != nil {
+		return err
+	}
+
+	for uid, postingList := range *postings {
+		if len(postingList.Postings) == 0 {
+			continue
+		}
+		posting := postingList.Postings[0]
+		data := &pb.Posting{
+			ValType: posting.ValType,
+			Value:   posting.Value,
+		}
+
+		if posting.Op == Del && types.TypeID(data.ValType) == types.VFloatID {
+			deadAttr := hnsw.ConcatStrings(pipeline.attr, hnsw.VecDead)
+			deadKey := x.DataKey(deadAttr, 1)
+			pl, err := mp.txn.Get(deadKey)
+			if err != nil {
+				return err
+			}
+			var deadNodes []uint64
+			deadData, _ := pl.Value(mp.txn.StartTs)
+			if deadData.Value == nil {
+				deadNodes = append(deadNodes, uid)
+			} else {
+				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+				if err != nil {
+					return err
+				}
+				deadNodes = append(deadNodes, uid)
+			}
+			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			edge := &pb.DirectedEdge{
+				Entity:    1,
+				Attr:      deadAttr,
+				Value:     deadNodesBytes,
+				ValueType: pb.Posting_ValType(0),
+			}
+			if err := pl.addMutation(ctx, mp.txn, edge); err != nil {
+				return err
+			}
+		}
+
+		if posting.Op != Del && types.TypeID(data.ValType) == types.VFloatID {
+			// retrieve vector from inUuid save as inVec
+			inVec := types.BytesAsFloatArray(data.Value)
+			tc := hnsw.NewTxnCache(NewViTxn(mp.txn), mp.txn.StartTs)
+
+			_, err := indexer.Insert(ctx, tc, uid, inVec)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
 	startTime := time.Now()
 	defer func() {
 		fmt.Println("Inserting tokenizer indexes for predicate", pipeline.attr, "took", time.Since(startTime))
 	}()
+
+	factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
+	if err != nil {
+		return err
+	}
+
+	if len(factorySpecs) > 0 {
+		return mp.InsertVectorIndexes(ctx, pipeline, postings, info)
+	}
 
 	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
 	if len(tokenizers) == 0 {
