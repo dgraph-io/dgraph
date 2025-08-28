@@ -345,6 +345,7 @@ type predicateInfo struct {
 	count      bool
 	noConflict bool
 	hasUpsert  bool
+	isUid      bool
 }
 
 func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
@@ -397,9 +398,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	}
 
 	if info.count {
-		if err := mp.ProcessCount(ctx, pipeline, &postings, info, false); err != nil {
-			return err
-		}
+		return mp.ProcessCount(ctx, pipeline, &postings, info, false)
 	}
 
 	dataKey := x.DataKey(pipeline.attr, 0)
@@ -411,7 +410,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		}
 
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl, info.isUid); err != nil {
 			return err
 		} else {
 			if !info.noConflict {
@@ -475,7 +474,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			continue
 		}
 		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(string(key), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(key), *pl, true); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(key, newPl, info.hasUpsert, info.noConflict)
@@ -636,7 +635,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	for c, pl := range countMap {
 		//fmt.Println("COUNT", c, pl)
 		ck := x.CountKey(pipeline.attr, uint32(c), isReverseEdge)
-		if newPl, err := mp.txn.AddDelta(string(ck), *pl); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(ck), *pl, true); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(ck, newPl, info.hasUpsert, info.noConflict)
@@ -761,7 +760,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 		}
 
-		if _, err := mp.txn.AddDelta(key, *pl); err != nil {
+		if _, err := mp.txn.AddDelta(key, *pl, false); err != nil {
 			return err
 		}
 	}
@@ -830,6 +829,7 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 		info.noConflict = schema.State().HasNoConflict(pipeline.attr)
 		info.hasUpsert = schema.State().HasUpsert(pipeline.attr)
 		info.isList = schema.State().IsList(pipeline.attr)
+		info.isUid = su.ValueType == pb.Posting_UID
 	}
 
 	runListFn := false
