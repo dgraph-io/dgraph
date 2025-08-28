@@ -99,73 +99,38 @@ func (pp *PredicatePipeline) close() {
 	pp.wg.Done()
 }
 
-func (mp *MutationPipeline) InsertVectorIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
-	factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
-	if err != nil {
-		return err
+func createDeleteAllEdge(uid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{
+		Entity: uid,
+		Op:     pb.DirectedEdge_DEL,
+		Value:  []byte(x.Star),
 	}
+}
 
-	if len(factorySpecs) == 0 {
-		return nil
-	}
-	indexer, err := factorySpecs[0].CreateIndex(pipeline.attr)
-	if err != nil {
-		return err
-	}
+func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
+	var wg errgroup.Group
+	numThreads := 10
 
-	for uid, postingList := range *postings {
-		if len(postingList.Postings) == 0 {
-			continue
-		}
-		posting := postingList.Postings[0]
-		data := &pb.Posting{
-			ValType: posting.ValType,
-			Value:   posting.Value,
-		}
+	for i := 0; i < numThreads; i++ {
+		wg.Go(func() error {
+			for edge := range pipeline.edges {
+				uid := edge.Entity
 
-		if posting.Op == Del && types.TypeID(data.ValType) == types.VFloatID {
-			deadAttr := hnsw.ConcatStrings(pipeline.attr, hnsw.VecDead)
-			deadKey := x.DataKey(deadAttr, 1)
-			pl, err := mp.txn.Get(deadKey)
-			if err != nil {
-				return err
-			}
-			var deadNodes []uint64
-			deadData, _ := pl.Value(mp.txn.StartTs)
-			if deadData.Value == nil {
-				deadNodes = append(deadNodes, uid)
-			} else {
-				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
+				key := x.DataKey(pipeline.attr, uid)
+				pl, err := mp.txn.Get(key)
 				if err != nil {
 					return err
 				}
-				deadNodes = append(deadNodes, uid)
+				if err := pl.AddMutationWithIndex(ctx, edge, mp.txn); err != nil {
+					return err
+				}
 			}
-			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
-			if marshalErr != nil {
-				return marshalErr
-			}
-			edge := &pb.DirectedEdge{
-				Entity:    1,
-				Attr:      deadAttr,
-				Value:     deadNodesBytes,
-				ValueType: pb.Posting_ValType(0),
-			}
-			if err := pl.addMutation(ctx, mp.txn, edge); err != nil {
-				return err
-			}
-		}
+			return nil
+		})
+	}
 
-		if posting.Op != Del && types.TypeID(data.ValType) == types.VFloatID {
-			// retrieve vector from inUuid save as inVec
-			inVec := types.BytesAsFloatArray(data.Value)
-			tc := hnsw.NewTxnCache(NewViTxn(mp.txn), mp.txn.StartTs)
-
-			_, err := indexer.Insert(ctx, tc, uid, inVec)
-			if err != nil {
-				return err
-			}
-		}
+	if err := wg.Wait(); err != nil {
+		return err
 	}
 
 	return nil
@@ -176,15 +141,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	defer func() {
 		fmt.Println("Inserting tokenizer indexes for predicate", pipeline.attr, "took", time.Since(startTime))
 	}()
-
-	factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
-	if err != nil {
-		return err
-	}
-
-	if len(factorySpecs) > 0 {
-		return mp.InsertVectorIndexes(ctx, pipeline, postings, info)
-	}
 
 	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
 	if len(tokenizers) == 0 {
@@ -410,7 +366,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		}
 
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl, info.isUid); err != nil {
+		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl, info.isUid, false); err != nil {
 			return err
 		} else {
 			if !info.noConflict {
@@ -474,7 +430,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			continue
 		}
 		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(string(key), *pl, true); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(key), *pl, true, false); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(key, newPl, info.hasUpsert, info.noConflict)
@@ -635,7 +591,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	for c, pl := range countMap {
 		//fmt.Println("COUNT", c, pl)
 		ck := x.CountKey(pipeline.attr, uint32(c), isReverseEdge)
-		if newPl, err := mp.txn.AddDelta(string(ck), *pl, true); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(ck), *pl, true, false); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(ck, newPl, info.hasUpsert, info.noConflict)
@@ -760,7 +716,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 		}
 
-		if _, err := mp.txn.AddDelta(key, *pl, false); err != nil {
+		if _, err := mp.txn.AddDelta(key, *pl, false, true); err != nil {
 			return err
 		}
 	}
@@ -821,6 +777,7 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
 	su, ok := schema.State().Get(ctx, pipeline.attr)
 	info := predicateInfo{}
+	runForVectorIndex := false
 
 	if ok {
 		info.index = schema.State().IsIndexed(ctx, pipeline.attr)
@@ -830,6 +787,17 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 		info.hasUpsert = schema.State().HasUpsert(pipeline.attr)
 		info.isList = schema.State().IsList(pipeline.attr)
 		info.isUid = su.ValueType == pb.Posting_UID
+		factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
+		if err != nil {
+			return err
+		}
+		if len(factorySpecs) > 0 {
+			runForVectorIndex = true
+		}
+	}
+
+	if runForVectorIndex {
+		return mp.ProcessVectorIndex(ctx, pipeline, info)
 	}
 
 	runListFn := false

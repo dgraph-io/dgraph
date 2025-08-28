@@ -94,12 +94,13 @@ func SortAndDedupPostings(postings []*pb.Posting) []*pb.Posting {
 	return postings[:n]
 }
 
-func (txn *Txn) AddDelta(key string, pl pb.PostingList, doSortAndDedup bool) (*pb.PostingList, error) {
+func (txn *Txn) AddDelta(key string, pl pb.PostingList, doSortAndDedup bool, addToList bool) (*pb.PostingList, error) {
 	txn.cache.Lock()
 	defer txn.cache.Unlock()
-	prevDelta, ok := txn.cache.deltas.Get(key)
+
 	var p1 *pb.PostingList
-	if ok {
+	prevDelta, ok := txn.cache.deltas.Get(key)
+	if ok && addToList {
 		p1 = new(pb.PostingList)
 		if err := proto.Unmarshal(prevDelta, p1); err != nil {
 			glog.Errorf("Error unmarshalling posting list: %v", err)
