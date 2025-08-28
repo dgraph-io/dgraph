@@ -77,21 +77,22 @@ func SortAndDedupPostings(postings []*pb.Posting) []*pb.Posting {
 	sort.Slice(postings, func(i, j int) bool {
 		return postings[i].Uid < postings[j].Uid
 	})
+	return postings
 
 	// In-place filtering: keep only the last occurrence for each UID
-	n := 0 // write index
-	for i := 0; i < len(postings); {
-		j := i + 1
-		// Skip all postings with same UID
-		for j < len(postings) && postings[j].Uid == postings[i].Uid {
-			j++
-		}
-		// Keep only the last posting for this UID
-		postings[n] = postings[j-1]
-		n++
-		i = j
-	}
-	return postings[:n]
+	// n := 0 // write index
+	// for i := 0; i < len(postings); {
+	// 	j := i + 1
+	// 	// Skip all postings with same UID
+	// 	for j < len(postings) && postings[j].Uid == postings[i].Uid {
+	// 		j++
+	// 	}
+	// 	// Keep only the last posting for this UID
+	// 	postings[n] = postings[j-1]
+	// 	n++
+	// 	i = j
+	// }
+	// return postings[:n]
 }
 
 func (txn *Txn) AddDelta(key string, pl pb.PostingList) (*pb.PostingList, error) {

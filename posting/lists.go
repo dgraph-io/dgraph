@@ -441,15 +441,13 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		return lc.readPostingListAt(key)
 	}
 
-	pk, _ := x.Parse(key)
-
 	pl, err := getPostings()
 	if err == badger.ErrKeyNotFound {
-		fmt.Println("READING ", pk, nil)
+		//fmt.Println("READING ", pk, nil)
 		return nil, nil
 	}
 	if err != nil {
-		fmt.Println("READING ", pk, err)
+		//fmt.Println("READING ", pk, err)
 		return nil, err
 	}
 
@@ -462,7 +460,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
-	fmt.Println("READING ", pk, pl)
+	//fmt.Println("READING ", pk, pl)
 	return pl, nil
 }
 

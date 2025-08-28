@@ -656,6 +656,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
+		//fmt.Println("EDGE", edge)
 		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
