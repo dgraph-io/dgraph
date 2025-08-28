@@ -872,6 +872,14 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	numWg := 0
 	eg, egCtx := errgroup.WithContext(ctx)
 	for _, edge := range edges {
+		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
+			l, err := mp.txn.Get(x.DataKey(edge.Attr, edge.Entity))
+			if err != nil {
+				return err
+			}
+			l.handleDeleteAll(ctx, edge, mp.txn)
+			continue
+		}
 		pred, ok := predicates[edge.Attr]
 		if !ok {
 			pred = &PredicatePipeline{
@@ -882,12 +890,12 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 			predicates[edge.Attr] = pred
 			wg.Add(1)
 			numWg += 1
-			// Launch processing for this predicate via errgroup.
-			p := pred
-			eg.Go(func() error {
-				// ProcessPredicate handles closing via defer pipeline.close().
-				return mp.ProcessPredicate(egCtx, p)
-			})
+			// Capture pred by passing it as a parameter to the closure
+			eg.Go(func(p *PredicatePipeline) func() error {
+				return func() error {
+					return mp.ProcessPredicate(egCtx, p)
+				}
+			}(pred))
 		}
 		pred.edges <- edge
 	}
