@@ -169,7 +169,7 @@ func (d *Deltas) GetBytes(key string) ([]byte, bool) {
 		}
 	}
 
-	return nil, false
+	return delta, deltaFound
 }
 
 func (d *Deltas) AddToDeltas(key string, delta []byte) {
