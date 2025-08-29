@@ -136,6 +136,36 @@ func (d *Deltas) Get(key string) (*pb.PostingList, bool) {
 	return res, len(res.Postings) > 0
 }
 
+func (d *Deltas) GetBytes(key string) ([]byte, bool) {
+	if len(d.indexMap) == 0 {
+		return d.deltas.Get(key)
+	}
+
+	pk, err := x.Parse([]byte(key))
+	if err != nil {
+		return nil, false
+	}
+
+	delta, deltaFound := d.deltas.Get(key)
+
+	if indexMap, ok := d.indexMap[pk.Attr]; ok {
+		if value, ok1 := indexMap.Get(key); ok1 && deltaFound {
+			res := &pb.PostingList{}
+			if err := proto.Unmarshal(delta, res); err != nil {
+				return nil, false
+			}
+			res.Postings = append(res.Postings, value.Postings...)
+			data, err := proto.Marshal(res)
+			if err != nil {
+				return nil, false
+			}
+			return data, true
+		}
+	}
+
+	return nil, false
+}
+
 func (d *Deltas) AddToDeltas(key string, delta []byte) {
 	d.deltas.Set(key, delta)
 }

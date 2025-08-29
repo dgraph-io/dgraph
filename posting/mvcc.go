@@ -297,13 +297,9 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				pl, ok := cache.deltas.Get(key)
-				if !ok || pl == nil {
+				data, ok := cache.deltas.GetBytes(key)
+				if !ok || data == nil {
 					continue
-				}
-				data, err := proto.Marshal(pl)
-				if err != nil {
-					return err
 				}
 				// pk, _ := x.Parse([]byte(key))
 				// fmt.Println("COMMITTING", pk, pl)
@@ -313,7 +309,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				err = btxn.SetEntry(&badger.Entry{
+				err := btxn.SetEntry(&badger.Entry{
 					Key:      []byte(key),
 					Value:    data,
 					UserMeta: BitDeltaPosting,
