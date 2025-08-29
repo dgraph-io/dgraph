@@ -160,6 +160,12 @@ func (d *Deltas) GetBytes(key string) ([]byte, bool) {
 				return nil, false
 			}
 			return data, true
+		} else if ok1 {
+			data, err := proto.Marshal(value)
+			if err != nil {
+				return nil, false
+			}
+			return data, true
 		}
 	}
 
