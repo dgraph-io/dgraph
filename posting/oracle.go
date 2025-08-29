@@ -94,39 +94,38 @@ func SortAndDedupPostings(postings []*pb.Posting) []*pb.Posting {
 	return postings[:n]
 }
 
-func (txn *Txn) AddDelta(key string, pl pb.PostingList, doSortAndDedup bool, addToList bool) (*pb.PostingList, error) {
+func (txn *Txn) AddDelta(key string, input *pb.PostingList, doSortAndDedup bool, addToList bool) (*pb.PostingList, error) {
 	txn.cache.Lock()
 	defer txn.cache.Unlock()
 
-	var p1 *pb.PostingList
-	prevDelta, ok := txn.cache.deltas.Get(key)
-	if ok && addToList {
-		p1 = new(pb.PostingList)
-		if err := proto.Unmarshal(prevDelta, p1); err != nil {
-			glog.Errorf("Error unmarshalling posting list: %v", err)
-			return nil, err
+	pl := new(pb.PostingList)
+
+	if addToList {
+		prevDelta, ok := txn.cache.deltas.Get(key)
+		if ok {
+			pl.Postings = append(pl.Postings, prevDelta.Postings...)
 		}
-		p1.Postings = append(p1.Postings, pl.Postings...)
-	} else {
-		p1 = &pl
 	}
+
+	pl.Postings = append(pl.Postings, input.Postings...)
 
 	if doSortAndDedup {
-		p1.Postings = SortAndDedupPostings(p1.Postings)
+		pl.Postings = SortAndDedupPostings(pl.Postings)
 	}
 
-	newPl, err := proto.Marshal(p1)
+	newPl, err := proto.Marshal(pl)
 	if err != nil {
 		glog.Errorf("Error marshalling posting list: %v", err)
 		return nil, err
 	}
+
 	txn.cache.deltas.AddToDeltas(key, newPl)
 
 	list, listOk := txn.cache.plists[key]
 	if listOk {
 		list.setMutation(txn.StartTs, newPl)
 	}
-	return p1, nil
+	return pl, nil
 }
 
 func (txn *Txn) LockCache() {

@@ -276,6 +276,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 			return nil
 		})
+	} else {
+		globalMapI.Iterate(func(key string, value *pb.PostingList) error {
+			mp.txn.addConflictKeyWithUid([]byte(key), value, info.hasUpsert, info.noConflict)
+			return nil
+		})
 	}
 
 	globalMap := mp.txn.cache.deltas.GetIndexMapForPredicate(pipeline.attr)
@@ -366,7 +371,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		}
 
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), *pl, info.isUid, false); err != nil {
+		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), pl, info.isUid, true); err != nil {
 			return err
 		} else {
 			if !info.noConflict {
@@ -430,7 +435,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			continue
 		}
 		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(string(key), *pl, true, false); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(key), pl, true, true); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(key, newPl, info.hasUpsert, info.noConflict)
@@ -479,6 +484,12 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 		if oldVal == nil {
 			continue
 		}
+
+		if string(oldVal.Value) == string(currValue.Value) {
+			postings[uid] = &pb.PostingList{}
+			continue
+		}
+
 		edge.Op = pb.DirectedEdge_DEL
 		edge.Value = oldVal.Value
 		edge.ValueType = oldVal.ValType
@@ -591,7 +602,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	for c, pl := range countMap {
 		//fmt.Println("COUNT", c, pl)
 		ck := x.CountKey(pipeline.attr, uint32(c), isReverseEdge)
-		if newPl, err := mp.txn.AddDelta(string(ck), *pl, true, false); err != nil {
+		if newPl, err := mp.txn.AddDelta(string(ck), pl, true, true); err != nil {
 			return err
 		} else {
 			mp.txn.addConflictKeyWithUid(ck, newPl, info.hasUpsert, info.noConflict)
@@ -709,6 +720,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
 	for uid, pl := range postings {
+		//fmt.Println("ADDING DELTA", uid, pipeline.attr, pl)
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
 		key := baseKey + string(dataKey[len(dataKey)-8:])
 
@@ -716,7 +728,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 		}
 
-		if _, err := mp.txn.AddDelta(key, *pl, false, true); err != nil {
+		if _, err := mp.txn.AddDelta(key, pl, false, false); err != nil {
 			return err
 		}
 	}
@@ -922,12 +934,15 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	numWg := 0
 	eg, egCtx := errgroup.WithContext(ctx)
 	for _, edge := range edges {
+		//fmt.Println("PROCESSING EDGE", edge)
 		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
 			l, err := mp.txn.Get(x.DataKey(edge.Attr, edge.Entity))
 			if err != nil {
 				return err
 			}
-			l.handleDeleteAll(ctx, edge, mp.txn)
+			if err = l.handleDeleteAll(ctx, edge, mp.txn); err != nil {
+				return err
+			}
 			continue
 		}
 		pred, ok := predicates[edge.Attr]

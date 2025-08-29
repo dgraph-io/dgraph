@@ -1099,6 +1099,12 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 func (l *List) setMutation(startTs uint64, data []byte) {
 	pl := new(pb.PostingList)
 	x.Check(proto.Unmarshal(data, pl))
+	l.setMutationWithPosting(startTs, pl)
+}
+
+func (l *List) setMutationWithPosting(startTs uint64, pl *pb.PostingList) {
+	// pk, _ := x.Parse(l.key)
+	// fmt.Println("Setting mutation for ", l.key, pk, pl)
 
 	l.Lock()
 	if l.mutationMap == nil {

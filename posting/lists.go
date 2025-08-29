@@ -107,50 +107,71 @@ func (d *Deltas) GetIndexMapForPredicate(pred string) *types.LockedShardedMap[st
 	return val
 }
 
-func (d *Deltas) Get(key string) ([]byte, bool) {
+func (d *Deltas) Get(key string) (*pb.PostingList, bool) {
 	if d == nil {
 		return nil, false
 	}
-	val, ok := d.deltas.Get(key)
-	if !ok {
-		pk, err := x.Parse([]byte(key))
-		if err != nil {
-			return nil, false
-		}
-
-		if _, ok := d.indexMap[pk.Attr]; !ok {
-			return nil, false
-		}
-
-		value, ok := d.indexMap[pk.Attr].Get(key)
-		if !ok {
-			return nil, false
-		}
-		b, err := proto.Marshal(value)
-		if err != nil {
-			return nil, false
-		}
-		return b, true
+	pk, err := x.Parse([]byte(key))
+	if err != nil {
+		return nil, false
 	}
-	return val, true
+
+	res := &pb.PostingList{}
+
+	val, ok := d.deltas.Get(key)
+	if ok {
+		if err := proto.Unmarshal(val, res); err != nil {
+			return nil, false
+		}
+	}
+
+	if indexMap, ok := d.indexMap[pk.Attr]; ok {
+		if value, ok1 := indexMap.Get(key); ok1 {
+			res.Postings = append(res.Postings, value.Postings...)
+		}
+	}
+
+	// fmt.Println("GETTING KEY FROM DELTAS", pk, "res", res, "val", val, "d.deltas", d.deltas, "d.indexMap[pk.Attr]", d.indexMap[pk.Attr], "ok", ok)
+
+	return res, len(res.Postings) > 0
 }
 
 func (d *Deltas) AddToDeltas(key string, delta []byte) {
 	d.deltas.Set(key, delta)
 }
 
-func (d *Deltas) IterateBytes(fn func(key string, value []byte) error) {
+func (d *Deltas) IterateKeys(fn func(key string) error) {
 	for _, v := range d.indexMap {
 		v.Iterate(func(key string, value *pb.PostingList) error {
-			b, err := proto.Marshal(value)
-			if err != nil {
-				return err
-			}
-			return fn(key, b)
+			return fn(key)
 		})
 	}
 	d.deltas.Iterate(func(key string, value []byte) error {
-		return fn(key, value)
+		return fn(key)
+	})
+}
+
+func (d *Deltas) IteratePostings(fn func(key string, value *pb.PostingList) error) {
+	d.IterateKeys(func(key string) error {
+		val, ok := d.Get(key)
+		if !ok {
+			return nil
+		}
+		return fn(key, val)
+	})
+}
+
+func (d *Deltas) IterateBytes(fn func(key string, value []byte) error) {
+	d.IterateKeys(func(key string) error {
+		val, ok := d.Get(key)
+		if !ok {
+			return nil
+		}
+		data, err := proto.Marshal(val)
+		if err != nil {
+			return err
+		}
+		return fn(key, data)
 	})
 }
 
@@ -340,9 +361,11 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 			return getNew(key, pstore, lc.startTs, readUids)
 		}
 		if l, ok := lc.plists[skey]; ok {
-			if delta, ok := lc.deltas.Get(skey); ok && len(delta) > 0 {
-				l.setMutation(lc.startTs, delta)
+			if delta, ok := lc.deltas.Get(skey); ok && delta != nil {
+				l.setMutationWithPosting(lc.startTs, delta)
 			}
+			// pk, _ := x.Parse(key)
+			// fmt.Println("READING PLIST", pk, l.Print())
 			return l, nil
 		}
 		return nil, nil
@@ -370,10 +393,13 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 	// If we just brought this posting list into memory and we already have a delta for it, let's
 	// apply it before returning the list.
 	lc.RLock()
-	if delta, ok := lc.deltas.Get(skey); ok && len(delta) > 0 {
-		pl.setMutation(lc.startTs, delta)
+	if delta, ok := lc.deltas.Get(skey); ok && delta != nil {
+		pl.setMutationWithPosting(lc.startTs, delta)
 	}
 	lc.RUnlock()
+
+	// pk, _ := x.Parse(key)
+	// fmt.Println("READING ", pk, pl.Print())
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
@@ -413,11 +439,9 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	getListFromLocalCache := func() (*pb.PostingList, error) {
 		lc.RLock()
 
-		pl := &pb.PostingList{}
-		if delta, ok := lc.deltas.Get(string(key)); ok && len(delta) > 0 {
-			err := proto.Unmarshal(delta, pl)
+		if delta, ok := lc.deltas.Get(string(key)); ok && delta != nil {
 			lc.RUnlock()
-			return pl, err
+			return delta, nil
 		}
 
 		l := lc.plists[string(key)]
@@ -442,12 +466,16 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	}
 
 	pl, err := getPostings()
+
+	// pk, _ := x.Parse(key)
+	// fmt.Println("READING ", pk, "pl:", pl)
+
 	if err == badger.ErrKeyNotFound {
-		//fmt.Println("READING ", pk, nil)
+		// fmt.Println("READING ", pk, nil)
 		return nil, nil
 	}
 	if err != nil {
-		//fmt.Println("READING ", pk, err)
+		// fmt.Println("READING ", pk, err)
 		return nil, err
 	}
 
@@ -460,7 +488,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
-	//fmt.Println("READING ", pk, pl)
+	// fmt.Println("READING ", pk, pl)
 	return pl, nil
 }
 
@@ -504,7 +532,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 	lc.RLock()
 	defer lc.RUnlock()
-	lc.deltas.IterateBytes(func(key string, delta []byte) error {
+	lc.deltas.IterateKeys(func(key string) error {
 		pk, err := x.Parse([]byte(key))
 		x.Check(err)
 		if len(pk.Attr) == 0 {

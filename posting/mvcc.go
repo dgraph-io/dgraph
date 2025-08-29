@@ -276,10 +276,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	defer cache.Unlock()
 
 	var keys []string
-	cache.deltas.IterateBytes(func(key string, data []byte) error {
-		if len(data) == 0 {
-			return nil
-		}
+	cache.deltas.IterateKeys(func(key string) error {
 		keys = append(keys, key)
 		return nil
 	})
@@ -300,13 +297,15 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				data, ok := cache.deltas.Get(key)
-				if !ok || len(data) == 0 {
+				pl, ok := cache.deltas.Get(key)
+				if !ok || pl == nil {
 					continue
 				}
+				data, err := proto.Marshal(pl)
+				if err != nil {
+					return err
+				}
 				// pk, _ := x.Parse([]byte(key))
-				// var pl pb.PostingList
-				// proto.Unmarshal(data, &pl)
 				// fmt.Println("COMMITTING", pk, pl)
 				if ts := cache.maxVersions[key]; ts >= commitTs {
 					// Skip write because we already have a write at a higher ts.
@@ -314,7 +313,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 					// not output anything here.
 					continue
 				}
-				err := btxn.SetEntry(&badger.Entry{
+				err = btxn.SetEntry(&badger.Entry{
 					Key:      []byte(key),
 					Value:    data,
 					UserMeta: BitDeltaPosting,
@@ -575,7 +574,7 @@ func (ml *MemoryLayer) wait() {
 	ml.cache.wait()
 }
 
-func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, commitTs uint64) {
+func (ml *MemoryLayer) updateItemInCache(key string, delta *pb.PostingList, startTs, commitTs uint64) {
 	if commitTs == 0 {
 		return
 	}
@@ -594,17 +593,13 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 	val.lastUpdate = commitTs
 
 	if val.list != nil {
-		p := new(pb.PostingList)
-		x.Check(proto.Unmarshal(delta, p))
-
-		if p.Pack == nil {
-			val.list.setMutationAfterCommit(startTs, commitTs, p, true)
+		if delta.Pack == nil {
+			val.list.setMutationAfterCommit(startTs, commitTs, delta, true)
 			checkForRollup([]byte(key), val.list)
 		} else {
 			// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
 			ml.del([]byte(key))
 		}
-
 	}
 }
 
@@ -615,8 +610,8 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	MemLayerInstance.wait()
-	txn.cache.deltas.IterateBytes(func(key string, delta []byte) error {
-		MemLayerInstance.updateItemInCache(key, delta, txn.StartTs, commitTs)
+	txn.cache.deltas.IteratePostings(func(key string, value *pb.PostingList) error {
+		MemLayerInstance.updateItemInCache(key, value, txn.StartTs, commitTs)
 		return nil
 	})
 }
@@ -850,7 +845,5 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64, readUids bool) (*List,
 	if err != nil {
 		return l, err
 	}
-	// pk, _ := x.Parse(key)
-	// fmt.Println("READING ", pk, l.Print())
 	return l, nil
 }
