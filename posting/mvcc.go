@@ -301,6 +301,13 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if !ok || data == nil {
 					continue
 				}
+				pl := &pb.PostingList{}
+				if err := proto.Unmarshal(data, pl); err != nil {
+					return err
+				}
+				if len(pl.Postings) == 0 {
+					continue
+				}
 				// pk, _ := x.Parse([]byte(key))
 				// fmt.Println("COMMITTING", pk, pl)
 				if ts := cache.maxVersions[key]; ts >= commitTs {
