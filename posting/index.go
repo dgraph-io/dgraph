@@ -157,7 +157,8 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	for uid, postingList := range *postings {
 		//fmt.Println("POSTING", uid, postingList)
 		for _, posting := range postingList.Postings {
-			valPl, ok := values[string(posting.Value)]
+			key := fmt.Sprintf("%s,%s", posting.LangTag, posting.Value)
+			valPl, ok := values[key]
 			if !ok {
 				valPl = &pb.PostingList{}
 			}
@@ -167,19 +168,19 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 			mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge1)
 			valPl.Postings = append(valPl.Postings, mpost)
-			values[string(posting.Value)] = valPl
+			values[key] = valPl
 
 			newPosting := new(pb.Posting)
 			newPosting.ValType = posting.ValType
 			newPosting.Value = posting.Value
 			newPosting.LangTag = posting.LangTag
-			valPost[string(posting.Value)] = newPosting
+			valPost[key] = newPosting
 		}
 	}
 
-	strings := make([]string, 0, len(values))
+	keysCreated := make([]string, 0, len(values))
 	for i := range values {
-		strings = append(strings, i)
+		keysCreated = append(keysCreated, i)
 	}
 
 	//fmt.Println("START")
@@ -200,13 +201,13 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			defer wg.Done()
 			localMap := make(map[string]*pb.PostingList, len(values)/numGo)
 			for i := start; i < len(values); i += numGo {
-				stringValue := strings[i]
-				valPl := values[stringValue]
+				key := keysCreated[i]
+				valPl := values[key]
 				if len(valPl.Postings) == 0 {
 					continue
 				}
 
-				posting := valPost[stringValue]
+				posting := valPost[key]
 				// Build info per iteration without indexEdge.
 				info := &indexMutationInfo{
 					tokenizers:   tokenizers,
@@ -359,7 +360,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	}
 
 	if info.count {
-		return mp.ProcessCount(ctx, pipeline, &postings, info, false)
+		return mp.ProcessCount(ctx, pipeline, &postings, info, true, false)
 	}
 
 	dataKey := x.DataKey(pipeline.attr, 0)
@@ -427,7 +428,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			noConflict: info.noConflict,
 			hasUpsert:  info.hasUpsert,
 		}
-		return mp.ProcessCount(ctx, pipeline, &reverseredMap, newInfo, true)
+		return mp.ProcessCount(ctx, pipeline, &reverseredMap, newInfo, true, true)
 	}
 
 	for uid, pl := range reverseredMap {
@@ -522,7 +523,7 @@ func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList, hasUpsert 
 	}
 }
 
-func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo, isReverseEdge bool) error {
+func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo, isListEdge bool, isReverseEdge bool) error {
 	dataKey := x.DataKey(pipeline.attr, 0)
 	if isReverseEdge {
 		dataKey = x.ReverseKey(pipeline.attr, 0)
@@ -556,7 +557,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		for _, post := range postingList.Postings {
 			found, _, _ := list.findPosting(post.StartTs, post.Uid)
 			if found {
-				if post.Op == Set {
+				if post.Op == Set && isListEdge {
 					post.Op = Ovr
 				}
 			} else {
@@ -565,7 +566,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 				}
 			}
 
-			list.updateMutationLayer(post, !info.isList, true)
+			list.updateMutationLayer(post, !isListEdge, true)
 		}
 
 		newCount := list.GetLength(mp.txn.StartTs)
@@ -573,7 +574,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		list.Unlock()
 
 		if updated {
-			if !info.isList {
+			if !isListEdge {
 				if !info.noConflict {
 					mp.txn.addConflictKey(farm.Fingerprint64(dataKey))
 				}
@@ -622,7 +623,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
-		//fmt.Println("EDGE", edge)
+		// fmt.Println("SINGLE EDGE", edge)
 		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
@@ -714,7 +715,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	if info.count {
 		// Count should take care of updating the posting list
-		return mp.ProcessCount(ctx, pipeline, &postings, info, false)
+		return mp.ProcessCount(ctx, pipeline, &postings, info, false, false)
 	}
 
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion

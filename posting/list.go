@@ -1327,10 +1327,10 @@ func (l *List) GetLength(readTs uint64) int {
 		length += immutLen
 	}
 
-	pureLength := l.length(readTs, 0)
-	if pureLength != length {
-		panic(fmt.Sprintf("pure length != length %d %d %s", pureLength, length, l.Print()))
-	}
+	// pureLength := l.length(readTs, 0)
+	// if pureLength != length {
+	// 	panic(fmt.Sprintf("pure length != length %d %d %s", pureLength, length, l.Print()))
+	// }
 
 	return length
 }

@@ -72,7 +72,7 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 
 	// Write delta to disk and call update
 	txn := Oracle().RegisterStartTs(5)
-	txn.cache.deltas[string(key)] = delta
+	txn.cache.deltas.AddToDeltas(string(key), delta)
 
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, 15))
