@@ -445,8 +445,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 	}
 	lc.RUnlock()
 
-	// pk, _ := x.Parse(key)
-	// fmt.Println("READING ", pk, pl.Print())
+	pk, _ := x.Parse(key)
+	fmt.Println("READING ", pk, pl.Print())
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
