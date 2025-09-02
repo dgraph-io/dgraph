@@ -176,19 +176,24 @@ func (d *Deltas) AddToDeltas(key string, delta []byte) {
 	d.deltas.Set(key, delta)
 }
 
-func (d *Deltas) IterateKeys(fn func(key string) error) {
+func (d *Deltas) IterateKeys(fn func(key string) error) error {
 	for _, v := range d.indexMap {
-		v.Iterate(func(key string, value *pb.PostingList) error {
+		if err := v.Iterate(func(key string, value *pb.PostingList) error {
 			return fn(key)
-		})
+		}); err != nil {
+			return err
+		}
 	}
-	d.deltas.Iterate(func(key string, value []byte) error {
+	if err := d.deltas.Iterate(func(key string, value []byte) error {
 		return fn(key)
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (d *Deltas) IteratePostings(fn func(key string, value *pb.PostingList) error) {
-	d.IterateKeys(func(key string) error {
+func (d *Deltas) IteratePostings(fn func(key string, value *pb.PostingList) error) error {
+	return d.IterateKeys(func(key string) error {
 		val, ok := d.Get(key)
 		if !ok {
 			return nil
@@ -197,8 +202,8 @@ func (d *Deltas) IteratePostings(fn func(key string, value *pb.PostingList) erro
 	})
 }
 
-func (d *Deltas) IterateBytes(fn func(key string, value []byte) error) {
-	d.IterateKeys(func(key string) error {
+func (d *Deltas) IterateBytes(fn func(key string, value []byte) error) error {
+	return d.IterateKeys(func(key string) error {
 		val, ok := d.Get(key)
 		if !ok {
 			return nil
@@ -580,7 +585,7 @@ func (lc *LocalCache) UpdateDeltasAndDiscardLists() {
 func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 	lc.RLock()
 	defer lc.RUnlock()
-	lc.deltas.IterateKeys(func(key string) error {
+	if err := lc.deltas.IterateKeys(func(key string) error {
 		pk, err := x.Parse([]byte(key))
 		x.Check(err)
 		if len(pk.Attr) == 0 {
@@ -591,6 +596,8 @@ func (lc *LocalCache) fillPreds(ctx *api.TxnContext, gid uint32) {
 		predKey := fmt.Sprintf("%d-%s", gid, pk.Attr)
 		ctx.Preds = append(ctx.Preds, predKey)
 		return nil
-	})
+	}); err != nil {
+		x.Check(err)
+	}
 	ctx.Preds = x.Unique(ctx.Preds)
 }

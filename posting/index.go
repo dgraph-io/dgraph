@@ -99,14 +99,6 @@ func (pp *PredicatePipeline) close() {
 	pp.wg.Done()
 }
 
-func createDeleteAllEdge(uid uint64) *pb.DirectedEdge {
-	return &pb.DirectedEdge{
-		Entity: uid,
-		Op:     pb.DirectedEdge_DEL,
-		Value:  []byte(x.Star),
-	}
-}
-
 func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
 	var wg errgroup.Group
 	numThreads := 10
@@ -262,6 +254,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 			wg.Add(1)
 			go process(i)
 		}
+
 		wg.Wait()
 
 		return globalMap
@@ -273,15 +266,21 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	defer mp.txn.cache.Unlock()
 
 	if info.hasUpsert {
-		globalMapI.Iterate(func(key string, value *pb.PostingList) error {
+		err := globalMapI.Iterate(func(key string, value *pb.PostingList) error {
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 	} else {
-		globalMapI.Iterate(func(key string, value *pb.PostingList) error {
+		err := globalMapI.Iterate(func(key string, value *pb.PostingList) error {
 			mp.txn.addConflictKeyWithUid([]byte(key), value, info.hasUpsert, info.noConflict)
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 	}
 
 	globalMap := mp.txn.cache.deltas.GetIndexMapForPredicate(pipeline.attr)
@@ -566,7 +565,9 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 				}
 			}
 
-			list.updateMutationLayer(post, !isListEdge, true)
+			if err := list.updateMutationLayer(post, !isListEdge, true); err != nil {
+				return err
+			}
 		}
 
 		newCount := list.GetLength(mp.txn.StartTs)
@@ -619,7 +620,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	postings := make(map[uint64]*pb.PostingList, 1000)
 
 	dataKey := x.DataKey(pipeline.attr, 0)
-	insertDeleteAllEdge := !(info.index || info.reverse || info.count)
+	insertDeleteAllEdge := !(info.index || info.reverse || info.count) // nolint
 
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
@@ -872,7 +873,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 			x.ParseAttr(edge.Attr), edge)
 
 	case schemaType == types.TypeID(pb.Posting_VFLOAT):
-		if !(storageType == types.TypeID(pb.Posting_VFLOAT) || storageType == types.TypeID(pb.Posting_STRING) ||
+		if !(storageType == types.TypeID(pb.Posting_VFLOAT) || storageType == types.TypeID(pb.Posting_STRING) || //nolint
 			storageType == types.TypeID(pb.Posting_DEFAULT)) {
 			return errors.Errorf("Input for predicate %q of type vector is not vector."+
 				" Did you forget to add quotes before []?. Edge: %v", x.ParseAttr(edge.Attr), edge)
@@ -1848,7 +1849,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0)
 
-		streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
+		if err := streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
@@ -1858,7 +1859,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 			kvs = append(kvs, &kv)
 			return nil
-		})
+		}); err != nil {
+			return nil, err
+		}
 
 		txns[threadId] = NewTxn(r.startTs)
 		return &bpb.KVList{Kv: kvs}, nil
@@ -1908,7 +1911,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
+		if err := streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
@@ -1918,7 +1921,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 			kvs = append(kvs, &kv)
 			return nil
-		})
+		}); err != nil {
+			return nil, err
+		}
 
 		txns[threadId] = NewTxn(r.startTs)
 		return &bpb.KVList{Kv: kvs}, nil

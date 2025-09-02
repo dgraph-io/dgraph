@@ -276,10 +276,12 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	defer cache.Unlock()
 
 	var keys []string
-	cache.deltas.IterateKeys(func(key string) error {
+	if err := cache.deltas.IterateKeys(func(key string) error {
 		keys = append(keys, key)
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	defer func() {
 		// Add these keys to be rolled up after we're done writing. This is the right place for them
@@ -589,19 +591,18 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta *pb.PostingList, star
 	}
 
 	val, ok := ml.cache.get([]byte(key))
-	if !ok {
-		return
-	}
 
-	val.lastUpdate = commitTs
+	if ok && val.list != nil && val.list.minTs <= commitTs {
+		val.lastUpdate = commitTs
 
-	if val.list != nil {
-		if delta.Pack == nil {
-			val.list.setMutationAfterCommit(startTs, commitTs, delta, true)
-			checkForRollup([]byte(key), val.list)
-		} else {
-			// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
-			ml.del([]byte(key))
+		if val.list != nil {
+			if delta.Pack == nil {
+				val.list.setMutationAfterCommit(startTs, commitTs, delta, true)
+				checkForRollup([]byte(key), val.list)
+			} else {
+				// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
+				ml.del([]byte(key))
+			}
 		}
 	}
 }
@@ -613,10 +614,12 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	MemLayerInstance.wait()
-	txn.cache.deltas.IteratePostings(func(key string, value *pb.PostingList) error {
+	if err := txn.cache.deltas.IteratePostings(func(key string, value *pb.PostingList) error {
 		MemLayerInstance.updateItemInCache(key, value, txn.StartTs, commitTs)
 		return nil
-	})
+	}); err != nil {
+		glog.Errorf("UpdateCachedKeys: error while iterating deltas: %v", err)
+	}
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {

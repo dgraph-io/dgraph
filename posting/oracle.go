@@ -404,10 +404,12 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	for _, status := range delta.Txns {
 		txn := o.pendingTxns[status.StartTs]
 		if txn != nil && status.CommitTs > 0 {
-			txn.cache.deltas.IterateBytes(func(key string, value []byte) error {
+			if err := txn.cache.deltas.IterateBytes(func(key string, value []byte) error {
 				IncrRollup.addKeyToBatch([]byte(key), 0)
 				return nil
-			})
+			}); err != nil {
+				glog.Errorf("ProcessDelta: error while iterating deltas for txn %d: %v", status.StartTs, err)
+			}
 		}
 		delete(o.pendingTxns, status.StartTs)
 	}
@@ -467,12 +469,14 @@ func (o *oracle) IterateTxns(ok func(key []byte) bool) []uint64 {
 	defer o.RUnlock()
 	var timestamps []uint64
 	for startTs, txn := range o.pendingTxns {
-		txn.cache.deltas.IterateBytes(func(key string, value []byte) error {
+		if err := txn.cache.deltas.IterateBytes(func(key string, value []byte) error {
 			if ok([]byte(key)) {
 				timestamps = append(timestamps, startTs)
 			}
 			return nil
-		})
+		}); err != nil {
+			glog.Errorf("IterateTxns: error while iterating deltas for txn %d: %v", startTs, err)
+		}
 	}
 	return timestamps
 }
