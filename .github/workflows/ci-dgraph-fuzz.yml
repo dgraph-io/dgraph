@@ -23,7 +23,7 @@ permissions:
 jobs:
   fuzz-test:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

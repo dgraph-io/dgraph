@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   dgraph-build-amd64:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -121,7 +121,7 @@ jobs:
           path: dgraph-standalone-amd64.tar
 
   dgraph-build-arm64:
-    runs-on: warp-ubuntu-latest-arm64-4x
+    runs-on: ubuntu-latest-arm
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -222,7 +222,7 @@ jobs:
 
   graph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5

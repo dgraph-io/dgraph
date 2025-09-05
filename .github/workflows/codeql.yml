@@ -18,7 +18,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: warp-ubuntu-latest-x64-16x
+    runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
       security-events: write
