@@ -1148,13 +1148,8 @@ func (c *workerClient) StreamExtSnapshot(ctx context.Context, opts ...grpc.CallO
 }
 
 type Worker_StreamExtSnapshotClient interface {
-<<<<<<< HEAD
 	Send(*api.StreamExtSnapshotRequest) error
-	CloseAndRecv() (*api.StreamExtSnapshotResponse, error)
-=======
-	Send(*api_v2.StreamExtSnapshotRequest) error
-	Recv() (*api_v2.StreamExtSnapshotResponse, error)
->>>>>>> 2014a72d3 (Make dgraph import work over the internet)
+	Recv() (*api.StreamExtSnapshotResponse, error)
 	grpc.ClientStream
 }
 
@@ -1166,16 +1161,8 @@ func (x *workerStreamExtSnapshotClient) Send(m *api.StreamExtSnapshotRequest) er
 	return x.ClientStream.SendMsg(m)
 }
 
-<<<<<<< HEAD
-func (x *workerStreamExtSnapshotClient) CloseAndRecv() (*api.StreamExtSnapshotResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
+func (x *workerStreamExtSnapshotClient) Recv() (*api.StreamExtSnapshotResponse, error) {
 	m := new(api.StreamExtSnapshotResponse)
-=======
-func (x *workerStreamExtSnapshotClient) Recv() (*api_v2.StreamExtSnapshotResponse, error) {
-	m := new(api_v2.StreamExtSnapshotResponse)
->>>>>>> 2014a72d3 (Make dgraph import work over the internet)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -1565,13 +1552,8 @@ func _Worker_StreamExtSnapshot_Handler(srv interface{}, stream grpc.ServerStream
 }
 
 type Worker_StreamExtSnapshotServer interface {
-<<<<<<< HEAD
-	SendAndClose(*api.StreamExtSnapshotResponse) error
+	Send(*api.StreamExtSnapshotResponse) error
 	Recv() (*api.StreamExtSnapshotRequest, error)
-=======
-	Send(*api_v2.StreamExtSnapshotResponse) error
-	Recv() (*api_v2.StreamExtSnapshotRequest, error)
->>>>>>> 2014a72d3 (Make dgraph import work over the internet)
 	grpc.ServerStream
 }
 
@@ -1579,11 +1561,7 @@ type workerStreamExtSnapshotServer struct {
 	grpc.ServerStream
 }
 
-<<<<<<< HEAD
-func (x *workerStreamExtSnapshotServer) SendAndClose(m *api.StreamExtSnapshotResponse) error {
-=======
-func (x *workerStreamExtSnapshotServer) Send(m *api_v2.StreamExtSnapshotResponse) error {
->>>>>>> 2014a72d3 (Make dgraph import work over the internet)
+func (x *workerStreamExtSnapshotServer) Send(m *api.StreamExtSnapshotResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 

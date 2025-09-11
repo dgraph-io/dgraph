@@ -22,6 +22,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hypermodeinc/dgraph/v25/acl"
+	sample "github.com/hypermodeinc/dgraph/v25/sammple"
+
 	"github.com/hypermodeinc/dgraph/v25/audit"
 	"github.com/hypermodeinc/dgraph/v25/backup"
 	checkupgrade "github.com/hypermodeinc/dgraph/v25/check_upgrade"
@@ -80,7 +82,7 @@ var subcommands = []*x.SubCommand{
 	&bulk.Bulk, &cert.Cert, &conv.Conv, &live.Live, &alpha.Alpha, &zero.Zero, &version.Version,
 	&debug.Debug, &migrate.Migrate, &debuginfo.DebugInfo, &upgrade.Upgrade, &decrypt.Decrypt, &increment.Increment,
 	&checkupgrade.CheckUpgrade, &backup.Restore, &backup.LsBackup, &backup.ExportBackup, &acl.CmdAcl,
-	&audit.CmdAudit, &mcp.Mcp, &dgraphimport.ImportCmd,
+	&audit.CmdAudit, &mcp.Mcp, &dgraphimport.ImportCmd, &sample.Import,
 }
 
 func initCmds() {

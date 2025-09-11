@@ -300,7 +300,7 @@ func (p *Pool) MonitorHealth() {
 				p.Unlock()
 				return
 			}
-			glog.Errorf("CONN: Unable to connect with %s : %s\n", p.Addr, err)
+			// glog.Errorf("CONN: Unable to connect with %s : %s\n", p.Addr, err)
 			if conn != nil {
 				if err := conn.Close(); err != nil {
 					glog.Warningf("error while closing connection: %v", err)

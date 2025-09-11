@@ -26,7 +26,7 @@ import (
 
 type pubSub struct {
 	sync.RWMutex
-	subscribers []chan *apiv2.StreamExtSnapshotRequest
+	subscribers []chan *api.StreamExtSnapshotRequest
 }
 
 // Subscribe returns a new channel to receive published messages
@@ -72,7 +72,12 @@ func (ps *pubSub) handlePublisher(ctx context.Context, stream api.Dgraph_StreamE
 				return nil
 			}
 			ps.publish(msg)
-			if err := stream.Send(&apiv2.StreamExtSnapshotResponse{Finish: false}); err != nil {
+
+			if msg != nil && msg.Pkt.Done {
+				glog.Infof("[import] Received Done signal, breaking the loop")
+				return nil
+			}
+			if err := stream.Send(&api.StreamExtSnapshotResponse{Finish: false}); err != nil {
 				return err
 			}
 		}
@@ -80,6 +85,10 @@ func (ps *pubSub) handlePublisher(ctx context.Context, stream api.Dgraph_StreamE
 }
 
 func (ps *pubSub) runForwardSubscriber(ctx context.Context, out api.Dgraph_StreamExtSnapshotClient, peerId string) error {
+	defer func() {
+		glog.Infof("[import] forward subscriber stopped for peer [%v]", peerId)
+	}()
+
 	buffer := ps.subscribe()
 Loop:
 	for {
@@ -94,8 +103,6 @@ Loop:
 				break Loop
 			}
 
-			data := &api.StreamExtSnapshotRequest{Pkt: &api.StreamPacket{Data: msg.Pkt.Data}}
-
 			if msg.Pkt.Done {
 				glog.Infof("[import] received done signal from [%v]", peerId)
 				d := api.StreamPacket{Done: true}
@@ -105,7 +112,7 @@ Loop:
 				break Loop
 			}
 
-			data := &apiv2.StreamExtSnapshotRequest{Pkt: &apiv2.StreamPacket{Data: msg.Pkt.Data}}
+			data := &api.StreamExtSnapshotRequest{Pkt: &api.StreamPacket{Data: msg.Pkt.Data}}
 			if err := out.Send(data); err != nil {
 				return err
 			}
@@ -162,7 +169,7 @@ Loop:
 		return err
 	}
 
-	if err := stream.Send(&apiv2.StreamExtSnapshotResponse{Finish: true}); err != nil {
+	if err := stream.Send(&api.StreamExtSnapshotResponse{Finish: true}); err != nil {
 		glog.Errorf("[import] failed to send close on in: %v", err)
 		return err
 	}
@@ -170,7 +177,7 @@ Loop:
 }
 
 func ProposeDrain(ctx context.Context, drainMode *api.UpdateExtSnapshotStreamingStateRequest) ([]uint32, error) {
-	memState := GetMembershipState()
+	members := GetMembershipState()
 	currentGroups := make([]uint32, 0)
 	for gid := range members.GetGroups() {
 		currentGroups = append(currentGroups, gid)
@@ -254,7 +261,7 @@ func pipeTwoStream(in api.Dgraph_StreamExtSnapshotServer, out pb.Worker_StreamEx
 	glog.Infof("[import] [forward from group-%v to group-%v] forwarding stream", currentGroup, groupId)
 
 	defer func() {
-		if err := in.SendAndClose(&api.StreamExtSnapshotResponse{}); err != nil {
+		if err := in.Send(&api.StreamExtSnapshotResponse{}); err != nil {
 			glog.Errorf("[import] [forward from group %v to group %v] failed to send close on in"+
 				" stream for group [%v]: %v", currentGroup, groupId, groupId, err)
 		}
@@ -365,6 +372,10 @@ func postStreamProcessing(ctx context.Context) error {
 // - nil: If streaming completes successfully
 // - error: If there's an issue receiving data or if majority consensus isn't achieved (for leader)
 func streamInGroup(stream api.Dgraph_StreamExtSnapshotServer, forward bool) error {
+
+	if err := stream.Send(&api.StreamExtSnapshotResponse{Finish: false}); err != nil {
+		return fmt.Errorf("failed to send initial response: %v", err)
+	}
 	node := groups().Node
 	glog.Infof("[import] got stream, forwarding in group [%v]", forward)
 
@@ -442,7 +453,7 @@ func streamInGroup(stream api.Dgraph_StreamExtSnapshotServer, forward bool) erro
 	eg.Go(func() error {
 		defer ps.close()
 		defer func() {
-			if err := stream.SendAndClose(&api.StreamExtSnapshotResponse{}); err != nil {
+			if err := stream.Send(&api.StreamExtSnapshotResponse{}); err != nil {
 				glog.Errorf("[import] failed to send close on in: %v", err)
 			}
 		}()
@@ -454,6 +465,12 @@ func streamInGroup(stream api.Dgraph_StreamExtSnapshotServer, forward bool) erro
 
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("failed to run in group streaming: %v", err)
+	}
+	// Sends a StreamExtSnapshotResponse with the Finish flag set to true to indicate
+	// the completion of the streaming process. If an error occurs during the send
+	// operation, it is returned for further handling.
+	if err := stream.Send(&api.StreamExtSnapshotResponse{Finish: true}); err != nil {
+		glog.Errorf("failed to send done signal: %v", err)
 	}
 
 	// If this node is the leader and fails to reach a majority of nodes, we return an error.
