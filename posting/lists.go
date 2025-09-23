@@ -403,16 +403,16 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 			if err != nil {
 				return nil, err
 			}
-			// pk, _ := x.Parse(key)
-			// fmt.Println("READING NEW PLIST", pk, l.Print())
+			pk, _ := x.Parse(key)
+			fmt.Println("READING NEW PLIST", pk, l.Print())
 			return l, nil
 		}
 		if l, ok := lc.plists[skey]; ok {
 			if delta, ok := lc.deltas.Get(skey); ok && delta != nil {
 				l.setMutationWithPosting(lc.startTs, delta)
 			}
-			// pk, _ := x.Parse(key)
-			// fmt.Println("READING PLIST", pk, l.Print())
+			pk, _ := x.Parse(key)
+			fmt.Println("READING PLIST", pk, l.Print())
 			return l, nil
 		}
 		return nil, nil
@@ -484,15 +484,15 @@ func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	// This would return an error if there is some data in the local cache, but we couldn't read it.
 
-	// pk, _ := x.Parse(key)
-	// fmt.Println("READING SINGLE ", pk)
+	pk, _ := x.Parse(key)
+	fmt.Println("READING SINGLE ", pk)
 
 	getListFromLocalCache := func() (*pb.PostingList, error) {
 		lc.RLock()
 
 		if delta, ok := lc.deltas.Get(string(key)); ok && delta != nil {
 			lc.RUnlock()
-			// fmt.Println("READING SINGLE FROM DELTA", pk, delta)
+			fmt.Println("READING SINGLE FROM DELTA", pk, delta)
 			return delta, nil
 		}
 
@@ -501,7 +501,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 		if l != nil {
 			res, err := l.StaticValue(lc.startTs)
-			// fmt.Println("READING SINGLE FROM PLISTS", pk, res, err, l.Print())
+			fmt.Println("READING SINGLE FROM PLISTS", pk, res, err, l.Print())
 			return res, err
 		}
 
@@ -521,14 +521,14 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 
 	pl, err := getPostings()
 
-	// fmt.Println("READING SINGLE ", pk, "pl:", pl)
+	fmt.Println("READING SINGLE ", pk, "pl:", pl)
 
 	if err == badger.ErrKeyNotFound {
-		// fmt.Println("READING ", pk, nil)
+		fmt.Println("READING ", pk, nil)
 		return nil, nil
 	}
 	if err != nil {
-		// fmt.Println("READING ", pk, err)
+		fmt.Println("READING ", pk, err)
 		return nil, err
 	}
 

@@ -335,6 +335,7 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 		// We insert old postings in reverse order. So we only need to read the first update to an UID.
 		if _, ok := mm.committedUids[mpost.Uid]; !ok {
 			mm.committedUids[mpost.Uid] = mpost
+			fmt.Println("Buidlding committed uids", mm.committedUids, mpost)
 		}
 	}
 }
@@ -1525,9 +1526,15 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
 
-	x.PrintRollup(out.plist, out.parts, l.key, kv.Version)
+	PrintRollup(out.plist, out.parts, l.key, kv.Version)
 	x.VerifyPostingSplits(kvs, out.plist, out.parts, l.key)
 	return kvs, nil
+}
+
+func PrintRollup(plist *pb.PostingList, parts map[uint64]*pb.PostingList, baseKey []byte, ts uint64) {
+	k, _ := x.Parse(baseKey)
+	uids := codec.Decode(plist.Pack, 0)
+	fmt.Printf("[TXNLOG] DOING ROLLUP for key: %+v at timestamp: %v, uids: %+v\n", k, ts, uids)
 }
 
 // ToBackupPostingList uses rollup to generate a single list with no splits.
