@@ -711,6 +711,8 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 	}
 
 	for range 10 {
+		// Sleep for a second before retrying
+		time.Sleep(waitDurBeforeRetry)
 		// we do this because before v21, we used to propose the initial schema to the cluster.
 		// This results in schema being applied and indexes being built which could delay alpha
 		// starting to serve graphql schema.
