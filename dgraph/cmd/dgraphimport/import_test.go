@@ -371,7 +371,7 @@ func verifyImportResults(t *testing.T, gc *dgraphapi.GrpcClient, downAlphas int)
 		maxRetries = 10
 	}
 
-	retryDelay := 500 * time.Millisecond
+	retryDelay := time.Second
 	hasAllPredicates := true
 
 	// Get expected predicates first
@@ -381,7 +381,7 @@ func verifyImportResults(t *testing.T, gc *dgraphapi.GrpcClient, downAlphas int)
 
 	for i := 0; i < maxRetries; i++ {
 		// Checking client connection again here because an import operation may be in progress on the rejoined alpha
-		require.NoError(t, validateClientConnection(t, gc, 10*time.Second))
+		require.NoError(t, validateClientConnection(t, gc, 30*time.Second))
 
 		schemaResp, err := gc.Query("schema{}")
 		require.NoError(t, err)

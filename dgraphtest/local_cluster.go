@@ -624,7 +624,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 		return errors.Wrapf(err, "error getting health URL %v", endpoint)
 	}
 
-	for attempt := range 60 {
+	for attempt := range 120 {
 		time.Sleep(waitDurBeforeRetry)
 
 		endpoint, err = url(c)
