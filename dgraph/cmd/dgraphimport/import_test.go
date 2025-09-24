@@ -380,6 +380,9 @@ func verifyImportResults(t *testing.T, gc *dgraphapi.GrpcClient, downAlphas int)
 	expectedPredicates := getPredicateMap(expectedSchemaObj)
 
 	for i := 0; i < maxRetries; i++ {
+		// Checking client connection again here because an import operation may be in progress on the rejoined alpha
+		require.NoError(t, validateClientConnection(t, gc, 10*time.Second))
+
 		schemaResp, err := gc.Query("schema{}")
 		require.NoError(t, err)
 
