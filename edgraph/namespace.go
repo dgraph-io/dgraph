@@ -33,7 +33,7 @@ func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceReq
 	}
 
 	glog.Infof("Created namespace with id [%d]", ns)
-	return &api.CreateNamespaceResponse{}, nil
+	return &api.CreateNamespaceResponse{Namespace: ns}, nil
 }
 
 func (s *Server) DropNamespace(ctx context.Context, in *api.DropNamespaceRequest) (
