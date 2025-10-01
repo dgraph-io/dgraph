@@ -151,7 +151,6 @@ func streamSnapshotForGroup(ctx context.Context, dc api.DgraphClient, pdir strin
 	if err := out.Send(groupReq); err != nil {
 		return fmt.Errorf("failed to send request for group ID [%v] to the server: %w", groupId, err)
 	}
-	fmt.Println("waiting here==================================>")
 	if _, err := out.Recv(); err != nil {
 		return fmt.Errorf("failed to receive response for group ID [%v] from the server: %w", groupId, err)
 	}
