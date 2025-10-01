@@ -28,7 +28,7 @@ jobs:
         with:
           ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install protobuf-compiler
@@ -128,7 +128,7 @@ jobs:
         with:
           ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install protobuf-compiler
