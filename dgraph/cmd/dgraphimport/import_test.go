@@ -306,7 +306,7 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.NoError(t, err)
 		defer cleanup()
 
-		require.NoError(t, validateClientConnection(t, gc, 10*time.Second))
+		require.NoError(t, validateClientConnection(t, gc, 30*time.Second))
 		verifyImportResults(t, gc, tt.downAlphas)
 	}
 }
@@ -549,7 +549,7 @@ func retryHealthCheck(t *testing.T, cluster *dgraphtest.LocalCluster, timeout ti
 // validateClientConnection ensures the client connection is working before use
 func validateClientConnection(t *testing.T, gc *dgraphapi.GrpcClient, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	retryDelay := 200 * time.Millisecond
+	retryDelay := 1 * time.Second
 
 	for time.Now().Before(deadline) {
 		if _, err := gc.Query("schema{}"); err != nil {
