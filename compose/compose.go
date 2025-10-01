@@ -235,7 +235,8 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += " --bindall"
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerPort := zeroBasePort + opts.PortOffset
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), peerPort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -258,7 +259,9 @@ func getZero(idx int, raft string) service {
 
 func getAlpha(idx int, raft string) service {
 	basename := "alpha"
+	// internalPort is used for Raft communication between nodes.
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
+	// grpcPort is the public-facing port for clients. It is offset from the internal port.
 	grpcPort := internalPort + 1000
 	svc := initService(basename, idx, grpcPort)
 
