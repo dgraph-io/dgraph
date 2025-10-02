@@ -197,11 +197,6 @@ Loop:
 	if err := postStreamProcessing(ctx); err != nil {
 		return err
 	}
-
-	if err := stream.Send(&api.StreamExtSnapshotResponse{Finish: true}); err != nil {
-		glog.Errorf("[import] failed to send close on in: %v", err)
-		return err
-	}
 	return nil
 }
 
@@ -354,6 +349,7 @@ func pipeTwoStream(in api.Dgraph_StreamExtSnapshotServer, out pb.Worker_StreamEx
 		if err := in.Send(&api.StreamExtSnapshotResponse{}); err != nil {
 			return fmt.Errorf("send ack upstream: %w", err)
 		}
+
 	}
 }
 
