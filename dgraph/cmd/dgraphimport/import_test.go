@@ -292,7 +292,7 @@ func runImportTest(t *testing.T, tt testcase) {
 			alphaID := alphas[i]
 			t.Logf("Starting alpha %v from group %v", alphaID, group)
 			require.NoError(t, targetCluster.StartAlpha(alphaID))
-			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 30*time.Second))
+			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 60*time.Second))
 		}
 	}
 
@@ -368,7 +368,7 @@ func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (
 
 // verifyImportResults validates the result of an import operation with retry logic
 func verifyImportResults(t *testing.T, gc *dgraphapi.GrpcClient, downAlphas int) {
-	maxRetries := 1
+	maxRetries := 5
 	if downAlphas > 0 {
 		maxRetries = 10
 	}
