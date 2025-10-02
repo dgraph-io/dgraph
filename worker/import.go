@@ -30,20 +30,43 @@ type pubSub struct {
 }
 
 // Subscribe returns a new channel to receive published messages
-func (ps *pubSub) subscribe() <-chan *api.StreamExtSnapshotRequest {
+func (ps *pubSub) subscribe() chan *api.StreamExtSnapshotRequest {
 	ch := make(chan *api.StreamExtSnapshotRequest, 20)
 	ps.Lock()
-	defer ps.Unlock()
 	ps.subscribers = append(ps.subscribers, ch)
+	ps.Unlock()
 	return ch
 }
 
+// publish sends to all subscribers without blocking on any single subscriber.
+// If a subscriber is not draining, skip it (it will be marked failed by its goroutine).
 func (ps *pubSub) publish(msg *api.StreamExtSnapshotRequest) {
-	// Send message to all subscribers without dropping any
 	ps.RLock()
-	defer ps.RUnlock()
-	for _, ch := range ps.subscribers {
-		ch <- msg
+	// copy to avoid holding lock while sending
+	subs := make([]chan *api.StreamExtSnapshotRequest, len(ps.subscribers))
+	copy(subs, ps.subscribers)
+	ps.RUnlock()
+
+	for _, ch := range subs {
+		select {
+		case ch <- msg:
+		default:
+			// subscriber is stuck; skip to avoid blocking publisher
+		}
+	}
+}
+
+// Unsubscribe removes a subscriber and closes its channel.
+func (ps *pubSub) unsubscribe(ch chan *api.StreamExtSnapshotRequest) {
+	ps.Lock()
+	defer ps.Unlock()
+	for i, c := range ps.subscribers {
+		if c == ch {
+			// remove from slice
+			ps.subscribers = append(ps.subscribers[:i], ps.subscribers[i+1:]...)
+			close(c)
+			return
+		}
 	}
 }
 
@@ -93,6 +116,8 @@ func (ps *pubSub) runForwardSubscriber(ctx context.Context, out api.Dgraph_Strea
 	}()
 
 	buffer := ps.subscribe()
+	defer ps.unsubscribe(buffer) // ensure publisher won't block on us if we exit
+
 Loop:
 	for {
 		select {
@@ -154,6 +179,7 @@ func (ps *pubSub) runLocalSubscriber(ctx context.Context, stream pb.Worker_Strea
 	}()
 
 	buffer := ps.subscribe()
+	defer ps.unsubscribe(buffer) // ensure publisher won't block on us if we exit
 	glog.Infof("[import:flush] flushing external snapshot in badger db")
 
 	sw := pstore.NewStreamWriter()
