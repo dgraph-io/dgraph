@@ -7,9 +7,9 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2
 	github.com/IBM/sarama v1.46.1
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/blevesearch/bleve/v2 v2.5.3
+	github.com/blevesearch/bleve/v2 v2.5.2
 	github.com/dgraph-io/badger/v4 v4.8.0
-	github.com/dgraph-io/dgo/v250 v250.0.0-preview4.0.20251001031539-c5607f0af3d0
+	github.com/dgraph-io/dgo/v250 v250.0.0-preview7
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
 	github.com/dgraph-io/graphql-transport-ws v0.0.0-20210511143556-2cef522f1f15

@@ -503,6 +503,11 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		args = append(args, "-g", strings.Join(opts.GQLSchemaFiles, ","))
 	}
 
+	// dgraphCmdPath := os.Getenv("DGRAPH_CMD_PATH")
+	// if dgraphCmdPath == "" {
+	// 	dgraphCmdPath = filepath.Join(c.tempBinDir, "dgraph")
+	// }
+
 	log.Printf("[INFO] running bulk loader with args: [%v]", strings.Join(args, " "))
 	binaryName := "dgraph"
 	if os.Getenv("DGRAPH_BINARY") != "" {

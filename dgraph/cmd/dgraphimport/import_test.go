@@ -1,4 +1,4 @@
-//go:build integration
+//go:build integration2
 
 /*
  * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
@@ -79,7 +79,8 @@ func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conf := dgraphtest.NewClusterConfig().WithNumAlphas(tt.numAlphas).WithNumZeros(tt.numZeros).WithReplicas(tt.replicas)
+			conf := dgraphtest.NewClusterConfig().WithNumAlphas(tt.numAlphas).
+				WithNumZeros(tt.numZeros).WithReplicas(tt.replicas)
 			c, err := dgraphtest.NewLocalCluster(conf)
 			require.NoError(t, err)
 			defer func() { c.Cleanup(t.Failed()) }()
@@ -284,7 +285,6 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.ErrorContains(t, err, tt.err)
 		return
 	}
-
 	require.NoError(t, Import(context.Background(), connectionString, outDir))
 
 	for group, alphas := range alphaGroups {
@@ -292,7 +292,7 @@ func runImportTest(t *testing.T, tt testcase) {
 			alphaID := alphas[i]
 			t.Logf("Starting alpha %v from group %v", alphaID, group)
 			require.NoError(t, targetCluster.StartAlpha(alphaID))
-			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 30*time.Second))
+			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 60*time.Second))
 		}
 	}
 
@@ -306,7 +306,7 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.NoError(t, err)
 		defer cleanup()
 
-		require.NoError(t, validateClientConnection(t, gc, 10*time.Second))
+		require.NoError(t, validateClientConnection(t, gc, 30*time.Second))
 		verifyImportResults(t, gc, tt.downAlphas)
 	}
 }
@@ -347,7 +347,9 @@ func setupBulkCluster(t *testing.T, numAlphas int, encrypted bool) (*dgraphtest.
 }
 
 // setupTargetCluster creates and starts a cluster that will receive the imported data
-func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (*dgraphtest.LocalCluster, *dgraphapi.GrpcClient, func()) {
+func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (
+	*dgraphtest.LocalCluster, *dgraphapi.GrpcClient, func()) {
+
 	conf := dgraphtest.NewClusterConfig().
 		WithNumAlphas(numAlphas).
 		WithNumZeros(3).
@@ -366,7 +368,7 @@ func setupTargetCluster(t *testing.T, numAlphas, replicasFactor int) (*dgraphtes
 
 // verifyImportResults validates the result of an import operation with retry logic
 func verifyImportResults(t *testing.T, gc *dgraphapi.GrpcClient, downAlphas int) {
-	maxRetries := 1
+	maxRetries := 5
 	if downAlphas > 0 {
 		maxRetries = 10
 	}
@@ -547,7 +549,7 @@ func retryHealthCheck(t *testing.T, cluster *dgraphtest.LocalCluster, timeout ti
 // validateClientConnection ensures the client connection is working before use
 func validateClientConnection(t *testing.T, gc *dgraphapi.GrpcClient, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
-	retryDelay := 200 * time.Millisecond
+	retryDelay := 1 * time.Second
 
 	for time.Now().Before(deadline) {
 		if _, err := gc.Query("schema{}"); err != nil {

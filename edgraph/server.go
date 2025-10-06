@@ -1828,6 +1828,7 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 	groups, err := worker.ProposeDrain(ctx, req)
 	if err != nil {
+		glog.Errorf("[import] failed to propose drain mode: %v", err)
 		return nil, err
 	}
 
@@ -1838,8 +1839,11 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) error {
 	defer x.ExtSnapshotStreamingState(false)
-
-	return worker.InStream(stream)
+	if err := worker.InStream(stream); err != nil {
+		glog.Errorf("[import] failed to stream external snapshot: %v", err)
+		return err
+	}
+	return nil
 }
 
 // CommitOrAbort commits or aborts a transaction.

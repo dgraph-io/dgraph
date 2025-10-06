@@ -599,7 +599,7 @@ service Worker {
   rpc DeleteNamespace(DeleteNsRequest) returns (Status) {}
   rpc TaskStatus(TaskStatusRequest) returns (TaskStatusResponse) {}
   rpc UpdateExtSnapshotStreamingState(api.UpdateExtSnapshotStreamingStateRequest) returns (Status) {}
-  rpc StreamExtSnapshot(stream api.StreamExtSnapshotRequest) returns (api.StreamExtSnapshotResponse) {}
+  rpc StreamExtSnapshot(stream api.StreamExtSnapshotRequest) returns (stream api.StreamExtSnapshotResponse) {}
 }
 
 message TabletResponse {

@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/hypermodeinc/dgraph/v25/acl"
+
 	"github.com/hypermodeinc/dgraph/v25/audit"
 	"github.com/hypermodeinc/dgraph/v25/backup"
 	checkupgrade "github.com/hypermodeinc/dgraph/v25/check_upgrade"

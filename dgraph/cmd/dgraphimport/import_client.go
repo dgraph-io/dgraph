@@ -127,23 +127,18 @@ func streamSnapshotForGroup(ctx context.Context, dc api.DgraphClient, pdir strin
 	if err != nil {
 		return fmt.Errorf("failed to start external snapshot stream for group %d: %w", groupId, err)
 	}
-
 	defer func() {
-		if _, err := out.CloseAndRecv(); err != nil {
-			glog.Errorf("failed to close the stream for group [%v]: %v", groupId, err)
-		}
-
-		glog.Infof("[import] Group [%v]: Received ACK ", groupId)
+		_ = out.CloseSend()
 	}()
 
 	// Open the BadgerDB instance at the specified directory
 	opt := badger.DefaultOptions(pdir)
+	opt.ReadOnly = true
 	ps, err := badger.OpenManaged(opt)
 	if err != nil {
 		glog.Errorf("failed to open BadgerDB at [%s]: %v", pdir, err)
 		return fmt.Errorf("failed to open BadgerDB at [%v]: %v", pdir, err)
 	}
-
 	defer func() {
 		if err := ps.Close(); err != nil {
 			glog.Warningf("[import] Error closing BadgerDB: %v", err)
@@ -154,17 +149,19 @@ func streamSnapshotForGroup(ctx context.Context, dc api.DgraphClient, pdir strin
 	glog.Infof("[import] Sending request for streaming external snapshot for group ID [%v]", groupId)
 	groupReq := &api.StreamExtSnapshotRequest{GroupId: groupId}
 	if err := out.Send(groupReq); err != nil {
-		return fmt.Errorf("failed to send request for streaming external snapshot for group ID [%v] to the server: %w",
-			groupId, err)
+		return fmt.Errorf("failed to send request for group ID [%v] to the server: %w", groupId, err)
 	}
+	if _, err := out.Recv(); err != nil {
+		return fmt.Errorf("failed to receive response for group ID [%v] from the server: %w", groupId, err)
+	}
+
+	glog.Infof("[import] Group [%v]: Received ACK for sending group request", groupId)
 
 	// Configure and start the BadgerDB stream
 	glog.Infof("[import] Starting BadgerDB stream for group [%v]", groupId)
-
 	if err := streamBadger(ctx, ps, out, groupId); err != nil {
 		return fmt.Errorf("badger streaming failed for group [%v]: %v", groupId, err)
 	}
-
 	return nil
 }
 
@@ -180,6 +177,11 @@ func streamBadger(ctx context.Context, ps *badger.DB, out api.Dgraph_StreamExtSn
 		if err := out.Send(&api.StreamExtSnapshotRequest{Pkt: p}); err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to send data chunk: %w", err)
 		}
+		if _, err := out.Recv(); err != nil {
+			return fmt.Errorf("failed to receive response for group ID [%v] from the server: %w", groupId, err)
+		}
+		glog.Infof("[import] Group [%v]: Received ACK for sending data chunk", groupId)
+
 		return nil
 	}
 
@@ -195,6 +197,26 @@ func streamBadger(ctx context.Context, ps *badger.DB, out api.Dgraph_StreamExtSn
 	if err := out.Send(&api.StreamExtSnapshotRequest{Pkt: done}); err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("failed to send 'done' signal for group [%d]: %w", groupId, err)
 	}
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		resp, err := out.Recv()
+		if errors.Is(err, io.EOF) {
+			return fmt.Errorf("server closed stream before Finish=true for group [%d]", groupId)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to receive final response for group ID [%v] from the server: %w", groupId, err)
+		}
+		if resp.Finish {
+			glog.Infof("[import] Group [%v]: Received final Finish=true", groupId)
+			break
+		}
+		glog.Infof("[import] Group [%v]: Waiting for Finish=true, got interim ACK", groupId)
+	}
+
+	glog.Infof("[import] Group [%v]: Received ACK for sending completion signal", groupId)
 
 	return nil
 }
