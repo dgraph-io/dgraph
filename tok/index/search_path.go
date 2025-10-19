@@ -5,22 +5,22 @@
 
 package index
 
-// SearchPathResult is the return-type for the optional
+// SearchPathResult is the return type for the optional
 // SearchWithPath function for a VectorIndex
 // (by way of extending OptionalIndexSupport).
 type SearchPathResult struct {
-	// The collection of nearest-neighbors in sorted order after filtlering
-	// out neighbors that fail any Filter criteria.
+    // The collection of nearest neighbours in sorted order after filtering
+    // out neighbours that fail any Filter criteria.
 	Neighbors []uint64
-	// The path from the start of search to the closest neighbor vector.
+    // The path from the start of search to the closest neighbour vector.
 	Path []uint64
 	// A collection of captured named counters that occurred for the
 	// particular search.
 	Metrics map[string]uint64
 }
 
-// NewSearchPathResult() provides an initialized (empty) *SearchPathResult.
-// The attributes will be non-nil, but empty.
+// NewSearchPathResult provides an initialised (empty) *SearchPathResult.
+// The attributes will be non‑nil but empty.
 func NewSearchPathResult() *SearchPathResult {
 	return &SearchPathResult{
 		Neighbors: []uint64{},

@@ -28,8 +28,8 @@ type persistentHNSW[T c.Float] struct {
 	vecDead        string
 	simType        SimilarityType[T]
 	floatBits      int
-	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
-	// layer for uuid 65443. The result will be a neighboring uuid.
+    // nodeAllEdges[65443][1][3] indicates the 3rd neighbour in the first
+    // layer for UUID 65443. The result will be a neighbouring UUID.
 	nodeAllEdges map[uint64][][]uint64
 	deadNodes    map[uint64]struct{}
 }
@@ -120,7 +120,7 @@ func (ph *persistentHNSW[T]) emptySearchResultWithError(e error) (*searchLayerRe
 	return newLayerResult[T](0), e
 }
 
-// fillNeighborEdges(uuid, c, edges) will "fill" edges with the neighbors for
+// fillNeighborEdges(uuid, c, edges) will "fill" edges with the neighbours for
 // all levels associated with given uuid and CacheType.
 // It returns true when we were able to find the node (either in cache or
 // in persistent store) and false otherwise.
@@ -145,9 +145,9 @@ func (ph *persistentHNSW[T]) fillNeighborEdges(uuid uint64, c index.CacheType, e
 	return true, nil
 }
 
-// searchPersistentLayer searches a layer of the hnsw graph for the nearest
-// neighbors of the query vector and returns the traversal path and the nearest
-// neighbors
+// searchPersistentLayer searches a layer of the HNSW graph for the nearest
+// neighbours of the query vector and returns the traversal path and the nearest
+// neighbours
 func (ph *persistentHNSW[T]) searchPersistentLayer(
 	c index.CacheType,
 	level int,
@@ -177,9 +177,9 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 	//create set using map to append to on future visited nodes
 	for candidateHeap.Len() != 0 {
 		currCandidate := candidateHeap.Pop().(minPersistentHeapElement[T])
-		if r.numNeighbors() < expectedNeighbors &&
+		if r.numNeighbors() >= expectedNeighbors &&
 			ph.simType.isBetterScore(r.lastNeighborScore(), currCandidate.value) {
-			// If the "worst score" in our neighbors list is deemed to have
+            // If the "worst score" in our neighbours list is deemed to have
 			// a better score than the current candidate -- and if we have at
 			// least our expected number of nearest results -- we discontinue
 			// the search.
@@ -223,12 +223,12 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 
 			// If we have not yet found k candidates, we can consider
 			// any candidate. Otherwise, only consider those that
-			// are better than our current k nearest neighbors.
+            // are better than our current k nearest neighbours.
 			// Note that the "numNeighbors" function is a bit tricky:
-			// If we previously added to the heap M elements that should
+            // If we previously added to the heap M elements that should
 			// be filtered out, we ignore M elements in the numNeighbors
 			// check! In this way, we can make sure to allow in up to
-			// expectedNeighbors "unfiltered" elements.
+            // expectedNeighbors "unfiltered" elements.
 			if r.numNeighbors() < expectedNeighbors || ph.simType.isBetterScore(currDist, r.lastNeighborScore()) {
 				if candidateHeap.Len() > expectedNeighbors {
 					candidateHeap.PopLast()
@@ -246,16 +246,183 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 	return r, nil
 }
 
-// Search searches the hnsw graph for the nearest neighbors of the query vector
-// and returns the traversal path and the nearest neighbors
+// Search searches the HNSW graph for the nearest neighbours of the query vector
+// and returns the traversal path and the nearest neighbours
 func (ph *persistentHNSW[T]) Search(ctx context.Context, c index.CacheType, query []T,
 	maxResults int, filter index.SearchFilter[T]) (nnUids []uint64, err error) {
 	r, err := ph.SearchWithPath(ctx, c, query, maxResults, filter)
 	return r.Neighbors, err
 }
 
-// SearchWithUid searches the hnsw graph for the nearest neighbors of the query uid
-// and returns the traversal path and the nearest neighbors
+// SearchWithOptions applies optional per-call controls (ef override and distance threshold).
+// When EfOverride > 0, it is applied at upper layers and the bottom layer uses
+// candidateK = max(maxResults, EfOverride). Results return the best maxResults.
+// When DistanceThreshold is set, results exceeding the threshold (in the metric domain)
+// are filtered out before limiting to maxResults.
+func (ph *persistentHNSW[T]) SearchWithOptions(
+	ctx context.Context,
+	c index.CacheType,
+	query []T,
+	maxResults int,
+	opts index.VectorIndexOptions[T],
+) ([]uint64, error) {
+	if opts.Filter == nil {
+		opts.Filter = index.AcceptAll[T]
+	}
+	if maxResults < 0 {
+		maxResults = 0
+	}
+	r := index.NewSearchPathResult()
+	start := time.Now().UnixMilli()
+
+	// 0-profile_vector_entry
+	var startVec []T
+	entry, err := ph.PickStartNode(ctx, c, &startVec)
+	if err != nil {
+		return nil, err
+	}
+
+	// Upper layers use efUpper (override if provided)
+	efUpper := ph.efSearch
+	if opts.EfOverride > 0 {
+		efUpper = opts.EfOverride
+	}
+
+	for level := range ph.maxLevels - 1 {
+		if isEqual(startVec, query) {
+			break
+		}
+		filterOut := !opts.Filter(query, startVec, entry)
+		layerResult, err := ph.searchPersistentLayer(
+			c, level, entry, startVec, query, filterOut, efUpper, opts.Filter)
+		if err != nil {
+			return nil, err
+		}
+		layerResult.updateFinalMetrics(r)
+		entry = layerResult.bestNeighbor().index
+		layerResult.updateFinalPath(r)
+		if err = ph.getVecFromUid(entry, c, &startVec); err != nil {
+			return nil, err
+		}
+	}
+
+	// Bottom layer: candidate size = max(k, efUpper)
+	filterOut := !opts.Filter(query, startVec, entry)
+	candidateK := maxResults
+	if efUpper > candidateK {
+		candidateK = efUpper
+	}
+	layerResult, err := ph.searchPersistentLayer(
+		c, ph.maxLevels-1, entry, startVec, query, filterOut, candidateK, opts.Filter)
+	if err != nil {
+		return nil, err
+	}
+	layerResult.updateFinalMetrics(r)
+	layerResult.updateFinalPath(r)
+
+    // Build final neighbour list with optional threshold, limited to maxResults.
+	res := make([]uint64, 0, maxResults)
+	for _, n := range layerResult.neighbors {
+		if maxResults == 0 {
+			break
+		}
+		if n.filteredOut {
+			continue
+		}
+		if opts.DistanceThreshold != nil {
+			th := *opts.DistanceThreshold
+			switch ph.simType.indexType {
+			case Euclidean:
+				thSq := th * th
+				if float64(n.value) > thSq {
+					continue
+				}
+			case Cosine:
+				// n.value is cosine similarity in [-1,1]; cosine distance d=1-sim must be <= th
+				if float64(1.0)-float64(n.value) > th {
+					continue
+				}
+			default:
+				// Dot product or others: ignore threshold for now
+			}
+		}
+		res = append(res, n.index)
+		if len(res) >= maxResults {
+			break
+		}
+	}
+
+	r.Metrics[searchTime] = uint64(time.Now().UnixMilli() - start)
+	return res, nil
+}
+
+// SearchWithUidAndOptions is analogous to SearchWithUid but applies per‑call options.
+func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
+	_ context.Context,
+	c index.CacheType,
+	queryUid uint64,
+	maxResults int,
+	opts index.VectorIndexOptions[T],
+) ([]uint64, error) {
+	if opts.Filter == nil {
+		opts.Filter = index.AcceptAll[T]
+	}
+	if maxResults < 0 {
+		maxResults = 0
+	}
+	var queryVec []T
+	if err := ph.getVecFromUid(queryUid, c, &queryVec); err != nil {
+		if errors.Is(err, errFetchingPostingList) {
+			return []uint64{}, nil
+		}
+		return []uint64{}, err
+	}
+	if len(queryVec) == 0 {
+		return []uint64{}, nil
+	}
+	filterOut := !opts.Filter(queryVec, queryVec, queryUid)
+	candidateK := maxResults
+	if opts.EfOverride > candidateK {
+		candidateK = opts.EfOverride
+	}
+	lr, err := ph.searchPersistentLayer(
+		c, ph.maxLevels-1, queryUid, queryVec, queryVec, filterOut, candidateK, opts.Filter)
+	if err != nil {
+		return []uint64{}, err
+	}
+	res := make([]uint64, 0, maxResults)
+	for _, n := range lr.neighbors {
+		if maxResults == 0 {
+			break
+		}
+		if n.filteredOut {
+			continue
+		}
+		if opts.DistanceThreshold != nil {
+			th := *opts.DistanceThreshold
+			switch ph.simType.indexType {
+			case Euclidean:
+				thSq := th * th
+				if float64(n.value) > thSq {
+					continue
+				}
+			case Cosine:
+				if float64(1.0)-float64(n.value) > th {
+					continue
+				}
+			default:
+			}
+		}
+		res = append(res, n.index)
+		if len(res) >= maxResults {
+			break
+		}
+	}
+	return res, nil
+}
+
+// SearchWithUid searches the HNSW graph for the nearest neighbours of the query UID
+// and returns the traversal path and the nearest neighbours
 func (ph *persistentHNSW[T]) SearchWithUid(_ context.Context, c index.CacheType, queryUid uint64,
 	maxResults int, filter index.SearchFilter[T]) (nnUids []uint64, err error) {
 	var queryVec []T
@@ -275,10 +442,10 @@ func (ph *persistentHNSW[T]) SearchWithUid(_ context.Context, c index.CacheType,
 
 	shouldFilterOutQueryVec := !filter(queryVec, queryVec, queryUid)
 
-	// how normal search works is by cotinuously searching higher layers
-	// for the best entry node to the last layer since we already know the
-	// best entry node (since it already exists in the lowest level), we
-	// can just search the last layer and return the results.
+    // How normal search works is by continuously searching higher layers
+    // for the best entry node to the last layer. Since we already know the
+    // best entry node (it already exists in the lowest level), we
+    // can just search the last layer and return the results.
 	r, err := ph.searchPersistentLayer(
 		c, ph.maxLevels-1, queryUid, queryVec, queryVec,
 		shouldFilterOutQueryVec, maxResults, filter)
@@ -389,7 +556,7 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	return r, nil
 }
 
-// InsertToPersistentStorage inserts a node into the hnsw graph and returns the
+// InsertToPersistentStorage inserts a node into the HNSW graph and returns the
 // traversal path and the edges created
 func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
 	inUuid uint64, inVec []T) ([]*index.KeyValue, error) {
@@ -401,7 +568,7 @@ func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
 	return edges, err
 }
 
-// InsertToPersistentStorage inserts a node into the hnsw graph and returns the
+// InsertToPersistentStorage inserts a node into the HNSW graph and returns the
 // traversal path and the edges created
 func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	inUuid uint64, inVec []T) ([]minPersistentHeapElement[T], []*index.KeyValue, error) {
