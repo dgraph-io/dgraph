@@ -179,14 +179,11 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		currCandidate := candidateHeap.Pop().(minPersistentHeapElement[T])
 		if r.numNeighbors() >= expectedNeighbors &&
 			ph.simType.isBetterScore(r.lastNeighborScore(), currCandidate.value) {
-            // If the "worst score" in our neighbours list is deemed to have
-			// a better score than the current candidate -- and if we have at
-			// least our expected number of nearest results -- we discontinue
-			// the search.
-			// Note that while this is faithful to the published
-			// HNSW algorithms insofar as we stop when we reach a local
-			// minimum, it leaves something to be desired in terms of
-			// guarantees of getting best results.
+            // Standard HNSW termination: once the current best candidate
+            // cannot improve the ef-sized neighbour set (and we already have
+            // at least expectedNeighbors), we stop exploring this layer.
+            // Recall is governed by ef; callers may raise ef (per‑query
+            // override supported) to explore further.
 			break
 		}
 
