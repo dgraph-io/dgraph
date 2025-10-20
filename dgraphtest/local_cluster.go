@@ -635,14 +635,14 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 		if err != nil {
 			if attempt > 50 {
-				log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)
+				log.Printf("[WARNING] problem building req for endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
 		}
 		body, err := dgraphapi.DoReq(req)
 		if err != nil {
 			if attempt > 50 {
-				log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", endpoint, err)
+				log.Printf("[WARNING] problem hitting health endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
 		}
@@ -692,7 +692,7 @@ func (c *LocalCluster) waitUntilLogin() error {
 			return nil
 		}
 		if attempt > 5 {
-			log.Printf("[WARNING] error trying to login: %v", err)
+			log.Printf("[WARNING] problem trying to login: %v", err)
 		}
 		time.Sleep(waitDurBeforeRetry)
 	}
@@ -876,7 +876,7 @@ func (c *LocalCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	cleanup := func() {
 		for _, conn := range conns {
 			if err := conn.Close(); err != nil {
-				log.Printf("[WARNING] error closing connection: %v", err)
+				log.Printf("[WARNING] problem closing connection: %v", err)
 			}
 		}
 	}
@@ -897,7 +897,7 @@ func (c *LocalCluster) AlphaClient(id int) (*dgraphapi.GrpcClient, func(), error
 	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	cleanup := func() {
 		if err := conn.Close(); err != nil {
-			log.Printf("[WARNING] error closing connection: %v", err)
+			log.Printf("[WARNING] problem closing connection: %v", err)
 		}
 	}
 	return &dgraphapi.GrpcClient{Dgraph: client}, cleanup, nil
