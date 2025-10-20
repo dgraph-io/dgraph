@@ -493,6 +493,22 @@ func (c *LocalCluster) StartAlpha(id int) error {
 func (c *LocalCluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
+
+	// verify the container still exists
+	_, err := c.dcli.ContainerInspect(ctx, dc.cid())
+	if err != nil {
+		log.Printf("[WARNING] container %s (ID: %s) not found, attempting to recreate", dc.cname(), dc.cid())
+		newCID, createErr := c.createContainer(dc)
+		if createErr != nil {
+			return errors.Wrapf(createErr, "error recreating missing container [%v]", dc.cname())
+		}
+		switch node := dc.(type) {
+		case *alpha, *zero:
+			node.setContainerID(newCID)
+		}
+		log.Printf("[INFO] successfully recreated container %s with new ID: %s", dc.cname(), newCID)
+	}
+
 	if err := c.dcli.ContainerStart(ctx, dc.cid(), container.StartOptions{}); err != nil {
 		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
