@@ -634,14 +634,14 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 
 		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 		if err != nil {
-			if attempt > 10 {
+			if attempt > 50 {
 				log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
 		}
 		body, err := dgraphapi.DoReq(req)
 		if err != nil {
-			if attempt > 10 {
+			if attempt > 50 {
 				log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
@@ -691,7 +691,7 @@ func (c *LocalCluster) waitUntilLogin() error {
 			log.Printf("[INFO] login succeeded")
 			return nil
 		}
-		if attempt > 10 {
+		if attempt > 5 {
 			log.Printf("[WARNING] error trying to login: %v", err)
 		}
 		time.Sleep(waitDurBeforeRetry)
