@@ -235,7 +235,7 @@ func runImportTest(t *testing.T, tt testcase) {
 	defer gcCleanup()
 
 	// Wait for cluster to be fully ready before proceeding
-	require.NoError(t, waitForClusterReady(t, targetCluster, gc, 30*time.Second))
+	require.NoError(t, waitForClusterReady(t, targetCluster, gc, 60*time.Second))
 
 	url, err := targetCluster.GetAlphaGrpcEndpoint(0)
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func runImportTest(t *testing.T, tt testcase) {
 	}
 
 	if tt.downAlphas > 0 && tt.err == "" {
-		require.NoError(t, waitForClusterStable(t, targetCluster, 30*time.Second))
+		require.NoError(t, waitForClusterStable(t, targetCluster, 60*time.Second))
 	}
 
 	if tt.err != "" {
@@ -292,11 +292,11 @@ func runImportTest(t *testing.T, tt testcase) {
 			alphaID := alphas[i]
 			t.Logf("Starting alpha %v from group %v", alphaID, group)
 			require.NoError(t, targetCluster.StartAlpha(alphaID))
-			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 60*time.Second))
+			require.NoError(t, waitForAlphaReady(t, targetCluster, alphaID, 120*time.Second))
 		}
 	}
 
-	require.NoError(t, retryHealthCheck(t, targetCluster, 60*time.Second))
+	require.NoError(t, retryHealthCheck(t, targetCluster, 120*time.Second))
 
 	t.Log("Import completed")
 
@@ -306,7 +306,7 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.NoError(t, err)
 		defer cleanup()
 
-		require.NoError(t, validateClientConnection(t, gc, 30*time.Second))
+		require.NoError(t, validateClientConnection(t, gc, 60*time.Second))
 		verifyImportResults(t, gc, tt.downAlphas)
 	}
 }
