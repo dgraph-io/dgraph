@@ -279,6 +279,9 @@ func runImportTest(t *testing.T, tt testcase) {
 		require.NoError(t, waitForClusterStable(t, targetCluster, 60*time.Second))
 	}
 
+	// Ensure all groups have leaders before starting import
+	require.NoError(t, waitForAllGroupLeaders(t, targetCluster, 120*time.Second))
+
 	if tt.err != "" {
 		err := Import(context.Background(), connectionString, outDir)
 		require.Error(t, err)
@@ -544,6 +547,64 @@ func retryHealthCheck(t *testing.T, cluster *dgraphtest.LocalCluster, timeout ti
 	}
 
 	return fmt.Errorf("health check failed within %v timeout", timeout)
+}
+
+// waitForAllGroupLeaders ensures all Raft groups have established leaders
+func waitForAllGroupLeaders(t *testing.T, cluster *dgraphtest.LocalCluster, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	retryDelay := 1 * time.Second
+
+	for time.Now().Before(deadline) {
+		hc, err := cluster.HTTPClient()
+		if err != nil {
+			t.Logf("Failed to get HTTP client: %v, retrying in %v", err, retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay = min(retryDelay*2, 5*time.Second)
+			continue
+		}
+
+		var state pb.MembershipState
+		healthResp, err := hc.GetAlphaState()
+		if err != nil {
+			t.Logf("Failed to get alpha state: %v, retrying in %v", err, retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay = min(retryDelay*2, 5*time.Second)
+			continue
+		}
+
+		if err := protojson.Unmarshal(healthResp, &state); err != nil {
+			t.Logf("Failed to unmarshal state: %v, retrying in %v", err, retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay = min(retryDelay*2, 5*time.Second)
+			continue
+		}
+
+		allGroupsHaveLeaders := true
+		for _, group := range state.Groups {
+			hasLeader := false
+			for _, member := range group.Members {
+				if member.Leader {
+					hasLeader = true
+					break
+				}
+			}
+			if !hasLeader {
+				t.Logf("Group %d has no leader yet, retrying in %v", group.GroupId, retryDelay)
+				allGroupsHaveLeaders = false
+				break
+			}
+		}
+
+		if allGroupsHaveLeaders {
+			t.Log("All groups have established leaders")
+			return nil
+		}
+
+		time.Sleep(retryDelay)
+		retryDelay = min(retryDelay*2, 5*time.Second)
+	}
+
+	return fmt.Errorf("not all groups have leaders within %v timeout", timeout)
 }
 
 // validateClientConnection ensures the client connection is working before use
