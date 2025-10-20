@@ -167,18 +167,30 @@ func (c *LocalCluster) init() error {
 
 func (c *LocalCluster) createNetwork() error {
 	c.net.name = c.conf.prefix + "-net"
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	// Check if network already exists
+	existingNet, err := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+	if err == nil {
+		// Network exists, reuse it
+		log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
+		c.net.id = existingNet.ID
+		return nil
+	}
+
+	// Network doesn't exist, create it
 	opts := network.CreateOptions{
 		Driver: "bridge",
 		IPAM:   &network.IPAM{Driver: "default"},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	network, err := c.dcli.NetworkCreate(ctx, c.net.name, opts)
+	networkResp, err := c.dcli.NetworkCreate(ctx, c.net.name, opts)
 	if err != nil {
 		return errors.Wrap(err, "error creating network")
 	}
-	c.net.id = network.ID
+	c.net.id = networkResp.ID
 
 	return nil
 }
@@ -256,6 +268,19 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		return "", err
 	}
 
+	// Verify the network still exists before creating container
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if c.net.id != "" {
+		_, err := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+		if err != nil {
+			log.Printf("[WARNING] network %s (ID: %s) not found, recreating", c.net.name, c.net.id)
+			if err := c.createNetwork(); err != nil {
+				return "", errors.Wrap(err, "error recreating network")
+			}
+		}
+	}
+
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
 	networkConfig := &network.NetworkingConfig{
@@ -267,8 +292,6 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
 	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, nil, dc.cname())
 	if err != nil {
 		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
