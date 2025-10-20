@@ -491,6 +491,8 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		"--out", outDir,
 		// we had to create the dir for setting up docker, hence, replacing it here.
 		"--replace_out",
+		// Use :0 to let OS assign random available port for pprof, avoids conflicts in tests
+		"--http", ":0",
 	}
 
 	if len(opts.DataFiles) > 0 {
