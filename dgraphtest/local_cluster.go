@@ -56,10 +56,11 @@ type LocalCluster struct {
 	customTokenizers string
 
 	// resources
-	dcli   *docker.Client
-	net    cnet
-	zeros  []*zero
-	alphas []*alpha
+	dcli     *docker.Client
+	net      cnet
+	netMutex sync.Mutex // protects network recreation
+	zeros    []*zero
+	alphas   []*alpha
 }
 
 // UpgradeStrategy is an Enum that defines various upgrade strategies
@@ -188,6 +189,18 @@ func (c *LocalCluster) createNetwork() error {
 
 	networkResp, err := c.dcli.NetworkCreate(ctx, c.net.name, opts)
 	if err != nil {
+		// If network already exists (race condition), try to inspect and reuse it
+		if strings.Contains(err.Error(), "already exists") {
+			log.Printf("[INFO] network %s already exists (race condition), inspecting", c.net.name)
+			existingNet, inspectErr := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+			if inspectErr == nil {
+				log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
+				c.net.id = existingNet.ID
+				return nil
+			}
+			// If inspect also fails, return original create error
+			log.Printf("[WARNING] failed to inspect network after creation conflict: %v", inspectErr)
+		}
 		return errors.Wrap(err, "error creating network")
 	}
 	c.net.id = networkResp.ID
@@ -274,10 +287,18 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	if c.net.id != "" {
 		_, err := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
 		if err != nil {
-			log.Printf("[WARNING] network %s (ID: %s) not found, recreating", c.net.name, c.net.id)
-			if err := c.createNetwork(); err != nil {
-				return "", errors.Wrap(err, "error recreating network")
+			// Use mutex to prevent multiple goroutines from recreating network simultaneously
+			c.netMutex.Lock()
+			// Double-check after acquiring lock - another goroutine may have recreated it
+			_, recheckErr := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+			if recheckErr != nil {
+				log.Printf("[WARNING] network %s (ID: %s) not found, recreating", c.net.name, c.net.id)
+				if err := c.createNetwork(); err != nil {
+					c.netMutex.Unlock()
+					return "", errors.Wrap(err, "error recreating network")
+				}
 			}
+			c.netMutex.Unlock()
 		}
 	}
 
