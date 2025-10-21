@@ -580,7 +580,7 @@ func waitForAllGroupLeaders(t *testing.T, cluster *dgraphtest.LocalCluster, time
 		}
 
 		allGroupsHaveLeaders := true
-		for _, group := range state.Groups {
+		for groupID, group := range state.Groups {
 			hasLeader := false
 			for _, member := range group.Members {
 				if member.Leader {
@@ -589,7 +589,7 @@ func waitForAllGroupLeaders(t *testing.T, cluster *dgraphtest.LocalCluster, time
 				}
 			}
 			if !hasLeader {
-				t.Logf("Group %d has no leader yet, retrying in %v", group.GroupId, retryDelay)
+				t.Logf("Group %d has no leader yet, retrying in %v", groupID, retryDelay)
 				allGroupsHaveLeaders = false
 				break
 			}
