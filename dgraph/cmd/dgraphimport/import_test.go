@@ -596,8 +596,38 @@ func waitForAllGroupLeaders(t *testing.T, cluster *dgraphtest.LocalCluster, time
 		}
 
 		if allGroupsHaveLeaders {
-			t.Log("All groups have established leaders")
-			return nil
+			// Wait a bit to ensure leaders are stable, not just elected
+			t.Log("All groups have leaders, waiting for stability...")
+			time.Sleep(5 * time.Second)
+
+			// Verify leaders are still present after stability period
+			var stableState pb.MembershipState
+			stableResp, err := hc.GetAlphaState()
+			if err == nil && protojson.Unmarshal(stableResp, &stableState) == nil {
+				stillStable := true
+				for groupID, group := range stableState.Groups {
+					hasLeader := false
+					for _, member := range group.Members {
+						if member.Leader {
+							hasLeader = true
+							break
+						}
+					}
+					if !hasLeader {
+						t.Logf("Group %d lost its leader during stability check, retrying", groupID)
+						stillStable = false
+						break
+					}
+				}
+				if stillStable {
+					t.Log("All groups have stable leaders")
+					return nil
+				}
+			}
+			// If stability check failed, continue retrying
+			time.Sleep(retryDelay)
+			retryDelay = min(retryDelay*2, 5*time.Second)
+			continue
 		}
 
 		time.Sleep(retryDelay)
