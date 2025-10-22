@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     iputils-ping \
     jq \
+    libjemalloc-dev \
     less \
     sysstat \
     && rm -rf /var/lib/apt/lists/*
