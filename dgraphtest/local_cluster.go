@@ -438,16 +438,28 @@ func (c *LocalCluster) cleanupDocker() error {
 	// Prune containers
 	contsReport, err := c.dcli.ContainersPrune(ctx, filters.Args{})
 	if err != nil {
-		log.Fatalf("[ERROR] Error pruning containers: %v", err)
+		// Don't fail if prune is already running - just skip it
+		if strings.Contains(err.Error(), "already running") {
+			log.Printf("[WARNING] Skipping container prune - operation already running")
+		} else {
+			log.Printf("[WARNING] Error pruning containers: %v", err)
+		}
+	} else {
+		log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
 	}
-	log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
 
 	// Prune networks
 	netsReport, err := c.dcli.NetworksPrune(ctx, filters.Args{})
 	if err != nil {
-		log.Fatalf("[ERROR] Error pruning networks: %v", err)
+		// Don't fail if prune is already running - just skip it
+		if strings.Contains(err.Error(), "already running") {
+			log.Printf("[WARNING] Skipping network prune - operation already running")
+		} else {
+			log.Printf("[WARNING] Error pruning networks: %v", err)
+		}
+	} else {
+		log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
 	}
-	log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
 
 	return nil
 }
