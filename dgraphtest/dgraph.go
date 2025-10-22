@@ -84,6 +84,7 @@ type dnode interface {
 	alphaURL(*LocalCluster) (string, error)
 	zeroURL(*LocalCluster) (string, error)
 	changeStatus(bool)
+	setContainerID(string)
 }
 
 type zero struct {
@@ -168,6 +169,10 @@ func (z *zero) healthURL(c *LocalCluster) (string, error) {
 
 func (z *zero) changeStatus(isRunning bool) {
 	z.isRunning = isRunning
+}
+
+func (z *zero) setContainerID(cid string) {
+	z.containerID = cid
 }
 
 func (z *zero) assignURL(c *LocalCluster) (string, error) {
@@ -362,6 +367,10 @@ func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
 
 func (a *alpha) changeStatus(isRunning bool) {
 	a.isRunning = isRunning
+}
+
+func (a *alpha) setContainerID(cid string) {
+	a.containerID = cid
 }
 
 func (a *alpha) zeroURL(c *LocalCluster) (string, error) {
