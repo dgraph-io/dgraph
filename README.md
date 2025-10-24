@@ -29,13 +29,13 @@ over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Progra
 
 ## Status
 
-Dgraph is at [version v24.1.3][rel] and is production-ready. Apart from the vast open source
+Dgraph is at [version v25.0.0][rel] and is production-ready. Since v25, all of Dgraph's source code is fully
+available under the permissive Apache 2.0 license, meaning previously enterprise-only features such as
+namespaces and binary backups are now freely available to all users. Apart from the vast open source
 community, it is being used in production at multiple Fortune 500 companies, and by
-[Intuit Katlas](https://github.com/intuit/katlas) and
-[VMware Purser](https://github.com/vmware/purser). A hosted version of Dgraph is available at
-[https://cloud.dgraph.io](https://cloud.dgraph.io).
+[Intuit Katlas](https://github.com/intuit/katlas) and [VMware Purser](https://github.com/vmware/purser).
 
-[rel]: https://github.com/hypermodeinc/dgraph/releases/tag/v24.1.3
+[rel]: https://github.com/hypermodeinc/dgraph/releases/tag/v25.0.0
 
 ## Supported Platforms
 
