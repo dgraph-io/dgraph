@@ -1874,7 +1874,10 @@ L:
 				case IsInequalityFn(function.Name):
 					err = parseFuncArgs(it, function)
 
-				case function.Name == "uid_in" || function.Name == "similar_to":
+				case function.Name == "uid_in":
+					err = parseFuncArgs(it, function)
+
+				case function.Name == "similar_to":
 					err = parseFuncArgs(it, function)
 
 				default:
@@ -1889,6 +1892,18 @@ L:
 				if _, err := it.Peek(1); err != nil {
 					return nil,
 						itemInFunc.Errorf("Unexpected EOF while parsing args")
+				}
+				expectArg = false
+				continue
+			case itemLeftCurl:
+				if function.Name != "similar_to" {
+					return nil, itemInFunc.Errorf("Unexpected character { while parsing request.")
+				}
+				// The initial '{' belongs to the current item; we need to hand off
+				// to a helper that consumes until the matching '}' and feeds the
+				// resulting string as a single argument.
+				if err := parseSimilarToObjectArg(it, function, itemInFunc); err != nil {
+					return nil, err
 				}
 				expectArg = false
 				continue
@@ -3470,4 +3485,33 @@ func trySkipItemTyp(it *lex.ItemIterator, typ lex.ItemType) bool {
 	}
 	it.Next()
 	return true
+}
+
+func parseSimilarToObjectArg(it *lex.ItemIterator, function *Function, start lex.Item) error {
+	depth := 1
+	var builder strings.Builder
+	builder.WriteString(start.Val)
+
+	for depth > 0 {
+		if !it.Next() {
+			return start.Errorf("Unexpected end of object literal while parsing similar_to options")
+		}
+
+		item := it.Item()
+		builder.WriteString(item.Val)
+
+		switch item.Typ {
+		case itemLeftCurl:
+			depth++
+		case itemRightCurl:
+			depth--
+		case itemRightRound:
+			if depth > 0 {
+				return item.Errorf("Expected '}' before ')' in similar_to options")
+			}
+		}
+	}
+
+	function.Args = append(function.Args, Arg{Value: builder.String()})
+	return nil
 }

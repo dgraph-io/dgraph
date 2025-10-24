@@ -306,6 +306,22 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftSquare)
 		case r == rightSquare:
 			l.Emit(itemRightSquare)
+		case r == leftCurl:
+			empty = false
+			if l.ArgDepth == 0 {
+				return lexSimilarToArgsObject(l)
+			}
+			l.Emit(itemLeftCurl)
+			l.ArgDepth++
+		case r == rightCurl:
+			if l.ArgDepth == 0 {
+				return l.Errorf("Unexpected right curly bracket")
+			}
+			l.ArgDepth--
+			l.Emit(itemRightCurl)
+			if l.ArgDepth == 0 {
+				return lexQuery
+			}
 		case r == '#':
 			return lexComment
 		case r == '.':
@@ -314,6 +330,13 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unrecognized character inside a func: %#U", r)
 		}
 	}
+}
+
+func lexSimilarToArgsObject(l *lex.Lexer) lex.StateFn {
+	l.Emit(itemName)
+	l.Backup()
+	l.ArgDepth++
+	return lexFuncOrArg
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {

@@ -417,6 +417,74 @@ func TestVectorIndexRebuildWhenChange(t *testing.T) {
 	require.Greater(t, dur, time.Second*4)
 }
 
+func TestSimilarToOptionsIntegration(t *testing.T) {
+	const pred = "voptions"
+	dropPredicate(pred)
+	t.Cleanup(func() { dropPredicate(pred) })
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+
+	rdf := `<0x1> <voptions> "[0,0]" .
+	<0x2> <voptions> "[1,0]" .
+	<0x3> <voptions> "[2,0]" .
+	<0x4> <voptions> "[5,0]" .`
+	require.NoError(t, addTriplesToCluster(rdf))
+
+	t.Run("ef_override_string_syntax", func(t *testing.T) {
+		query := `{
+			results(func: similar_to(voptions, 3, "[0,0]", "ef=2")) {
+				uid
+			}
+		}`
+		resp := processQueryNoErr(t, query)
+
+		var result struct {
+			Data struct {
+				Results []struct {
+					UID string `json:"uid"`
+				} `json:"results"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(resp), &result))
+		require.Len(t, result.Data.Results, 3)
+
+		expected := map[string]struct{}{"0x1": {}, "0x2": {}, "0x3": {}}
+		for _, r := range result.Data.Results {
+			_, ok := expected[r.UID]
+			require.Truef(t, ok, "unexpected uid %s", r.UID)
+			delete(expected, r.UID)
+		}
+		require.Empty(t, expected)
+	})
+
+	t.Run("distance_threshold_json_syntax", func(t *testing.T) {
+		query := `{
+			results(func: similar_to(voptions, 4, "[0,0]", {distance_threshold: 1.5})) {
+				uid
+			}
+		}`
+		resp := processQueryNoErr(t, query)
+
+		var result struct {
+			Data struct {
+				Results []struct {
+					UID string `json:"uid"`
+				} `json:"results"`
+			} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(resp), &result))
+		require.Len(t, result.Data.Results, 2)
+
+		expected := map[string]struct{}{"0x1": {}, "0x2": {}}
+		for _, r := range result.Data.Results {
+			_, ok := expected[r.UID]
+			require.Truef(t, ok, "unexpected uid %s", r.UID)
+			delete(expected, r.UID)
+		}
+		require.Empty(t, expected)
+	})
+}
+
 func TestVectorInQueryArgument(t *testing.T) {
 	dropPredicate("vtest")
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))

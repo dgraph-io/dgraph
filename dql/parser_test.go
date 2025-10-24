@@ -2536,6 +2536,25 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 		"Unrecognized character inside a func: U+007B '{'")
 }
 
+func TestParseSimilarToObjectLiteral(t *testing.T) {
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]", {distance_threshold: 1.5, ef: 12})) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Len(t, res.Query, 1)
+	require.NotNil(t, res.Query[0])
+	require.NotNil(t, res.Query[0].Func)
+	require.Equal(t, "similar_to", res.Query[0].Func.Name)
+	require.Len(t, res.Query[0].Func.Args, 3)
+	require.Equal(t, "voptions", res.Query[0].Func.Attr)
+	require.Equal(t, "4", res.Query[0].Func.Args[0].Value)
+	require.Equal(t, "[0,0]", res.Query[0].Func.Args[1].Value)
+	require.Equal(t, "{distance_threshold:1.5,ef:12}", res.Query[0].Func.Args[2].Value)
+}
+
 func TestParseFilter_Geo1(t *testing.T) {
 	query := `
 	query {
