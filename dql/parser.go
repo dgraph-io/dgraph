@@ -1896,17 +1896,24 @@ L:
 				expectArg = false
 				continue
 			case itemLeftCurl:
-				if function.Name != "similar_to" {
-					return nil, itemInFunc.Errorf("Unexpected character { while parsing request.")
+				// Guard: Only similar_to may use object-literal syntax in its 4th argument.
+				// By checking Name=="similar_to", Attr is set (predicate) and Args has
+				// exactly two elements (k and vector), we ensure the '{' is in position 4.
+				// All other functions receive the historical error for stray braces.
+				if function.Name != "similar_to" || function.Attr == "" || len(function.Args) != 2 {
+					return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007B '{'")
 				}
-				// The initial '{' belongs to the current item; we need to hand off
-				// to a helper that consumes until the matching '}' and feeds the
-				// resulting string as a single argument.
+				// Parse the object literal: {ef: 64, distance_threshold: 0.45}
+				// The helper consumes tokens until the matching '}' is found.
 				if err := parseSimilarToObjectArg(it, function, itemInFunc); err != nil {
 					return nil, err
 				}
 				expectArg = false
 				continue
+			case itemRightCurl:
+				// Right curly braces are never valid in function arguments outside of
+				// the object literal parsed above. Always error on stray '}'.
+				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007D '}'")
 			default:
 				if itemInFunc.Typ != itemName {
 					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
@@ -2423,6 +2430,10 @@ loop:
 				// The parentheses are balanced out. Let's break.
 				break loop
 			}
+		case item.Typ == itemLeftCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007B '{'")
+		case item.Typ == itemRightCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007D '}'")
 		default:
 			return nil, item.Errorf("Unexpected item while parsing @filter: %v", item)
 		}

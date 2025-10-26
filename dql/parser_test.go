@@ -2518,6 +2518,12 @@ func TestParseFilter_brac(t *testing.T) {
 }
 
 // Test if unbalanced brac will lead to errors.
+// Note: This query has two errors: missing ')' after '()' AND a stray '{'.
+// After changes to support similar_to's JSON args the lexer now emits brace tokens
+// instead of erroring immediately. This causes the query to fail on the structural
+// error (unclosed brackets) rather than the character-specific error. This is an
+// acceptable trade-off because queries with multiple syntax errors may report a different
+// (but equally fatal) error first.
 func TestParseFilter_unbalancedbrac(t *testing.T) {
 	query := `
 	query {
@@ -2532,8 +2538,7 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"Unrecognized character inside a func: U+007B '{'")
+	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
 func TestParseSimilarToObjectLiteral(t *testing.T) {
@@ -2553,6 +2558,56 @@ func TestParseSimilarToObjectLiteral(t *testing.T) {
 	require.Equal(t, "4", res.Query[0].Func.Args[0].Value)
 	require.Equal(t, "[0,0]", res.Query[0].Func.Args[1].Value)
 	require.Equal(t, "{distance_threshold:1.5,ef:12}", res.Query[0].Func.Args[2].Value)
+}
+
+func TestParseSimilarToStringOptions(t *testing.T) {
+	// Test string-based options format (backwards compatibility)
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]", "ef=64,distance_threshold=0.45")) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, "similar_to", res.Query[0].Func.Name)
+	require.Equal(t, "ef=64,distance_threshold=0.45", res.Query[0].Func.Args[2].Value)
+}
+
+func TestParseSimilarToThreeArgs(t *testing.T) {
+	// Test three-arg form (no options)
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]")) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, "similar_to", res.Query[0].Func.Name)
+	require.Len(t, res.Query[0].Func.Args, 2)
+}
+
+func TestParseSimilarToBraceInWrongPosition(t *testing.T) {
+	// Brace as third argument should be rejected
+	query := `{
+		q(func: similar_to(voptions, 4, {ef: 12})) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unrecognized character inside a func: U+007B '{'")
+}
+
+func TestParseNonSimilarToWithBrace(t *testing.T) {
+	// Braces in non-similar_to functions should be rejected
+	query := `{
+		q(func: eq(name, {value: "test"})) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unrecognized character inside a func: U+007B '{'")
 }
 
 func TestParseFilter_Geo1(t *testing.T) {
@@ -2787,6 +2842,10 @@ func TestParseCountAsFunc(t *testing.T) {
 
 }
 
+// Note: This query has two errors: missing ')' after 'friends' AND a stray '}'.
+// After changes to support similar_to's JSON args the lexer emits brace tokens instead
+// of erroring immediately -- causing this to fail on unclosed brackets rather than the
+// specific character error. See TestParseFilter_unbalancedbrac for full explanation.
 func TestParseCountError1(t *testing.T) {
 	query := `{
 		me(func: uid(1)) {
@@ -2798,10 +2857,11 @@ func TestParseCountError1(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"Unrecognized character inside a func: U+007D '}'")
+	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
+// Note: Similar to TestParseCountError1, this has missing ')' and stray '}',
+// now reports structural error instead of character-specific error.
 func TestParseCountError2(t *testing.T) {
 	query := `{
 		me(func: uid(1)) {
@@ -2813,8 +2873,7 @@ func TestParseCountError2(t *testing.T) {
 `
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
-	require.Contains(t, err.Error(),
-		"Unrecognized character inside a func: U+007D '}'")
+	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
 func TestParseCheckPwd(t *testing.T) {

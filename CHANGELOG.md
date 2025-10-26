@@ -105,7 +105,7 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 - **Perf**
   - perf(query): Read just the latest value for scalar types
     https://github.com/hypermodeinc/dgraph/pull/8966
-  - perf(vector): Add heap to neighbour edges https://github.com/hypermodeinc/dgraph/pull/9122
+  - perf(vector): Add heap to neighbor edges https://github.com/hypermodeinc/dgraph/pull/9122
 
 ## [v24.0.1] - 2024-07-30
 

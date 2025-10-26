@@ -308,20 +308,17 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightSquare)
 		case r == leftCurl:
 			empty = false
-			if l.ArgDepth == 0 {
-				return lexSimilarToArgsObject(l)
-			}
 			l.Emit(itemLeftCurl)
-			l.ArgDepth++
+			// Design decision: Emit brace tokens without affecting ArgDepth tracking.
+			// This allows similar_to's JSON-style options ({ef: 64, distance_threshold: 0.45})
+			// to be parsed. The parser validates whether braces are legal in context.
+			// Trade-off: Queries with multiple syntax errors (e.g., missing ')' AND stray '}')
+			// will report structural errors (Unclosed Brackets) rather than character-specific
+			// errors. This is acceptable as the query is still rejected with a clear error.
 		case r == rightCurl:
-			if l.ArgDepth == 0 {
-				return l.Errorf("Unexpected right curly bracket")
-			}
-			l.ArgDepth--
 			l.Emit(itemRightCurl)
-			if l.ArgDepth == 0 {
-				return lexQuery
-			}
+			// Don't decrement ArgDepth for braces; let parser validate context.
+			// See leftCurl case above for full rationale.
 		case r == '#':
 			return lexComment
 		case r == '.':
@@ -330,13 +327,6 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			return l.Errorf("Unrecognized character inside a func: %#U", r)
 		}
 	}
-}
-
-func lexSimilarToArgsObject(l *lex.Lexer) lex.StateFn {
-	l.Emit(itemName)
-	l.Backup()
-	l.ArgDepth++
-	return lexFuncOrArg
 }
 
 func lexTopLevel(l *lex.Lexer) lex.StateFn {
