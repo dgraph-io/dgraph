@@ -3,6 +3,7 @@ name: ci-dgraph-ldbc-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
