@@ -919,7 +919,7 @@ var datafiles = map[string]string{
 	"21million.rdf.gz":        "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.rdf.gz",
 }
 
-var baseUrl = "https://media.githubusercontent.com/media/hypermodeinc/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbc_rdf_0.3/"
+var baseUrl = "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbc_rdf_0.3/"
 var suffix = "?raw=true"
 
 var rdfFileNames = [...]string{
