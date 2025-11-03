@@ -3,6 +3,7 @@ name: ci-dgraph-vector-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"

@@ -8,8 +8,8 @@ Please explain the changes you made here.
 - [ ] For all _code_ changes, an entry added to the `CHANGELOG.md` file describing and linking to
       this PR
 - [ ] Tests added for new functionality, or regression tests for bug fixes added as applicable
-- [ ] For public APIs, new features, etc., PR on
-      [docs repo](https://github.com/hypermodeinc/docs) staged and linked here
+- [ ] For public APIs, new features, etc., PR on [docs repo](https://github.com/dgraph-io/docs)
+      staged and linked here
 
 **Instructions**
 

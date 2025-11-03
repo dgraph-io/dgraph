@@ -29,10 +29,10 @@ import (
 )
 
 var datafiles = map[string]string{
-	"1million.schema":  "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
-	"1million.rdf.gz":  "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
-	"21million.schema": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
-	"21million.rdf.gz": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
+	"1million.schema":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
+	"1million.rdf.gz":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
+	"21million.schema": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
+	"21million.rdf.gz": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
 }
 
 type DatasetType int
