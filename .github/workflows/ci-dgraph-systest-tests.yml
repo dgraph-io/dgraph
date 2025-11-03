@@ -3,6 +3,7 @@ name: ci-dgraph-system-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"

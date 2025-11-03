@@ -34,17 +34,13 @@
 
 ### Setup Dgraph from source repo
 
-It's best to put the Dgraph repo somewhere in `$GOPATH`.
-
 ```bash
-mkdir -p "$(go env GOPATH)/src/github.com/hypermodeinc"
-cd "$(go env GOPATH)/src/github.com/hypermodeinc"
-git clone https://github.com/hypermodeinc/dgraph.git
+git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
 make install
 ```
 
-This will put the source code in a Git repo under `$GOPATH/src/github.com/hypermodeinc/dgraph` and
+This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
 compile the binaries to `$GOPATH/bin`.
 
 ### Setup Badger from source repo
@@ -90,8 +86,8 @@ This should generate the required `.pb.go` file.
 
 ### Build Dgraph
 
-You can build Dgraph using `make dgraph` or `make install` which add the version information to the
-binary.
+You can build Dgraph using `make dgraph` or `make install` which will add the version information to
+the binary.
 
 - `make dgraph`: Creates a `dgraph` binary at `./dgraph/dgraph`
 - `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You should add `$GOPATH/bin` to
@@ -116,7 +112,6 @@ jemalloc enabled : true
 
 For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
 © Hypermode Inc.
@@ -150,7 +145,7 @@ delivery process.
 
 Non-integration unit tests exist for many core packages that can be exercised without invoking the
 testing framework. For instance, to unit test the core DQL parsing package:
-`go test github.com/hypermodeinc/dgraph/v25/dql`.
+`go test github.com/dgraph-io/dgraph/v25/dql`.
 
 ## Contributing
 
