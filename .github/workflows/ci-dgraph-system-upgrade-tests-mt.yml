@@ -50,8 +50,6 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the sytem upgrade tests
           go test -v -timeout=120m -failfast -tags=upgrade \
-            github.com/hypermodeinc/dgraph/v25/systest/mutations-and-queries \
-            github.com/hypermodeinc/dgraph/v25/systest/plugin \
             github.com/hypermodeinc/dgraph/v25/systest/multi-tenancy
           # clean up docker containers after test execution
           go clean -testcache
