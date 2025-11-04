@@ -69,6 +69,11 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	ctx := context.Background()
+
+	// Wait for gRPC connection to be ready with retries
+	t.Log("Waiting for gRPC connection to be ready...")
+	testutil.RetryQuery(t, dg, `{ health { status } }`)
+
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	// Add schema and types.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .
