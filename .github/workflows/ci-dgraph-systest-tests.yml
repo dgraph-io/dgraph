@@ -63,6 +63,7 @@ jobs:
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
+          export DEBUG_SHOW_ERROR=1
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and systests
