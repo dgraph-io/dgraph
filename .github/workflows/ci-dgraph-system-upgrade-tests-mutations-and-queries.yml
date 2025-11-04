@@ -1,4 +1,4 @@
-name: ci-dgraph-system-upgrade-tests
+name: ci-dgraph-system-upgrade-tests-mutations-and-queries
 
 on:
   pull_request:

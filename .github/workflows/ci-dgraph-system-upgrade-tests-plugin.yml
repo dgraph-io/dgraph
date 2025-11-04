@@ -1,4 +1,4 @@
-name: ci-dgraph-system-upgrade-tests
+name: ci-dgraph-system-upgrade-tests-plugin
 
 on:
   pull_request:

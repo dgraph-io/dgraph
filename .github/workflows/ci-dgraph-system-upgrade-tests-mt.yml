@@ -1,4 +1,4 @@
-name: ci-dgraph-system-upgrade-tests
+name: ci-dgraph-system-upgrade-tests-multi-tenancy
 
 on:
   pull_request:
