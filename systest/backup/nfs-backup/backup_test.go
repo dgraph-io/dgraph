@@ -72,7 +72,8 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 
 	// Wait for gRPC connection to be ready with retries
 	t.Log("Waiting for gRPC connection to be ready...")
-	testutil.RetryQuery(t, dg, `{ health { status } }`)
+	_, err = testutil.RetryQuery(dg, `{ health { status } }`)
+	require.NoError(t, err)
 
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	// Add schema and types.
