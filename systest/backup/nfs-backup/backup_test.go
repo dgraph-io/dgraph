@@ -40,18 +40,30 @@ var (
 
 func TestBackupHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.GetSockAddr(), testutil.GetSockAddrAlpha4Http(),
+	backupRestoreTest(t, "alpha1_backup_clust_ha", "zero1_backup_clust_ha",
+		testutil.GetSockAddr(), testutil.GetSockAddrAlpha4Http(),
 		testutil.GetSockAddrZeroHttp(), backupDstHA, testutil.GetSockAddrHttp())
 }
 
 func TestBackupNonHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.GetSockAddrAlpha7(), testutil.GetSockAddrAlpha8Http(),
+	backupRestoreTest(t, "alpha7_backup_clust_non_ha", "zero7_backup_clust_non_ha",
+		testutil.GetSockAddrAlpha7(), testutil.GetSockAddrAlpha8Http(),
 		testutil.GetSockAddrZero7Http(), backupDstNonHA, testutil.GetSockAddrAlpha7Http())
 }
 
-func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
+func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName string,
+	backupAlphaSocketAddr string, restoreAlphaAddr string,
 	backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+
+	// Wait for containers to be healthy before proceeding
+	t.Logf("Waiting for %s to be healthy...", backupAlphaName)
+	backupAlpha := testutil.ContainerInstance{Name: backupAlphaName, Prefix: testutil.DockerPrefix}
+	require.NoError(t, backupAlpha.BestEffortWaitForHealthy(8080))
+
+	t.Logf("Waiting for %s to be healthy...", backupZeroName)
+	backupZero := testutil.ContainerInstance{Name: backupZeroName, Prefix: testutil.DockerPrefix}
+	require.NoError(t, backupZero.BestEffortWaitForHealthy(6080))
 
 	conn, err := grpc.NewClient(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
