@@ -42,26 +42,17 @@ var (
 func TestBackupHAClust(t *testing.T) {
 
 	backupRestoreTest(t, "alpha1_backup_clust_ha", "zero1_backup_clust_ha",
-		testutil.ContainerAddr("alpha1_backup_clust_ha", 9080),
-		testutil.ContainerAddr("alpha4_restore_clust_ha", 8080),
-		testutil.ContainerAddr("zero1_backup_clust_ha", 6080),
-		backupDstHA,
-		testutil.ContainerAddr("alpha1_backup_clust_ha", 8080))
+		"alpha4_restore_clust_ha", backupDstHA)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
 
 	backupRestoreTest(t, "alpha7_backup_clust_non_ha", "zero7_backup_clust_non_ha",
-		testutil.ContainerAddr("alpha7_backup_clust_non_ha", 9080),
-		testutil.ContainerAddr("alpha8_restore_clust_non_ha", 8080),
-		testutil.ContainerAddr("zero7_backup_clust_non_ha", 6080),
-		backupDstNonHA,
-		testutil.ContainerAddr("alpha7_backup_clust_non_ha", 8080))
+		"alpha8_restore_clust_non_ha", backupDstNonHA)
 }
 
 func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName string,
-	backupAlphaSocketAddr string, restoreAlphaAddr string,
-	backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+	restoreAlphaName string, backupDst string) {
 
 	// Wait for containers to be healthy before proceeding
 	t.Logf("Waiting for %s to be healthy...", backupAlphaName)
@@ -71,6 +62,12 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 	t.Logf("Waiting for %s to be healthy...", backupZeroName)
 	backupZero := testutil.ContainerInstance{Name: backupZeroName, Prefix: testutil.DockerPrefix}
 	require.NoError(t, backupZero.BestEffortWaitForHealthy(6080))
+
+	// Resolve addresses after containers are healthy
+	backupAlphaSocketAddr := testutil.ContainerAddr(backupAlphaName, 9080)
+	backupAlphaSocketAddrHttp := testutil.ContainerAddr(backupAlphaName, 8080)
+	restoreAlphaAddr := testutil.ContainerAddr(restoreAlphaName, 8080)
+	backupZeroAddr := testutil.ContainerAddr(backupZeroName, 6080)
 
 	var dg *dgo.Dgraph
 	var err error
