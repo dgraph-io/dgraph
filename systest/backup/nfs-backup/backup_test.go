@@ -86,7 +86,7 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 			continue
 		}
 		dg = dgo.NewDgraphClient(api.NewDgraphClient(conn))
-		_, err = testutil.RetryQuery(dg, `{ health { status } }`)
+		_, err = testutil.RetryQuery(dg, `schema {}`)
 		if err == nil {
 			break
 		}
