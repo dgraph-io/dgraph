@@ -660,6 +660,92 @@ func (l *loader) populateNamespaces(ctx context.Context, dc *dgo.Dgraph, singleN
 	return nil
 }
 
+// checkServerVersion verifies that the Dgraph server supports AllocateUIDs.
+// If AllocateUIDs is not available, it gets the server version and provides appropriate error messages.
+func checkServerVersion(ctx context.Context, dg *dgo.Dgraph) error {
+	// First, try to call AllocateUIDs to test if the method exists
+	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, _, err := dg.AllocateUIDs(testCtx, 1)
+	if err == nil {
+		// Method exists and works, server is compatible
+		return nil
+	}
+
+	// Check if the error is "unknown method AllocateIDs" or "Unimplemented"
+	errStr := err.Error()
+	isAllocateUIDError := strings.Contains(errStr, "Unimplemented")
+
+	if !isAllocateUIDError {
+		// Other errors (network, auth, etc.) - let them propagate normally
+		return nil
+	}
+
+	// AllocateUIDs is not available - get server version to provide better error message
+	var serverVersion string
+	apiClients := dg.GetAPIClients()
+	if len(apiClients) > 0 {
+		version, checkErr := apiClients[0].CheckVersion(testCtx, &api.Check{})
+		if checkErr == nil && version != nil {
+			serverVersion = version.Tag
+		}
+	}
+
+	liveVersion := x.Version()
+
+	// If we couldn't get server version, provide generic error
+	if serverVersion == "" {
+		return errors.Errorf(
+			"ERROR: AllocateUIDs method is not available.\n\n"+
+				"dgraph live version %s requires the AllocateUIDs method, but it is not available on the server.\n\n"+
+				"We recommend using a version of dgraph live that matches your server version .\n\n"+
+				"Original error: %v",
+			liveVersion, err)
+	}
+
+	// Compare versions
+	if serverVersion == liveVersion {
+		// Versions match but AllocateUIDs is not responding
+		return errors.Errorf(
+			"ERROR: AllocateUIDs is not responding.\n\n"+
+				"Your Dgraph server version is %s, which matches dgraph live version %s.\n\n"+
+				"However, the AllocateUIDs method required by dgraph live is not responding.\n\n"+
+				"Please check your server configuration and ensure it is running properly.\n\n"+
+				"Original error: %v",
+			serverVersion, liveVersion, err)
+	}
+
+	// Versions differ - version mismatch
+	return errors.Errorf(
+		"ERROR: Version mismatch detected.\n\n"+
+			"Your Dgraph server version is %s, but dgraph live version is %s.\n\n"+
+			"dgraph live %s requires the AllocateUIDs method, which is not available on server version %s.\n\n"+
+			"We recommend using a version of dgraph live that matches your server version (%s).\n\n"+
+			"Original error: %v",
+		serverVersion, liveVersion, liveVersion, serverVersion, serverVersion, err)
+}
+
+// testConnection verifies that the connection to the Dgraph server is working.
+// It makes a simple CheckVersion call to ensure the connection is functional.
+func testConnection(ctx context.Context, dg *dgo.Dgraph) error {
+	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	apiClients := dg.GetAPIClients()
+	if len(apiClients) == 0 {
+		return errors.New("no Dgraph API clients available")
+	}
+
+	// Test connection by calling CheckVersion
+	_, err := apiClients[0].CheckVersion(testCtx, &api.Check{})
+	if err != nil {
+		return errors.Wrapf(err, "connection test failed: unable to communicate with Dgraph server")
+	}
+
+	return nil
+}
+
 func run() error {
 	creds := z.NewSuperFlag(Live.Conf.GetString("creds")).MergeAndCheckDefault(x.DefaultCreds)
 	keys, err := x.GetEncAclKeys(Live.Conf)
@@ -744,6 +830,15 @@ func run() error {
 
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
+
+	// Test connection to ensure it's working before proceeding
+	if err := testConnection(ctx, dg); err != nil {
+		return errors.Wrapf(err, "Check if the server is running and accessible.")
+	}
+	// Check if server supports AllocateUIDs before proceeding
+	if err := checkServerVersion(ctx, dg); err != nil {
+		return err
+	}
 
 	l := setup(bmOpts, dg, Live.Conf)
 	if err := l.populateNamespaces(ctx, dg, singleNsOp); err != nil {
