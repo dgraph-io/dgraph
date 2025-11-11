@@ -10,6 +10,11 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 - **Fixed**
   - fix(core): fix panic in verifyUniqueWithinMutation when mutation is conditionally pruned (#9450)
   - fix(query): return full float value in query results (#9492)
+- **Vector**
+  - fix(vector/hnsw): correct early termination in bottom-layer search to ensure at least k
+    candidates are considered before breaking
+  - feat(vector/hnsw): add optional per-query controls to similar_to via a 4th argument: `ef`
+    (search breadth override) and `distance_threshold` (metric-domain cutoff); defaults unchanged
 
 ## [v24.X.X] - YYYY-MM-DD
 
@@ -100,7 +105,7 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
 - **Perf**
   - perf(query): Read just the latest value for scalar types
     https://github.com/hypermodeinc/dgraph/pull/8966
-  - perf(vector): Add heap to neighbour edges https://github.com/hypermodeinc/dgraph/pull/9122
+  - perf(vector): Add heap to neighbor edges https://github.com/hypermodeinc/dgraph/pull/9122
 
 ## [v24.0.1] - 2024-07-30
 
@@ -4798,8 +4803,8 @@ Users can set `port_offset` flag, to modify these fixed ports.
 - `Query` Grpc endpoint returns response in JSON under `Json` field instead of protocol buffer.
   `client.Unmarshal` method also goes away from the Go client. Users can use `json.Unmarshal` for
   unmarshalling the response.
-- Response for predicate of type `geo` can be unmarshalled into a struct. Example
-  [here](https://godoc.org/github.com/hypermodeinc/dggraph/client#example-package--SetObject).
+- Response for predicate of type `geo` can be unmarshalled into a struct. See the
+  [SetObject example](https://godoc.org/github.com/hypermodeinc/dggraph/client#example-package--SetObject).
 - `Node` and `Edge` structs go away along with the `SetValue...` methods. We recommend using
   [`SetJson`](https://godoc.org/github.com/hypermodeinc/dggraph/client#example-package--SetObject)
   and `DeleteJson` fields to do mutations.
