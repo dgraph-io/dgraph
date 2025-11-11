@@ -879,7 +879,7 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := z.NewCloser(5)
+	closer := z.NewCloser(4)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
