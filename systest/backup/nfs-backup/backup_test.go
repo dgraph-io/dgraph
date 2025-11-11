@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -40,23 +41,57 @@ var (
 
 func TestBackupHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.GetSockAddr(), testutil.GetSockAddrAlpha4Http(),
-		testutil.GetSockAddrZeroHttp(), backupDstHA, testutil.GetSockAddrHttp())
+	backupRestoreTest(t, "alpha1_backup_clust_ha", "zero1_backup_clust_ha",
+		"alpha4_restore_clust_ha", backupDstHA)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
 
-	backupRestoreTest(t, testutil.GetSockAddrAlpha7(), testutil.GetSockAddrAlpha8Http(),
-		testutil.GetSockAddrZero7Http(), backupDstNonHA, testutil.GetSockAddrAlpha7Http())
+	backupRestoreTest(t, "alpha7_backup_clust_non_ha", "zero7_backup_clust_non_ha",
+		"alpha8_restore_clust_non_ha", backupDstNonHA)
 }
 
-func backupRestoreTest(t *testing.T, backupAlphaSocketAddr string, restoreAlphaAddr string,
-	backupZeroAddr string, backupDst string, backupAlphaSocketAddrHttp string) {
+func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName string,
+	restoreAlphaName string, backupDst string) {
 
-	conn, err := grpc.NewClient(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+	// Wait for containers to be healthy before proceeding
+	t.Logf("Waiting for %s to be healthy...", backupAlphaName)
+	backupAlpha := testutil.ContainerInstance{Name: backupAlphaName, Prefix: testutil.DockerPrefix}
+	require.NoError(t, backupAlpha.BestEffortWaitForHealthy(8080))
+
+	t.Logf("Waiting for %s to be healthy...", backupZeroName)
+	backupZero := testutil.ContainerInstance{Name: backupZeroName, Prefix: testutil.DockerPrefix}
+	require.NoError(t, backupZero.BestEffortWaitForHealthy(6080))
+
+	// Resolve addresses after containers are healthy
+	backupAlphaSocketAddr := testutil.ContainerAddr(backupAlphaName, 9080)
+	backupAlphaSocketAddrHttp := testutil.ContainerAddr(backupAlphaName, 8080)
+	restoreAlphaAddr := testutil.ContainerAddr(restoreAlphaName, 8080)
+	backupZeroAddr := testutil.ContainerAddr(backupZeroName, 6080)
+
+	var dg *dgo.Dgraph
+	var err error
 	ctx := context.Background()
+
+	// Wait for gRPC connection to be ready with retries
+	t.Log("Waiting for gRPC connection to be ready...")
+	for i := 0; i < 30; i++ {
+		conn, connErr := grpc.NewClient(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if connErr != nil {
+			t.Logf("Failed to create gRPC client (attempt %d/30): %v", i+1, connErr)
+			time.Sleep(time.Second)
+			continue
+		}
+		dg = dgo.NewDgraphClient(api.NewDgraphClient(conn))
+		_, err = testutil.RetryQuery(dg, `schema {}`)
+		if err == nil {
+			break
+		}
+		t.Logf("Health query failed (attempt %d/30): %v", i+1, err)
+		time.Sleep(time.Second)
+	}
+	require.NoError(t, err, "Failed to connect to gRPC after 30 attempts")
+
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 	// Add schema and types.
 	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `movie: string .

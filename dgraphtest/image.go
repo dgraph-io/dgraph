@@ -199,6 +199,16 @@ func copy(src, dst string) error {
 		return errors.Errorf("%s is not a regular file", src)
 	}
 
+	// Check if destination already exists and matches source size
+	if destStat, err := os.Stat(dst); err == nil {
+		if destStat.Size() == sourceFileStat.Size() {
+			log.Printf("[INFO] destination file %s already exists with matching size, skipping copy", dst)
+			return nil
+		}
+		log.Printf("[WARNING] destination file %s exists but size mismatch (source=%d, dest=%d), will overwrite",
+			dst, sourceFileStat.Size(), destStat.Size())
+	}
+
 	// Open source file
 	source, err := os.Open(src)
 	if err != nil {

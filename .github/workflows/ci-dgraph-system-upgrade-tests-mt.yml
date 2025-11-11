@@ -1,4 +1,4 @@
-name: ci-dgraph-integration2-tests
+name: ci-dgraph-system-upgrade-tests-multi-tenancy
 
 on:
   pull_request:
@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  dgraph-integration2-tests:
+  dgraph-upgrade-tests:
     if: false # TEMPORARILY DISABLED
     # if: github.event.pull_request.draft == false
     runs-on: blacksmith-8vcpu-ubuntu-2404
@@ -42,15 +42,16 @@ jobs:
           #!/bin/bash
           # clean cache
           go clean -testcache
-      - name: Run Integration2 Tests
+      - name: Run System Upgrade Tests
         run: |
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
-          # run the tests
-          go test -v -timeout=90m -failfast -tags=integration2 ./...
+          # run the sytem upgrade tests
+          go test -v -timeout=120m -failfast -tags=upgrade \
+            github.com/hypermodeinc/dgraph/v25/systest/multi-tenancy
           # clean up docker containers after test execution
           go clean -testcache
           # sleep

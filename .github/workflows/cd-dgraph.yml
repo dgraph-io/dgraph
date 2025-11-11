@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   dgraph-build-amd64:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -222,7 +222,7 @@ jobs:
 
   graph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
