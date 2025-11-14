@@ -99,7 +99,7 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	const scarfBaseUrlFmt = "https://events.hypermode.com/dgraph-deployments/%v/%v/%v/%v/%v"
+	const scarfBaseUrlFmt = "https://events.dgraph.io/dgraph-deployments/%v/%v/%v/%v/%v"
 
 	// sleep so that a leader is elected by this time
 	time.Sleep(time.Minute)

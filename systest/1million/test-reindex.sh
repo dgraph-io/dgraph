@@ -17,7 +17,7 @@ function DockerCompose {
 }
 
 Info "cloning benchmarks repo"
-BENCHMARKS_URL=https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data
+BENCHMARKS_URL=https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data
 rm -rf "${BENCHMARKS_REPO}"
 mkdir -p "${BENCHMARKS_REPO}"/data
 wget -O "${NO_INDEX_SCHEMA_FILE}" "${BENCHMARKS_URL}"/1million-noindex.schema?raw=true

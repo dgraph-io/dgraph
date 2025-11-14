@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   dgraph-jepsen-tests:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout dgraph repo
@@ -30,7 +30,7 @@ jobs:
           JEPSEN_ROOT=$(pwd)
           echo "JEPSEN_ROOT=$JEPSEN_ROOT" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Make dgraph linux build

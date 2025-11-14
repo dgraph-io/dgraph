@@ -84,6 +84,7 @@ type dnode interface {
 	alphaURL(*LocalCluster) (string, error)
 	zeroURL(*LocalCluster) (string, error)
 	changeStatus(bool)
+	setContainerID(string)
 }
 
 type zero struct {
@@ -170,6 +171,10 @@ func (z *zero) changeStatus(isRunning bool) {
 	z.isRunning = isRunning
 }
 
+func (z *zero) setContainerID(cid string) {
+	z.containerID = cid
+}
+
 func (z *zero) assignURL(c *LocalCluster) (string, error) {
 	publicPort, err := publicPort(c.dcli, z, zeroHttpPort)
 	if err != nil {
@@ -235,10 +240,9 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
-		acmd = append(acmd, `--whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`, "--telemetry=false")
+		acmd = append(acmd, `--whitelist=0.0.0.0/0`, "--telemetry=false")
 	} else {
-		acmd = append(acmd, `--security=whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`,
-			"--telemetry=reports=false;")
+		acmd = append(acmd, `--security=whitelist=0.0.0.0/0`, "--telemetry=reports=false;")
 	}
 
 	if c.conf.lambdaURL != "" {
@@ -363,6 +367,10 @@ func (a *alpha) alphaURL(c *LocalCluster) (string, error) {
 
 func (a *alpha) changeStatus(isRunning bool) {
 	a.isRunning = isRunning
+}
+
+func (a *alpha) setContainerID(cid string) {
+	a.containerID = cid
 }
 
 func (a *alpha) zeroURL(c *LocalCluster) (string, error) {

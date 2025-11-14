@@ -3,6 +3,7 @@ name: ci-dgraph-integration2-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
@@ -23,14 +24,14 @@ permissions:
 jobs:
   dgraph-integration2-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-4x
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Make Linux Build and Docker Image
@@ -48,7 +49,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the tests
-          go test -v -timeout=30m -failfast -tags=integration2 ./...
+          go test -v -timeout=90m -failfast -tags=integration2 ./...
           # clean up docker containers after test execution
           go clean -testcache
           # sleep

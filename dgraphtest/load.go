@@ -29,10 +29,10 @@ import (
 )
 
 var datafiles = map[string]string{
-	"1million.schema":  "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
-	"1million.rdf.gz":  "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
-	"21million.schema": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
-	"21million.rdf.gz": "https://github.com/hypermodeinc/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
+	"1million.schema":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
+	"1million.rdf.gz":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
+	"21million.schema": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
+	"21million.rdf.gz": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
 }
 
 type DatasetType int
@@ -491,6 +491,8 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		"--out", outDir,
 		// we had to create the dir for setting up docker, hence, replacing it here.
 		"--replace_out",
+		// Use :0 to let OS assign random available port for pprof, avoids conflicts in tests
+		"--http", ":0",
 	}
 
 	if len(opts.DataFiles) > 0 {
@@ -503,8 +505,17 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		args = append(args, "-g", strings.Join(opts.GQLSchemaFiles, ","))
 	}
 
+	// dgraphCmdPath := os.Getenv("DGRAPH_CMD_PATH")
+	// if dgraphCmdPath == "" {
+	// 	dgraphCmdPath = filepath.Join(c.tempBinDir, "dgraph")
+	// }
+
 	log.Printf("[INFO] running bulk loader with args: [%v]", strings.Join(args, " "))
-	cmd := exec.Command(filepath.Join(c.tempBinDir, "dgraph"), args...)
+	binaryName := "dgraph"
+	if os.Getenv("DGRAPH_BINARY") != "" {
+		binaryName = filepath.Base(os.Getenv("DGRAPH_BINARY"))
+	}
+	cmd := exec.Command(filepath.Join(c.tempBinDir, binaryName), args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error running bulk loader: %v", string(out))
 	} else {

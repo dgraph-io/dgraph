@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -55,10 +56,11 @@ type LocalCluster struct {
 	customTokenizers string
 
 	// resources
-	dcli   *docker.Client
-	net    cnet
-	zeros  []*zero
-	alphas []*alpha
+	dcli     *docker.Client
+	net      cnet
+	netMutex sync.Mutex // protects network recreation
+	zeros    []*zero
+	alphas   []*alpha
 }
 
 // UpgradeStrategy is an Enum that defines various upgrade strategies
@@ -166,18 +168,42 @@ func (c *LocalCluster) init() error {
 
 func (c *LocalCluster) createNetwork() error {
 	c.net.name = c.conf.prefix + "-net"
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	// Check if network already exists
+	existingNet, err := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+	if err == nil {
+		// Network exists, reuse it
+		log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
+		c.net.id = existingNet.ID
+		return nil
+	}
+
+	// Network doesn't exist, create it
 	opts := network.CreateOptions{
 		Driver: "bridge",
 		IPAM:   &network.IPAM{Driver: "default"},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
-	network, err := c.dcli.NetworkCreate(ctx, c.net.name, opts)
+	networkResp, err := c.dcli.NetworkCreate(ctx, c.net.name, opts)
 	if err != nil {
+		// If network already exists (race condition), try to inspect and reuse it
+		if strings.Contains(err.Error(), "already exists") {
+			log.Printf("[INFO] network %s already exists (race condition), inspecting", c.net.name)
+			existingNet, inspectErr := c.dcli.NetworkInspect(ctx, c.net.name, network.InspectOptions{})
+			if inspectErr == nil {
+				log.Printf("[INFO] reusing existing network %s (ID: %s)", c.net.name, existingNet.ID)
+				c.net.id = existingNet.ID
+				return nil
+			}
+			// If inspect also fails, return original create error
+			log.Printf("[WARNING] failed to inspect network after creation conflict: %v", inspectErr)
+		}
 		return errors.Wrap(err, "error creating network")
 	}
-	c.net.id = network.ID
+	c.net.id = networkResp.ID
 
 	return nil
 }
@@ -208,20 +234,40 @@ func (c *LocalCluster) setupBeforeCluster() error {
 }
 
 func (c *LocalCluster) createContainers() error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(c.zeros)+len(c.alphas))
+
 	for _, zo := range c.zeros {
-		cid, err := c.createContainer(zo)
-		if err != nil {
-			return err
-		}
-		zo.containerID = cid
+		wg.Add(1)
+		go func(z *zero) {
+			defer wg.Done()
+			cid, err := c.createContainer(z)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			z.containerID = cid
+		}(zo)
 	}
 
 	for _, aa := range c.alphas {
-		cid, err := c.createContainer(aa)
-		if err != nil {
-			return err
-		}
-		aa.containerID = cid
+		wg.Add(1)
+		go func(a *alpha) {
+			defer wg.Done()
+			cid, err := c.createContainer(a)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			a.containerID = cid
+		}(aa)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		return err
 	}
 
 	return nil
@@ -235,6 +281,27 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		return "", err
 	}
 
+	// Verify the network still exists before creating container
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if c.net.id != "" {
+		_, err := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+		if err != nil {
+			// Use mutex to prevent multiple goroutines from recreating network simultaneously
+			c.netMutex.Lock()
+			// Double-check after acquiring lock - another goroutine may have recreated it
+			_, recheckErr := c.dcli.NetworkInspect(ctx, c.net.id, network.InspectOptions{})
+			if recheckErr != nil {
+				log.Printf("[WARNING] network %s (ID: %s) not found, recreating", c.net.name, c.net.id)
+				if err := c.createNetwork(); err != nil {
+					c.netMutex.Unlock()
+					return "", errors.Wrap(err, "error recreating network")
+				}
+			}
+			c.netMutex.Unlock()
+		}
+	}
+
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
 	networkConfig := &network.NetworkingConfig{
@@ -246,8 +313,6 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
-	defer cancel()
 	resp, err := c.dcli.ContainerCreate(ctx, cconf, hconf, networkConfig, nil, dc.cname())
 	if err != nil {
 		return "", errors.Wrapf(err, "error creating container %v", dc.cname())
@@ -260,17 +325,35 @@ func (c *LocalCluster) destroyContainers() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(c.zeros)+len(c.alphas))
 	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
+
 	for _, zo := range c.zeros {
-		if err := c.dcli.ContainerRemove(ctx, zo.cid(), ro); err != nil {
-			return errors.Wrapf(err, "error removing zero [%v]", zo.cname())
-		}
+		wg.Add(1)
+		go func(z *zero) {
+			defer wg.Done()
+			if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil {
+				errChan <- errors.Wrapf(err, "error removing zero [%v]", z.cname())
+			}
+		}(zo)
 	}
 
 	for _, aa := range c.alphas {
-		if err := c.dcli.ContainerRemove(ctx, aa.cid(), ro); err != nil {
-			return errors.Wrapf(err, "error removing alpha [%v]", aa.cname())
-		}
+		wg.Add(1)
+		go func(a *alpha) {
+			defer wg.Done()
+			if err := c.dcli.ContainerRemove(ctx, a.cid(), ro); err != nil {
+				errChan <- errors.Wrapf(err, "error removing alpha [%v]", a.cname())
+			}
+		}(aa)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		return err
 	}
 
 	return nil
@@ -355,16 +438,28 @@ func (c *LocalCluster) cleanupDocker() error {
 	// Prune containers
 	contsReport, err := c.dcli.ContainersPrune(ctx, filters.Args{})
 	if err != nil {
-		log.Fatalf("[ERROR] Error pruning containers: %v", err)
+		// Don't fail if prune is already running - just skip it
+		if strings.Contains(err.Error(), "already running") {
+			log.Printf("[WARNING] Skipping container prune - operation already running")
+		} else {
+			log.Printf("[WARNING] Error pruning containers: %v", err)
+		}
+	} else {
+		log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
 	}
-	log.Printf("[INFO] Pruned containers: %+v\n", contsReport)
 
 	// Prune networks
 	netsReport, err := c.dcli.NetworksPrune(ctx, filters.Args{})
 	if err != nil {
-		log.Fatalf("[ERROR] Error pruning networks: %v", err)
+		// Don't fail if prune is already running - just skip it
+		if strings.Contains(err.Error(), "already running") {
+			log.Printf("[WARNING] Skipping network prune - operation already running")
+		} else {
+			log.Printf("[WARNING] Error pruning networks: %v", err)
+		}
+	} else {
+		log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
 	}
-	log.Printf("[INFO] Pruned networks: %+v\n", netsReport)
 
 	return nil
 }
@@ -372,13 +467,33 @@ func (c *LocalCluster) cleanupDocker() error {
 func (c *LocalCluster) Start() error {
 	log.Printf("[INFO] starting cluster with prefix [%v]", c.conf.prefix)
 	startAll := func() error {
+		var wg sync.WaitGroup
+		errCh := make(chan error, c.conf.numZeros+c.conf.numAlphas)
+
 		for i := range c.conf.numZeros {
-			if err := c.StartZero(i); err != nil {
-				return err
-			}
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				if err := c.StartZero(id); err != nil {
+					errCh <- fmt.Errorf("failed to start zero %d: %w", id, err)
+				}
+			}(i)
 		}
+
 		for i := range c.conf.numAlphas {
-			if err := c.StartAlpha(i); err != nil {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				if err := c.StartAlpha(id); err != nil {
+					errCh <- fmt.Errorf("failed to start alpha %d: %w", id, err)
+				}
+			}(i)
+		}
+
+		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			if err != nil {
 				return err
 			}
 		}
@@ -434,6 +549,22 @@ func (c *LocalCluster) StartAlpha(id int) error {
 func (c *LocalCluster) startContainer(dc dnode) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
+
+	// verify the container still exists
+	_, err := c.dcli.ContainerInspect(ctx, dc.cid())
+	if err != nil {
+		log.Printf("[WARNING] container %s (ID: %s) not found, attempting to recreate", dc.cname(), dc.cid())
+		newCID, createErr := c.createContainer(dc)
+		if createErr != nil {
+			return errors.Wrapf(createErr, "error recreating missing container [%v]", dc.cname())
+		}
+		switch node := dc.(type) {
+		case *alpha, *zero:
+			node.setContainerID(newCID)
+		}
+		log.Printf("[INFO] successfully recreated container %s with new ID: %s", dc.cname(), newCID)
+	}
+
 	if err := c.dcli.ContainerStart(ctx, dc.cid(), container.StartOptions{}); err != nil {
 		return errors.Wrapf(err, "error starting container [%v]", dc.cname())
 	}
@@ -506,36 +637,56 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(c.zeros)+len(c.alphas))
+
 	for _, zo := range c.zeros {
 		if !zo.isRunning {
 			break
 		}
-		if err := c.containerHealthCheck(zo.healthURL); err != nil {
-			return err
-		}
-		log.Printf("[INFO] container [%v] passed health check", zo.containerName)
+		wg.Add(1)
+		go func(z *zero) {
+			defer wg.Done()
+			if err := c.containerHealthCheck(z.healthURL); err != nil {
+				errChan <- err
+				return
+			}
+			log.Printf("[INFO] container [%v] passed health check", z.containerName)
 
-		if err := c.checkDgraphVersion(zo.containerName); err != nil {
-			return err
+			if err := c.checkDgraphVersion(z.containerName); err != nil {
+				errChan <- err
+			}
+		}(zo)
+	}
+
+	if !zeroOnly {
+		for _, aa := range c.alphas {
+			if !aa.isRunning {
+				break
+			}
+			wg.Add(1)
+			go func(a *alpha) {
+				defer wg.Done()
+				if err := c.containerHealthCheck(a.healthURL); err != nil {
+					errChan <- err
+					return
+				}
+				log.Printf("[INFO] container [%v] passed health check", a.containerName)
+
+				if err := c.checkDgraphVersion(a.containerName); err != nil {
+					errChan <- err
+				}
+			}(aa)
 		}
 	}
-	if zeroOnly {
-		return nil
+
+	wg.Wait()
+	close(errChan)
+
+	for err := range errChan {
+		return err
 	}
 
-	for _, aa := range c.alphas {
-		if !aa.isRunning {
-			break
-		}
-		if err := c.containerHealthCheck(aa.healthURL); err != nil {
-			return err
-		}
-		log.Printf("[INFO] container [%v] passed health check", aa.containerName)
-
-		if err := c.checkDgraphVersion(aa.containerName); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -545,7 +696,7 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 		return errors.Wrapf(err, "error getting health URL %v", endpoint)
 	}
 
-	for attempt := range 60 {
+	for attempt := range 120 {
 		time.Sleep(waitDurBeforeRetry)
 
 		endpoint, err = url(c)
@@ -555,15 +706,15 @@ func (c *LocalCluster) containerHealthCheck(url func(c *LocalCluster) (string, e
 
 		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 		if err != nil {
-			if attempt > 10 {
-				log.Printf("[WARNING] error building req for endpoint [%v], err: [%v]", endpoint, err)
+			if attempt > 50 {
+				log.Printf("[WARNING] problem building req for endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
 		}
 		body, err := dgraphapi.DoReq(req)
 		if err != nil {
-			if attempt > 10 {
-				log.Printf("[WARNING] error hitting health endpoint [%v], err: [%v]", endpoint, err)
+			if attempt > 50 {
+				log.Printf("[WARNING] problem hitting health endpoint [%v], err: [%v]", endpoint, err)
 			}
 			continue
 		}
@@ -607,17 +758,17 @@ func (c *LocalCluster) waitUntilLogin() error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	for attempt := range 10 {
-		err := client.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword)
+		err = client.Login(ctx, dgraphapi.DefaultUser, dgraphapi.DefaultPassword)
 		if err == nil {
 			log.Printf("[INFO] login succeeded")
 			return nil
 		}
-		if attempt > 10 {
-			log.Printf("[WARNING] error trying to login: %v", err)
+		if attempt > 5 {
+			log.Printf("[WARNING] problem trying to login: %v", err)
 		}
 		time.Sleep(waitDurBeforeRetry)
 	}
-	return errors.New("error during login")
+	return errors.Wrap(err, "error during login")
 }
 
 func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
@@ -632,22 +783,18 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 	}
 
 	for range 10 {
+		// Sleep for a second before retrying
+		time.Sleep(waitDurBeforeRetry)
 		// we do this because before v21, we used to propose the initial schema to the cluster.
 		// This results in schema being applied and indexes being built which could delay alpha
 		// starting to serve graphql schema.
-		err := hc.DeleteUser("nonexistent")
+		err = hc.DeleteUser("nonexistent")
 		if err == nil {
-			log.Printf("[INFO] graphql health check succeeded")
+			log.Printf("[INFO] graphql health check succeeded for %v", c.conf.prefix)
 			return nil
-		} else if strings.Contains(err.Error(), "this indicates a resolver or validation bug") {
-			time.Sleep(waitDurBeforeRetry)
-			continue
-		} else {
-			return errors.Wrapf(err, "error during graphql health check")
 		}
 	}
-
-	return errors.New("error during graphql health check")
+	return errors.Wrap(err, "error during graphql health check")
 }
 
 // Upgrades the cluster to the provided dgraph version
@@ -801,7 +948,7 @@ func (c *LocalCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	cleanup := func() {
 		for _, conn := range conns {
 			if err := conn.Close(); err != nil {
-				log.Printf("[WARNING] error closing connection: %v", err)
+				log.Printf("[WARNING] problem closing connection: %v", err)
 			}
 		}
 	}
@@ -822,7 +969,7 @@ func (c *LocalCluster) AlphaClient(id int) (*dgraphapi.GrpcClient, func(), error
 	client := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 	cleanup := func() {
 		if err := conn.Close(); err != nil {
-			log.Printf("[WARNING] error closing connection: %v", err)
+			log.Printf("[WARNING] problem closing connection: %v", err)
 		}
 	}
 	return &dgraphapi.GrpcClient{Dgraph: client}, cleanup, nil

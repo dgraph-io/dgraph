@@ -218,8 +218,8 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 
 	prefix := fmt.Sprintf(uidFmtStrRdf+" <%s> ", e.uid, e.attr)
 	err := e.pl.Iterate(e.readTs, 0, func(p *pb.Posting) error {
-		fmt.Fprint(bp, prefix)
 		if p.PostingType == pb.Posting_REF {
+			fmt.Fprint(bp, prefix)
 			fmt.Fprintf(bp, uidFmtStrRdf, p.Uid)
 		} else {
 			val := types.Val{Tid: types.TypeID(p.ValType), Value: p.Value}
@@ -228,6 +228,7 @@ func (e *exporter) toRDF() (*bpb.KVList, error) {
 				glog.Errorf("Ignoring error: %+v\n", err)
 				return nil
 			}
+			fmt.Fprint(bp, prefix)
 			fmt.Fprintf(bp, "%s", escapedString(str))
 
 			tid := types.TypeID(p.ValType)

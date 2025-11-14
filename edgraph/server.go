@@ -35,7 +35,6 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
 	"github.com/hypermodeinc/dgraph/v25/chunker"
 	"github.com/hypermodeinc/dgraph/v25/conn"
 	"github.com/hypermodeinc/dgraph/v25/dql"
@@ -1816,8 +1815,8 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 	return nil
 }
 
-func (s *ServerV25) UpdateExtSnapshotStreamingState(ctx context.Context,
-	req *apiv2.UpdateExtSnapshotStreamingStateRequest) (v *apiv2.UpdateExtSnapshotStreamingStateResponse, err error) {
+func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
+	req *api.UpdateExtSnapshotStreamingStateRequest) (v *api.UpdateExtSnapshotStreamingStateResponse, err error) {
 
 	if req == nil {
 		return nil, errors.New("UpdateExtSnapshotStreamingStateRequest must not be nil")
@@ -1829,18 +1828,22 @@ func (s *ServerV25) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 	groups, err := worker.ProposeDrain(ctx, req)
 	if err != nil {
+		glog.Errorf("[import] failed to propose drain mode: %v", err)
 		return nil, err
 	}
 
-	resp := &apiv2.UpdateExtSnapshotStreamingStateResponse{Groups: groups}
+	resp := &api.UpdateExtSnapshotStreamingStateResponse{Groups: groups}
 
 	return resp, nil
 }
 
-func (s *ServerV25) StreamExtSnapshot(stream apiv2.Dgraph_StreamExtSnapshotServer) error {
+func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) error {
 	defer x.ExtSnapshotStreamingState(false)
-
-	return worker.InStream(stream)
+	if err := worker.InStream(stream); err != nil {
+		glog.Errorf("[import] failed to stream external snapshot: %v", err)
+		return err
+	}
+	return nil
 }
 
 // CommitOrAbort commits or aborts a transaction.

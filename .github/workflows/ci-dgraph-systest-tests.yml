@@ -3,6 +3,7 @@ name: ci-dgraph-system-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
@@ -25,12 +26,12 @@ permissions:
 jobs:
   dgraph-systest-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-16x
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install protobuf-compiler

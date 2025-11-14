@@ -3,6 +3,7 @@ name: ci-dgraph-load-tests
 on:
   pull_request:
     paths:
+      - "!**/*.md"
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
@@ -23,12 +24,12 @@ permissions:
 jobs:
   dgraph-load-tests:
     if: github.event.pull_request.draft == false
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Make Linux Build and Docker Image

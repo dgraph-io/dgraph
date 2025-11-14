@@ -21,14 +21,14 @@ permissions:
 
 jobs:
   dgraph-build-amd64:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
           ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install protobuf-compiler
@@ -121,14 +121,14 @@ jobs:
           path: dgraph-standalone-amd64.tar
 
   dgraph-build-arm64:
-    runs-on: warp-ubuntu-latest-arm64-4x
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
           ref: "${{ github.event.inputs.releasetag }}"
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Install protobuf-compiler
@@ -222,7 +222,7 @@ jobs:
 
   graph-docker-image-and-manifests-push:
     needs: [dgraph-build-amd64, dgraph-build-arm64]
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
