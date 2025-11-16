@@ -46,9 +46,6 @@ func SetEnabledDetailedMetrics(enableMetrics bool) {
 	EnableDetailedMetrics = enableMetrics
 }
 
-func UpdateMaxCost(maxCost int64) {
-}
-
 // Cleanup waits until the closer has finished processing.
 func Cleanup() {
 	closer.SignalAndWait()

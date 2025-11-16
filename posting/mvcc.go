@@ -405,6 +405,13 @@ func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
 }
 
+func (ml *MemoryLayer) UpdateMaxCost(maxCost int64) {
+	if ml.cache == nil || ml.cache.data == nil {
+		return
+	}
+	ml.cache.data.UpdateMaxCost(maxCost)
+}
+
 type IterateDiskArgs struct {
 	Prefix         []byte
 	Prefetch       bool
