@@ -150,7 +150,9 @@ func UpdateCacheMb(memoryMB int64) error {
 	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
 	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
 
-	posting.UpdateMaxCost(plCacheSize)
+	if posting.MemLayerInstance != nil {
+		posting.MemLayerInstance.UpdateMaxCost(plCacheSize)
+	}
 	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update block cache size")
 	}
