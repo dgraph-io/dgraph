@@ -23,8 +23,7 @@ permissions:
 
 jobs:
   dgraph-upgrade-tests:
-    if: false # TEMPORARILY DISABLED
-    # if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
