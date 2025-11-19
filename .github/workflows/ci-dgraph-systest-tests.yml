@@ -67,8 +67,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and systests
-          # cd t; ./t --suite=systest
-          cd t; ./t --test=TestBackupHAClust
+          cd t; ./t --suite=systest
           # clean up docker containers after test execution
           ./t -r
           # sleep
