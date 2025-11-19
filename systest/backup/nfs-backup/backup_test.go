@@ -76,13 +76,14 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 	// Wait for gRPC connection to be ready with retries
 	t.Log("Waiting for gRPC connection to be ready...")
 	for i := 0; i < 30; i++ {
-		conn, connErr := grpc.NewClient(backupAlphaSocketAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		var connErr error
+		dg, connErr = dgo.Open(fmt.Sprintf("dgraph://%s?sslmode=disable", backupAlphaSocketAddr))
 		if connErr != nil {
-			t.Logf("Failed to create gRPC client (attempt %d/30): %v", i+1, connErr)
+			err = connErr
+			t.Logf("Failed to create Dgraph client (attempt %d/30): %v", i+1, connErr)
 			time.Sleep(time.Second)
 			continue
 		}
-		dg = dgo.NewDgraphClient(api.NewDgraphClient(conn))
 		_, err = testutil.RetryQuery(dg, `schema {}`)
 		if err == nil {
 			break
