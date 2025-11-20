@@ -21,6 +21,7 @@ import (
 
 var (
 	cloneOnce sync.Once
+	gitMutex  sync.Mutex // Protects git operations on shared repoDir
 )
 
 func (c *LocalCluster) dgraphImage() string {
@@ -49,7 +50,23 @@ func (c *LocalCluster) setupBinary() error {
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
 	}
 
-	isFileThere, err := fileExists(filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version)))
+	binaryPath := filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version))
+
+	// First check without lock (fast path)
+	isFileThere, err := fileExists(binaryPath)
+	if err != nil {
+		return err
+	}
+	if isFileThere {
+		return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
+	}
+
+	// Lock git operations to prevent parallel tests from conflicting
+	gitMutex.Lock()
+	defer gitMutex.Unlock()
+
+	// Double-check after acquiring lock - another parallel test may have built it
+	isFileThere, err = fileExists(binaryPath)
 	if err != nil {
 		return err
 	}
