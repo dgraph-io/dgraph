@@ -777,7 +777,13 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		return errors.Wrap(err, "error creating http client while graphql health check")
 	}
 	if c.conf.acl {
-		if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
+		for range 5 {
+			if err = hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if err != nil {
 			return errors.Wrap(err, "error during login while graphql health check")
 		}
 	}
