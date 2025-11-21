@@ -6,6 +6,7 @@ on:
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
+      - "**/*.json"
       - "**/Dockerfile"
       - "**/Makefile"
     types:
