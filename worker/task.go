@@ -368,12 +368,29 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		var nnUids []uint64
-		if srcFn.vectorInfo != nil {
-			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-				int(numNeighbors), index.AcceptAll[float32])
+		// Build optional search options if provided
+		filter := index.AcceptAll[float32]
+		opts := index.VectorIndexOptions[float32]{Filter: filter}
+		if srcFn.vsEfOverride > 0 {
+			opts.EfOverride = srcFn.vsEfOverride
+		}
+		if srcFn.vsDistanceThreshold != nil {
+			opts.DistanceThreshold = srcFn.vsDistanceThreshold
+		}
+		if o, ok := indexer.(index.OptionalSearchOptions[float32]); ok && (opts.EfOverride > 0 || opts.DistanceThreshold != nil) {
+			if srcFn.vectorInfo != nil {
+				nnUids, err = o.SearchWithOptions(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
+			} else {
+				nnUids, err = o.SearchWithUidAndOptions(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+			}
 		} else {
-			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-				int(numNeighbors), index.AcceptAll[float32])
+			if srcFn.vectorInfo != nil {
+				nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+					int(numNeighbors), index.AcceptAll[float32])
+			} else {
+				nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+					int(numNeighbors), index.AcceptAll[float32])
+			}
 		}
 
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
@@ -1792,6 +1809,9 @@ type functionContext struct {
 	atype          types.TypeID
 	vectorInfo     []float32
 	vectorUid      uint64
+	// Optional vector search options parsed from a 3rd arg on similar_to
+	vsEfOverride        int
+	vsDistanceThreshold *float64
 }
 
 const (
@@ -2119,12 +2139,48 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
-		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
-			return nil, err
+		// Allow 2 or 3 args: k, vector_or_uid[, options]
+		if !(len(q.SrcFunc.Args) == 2 || len(q.SrcFunc.Args) == 3) {
+			return nil, errors.Errorf("Function '%s' requires 2 or 3 arguments, but got %d (%v)", q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
 		}
 		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
+		}
+		if len(q.SrcFunc.Args) == 3 {
+			// Parse simple options: key=value pairs separated by comma or JSON-like {key:val,...}
+			raw := strings.TrimSpace(q.SrcFunc.Args[2])
+			if len(raw) > 0 {
+				if strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}") {
+					raw = strings.TrimSpace(raw[1 : len(raw)-1])
+				}
+				parts := strings.Split(raw, ",")
+				for _, p := range parts {
+					kv := strings.SplitN(p, ":", 2)
+					if len(kv) != 2 {
+						kv = strings.SplitN(p, "=", 2)
+						if len(kv) != 2 {
+							continue
+						}
+					}
+					k := strings.ToLower(strings.TrimSpace(kv[0]))
+					v := strings.TrimSpace(kv[1])
+					v = strings.Trim(v, "\"'")
+					switch k {
+					case "ef":
+						if n, perr := strconv.ParseInt(v, 10, 32); perr == nil && n > 0 {
+							fc.vsEfOverride = int(n)
+						}
+					case "distance_threshold":
+						if f, perr := strconv.ParseFloat(v, 64); perr == nil {
+							fc.vsDistanceThreshold = new(float64)
+							*fc.vsDistanceThreshold = f
+						}
+					default:
+						// ignore unknown keys silently
+					}
+				}
+			}
 		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {

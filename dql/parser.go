@@ -1874,7 +1874,10 @@ L:
 				case IsInequalityFn(function.Name):
 					err = parseFuncArgs(it, function)
 
-				case function.Name == "uid_in" || function.Name == "similar_to":
+				case function.Name == "uid_in":
+					err = parseFuncArgs(it, function)
+
+				case function.Name == "similar_to":
 					err = parseFuncArgs(it, function)
 
 				default:
@@ -1892,6 +1895,25 @@ L:
 				}
 				expectArg = false
 				continue
+			case itemLeftCurl:
+				// Guard: Only similar_to may use object-literal syntax in its 4th argument.
+				// By checking Name=="similar_to", Attr is set (predicate) and Args has
+				// exactly two elements (k and vector), we ensure the '{' is in position 4.
+				// All other functions receive the historical error for stray braces.
+				if function.Name != "similar_to" || function.Attr == "" || len(function.Args) != 2 {
+					return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007B '{'")
+				}
+				// Parse the object literal: {ef: 64, distance_threshold: 0.45}
+				// The helper consumes tokens until the matching '}' is found.
+				if err := parseSimilarToObjectArg(it, function, itemInFunc); err != nil {
+					return nil, err
+				}
+				expectArg = false
+				continue
+			case itemRightCurl:
+				// Right curly braces are never valid in function arguments outside of
+				// the object literal parsed above. Always error on stray '}'.
+				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007D '}'")
 			default:
 				if itemInFunc.Typ != itemName {
 					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
@@ -2408,6 +2430,10 @@ loop:
 				// The parentheses are balanced out. Let's break.
 				break loop
 			}
+		case item.Typ == itemLeftCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007B '{'")
+		case item.Typ == itemRightCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007D '}'")
 		default:
 			return nil, item.Errorf("Unexpected item while parsing @filter: %v", item)
 		}
@@ -3470,4 +3496,33 @@ func trySkipItemTyp(it *lex.ItemIterator, typ lex.ItemType) bool {
 	}
 	it.Next()
 	return true
+}
+
+func parseSimilarToObjectArg(it *lex.ItemIterator, function *Function, start lex.Item) error {
+	depth := 1
+	var builder strings.Builder
+	builder.WriteString(start.Val)
+
+	for depth > 0 {
+		if !it.Next() {
+			return start.Errorf("Unexpected end of object literal while parsing similar_to options")
+		}
+
+		item := it.Item()
+		builder.WriteString(item.Val)
+
+		switch item.Typ {
+		case itemLeftCurl:
+			depth++
+		case itemRightCurl:
+			depth--
+		case itemRightRound:
+			if depth > 0 {
+				return item.Errorf("Expected '}' before ')' in similar_to options")
+			}
+		}
+	}
+
+	function.Args = append(function.Args, Arg{Value: builder.String()})
+	return nil
 }
