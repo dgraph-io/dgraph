@@ -1,0 +1,407 @@
+# Dgraph Alpha Configuration File - All Options with Defaults
+# This file contains all possible configuration options for Dgraph Alpha
+# with their default values and detailed explanations.
+
+# =============================================================================
+# BASIC DIRECTORIES AND PATHS
+# =============================================================================
+
+# Directory to store posting lists (the main data structure for predicates)
+# This is where the actual graph data is stored on disk
+postings: p
+
+# Directory to store temporary buffers during operations like bulk loading
+# Used for intermediate data during processing
+tmp: t
+
+# Directory to store Raft write-ahead logs
+# Critical for data consistency and recovery in distributed setups
+wal: w
+
+# Folder where exported data will be saved when using export operations
+# Can be local path or cloud storage URL (s3://, minio://, etc.)
+export: export
+
+# =============================================================================
+# NETWORK CONFIGURATION
+# =============================================================================
+
+# Comma separated list of Dgraph Zero addresses (IP:PORT format)
+# Zero manages cluster membership, schema, and data distribution
+# Example: localhost:5080,zero2:5080,zero3:5080
+zero: localhost:5080
+
+# Address and port of this Alpha server for inter-server communication
+# Format: IP:PORT or hostname:PORT
+# If empty, Dgraph will auto-detect the address
+# Example: 192.168.1.100:7080
+my: ""
+
+# Value added to all default port numbers
+# Default ports: Internal=7080, HTTP=8080, Grpc=9080
+# With offset=100: Internal=7180, HTTP=8180, Grpc=9180
+port_offset: 0
+
+# =============================================================================
+# STORAGE ENGINE (BADGER) CONFIGURATION
+# =============================================================================
+
+badger:
+  # Compression algorithm for data storage
+  # Options: none, snappy, zstd:1, zstd:2, etc.
+  # snappy: Fast compression/decompression, moderate compression ratio
+  # zstd: Better compression ratio, slightly slower
+  compression: snappy
+
+  # Number of goroutines for Badger streaming operations
+  # Higher values can improve bulk loading performance but use more memory
+  numgoroutines: 8
+
+# =============================================================================
+# CACHE CONFIGURATION
+# =============================================================================
+
+cache:
+  # Total cache size in megabytes
+  # Larger cache improves query performance but uses more RAM
+  # Recommended: 50-70% of available RAM for dedicated Dgraph servers
+  size-mb: 4096
+
+  # Cache allocation percentages (must sum to 100)
+  # Format: PostingListCache,PstoreBlockCache,PstoreIndexCache
+  # PostingListCache: Caches predicate data (most important)
+  # PstoreBlockCache: Caches Badger data blocks
+  # PstoreIndexCache: Caches Badger index blocks
+  percentage: 40,40,20
+
+  # Cache update strategy on mutations
+  # false: Update cache entry with new value (default, consistent reads)
+  # true: Remove cache entry on mutation (14% faster writes, slower first read)
+  remove-on-update: false
+
+# =============================================================================
+# RAFT CONSENSUS CONFIGURATION
+# =============================================================================
+
+raft:
+  # Make this Alpha a learner node (read-only replica)
+  # Learner nodes don't participate in elections but receive data
+  # Useful for read replicas and gradual cluster expansion
+  learner: false
+
+  # Create Raft snapshot after this many log entries
+  # Lower values: More frequent snapshots, faster recovery, more I/O
+  # Higher values: Less frequent snapshots, slower recovery, less I/O
+  snapshot-after-entries: 10000
+
+  # Time interval for creating Raft snapshots
+  # Set to 0 to disable time-based snapshots
+  # Both entry and duration thresholds must be met
+  snapshot-after-duration: 30m
+
+  # Maximum number of pending mutation proposals
+  # Used for rate limiting to prevent memory exhaustion
+  # Higher values allow more concurrent mutations
+  pending-proposals: 256
+
+  # Optional Raft ID for this Alpha (auto-assigned if empty)
+  # Useful for replacing failed nodes with same ID
+  idx: ""
+
+  # Optional Raft Group ID to join (auto-assigned if empty)
+  # Used to control which shard group this Alpha joins
+  group: ""
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+
+security:
+  # Admin authentication token
+  # If set, all admin operations require this token
+  # HTTP: X-Dgraph-AuthToken header
+  # gRPC: auth-token in context metadata
+  token: ""
+
+  # IP whitelist for admin operations
+  # Comma-separated list of IPs, ranges, CIDR blocks, or hostnames
+  # Example: 192.168.1.0/24,10.0.0.1,admin.example.com
+  whitelist: ""
+
+# =============================================================================
+# QUERY AND MUTATION LIMITS
+# =============================================================================
+
+limit:
+  # Maximum number of edges returned in a single query
+  # Prevents queries from consuming excessive memory
+  # Applies to shortest path and recursive queries
+  query-edge: 1000000
+
+  # Maximum nodes returned when using @normalize directive
+  # Normalize flattens nested results into a single level
+  normalize-node: 10000
+
+  # Mutation mode control
+  # allow: All mutations permitted (default)
+  # disallow: No mutations allowed (read-only mode)
+  # strict: Mutations to unknown predicates fail
+  mutations: allow
+
+  # Maximum number of N-Quads in a single mutation request
+  # Prevents oversized mutations from overwhelming the system
+  mutations-nquad: 1000000
+
+  # Block drop-all and drop-data operations
+  # true: Prevents accidental data loss from drop operations
+  # false: Allows all drop operations (default)
+  disallow-drop: false
+
+  # Maximum concurrent queries before rejecting new ones
+  # Prevents query overload and maintains system responsiveness
+  max-pending-queries: 10000
+
+  # Query execution timeout (0 = no timeout)
+  # Format: 30s, 5m, 1h, etc.
+  # Prevents runaway queries from consuming resources indefinitely
+  query-timeout: 0ms
+
+  # Maximum retries for committing transactions to disk
+  # -1 = infinite retries, 0 = no retries
+  # Higher values increase durability but may cause delays
+  max-retries: 10
+
+  # Abort transactions older than this duration
+  # Prevents long-running transactions from blocking others
+  # Based on last mutation time, not transaction start time
+  txn-abort-after: 5m
+
+  # Shared instance mode (enterprise feature)
+  # true: Disables ACLs for non-galaxy users, restricts env var access
+  # false: Normal ACL behavior (default)
+  shared-instance: false
+
+  # Threshold for type filter optimization
+  # Lower values: More direct searches, less index usage
+  # Higher values: More index usage, fewer direct searches
+  type-filter-uid-limit: 10
+
+# =============================================================================
+# GRAPHQL CONFIGURATION
+# =============================================================================
+
+graphql:
+  # Enable GraphQL schema introspection queries
+  # Allows clients to discover schema structure
+  # May expose sensitive schema information in production
+  introspection: true
+
+  # Enable debug mode for GraphQL
+  # Returns detailed error messages to clients
+  # Should be false in production for security
+  debug: false
+
+  # Include extensions in GraphQL response body
+  # Provides additional metadata about query execution
+  extensions: true
+
+  # Polling interval for GraphQL subscriptions
+  # How often to check for subscription updates
+  # Lower values: More responsive, higher CPU usage
+  poll-interval: 1s
+
+  # URL of lambda server for custom GraphQL resolvers
+  # Supports $ns parameter for namespace substitution
+  # Example: http://lambda-server:8686/graphql-worker/$ns
+  lambda-url: ""
+
+# =============================================================================
+# CHANGE DATA CAPTURE (CDC)
+# =============================================================================
+
+cdc:
+  # File path for CDC audit logs
+  # Local file system path for change events
+  file: ""
+
+  # Comma-separated list of Kafka broker addresses
+  # Example: kafka1:9092,kafka2:9092,kafka3:9092
+  kafka: ""
+
+  # SASL username for Kafka authentication
+  sasl-user: ""
+
+  # SASL password for Kafka authentication
+  sasl-password: ""
+
+  # SASL authentication mechanism
+  # Options: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+  sasl-mechanism: PLAIN
+
+  # Path to CA certificate file for Kafka TLS
+  ca-cert: ""
+
+  # Path to client certificate file for Kafka TLS
+  client-cert: ""
+
+  # Path to client private key file for Kafka TLS
+  client-key: ""
+
+  # Enable TLS encryption for Kafka connections
+  tls: false
+
+# =============================================================================
+# AUDIT LOGGING
+# =============================================================================
+
+audit:
+  # Audit log output destination
+  # stdout: Write to standard output
+  # /path/to/dir: Write to files in specified directory
+  output: ""
+
+  # Enable compression of rotated audit log files
+  # Saves disk space for long-term audit retention
+  compress: false
+
+  # Path to encryption key file for audit logs
+  # Encrypts audit logs for security compliance
+  encrypt-file: ""
+
+  # Number of days to retain audit log files
+  # Older files are automatically deleted
+  days: 10
+
+  # Maximum audit log file size in MB before rotation
+  # Prevents individual log files from becoming too large
+  size: 100
+
+# =============================================================================
+# CUSTOM PLUGINS
+# =============================================================================
+
+# Comma-separated list of custom tokenizer plugin files (.so)
+# Allows loading custom indexing and search functionality
+# Example: /path/to/plugin1.so,/path/to/plugin2.so
+custom_tokenizers: ""
+
+# =============================================================================
+# MCP (Model Context Protocol) SERVER
+# =============================================================================
+
+# Enable MCP server alongside Alpha
+# Provides AI/ML model integration capabilities
+mcp: false
+
+# =============================================================================
+# FEATURE FLAGS
+# =============================================================================
+
+feature-flags:
+  # Configure @normalize directive response formatting
+  # v20: Use v20.11 compatible format (repeated keys for same alias)
+  # Empty: Use current default format
+  normalize-compatibility-mode: ""
+
+  # Enable detailed per-predicate metrics
+  # Provides disk read and cache statistics for each predicate
+  # Useful for performance analysis but adds overhead
+  enable-detailed-metrics: false
+
+# =============================================================================
+# TRACING AND OBSERVABILITY
+# =============================================================================
+
+trace:
+  # Fraction of queries to trace (0.0 to 1.0)
+  # Higher values provide more observability but increase overhead
+  ratio: 0.01
+
+  # Jaeger collector URL for distributed tracing
+  # Example: http://jaeger:14268/api/traces
+  jaeger: ""
+
+  # Datadog agent URL for distributed tracing
+  # Example: http://datadog-agent:8126
+  datadog: ""
+
+# =============================================================================
+# DATA DURABILITY
+# =============================================================================
+
+# Data survival mode
+# process: No data loss on process crash, undefined on filesystem crash
+# filesystem: No data loss on hard reboot (slower due to fsync calls)
+survive: process
+
+# =============================================================================
+# TELEMETRY
+# =============================================================================
+
+telemetry:
+  # Send anonymous usage statistics to Dgraph team
+  # Helps improve Dgraph development
+  reports: true
+
+  # Send crash reports to Sentry (deprecated)
+  sentry: false
+
+# =============================================================================
+# GLOBAL OPTIONS
+# =============================================================================
+
+# Bind to all network interfaces (0.0.0.0) instead of localhost
+# true: Accept connections from any IP (default)
+# false: Only accept localhost connections
+bindall: true
+
+# Allow trace endpoint access from remote addresses
+# Security consideration: May expose internal information
+expose_trace: false
+# =============================================================================
+# ADVANCED OPTIONS (Uncomment and configure as needed)
+# =============================================================================
+
+# # Working directory - Dgraph changes to this directory on startup
+# cwd: /var/lib/dgraph
+
+# # Profiling mode for performance analysis
+# # Options: cpu, mem, mutex, block
+# profile_mode: ""
+
+# # Block profiling rate (used with block profile_mode)
+# block_rate: 0
+
+# # TLS configuration
+# tls:
+#   # Directory containing TLS certificates
+#   dir: /etc/dgraph/tls
+#   # Use system CA certificates
+#   use-system-ca: true
+#   # Client authentication type
+#   client-auth-type: REQUIREANDVERIFY
+#   # Use TLS for internal gRPC communication
+#   internal-port: true
+
+# # Encryption at rest configuration
+# encryption:
+#   # Path to encryption key file
+#   key-file: /etc/dgraph/enc-key
+
+# # Vault integration (enterprise)
+# vault:
+#   # Vault server address
+#   addr: https://vault.example.com:8200
+#   # Path to Vault role ID file
+#   role-id-file: /etc/dgraph/vault-role-id
+#   # Path to Vault secret ID file
+#   secret-id-file: /etc/dgraph/vault-secret-id
+#   # Vault path for secrets
+#   path: secret/dgraph
+#   # Vault field name for encryption key
+#   field: enc-key
+
+# # ACL configuration (enterprise)
+# acl:
+#   # Path to HMAC secret file for JWT signing
+#   secret-file: /etc/dgraph/hmac-secret

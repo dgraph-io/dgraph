@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+UNAME_S := $(shell uname -s)
+
 # Update BADGER_PB_VERSION when upgrading Badger major versions
 BADGER_PB_VERSION = 4
 DGO_PB_VERSION = 250
@@ -46,6 +48,15 @@ copy-protos:
 patch-pb:
 	./patch_pb.sh
 
+ifneq ($(UNAME_S),Linux)
+.PHONY: regenerate
+regenerate:
+	@echo "Running in Docker..."
+	@docker run --rm -v $(shell pwd)/..:/go/src/github.com/dgraph-io/dgraph \
+		-w /go/src/github.com/dgraph-io/dgraph/protos \
+		golang:1.25.0 \
+		/bin/bash -c "apt-get update && apt-get install -y protobuf-compiler && make regenerate"
+else
 .PHONY: regenerate
 regenerate: tidy-deps copy-protos check clean
 	echo ${DGO_PATH}
@@ -62,3 +73,4 @@ regenerate: tidy-deps copy-protos check clean
 	@$(MAKE) patch-pb
 	@rm -rf ${TMPDIR}
 	@echo Done.
+endif
