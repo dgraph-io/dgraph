@@ -697,6 +697,10 @@ func (args *params) fill(gq *dql.GraphQuery) error {
 			if err != nil {
 				return err
 			}
+			if numPaths > math.MaxInt {
+				return errors.Errorf("numpaths value %d exceeds maximum allowed value %d",
+					numPaths, math.MaxInt)
+			}
 			args.NumPaths = int(numPaths)
 		}
 
