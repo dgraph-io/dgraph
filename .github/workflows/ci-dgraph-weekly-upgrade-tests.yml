@@ -1,0 +1,144 @@
+name: ci-dgraph-weekly-upgrade-tests
+
+on:
+  schedule:
+    - cron: 0 0 * * 0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dgraph-upgrade-tests-mutations-and-queries:
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+      - name: Run System Upgrade Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the sytem upgrade tests
+          go test -v -timeout=120m -failfast -tags=upgrade \
+            github.com/hypermodeinc/dgraph/v25/systest/mutations-and-queries
+          # clean up docker containers after test execution
+          go clean -testcache
+          # sleep
+          sleep 5
+
+  dgraph-upgrade-tests-multi-tenancy:
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+      - name: Run System Upgrade Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the sytem upgrade tests
+          go test -v -timeout=120m -failfast -tags=upgrade \
+            github.com/hypermodeinc/dgraph/v25/systest/multi-tenancy
+          # clean up docker containers after test execution
+          go clean -testcache
+          # sleep
+          sleep 5
+
+  dgraph-upgrade-tests-plugin:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+      - name: Run System Upgrade Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the sytem upgrade tests
+          go test -v -timeout=120m -failfast -tags=upgrade \
+            github.com/hypermodeinc/dgraph/v25/systest/plugin
+          # clean up docker containers after test execution
+          go clean -testcache
+          # sleep
+          sleep 5
+
+  dgraph-upgrade-tests-core:
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Clean Up Environment
+        run: |
+          #!/bin/bash
+          # clean cache
+          go clean -testcache
+      - name: Run Core Upgrade Tests
+        run: |
+          #!/bin/bash
+          # go env settings
+          export GOPATH=~/go
+          # move the binary
+          cp dgraph/dgraph ~/go/bin/dgraph
+          # run the core upgrade tests
+          go test -v -timeout=120m -failfast -tags=upgrade \
+            github.com/hypermodeinc/dgraph/v25/acl \
+            github.com/hypermodeinc/dgraph/v25/worker \
+            github.com/hypermodeinc/dgraph/v25/query
+          # clean up docker containers after test execution
+          go clean -testcache
+          # sleep
+          sleep 5
