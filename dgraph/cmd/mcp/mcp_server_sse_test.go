@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 

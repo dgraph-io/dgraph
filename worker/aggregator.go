@@ -6,7 +6,7 @@
 package worker
 
 import (
-	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types"
 )
 
 func couldApplyAggregatorOn(agrtr string, typ types.TypeID) bool {

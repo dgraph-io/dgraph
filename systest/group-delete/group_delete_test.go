@@ -26,7 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func NodesSetup(t *testing.T, c *dgo.Dgraph) {

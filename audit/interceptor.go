@@ -19,10 +19,10 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"

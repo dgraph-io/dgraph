@@ -6,8 +6,8 @@
 package hnsw
 
 import (
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
 
 	"fmt"
 )

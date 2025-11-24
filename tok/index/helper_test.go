@@ -15,8 +15,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/viterin/vek/vek32"
 	"google.golang.org/protobuf/proto"
 )

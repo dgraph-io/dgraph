@@ -13,7 +13,7 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode"
 	"github.com/blevesearch/bleve/v2/registry"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const unicodenormName = "unicodenorm_nfkc"

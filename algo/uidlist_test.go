@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/hypermodeinc/dgraph/v25/codec"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/codec"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 func newList(data []uint64) *pb.List {

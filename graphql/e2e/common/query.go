@@ -29,9 +29,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*country) {

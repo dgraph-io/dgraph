@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hypermodeinc/dgraph/v25/systest/21million/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/systest/21million/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestQueries(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/algo"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func (start *SubGraph) expandRecurse(ctx context.Context, maxDepth uint64) error {

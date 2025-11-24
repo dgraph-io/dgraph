@@ -18,9 +18,9 @@ import (
 	"gopkg.in/yaml.v3"
 
 	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/graphql/test"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/test"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // Tests that result completion and GraphQL error propagation are working properly.

@@ -18,7 +18,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func lambdaOnTypeField(t *testing.T) {

@@ -8,8 +8,8 @@ package tok
 import (
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	opts "github.com/hypermodeinc/dgraph/v25/tok/options"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	opts "github.com/dgraph-io/dgraph/v25/tok/options"
 )
 
 // registerIndexFactory(f) will register f as both a Tokenizer and specifically

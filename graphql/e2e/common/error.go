@@ -25,11 +25,11 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	admin2 "github.com/hypermodeinc/dgraph/v25/graphql/admin"
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/graphql/test"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	admin2 "github.com/dgraph-io/dgraph/v25/graphql/admin"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/test"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (

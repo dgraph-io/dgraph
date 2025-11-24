@@ -12,10 +12,10 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/raftwal"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/raftwal"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func getEntryForMutation(index, startTs uint64) raftpb.Entry {

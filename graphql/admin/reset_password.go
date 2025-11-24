@@ -12,9 +12,9 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/hypermodeinc/dgraph/v25/edgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/edgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
 )
 
 func resolveResetPassword(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {

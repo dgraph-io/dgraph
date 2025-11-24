@@ -16,8 +16,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func TestLoginOverTLS(t *testing.T) {

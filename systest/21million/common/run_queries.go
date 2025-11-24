@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 // JSON output can be hundreds of lines and diffs can scroll off the terminal before you

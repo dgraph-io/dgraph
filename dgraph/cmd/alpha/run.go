@@ -39,17 +39,17 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/audit"
+	"github.com/dgraph-io/dgraph/v25/dgraph/cmd/mcp"
+	"github.com/dgraph-io/dgraph/v25/edgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/admin"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/audit"
-	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/mcp"
-	"github.com/hypermodeinc/dgraph/v25/edgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (

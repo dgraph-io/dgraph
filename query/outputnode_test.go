@@ -17,10 +17,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 func TestEncodeMemory(t *testing.T) {

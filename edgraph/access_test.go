@@ -12,9 +12,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/acl"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/acl"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func generateJWT(namespace uint64, userId string, groupIds []string, expiry int64) string {

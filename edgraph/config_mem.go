@@ -12,7 +12,7 @@
 package edgraph
 
 import (
-	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/worker"
 )
 
 // #include <unistd.h>

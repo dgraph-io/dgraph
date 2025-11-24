@@ -19,9 +19,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hypermodeinc/dgraph/v25/enc"
-	"github.com/hypermodeinc/dgraph/v25/lex"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/enc"
+	"github.com/dgraph-io/dgraph/v25/lex"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // Chunker describes the interface to parse and process the input to the live and bulk loaders.

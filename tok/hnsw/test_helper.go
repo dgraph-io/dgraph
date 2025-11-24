@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/pkg/errors"
 )
 

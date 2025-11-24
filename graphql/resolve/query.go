@@ -15,10 +15,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/graphql/dgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var errNotScalar = errors.New("provided value is not a scalar, can't convert it to string")

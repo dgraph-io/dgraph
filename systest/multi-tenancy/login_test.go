@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func addData(t *testing.T, gc *dgraphapi.GrpcClient) {

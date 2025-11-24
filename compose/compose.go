@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type stringMap map[string]string

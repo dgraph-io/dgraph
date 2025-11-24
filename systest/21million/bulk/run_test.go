@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/systest/21million/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/systest/21million/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestQueries(t *testing.T) {

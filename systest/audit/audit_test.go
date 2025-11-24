@@ -15,8 +15,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/testutil/testaudit"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil/testaudit"
 )
 
 func TestZeroAudit(t *testing.T) {

@@ -8,10 +8,10 @@ package admin
 import (
 	"context"
 
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type currentUserResolver struct {

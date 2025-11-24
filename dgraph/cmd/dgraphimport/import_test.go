@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/systest/1million/common"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/systest/1million/common"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"

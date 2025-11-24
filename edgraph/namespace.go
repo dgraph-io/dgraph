@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/schema"
 )
 
 func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceRequest) (

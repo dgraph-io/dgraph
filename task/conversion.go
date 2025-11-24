@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 var (

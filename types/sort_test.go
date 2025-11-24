@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 func toString(t *testing.T, values [][]Val, vID TypeID) []string {

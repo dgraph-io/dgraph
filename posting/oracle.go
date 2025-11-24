@@ -17,9 +17,9 @@ import (
 	"github.com/golang/glog"
 	ostats "go.opencensus.io/stats"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var o *oracle

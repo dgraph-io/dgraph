@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"testing"
 
-	e2eCommon "github.com/hypermodeinc/dgraph/v25/graphql/e2e/common"
-	utilsCommon "github.com/hypermodeinc/dgraph/v25/systest/backup/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	e2eCommon "github.com/dgraph-io/dgraph/v25/graphql/e2e/common"
+	utilsCommon "github.com/dgraph-io/dgraph/v25/systest/backup/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (

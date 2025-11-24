@@ -8,7 +8,7 @@ package options
 import (
 	"fmt"
 
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 )
 
 // An Options instance maps the various named options to their specific values.

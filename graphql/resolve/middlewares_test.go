@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
 )
 
 func TestQueryMiddlewares_Then_ExecutesMiddlewaresInOrder(t *testing.T) {

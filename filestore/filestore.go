@@ -10,7 +10,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // FileStore represents a file or directory of files that are either stored

@@ -8,8 +8,8 @@ package worker
 import (
 	"context"
 
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 // RemoveNodeOverNetwork sends a request to remove the given node from given group to a zero server.

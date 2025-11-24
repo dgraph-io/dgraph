@@ -20,8 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xdg/scram"
 
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type SinkMessage struct {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/graphql/test"
+	"github.com/dgraph-io/dgraph/v25/graphql/test"
 )
 
 func TestQueriesPropagateExtensions(t *testing.T) {

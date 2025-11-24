@@ -11,8 +11,8 @@ import (
 	"os"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/bulk"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraph/cmd/bulk"
+	"github.com/dgraph-io/dgraph/v25/x"
 
 	"github.com/spf13/cobra"
 )

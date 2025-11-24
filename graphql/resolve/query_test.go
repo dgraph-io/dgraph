@@ -17,11 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/dgraph-io/dgraph/v25/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/test"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"github.com/hypermodeinc/dgraph/v25/graphql/dgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/graphql/test"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
 )
 
 // Tests showing that the query rewriter produces the expected Dgraph queries

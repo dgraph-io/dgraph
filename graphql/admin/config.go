@@ -12,9 +12,9 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/worker"
 )
 
 type configInput struct {

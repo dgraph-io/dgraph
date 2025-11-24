@@ -11,7 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (

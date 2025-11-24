@@ -13,9 +13,9 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func (w *grpcWorker) DeleteNamespace(ctx context.Context, req *pb.DeleteNsRequest) (*pb.Status, error) {

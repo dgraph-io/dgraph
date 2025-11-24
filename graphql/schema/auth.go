@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cast"
 
+	"github.com/dgraph-io/dgraph/v25/dql"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/gqlerror"
 	"github.com/dgraph-io/gqlparser/v2/parser"
 	"github.com/dgraph-io/gqlparser/v2/validator"
-	"github.com/hypermodeinc/dgraph/v25/dql"
 )
 
 const (

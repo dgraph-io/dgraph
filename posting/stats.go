@@ -9,7 +9,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/hypermodeinc/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/algo"
 )
 
 type StatsHolder struct {

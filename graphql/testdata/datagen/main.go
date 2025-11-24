@@ -5,7 +5,7 @@
 
 package main
 
-import "github.com/hypermodeinc/dgraph/v25/graphql/testdata/datagen/cmd"
+import "github.com/dgraph-io/dgraph/v25/graphql/testdata/datagen/cmd"
 
 func main() {
 	cmd.Execute()
