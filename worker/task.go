@@ -2015,6 +2015,12 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 				return nil, errors.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 					q.SrcFunc.Name, q.SrcFunc.Args[0])
 			}
+			// Threshold values are used as uint32 in count keys (see evaluate function).
+			// Validate they fit in uint32 range to prevent overflow.
+			if threshold < 0 || threshold > math.MaxUint32 {
+				return nil, errors.Errorf("Compare %v: threshold value %d must be between 0 and %d",
+					q.SrcFunc.Name, threshold, math.MaxUint32)
+			}
 			thresholds = append(thresholds, threshold)
 		}
 		fc.threshold = thresholds
