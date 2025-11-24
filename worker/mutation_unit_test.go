@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -90,7 +90,7 @@ func TestReverseEdgeSetDel(t *testing.T) {
 		Entity:  1,
 		Op:      pb.DirectedEdge_SET,
 	}
-	
+
 	edgeSet2 := &pb.DirectedEdge{
 		ValueId: 2,
 		Attr:    attr,
@@ -98,14 +98,12 @@ func TestReverseEdgeSetDel(t *testing.T) {
 		Op:      pb.DirectedEdge_SET,
 	}
 
-	
 	edgeSet3 := &pb.DirectedEdge{
 		ValueId: 2,
 		Attr:    attr,
 		Entity:  4,
 		Op:      pb.DirectedEdge_SET,
 	}
-
 
 	x.Check(runMutation(ctx, edgeSet1, txn))
 	x.Check(runMutation(ctx, edgeSet2, txn))
