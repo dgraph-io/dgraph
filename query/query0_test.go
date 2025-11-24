@@ -584,7 +584,7 @@ func TestCascadeWithSort(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
 }
 
-// Regression test for issue described in https://github.com/hypermodeinc/dgraph/pull/8441
+// Regression test for issue described in https://github.com/dgraph-io/dgraph/pull/8441
 func TestNegativeOffset(t *testing.T) {
 	query := `
 	{

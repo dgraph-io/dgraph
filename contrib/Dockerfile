@@ -5,7 +5,7 @@
 # already built and placed there.
 
 FROM ubuntu:24.04
-LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
+LABEL maintainer="Istari Digital, Inc. <dgraph-admin@istaridigital.com>"
 
 # need to remove the cache of sources lists
 # apt-get Error Code 100

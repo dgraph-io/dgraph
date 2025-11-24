@@ -344,7 +344,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 			},
 		},
 		// Country: anotherCountry,
-		// FIXME: Won't work till https://github.com/hypermodeinc/dgraph/pull/4411 is merged
+		// FIXME: Won't work till https://github.com/dgraph-io/dgraph/pull/4411 is merged
 	}
 
 	patchRemove := &author{

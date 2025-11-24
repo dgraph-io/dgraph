@@ -79,5 +79,5 @@ jobs:
         uses: trunk-io/analytics-uploader@v2
         with:
           junit-paths: ./test-results.xml
-          org-slug: hypermode
+          org-slug: dgraph-io
           token: ${{ secrets.TRUNK_TOKEN }}

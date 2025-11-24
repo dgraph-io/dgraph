@@ -792,7 +792,7 @@ func TestHasFirst(t *testing.T) {
 }
 
 // This test is not working currently, but start working after
-// PR https://github.com/hypermodeinc/dgraph/pull/4316 is merged.
+// PR https://github.com/dgraph-io/dgraph/pull/4316 is merged.
 // func TestHasFirstLangPredicate(t *testing.T) {
 // 	query := `{
 // 		q(func:has(name@lang), orderasc: name, first:5) {

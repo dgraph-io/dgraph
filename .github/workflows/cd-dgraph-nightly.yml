@@ -27,4 +27,4 @@ jobs:
         with:
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/hypermodeinc/dgraph-standalone:nightly
+          tags: ghcr.io/dgraph-io/dgraph-standalone:nightly

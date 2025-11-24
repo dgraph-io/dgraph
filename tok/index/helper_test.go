@@ -366,7 +366,7 @@ func littleEndianBytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, float
 		// Assume LittleEndian for encoding since this is
 		// the assumption elsewhere when reading from client.
 		// See dgraph-io/dgo/protos/api.pb.go
-		// See also hypermodeinc/dgraph/types/conversion.go
+		// See also dgraph-io/dgraph/types/conversion.go
 		// This also seems to be the preference from many examples
 		// I have found via Google search. It's unclear why this
 		// should be a preference.

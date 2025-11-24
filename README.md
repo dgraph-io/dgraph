@@ -10,7 +10,6 @@
       <img alt="Dgraph Logo" src="/logo.png">
 </picture>
 
-[![chat](https://img.shields.io/discord/1267579648657850441)](https://discord.hypermode.com)
 [![GitHub Repo stars](https://img.shields.io/github/stars/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/stargazers)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/commits/main/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
@@ -127,8 +126,8 @@ operations, which makes it easy to build applications with it.
 
 - **Dgraph official documentation is present at
   [docs.hypermode.com/dgraph](https://docs.hypermode.com/dgraph).**
-- For feature requests or questions, visit
-  [https://discuss.hypermode.com](https://discuss.hypermode.com).
+- For general information and questions, visit
+  [Github discussions](https://github.com/dgraph-io/dgraph/discussions).
 - Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to find the latest release
   and corresponding release notes.
 
@@ -148,7 +147,7 @@ also libraries contributed by the community
 
 ## Contact
 
-- Please use [discuss.hypermode.com](https://discuss.hypermode.com) for documentation, questions,
+- Please use [Github discussions](https://github.com/dgraph-io/dgraph/discussions) for questions,
   feature requests and discussions.
 - Please use [GitHub Issues](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature
   requests.

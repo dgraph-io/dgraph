@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	dnOrganization     = "Hypermode Inc."
+	dnOrganization     = "Istari Digital, Inc."
 	dnCommonNamePrefix = "Dgraph"
 )
 

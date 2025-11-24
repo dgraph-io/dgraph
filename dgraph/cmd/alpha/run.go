@@ -268,7 +268,7 @@ they form a Raft group and provide synchronous replication.
 		Head("Feature flags to enable various experimental features").
 		Flag("normalize-compatibility-mode", "configure @normalize response formatting."+
 			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
-			" For more details, see https://github.com/hypermodeinc/dgraph/pull/7639").
+			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
 		Flag("enable-detailed-metrics", "Enable metrics about disk reads and cache per predicate").
 		String())
 }

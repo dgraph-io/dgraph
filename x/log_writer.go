@@ -28,7 +28,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
-	//  old logs before https://github.com/hypermodeinc/dgraph/pull/8323 contain deprecated verification text in header
+	//  old logs before https://github.com/dgraph-io/dgraph/pull/8323 contain deprecated verification text in header
 	VerificationTextDeprecated = "Hello World"
 	VerificationText           = "dlroW olloH"
 )
