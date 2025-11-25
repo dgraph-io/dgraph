@@ -1,7 +1,7 @@
 //go:build integration || cloud || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestRecurseError(t *testing.T) {
@@ -946,7 +946,7 @@ func TestShortestPathRev(t *testing.T) {
 		js)
 }
 
-// Regression test for https://github.com/hypermodeinc/dgraph/issues/3657.
+// Regression test for https://github.com/dgraph-io/dgraph/issues/3657.
 func TestShortestPathPassword(t *testing.T) {
 	query := `
 		{
@@ -3221,7 +3221,7 @@ func TestMultiRegexInFilter2(t *testing.T) {
 	`
 
 	// run 20 times ensure that there is no data race
-	// https://github.com/hypermodeinc/dgraph/issues/4030
+	// https://github.com/dgraph-io/dgraph/issues/4030
 	for i := 0; i < 20; i++ {
 		res := processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)

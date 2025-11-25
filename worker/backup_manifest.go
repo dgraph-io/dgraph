@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func verifyManifests(manifests []*Manifest) error {
@@ -157,7 +157,7 @@ func getConsolidatedManifest(h UriHandler, uri *url.URL) (*MasterManifest, error
 // the drop data/attr operation.
 // If the manifest version is 2103, convert the format of predicate from <ns bytes>|<attr> to
 // <ns string>-<attr>. This is because of a bug for namespace greater than 127.
-// See https://github.com/hypermodeinc/dgraph/pull/7810
+// See https://github.com/dgraph-io/dgraph/pull/7810
 // NOTE: Do not use the upgraded manifest to overwrite the non-upgraded manifest.
 func upgradeManifest(m *Manifest) error {
 	switch m.Version {

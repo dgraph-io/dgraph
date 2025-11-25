@@ -1,7 +1,7 @@
 //go:build integration || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 )
 
 func TestReservedPredicateForMutation(t *testing.T) {

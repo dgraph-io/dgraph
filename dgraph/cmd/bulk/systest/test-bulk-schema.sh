@@ -1,5 +1,5 @@
 #!/bin/bash
-# verify fix of https://github.com/hypermodeinc/dgraph/issues/2616
+# verify fix of https://github.com/dgraph-io/dgraph/issues/2616
 
 readonly ME=${0##*/}
 readonly SRCROOT=$(git rev-parse --show-toplevel)

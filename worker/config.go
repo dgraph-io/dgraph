@@ -1,17 +1,18 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package worker
 
 import (
+	"fmt"
 	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (
@@ -108,4 +109,15 @@ func (opt *Options) validate() {
 		x.AssertTruef(ad != td,
 			"Tmp directory and Audit Output cannot be the same ('%s').", opt.Audit.Output)
 	}
+}
+
+// String implements the Stringer interface to redact sensitive fields when logging.
+func (opt Options) String() string {
+	return fmt.Sprintf("{PostingDir:%s WALDir:%s MutationsMode:%d AuthToken:**** "+
+		"AclJwtAlg:%v AclSecretKey:**** AclSecretKeyBytes:**** AccessJwtTtl:%v "+
+		"RefreshJwtTtl:%v CachePercentage:%s CacheMb:%d RemoveOnUpdate:%v Audit:%v "+
+		"ChangeDataConf:%s TypeFilterUidLimit:%d}",
+		opt.PostingDir, opt.WALDir, opt.MutationsMode, opt.AclJwtAlg,
+		opt.AccessJwtTtl, opt.RefreshJwtTtl, opt.CachePercentage, opt.CacheMb,
+		opt.RemoveOnUpdate, opt.Audit, opt.ChangeDataConf, opt.TypeFilterUidLimit)
 }

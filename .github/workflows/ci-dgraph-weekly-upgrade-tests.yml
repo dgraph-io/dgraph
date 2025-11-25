@@ -36,7 +36,7 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the sytem upgrade tests
           go test -v -timeout=120m -failfast -tags=upgrade \
-            github.com/hypermodeinc/dgraph/v25/systest/mutations-and-queries
+            github.com/dgraph-io/dgraph/v25/systest/mutations-and-queries
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
@@ -69,7 +69,7 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the sytem upgrade tests
           go test -v -timeout=120m -failfast -tags=upgrade \
-            github.com/hypermodeinc/dgraph/v25/systest/multi-tenancy
+            github.com/dgraph-io/dgraph/v25/systest/multi-tenancy
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
@@ -102,7 +102,7 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the sytem upgrade tests
           go test -v -timeout=120m -failfast -tags=upgrade \
-            github.com/hypermodeinc/dgraph/v25/systest/plugin
+            github.com/dgraph-io/dgraph/v25/systest/plugin
           # clean up docker containers after test execution
           go clean -testcache
           # sleep
@@ -135,9 +135,9 @@ jobs:
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the core upgrade tests
           go test -v -timeout=120m -failfast -tags=upgrade \
-            github.com/hypermodeinc/dgraph/v25/acl \
-            github.com/hypermodeinc/dgraph/v25/worker \
-            github.com/hypermodeinc/dgraph/v25/query
+            github.com/dgraph-io/dgraph/v25/acl \
+            github.com/dgraph-io/dgraph/v25/worker \
+            github.com/dgraph-io/dgraph/v25/query
           # clean up docker containers after test execution
           go clean -testcache
           # sleep

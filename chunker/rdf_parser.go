@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,11 +14,11 @@ import (
 	"unicode"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/lex"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/lex"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var (
@@ -68,6 +68,10 @@ func isSpaceRune(r rune) bool {
 
 // ParseRDF parses a mutation string and returns the N-Quad representation for it.
 // It parses N-Quad statements based on http://www.w3.org/TR/n-quads/.
+// Safe to return by value: embedded mutex is never used before return.
+// The static analyzer warning is a false positive (copylocks).
+//
+//nolint:govet,copylocks
 func ParseRDF(line string, l *lex.Lexer) (api.NQuad, error) {
 	var rnq api.NQuad
 	line = strings.TrimSpace(line)
@@ -217,7 +221,9 @@ L:
 		return rnq, fmt.Errorf("no Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) {
-		return rnq, fmt.Errorf("NQuad failed sanity check:%+v", rnq)
+		// Don't format the full line, as it may contain sensitive information
+		return rnq, fmt.Errorf("NQuad failed sanity check. Subject: %q, Predicate: %q, ObjectId: %q",
+			rnq.Subject, rnq.Predicate, rnq.ObjectId)
 	}
 
 	return rnq, nil

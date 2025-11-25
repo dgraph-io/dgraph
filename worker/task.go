@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,18 +26,18 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/algo"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	ctask "github.com/hypermodeinc/dgraph/v25/task"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	ctask "github.com/dgraph-io/dgraph/v25/task"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -2014,6 +2014,12 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "Compare %v(%v) require digits, but got invalid num",
 					q.SrcFunc.Name, q.SrcFunc.Args[0])
+			}
+			// Threshold values are used as uint32 in count keys (see evaluate function).
+			// Validate they fit in uint32 range to prevent overflow.
+			if threshold < 0 || threshold > math.MaxUint32 {
+				return nil, errors.Errorf("Compare %v: threshold value %d must be between 0 and %d",
+					q.SrcFunc.Name, threshold, math.MaxUint32)
 			}
 			thresholds = append(thresholds, threshold)
 		}

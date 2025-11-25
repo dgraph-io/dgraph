@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	opt "github.com/dgraph-io/dgraph/v25/tok/options"
 	"github.com/golang/glog"
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	opt "github.com/hypermodeinc/dgraph/v25/tok/options"
 	"github.com/pkg/errors"
 )
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/hypermodeinc/dgraph/v25/codec"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/codec"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 const jump = 32          // Jump size in InsersectWithJump.

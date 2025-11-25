@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} make
 
 ###################### Stage II ######################
 FROM ubuntu:24.04
-LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
+LABEL maintainer="Dgraph <dgraph-admin@istaridigital.com>"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates=20240203 \
     curl=8.5.0-2ubuntu10.6 \

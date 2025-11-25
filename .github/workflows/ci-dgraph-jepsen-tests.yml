@@ -20,7 +20,7 @@ jobs:
       - name: Checkout jepsen repo
         uses: actions/checkout@v5
         with:
-          repository: hypermodeinc/jepsen
+          repository: dgraph-io/jepsen
           path: jepsen
           ref: master
       - name: Set jepsen root

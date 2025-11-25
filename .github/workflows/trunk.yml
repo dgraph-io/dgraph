@@ -11,4 +11,4 @@ permissions:
 jobs:
   trunk-code-quality:
     name: Trunk Code Quality
-    uses: hypermodeinc/.github/.github/workflows/trunk.yml@main
+    uses: dgraph-io/.github/.github/workflows/trunk.yml@main

@@ -1,7 +1,7 @@
 //go:build integration || cloud || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,9 +16,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/dql"
 )
 
 func TestGetUID(t *testing.T) {
@@ -584,7 +584,7 @@ func TestCascadeWithSort(t *testing.T) {
 	require.JSONEq(t, `{"data":{"me":[{"name": "Daryl Dixon","alive": false},{"name": "Rick Grimes","alive": true}]}}`, js)
 }
 
-// Regression test for issue described in https://github.com/hypermodeinc/dgraph/pull/8441
+// Regression test for issue described in https://github.com/dgraph-io/dgraph/pull/8441
 func TestNegativeOffset(t *testing.T) {
 	query := `
 	{
