@@ -7,6 +7,7 @@ package x
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"time"
 
@@ -71,7 +72,8 @@ type IPRange struct {
 }
 
 // WorkerOptions stores the options for the worker package. It's declared here
-// since it's used by multiple packages.
+// since it's used by multiple packages. Note the String override for this type,
+// added to prevent sensitive information from being logged.
 type WorkerOptions struct {
 	// TmpDir is a directory to store temporary buffers.
 	TmpDir string
@@ -146,4 +148,16 @@ func (w *WorkerOptions) Parse(conf *viper.Viper) {
 	AssertTruef(survive == "process" || survive == "filesystem",
 		"Invalid survival mode: %s", survive)
 	w.HardSync = survive == "filesystem"
+}
+
+// String implements the Stringer interface to redact sensitive fields when logging.
+func (w WorkerOptions) String() string {
+	return fmt.Sprintf("{TmpDir:%s ExportPath:%s MyAddr:%s ZeroAddr:%v Raft:%v "+
+		"WhiteListedIPRanges:%v StrictMutations:%v AclEnabled:%v AclJwtAlg:%v "+
+		"AclPublicKey:**** AbortOlderThan:%v ProposedGroupId:%d StartTime:%v "+
+		"Security:**** EncryptionKey:**** LogDQLRequest:%d HardSync:%v Audit:%v}",
+		w.TmpDir, w.ExportPath, w.MyAddr, w.ZeroAddr, w.Raft,
+		w.WhiteListedIPRanges, w.StrictMutations, w.AclEnabled, w.AclJwtAlg,
+		w.AbortOlderThan, w.ProposedGroupId, w.StartTime,
+		w.LogDQLRequest, w.HardSync, w.Audit)
 }
