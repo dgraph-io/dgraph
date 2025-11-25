@@ -217,7 +217,9 @@ L:
 		return rnq, fmt.Errorf("no Object in NQuad. Input: [%s]", line)
 	}
 	if !sane(rnq.Subject) || !sane(rnq.Predicate) || !sane(rnq.ObjectId) {
-		return rnq, fmt.Errorf("NQuad failed sanity check:%+v", rnq)
+		// Don't format the full line, as it may contain sensitive information
+		return rnq, fmt.Errorf("NQuad failed sanity check. Subject: %q, Predicate: %q, ObjectId: %q",
+			rnq.Subject, rnq.Predicate, rnq.ObjectId)
 	}
 
 	return rnq, nil
