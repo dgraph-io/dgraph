@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	opt "github.com/hypermodeinc/dgraph/v25/tok/options"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	opt "github.com/dgraph-io/dgraph/v25/tok/options"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // memoryCache satisfies index.CacheType for synthetic tests.
@@ -52,7 +52,7 @@ func TestHNSWSearchEfOverrideImprovesRecall(t *testing.T) {
 	options.SetOpt(EfSearchOpt, 1)
 	options.SetOpt(MetricOpt, GetSimType[float64](Euclidean, 64))
 
-	predName := "joefix_pred"
+	predName := "ef_override_test_pred"
 	predWithNamespace := x.NamespaceAttr(x.RootNamespace, predName)
 
 	rawIdx, err := factory.Create(predWithNamespace, options, 64)
@@ -88,14 +88,17 @@ func TestHNSWSearchEfOverrideImprovesRecall(t *testing.T) {
 	ph.nodeAllEdges[100] = [][]uint64{{201}, {201}}
 
 	cache := &memoryCache{data: data}
+	query := []float64{0, 0, 0.12, 0}
 
 	// Narrow ef behaves like legacy path: returns uid 200 for k=1.
-	narrow, err := ph.SearchWithOptions(ctx, cache, []float64{0, 0, 0.12, 0}, 1, index.VectorIndexOptions[float64]{})
+	narrowOpts := index.VectorIndexOptions[float64]{}
+	narrow, err := ph.SearchWithOptions(ctx, cache, query, 1, narrowOpts)
 	require.NoError(t, err)
 	require.Equal(t, []uint64{200}, narrow)
 
 	// Wider ef surfaces the closer neighbor uid 100.
-	wide, err := ph.SearchWithOptions(ctx, cache, []float64{0, 0, 0.12, 0}, 1, index.VectorIndexOptions[float64]{EfOverride: 4})
+	wideOpts := index.VectorIndexOptions[float64]{EfOverride: 4}
+	wide, err := ph.SearchWithOptions(ctx, cache, query, 1, wideOpts)
 	require.NoError(t, err)
 	require.Equal(t, []uint64{100}, wide)
 }
