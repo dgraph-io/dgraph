@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,7 +7,7 @@ package dql
 
 import (
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/lex"
+	"github.com/dgraph-io/dgraph/v25/lex"
 )
 
 // ParseMutation parses a block into a mutation. Returns an object with a mutation or

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,12 +27,12 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgraph/v25/enc"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/enc"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.

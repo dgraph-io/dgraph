@@ -1,4 +1,4 @@
-module github.com/hypermodeinc/dgraph/graphql/e2e/custom_logic/cmd
+module github.com/dgraph-io/dgraph/graphql/e2e/custom_logic/cmd
 
 go 1.24.3
 

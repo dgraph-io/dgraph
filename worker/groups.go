@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,12 +20,12 @@ import (
 
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/raftwal"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/raftwal"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type groupi struct {
@@ -106,7 +106,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 	var connState *pb.ConnectionState
 	var err error
 
-	for { // Keep on retrying. See: https://github.com/hypermodeinc/dgraph/issues/2289
+	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		pl := gr.connToZeroLeader()
 		if pl == nil {
 			continue
@@ -703,7 +703,7 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	// No leader found. Let's get the latest membership state from Zero.
 	delay := connBaseDelay
 	maxHalfDelay := time.Second
-	for i := 0; ; i++ { // Keep on retrying. See: https://github.com/hypermodeinc/dgraph/issues/2289
+	for i := 0; ; i++ { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		if g.IsClosed() {
 			return nil
 		}

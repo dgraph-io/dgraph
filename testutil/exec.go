@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,7 +14,7 @@ import (
 	"os/exec"
 	"strconv"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // These are exported so they can also be set directly from outside this package.

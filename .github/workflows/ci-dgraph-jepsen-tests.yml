@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   dgraph-jepsen-tests:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - name: Checkout dgraph repo
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout jepsen repo
         uses: actions/checkout@v5
         with:
-          repository: hypermodeinc/jepsen
+          repository: dgraph-io/jepsen
           path: jepsen
           ref: master
       - name: Set jepsen root

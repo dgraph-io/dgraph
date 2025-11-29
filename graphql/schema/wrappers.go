@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,10 +19,10 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/v25/graphql/authorization"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/gqlparser/v2/ast"
 	"github.com/dgraph-io/gqlparser/v2/parser"
-	"github.com/hypermodeinc/dgraph/v25/graphql/authorization"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // Wrap the github.com/dgraph-io/gqlparser/ast defintions so that the bulk of the GraphQL

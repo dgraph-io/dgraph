@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@ import (
 	"strings"
 	"unsafe"
 
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/pkg/errors"
 	"github.com/viterin/vek"
 	"github.com/viterin/vek/vek32"

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,10 +53,9 @@ jemalloc enabled : %v
 
 For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 %s.
-© Hypermode Inc.
+© Istari Digital, Inc.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,

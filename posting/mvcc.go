@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,10 +24,10 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type pooledKeys struct {
@@ -370,7 +370,7 @@ func (c *Cache) set(key []byte, i *CachePL) {
 		return
 	}
 	c.numCacheSave.Add(1)
-	c.data.Set(key, i, 1)
+	c.data.Set(key, i, 0)
 }
 
 func (c *Cache) del(key []byte) {
@@ -508,14 +508,18 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 	ml.removeOnUpdate = removeOnUpdate
 	ml.statsHolder = NewStatsHolder()
 	if cacheSize > 0 {
-		cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
+		cache, err := ristretto.NewCache(&ristretto.Config[[]byte, *CachePL]{
 			// Use 5% of cache memory for storing counters.
 			NumCounters: int64(float64(cacheSize) * 0.05 * 2),
 			MaxCost:     int64(float64(cacheSize) * 0.95),
 			BufferItems: 16,
 			Metrics:     true,
 			Cost: func(val *CachePL) int64 {
-				return 1
+				itemSize := int64(8)
+				if val.list != nil {
+					itemSize += int64(val.list.ApproximateSize())
+				}
+				return itemSize
 			},
 			ShouldUpdate: func(cur, prev *CachePL) bool {
 				return !(cur.list != nil && prev.list != nil && prev.list.maxTs > cur.list.maxTs)

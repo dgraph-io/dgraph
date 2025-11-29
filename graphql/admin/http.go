@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,14 +20,14 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 
+	"github.com/dgraph-io/dgraph/v25/audit"
+	"github.com/dgraph-io/dgraph/v25/edgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/api"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/subscription"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/hypermodeinc/dgraph/v25/audit"
-	"github.com/hypermodeinc/dgraph/v25/edgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/api"
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/graphql/subscription"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type Headerkey string

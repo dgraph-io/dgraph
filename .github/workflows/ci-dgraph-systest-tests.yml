@@ -7,6 +7,7 @@ on:
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
+      - "**/*.json"
       - "**/Dockerfile"
       - "**/Makefile"
     types:
@@ -26,7 +27,7 @@ permissions:
 jobs:
   dgraph-systest-tests:
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -63,6 +64,7 @@ jobs:
           #!/bin/bash
           # go env settings
           export GOPATH=~/go
+          export DEBUG_SHOW_ERROR=1
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and systests
@@ -77,5 +79,5 @@ jobs:
         uses: trunk-io/analytics-uploader@v2
         with:
           junit-paths: ./test-results.xml
-          org-slug: hypermode
+          org-slug: dgraph-io
           token: ${{ secrets.TRUNK_TOKEN }}

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,10 +21,10 @@ import (
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok/hnsw"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // Oracle stores and manages the transaction state and conflict detection.

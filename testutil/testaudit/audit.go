@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,35 +15,60 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func VerifyLogs(t *testing.T, path string, cmds []string) {
-	// to make sure that the audit log is flushed
-	time.Sleep(time.Second * 5)
 
 	abs, err := filepath.Abs(path)
-	require.NoError(t, err)
-	f, err := os.Open(abs)
 	require.NoError(t, err)
 
 	type log struct {
 		Msg string `json:"endpoint"`
 	}
-	logMap := make(map[string]bool)
 
-	fileScanner := bufio.NewScanner(f)
-	for fileScanner.Scan() {
-		bytes := fileScanner.Bytes()
-		l := new(log)
-		require.NoError(t, json.Unmarshal(bytes, l))
-		logMap[l.Msg] = true
-	}
-	for _, m := range cmds {
-		if !logMap[m] {
-			t.Fatalf("audit logs not present for command %s", m)
+	maxRetries := 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		f, err := os.Open(abs)
+		if err != nil {
+			if attempt == maxRetries {
+				require.NoError(t, err, "failed to open audit log after %d attempts", maxRetries)
+			}
+			time.Sleep(time.Second)
+			continue
 		}
+
+		logMap := make(map[string]bool)
+		fileScanner := bufio.NewScanner(f)
+		for fileScanner.Scan() {
+			bytes := fileScanner.Bytes()
+			l := new(log)
+			if err := json.Unmarshal(bytes, l); err != nil {
+				f.Close()
+				if attempt == maxRetries {
+					require.NoError(t, err, "failed to unmarshal audit log after %d attempts", maxRetries)
+				}
+				time.Sleep(time.Second)
+				continue
+			}
+			logMap[l.Msg] = true
+		}
+		f.Close()
+
+		missingCmds := []string{}
+		for _, m := range cmds {
+			if !logMap[m] {
+				missingCmds = append(missingCmds, m)
+			}
+		}
+		if len(missingCmds) == 0 {
+			return
+		}
+		if attempt == maxRetries {
+			t.Fatalf("audit logs not present after %d attempts. Missing commands: %v", maxRetries, missingCmds)
+		}
+		time.Sleep(time.Second)
 	}
 }
 

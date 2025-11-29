@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,8 +35,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // cluster's network struct
@@ -777,7 +777,13 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		return errors.Wrap(err, "error creating http client while graphql health check")
 	}
 	if c.conf.acl {
-		if err := hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err != nil {
+		for range 5 {
+			if err = hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+		if err != nil {
 			return errors.Wrap(err, "error during login while graphql health check")
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,15 +21,15 @@ import (
 
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/codec"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/algo"
-	"github.com/hypermodeinc/dgraph/v25/codec"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/tok/index"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -698,7 +698,7 @@ func ObjectValue(id TypeID, value interface{}) (*api.Value, error) {
 	case PasswordID:
 		var v string
 		if v, ok = value.(string); !ok {
-			return def, errors.Errorf("Expected value of type password. Got : %v", value)
+			return def, errors.Errorf("Expected value of type password. Got type: %T", value)
 		}
 		return &api.Value{Val: &api.Value_PasswordVal{PasswordVal: v}}, nil
 	case VFloatID:

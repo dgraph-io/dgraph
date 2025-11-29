@@ -33,9 +33,9 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/hypermodeinc/dgraph/v25/codec"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/codec"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // So, with SIMD instructions before, we were getting great performance, but at the cost of

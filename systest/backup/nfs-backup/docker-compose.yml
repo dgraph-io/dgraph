@@ -25,6 +25,16 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        for i in $(seq 1 30); do
+          if mountpoint -q /mnt 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        if ! mountpoint -q /mnt 2>/dev/null; then
+          echo "ERROR: Failed to mount NFS after 30 seconds"
+          exit 1
+        fi
         /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha1_backup_clust_ha:7080  --zero=zero1_backup_clust_ha:5080,zero2_backup_clust_ha:5080,zero3_backup_clust_ha:5080 --logtostderr -v=2  --security "whitelist=0.0.0.0/0;"
 
   alpha2_backup_clust_ha:
@@ -158,6 +168,16 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        for i in $(seq 1 30); do
+          if mountpoint -q /mnt 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        if ! mountpoint -q /mnt 2>/dev/null; then
+          echo "ERROR: Failed to mount NFS after 30 seconds"
+          exit 1
+        fi
         /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha4_restore_clust_ha:7080  --zero=zero4_restore_clust_ha:5080,zero5_restore_clust_ha:5080,zero6_restore_clust_ha:5080 --logtostderr -v=2  --security "whitelist=0.0.0.0/0;"
 
   alpha5_restore_clust_ha:
@@ -312,6 +332,16 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        for i in $(seq 1 30); do
+          if mountpoint -q /mnt 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        if ! mountpoint -q /mnt 2>/dev/null; then
+          echo "ERROR: Failed to mount NFS after 30 seconds"
+          exit 1
+        fi
         /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha7_backup_clust_non_ha:7080  --zero=zero7_backup_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=0.0.0.0/0;"
 
   #non HA restore cluster
@@ -359,6 +389,16 @@ services:
       - -c
       - |
         mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        for i in $(seq 1 30); do
+          if mountpoint -q /mnt 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        if ! mountpoint -q /mnt 2>/dev/null; then
+          echo "ERROR: Failed to mount NFS after 30 seconds"
+          exit 1
+        fi
         /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=0.0.0.0/0;"
 
   nfs:

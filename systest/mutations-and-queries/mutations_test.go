@@ -1,7 +1,7 @@
 //go:build integration || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,9 +25,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func (ssuite *SystestTestSuite) TestFacetJsonInputSupportsAnyOfTerms() {
@@ -2343,7 +2343,7 @@ func (ssuite *SystestTestSuite) TestReverseCountIndex() {
 	require.NoError(t, err)
 	ctx := context.Background()
 	// This test checks that we consider reverse count index keys while doing conflict detection
-	// for transactions. See https://github.com/hypermodeinc/dgraph/issues/3893 for more details.
+	// for transactions. See https://github.com/dgraph-io/dgraph/issues/3893 for more details.
 	op := &api.Operation{}
 	op.Schema = `friend: [uid] @count @reverse .`
 	require.NoError(t, gcli.Alter(ctx, op))

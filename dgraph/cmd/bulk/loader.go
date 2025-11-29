@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,14 +29,14 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250"
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/enc"
-	"github.com/hypermodeinc/dgraph/v25/filestore"
-	gqlSchema "github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/hypermodeinc/dgraph/v25/xidmap"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/enc"
+	"github.com/dgraph-io/dgraph/v25/filestore"
+	gqlSchema "github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/xidmap"
 )
 
 type BulkOptions struct {

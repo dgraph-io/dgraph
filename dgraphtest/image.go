@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,7 @@ import (
 
 var (
 	cloneOnce sync.Once
+	gitMutex  sync.Mutex // Protects git operations on shared repoDir
 )
 
 func (c *LocalCluster) dgraphImage() string {
@@ -49,7 +50,23 @@ func (c *LocalCluster) setupBinary() error {
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
 	}
 
-	isFileThere, err := fileExists(filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version)))
+	binaryPath := filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version))
+
+	// First check without lock (fast path)
+	isFileThere, err := fileExists(binaryPath)
+	if err != nil {
+		return err
+	}
+	if isFileThere {
+		return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
+	}
+
+	// Lock git operations to prevent parallel tests from conflicting
+	gitMutex.Lock()
+	defer gitMutex.Unlock()
+
+	// Double-check after acquiring lock - another parallel test may have built it
+	isFileThere, err = fileExists(binaryPath)
 	if err != nil {
 		return err
 	}
@@ -197,6 +214,16 @@ func copy(src, dst string) error {
 	}
 	if !sourceFileStat.Mode().IsRegular() {
 		return errors.Errorf("%s is not a regular file", src)
+	}
+
+	// Check if destination already exists and matches source size
+	if destStat, err := os.Stat(dst); err == nil {
+		if destStat.Size() == sourceFileStat.Size() {
+			log.Printf("[INFO] destination file %s already exists with matching size, skipping copy", dst)
+			return nil
+		}
+		log.Printf("[WARNING] destination file %s exists but size mismatch (source=%d, dest=%d), will overwrite",
+			dst, sourceFileStat.Size(), destStat.Size())
 	}
 
 	// Open source file

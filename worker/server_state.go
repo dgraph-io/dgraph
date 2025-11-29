@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,10 +14,10 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/raftwal"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/raftwal"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (
@@ -41,7 +41,7 @@ const (
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
-	CacheDefaults        = `size-mb=1024; percentage=40,40,20; remove-on-update=false`
+	CacheDefaults        = `size-mb=4096; percentage=40,40,20; remove-on-update=false`
 	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false`
 )
 

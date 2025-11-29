@@ -7,6 +7,7 @@ on:
       - "**/*.go"
       - "**/go.mod"
       - "**/*.yml"
+      - "**/*.json"
       - "**/Dockerfile"
       - "**/Makefile"
     types:
@@ -26,7 +27,7 @@ permissions:
 jobs:
   dgraph-core-tests:
     if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -77,5 +78,5 @@ jobs:
         uses: trunk-io/analytics-uploader@v2
         with:
           junit-paths: ./test-results.xml
-          org-slug: hypermode
+          org-slug: dgraph-io
           token: ${{ secrets.TRUNK_TOKEN }}

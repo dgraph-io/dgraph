@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,10 +10,10 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type matchFunc func(types.Val, *stringFilter) bool

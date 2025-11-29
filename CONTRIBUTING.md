@@ -114,7 +114,7 @@ For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-© Hypermode Inc.
+© Istari Digital, Inc.
 ```
 
 ### Build Docker Image
@@ -187,7 +187,7 @@ under the Apache 2.0 license:
 
 ```sh
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 ```

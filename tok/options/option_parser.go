@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package options
 
 import (
+	"math"
 	"strconv"
 )
 
@@ -28,10 +29,14 @@ func UintOptParser(optValue string) (any, error) {
 	// Specified originally as 64 bit for conversion, since it is
 	// not trivial (as far as I can tell) to determine the
 	// uint bit size. Simpler to just get it back as 64 bit then
-	// cast it.
+	// cast it with bounds checking.
 	retVal, err := strconv.ParseUint(optValue, 10, 64)
 	if err != nil {
 		return 0, err
+	}
+	// Check if the value fits in a uint (which may be 32 or 64 bits depending on platform)
+	if retVal > math.MaxUint {
+		return 0, strconv.ErrRange
 	}
 	return uint(retVal), nil
 }
