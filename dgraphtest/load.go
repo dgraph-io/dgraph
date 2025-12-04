@@ -580,8 +580,8 @@ func downloadFile(fname, url string) error {
 	cmd := exec.Command("wget", "-O", fname, url)
 	cmd.Dir = datasetFilesPath
 
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("error downloading file %s: %s", fname, string(out))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error downloading file %s: %w", fname, err)
 	}
 	return nil
 }
