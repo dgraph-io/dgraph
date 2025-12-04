@@ -1,8 +1,6 @@
-# This file is used to add the nightly Dgraph binaries and assets to Dgraph base
-# image.
-
-# This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
-# already built and placed there.
+# This file is used to add the Dgraph binaries and assets to Dgraph images.
+# Ensure that the Dgraph binaries are built and placed in the linux
+# directory before building this image.
 
 FROM ubuntu:24.04
 LABEL maintainer="Istari Digital, Inc. <dgraph-admin@istaridigital.com>"
