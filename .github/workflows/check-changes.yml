@@ -1,0 +1,73 @@
+name: Check File Changes
+
+on:
+  workflow_call:
+    inputs:
+      skip-extensions:
+        description: Space-separated list of file extensions that should skip tests
+        required: false
+        type: string
+        default: md mdc txt rst png jpg jpeg gif svg ico pdf
+    outputs:
+      should-skip:
+        description: Whether the workflow should skip (only skippable files changed)
+        value: ${{ jobs.check-changes.outputs.should-skip }}
+
+permissions:
+  contents: read
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-skip: ${{ steps.check.outputs.should-skip }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check if only skippable files changed
+        id: check
+        run: |
+          # Use input parameter or default
+          SKIP_EXTENSIONS="${{ inputs.skip-extensions }}"
+
+          if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Triggered by schedule or manual dispatch, running full tests"
+            echo "should-skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get the list of changed files
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+
+          # Check if we have any changes
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files changed, running tests"
+            echo "should-skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Build regex pattern from extensions (e.g., \.(md|txt|png)$)
+          PATTERN=$(echo "$SKIP_EXTENSIONS" | sed 's/ /|/g')
+          REGEX="\.($PATTERN)$"
+
+          # Check if all changes match skippable extensions
+          NON_SKIPPABLE_FILES=$(echo "$CHANGED_FILES" | grep -Ev "$REGEX" || true)
+
+          if [ -z "$NON_SKIPPABLE_FILES" ]; then
+            echo "Only skippable files changed (extensions: $SKIP_EXTENSIONS), skipping tests"
+            echo "should-skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Non-skippable files changed, running tests"
+            echo "should-skip=false" >> $GITHUB_OUTPUT
+          fi
+
+  skip-job:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-skip == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip tests
+        run: echo "Only documentation/assets changed, skipping tests"
