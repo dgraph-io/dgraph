@@ -63,7 +63,7 @@ const expectedSchema = `{
 }`
 
 func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
-	t.Skip("Skipping... sometimes the query for schema succeeds even when the server is in draining mode")
+	// t.Skip("Skipping... sometimes the query for schema succeeds even when the server is in draining mode")
 
 	tests := []struct {
 		name        string
@@ -111,7 +111,7 @@ func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
 }
 
 func TestImportApis(t *testing.T) {
-	t.Skip("Skipping import tests due to persistent flakiness with container networking and Raft leadership issues")
+	// t.Skip("Skipping import tests due to persistent flakiness with container networking and Raft leadership issues")
 
 	tests := []testcase{
 		{
