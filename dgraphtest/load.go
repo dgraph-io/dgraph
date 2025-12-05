@@ -581,7 +581,7 @@ func downloadFile(fname, url string) error {
 	cmd.Dir = datasetFilesPath
 
 	if _, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("error downloading file %s: %s", fname, err.Error())
+		return fmt.Errorf("error downloading file %s: %w", fname, err)
 	}
 	return nil
 }
