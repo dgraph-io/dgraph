@@ -346,6 +346,10 @@ func run() {
 		st.node.closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
+		// Stop all pools
+		if pools := conn.GetPools(); pools != nil {
+			pools.RemoveAll()
+		}
 	}()
 
 	st.zero.closer.AddRunning(2)
