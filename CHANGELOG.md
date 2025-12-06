@@ -2,13 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project will
-adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
+The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). This project adheres
+to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
+as a guide.
 
-## Unreleased
+## [v25.1.0] - 2025-12-04
+
+[v25.1.0]: https://github.com/dgraph-io/dgraph/compare/v25.0.0...v25.1.0
 
 - **Fixed**
-  - fix(core): fix panic in verifyUniqueWithinMutation when mutation is conditionally pruned (#9450)
+  - fix(cache): make updating the max cost of posting cache work again (#9526)
+  - fix(cache): Estimate (correctly)size of posting lists (#9515)
+  - fix(dev): Add jemalloc package to local docker image (#9516)
+
+> **WARNING** In #9515, the default `cacheMB` has been increased from 1GB to 4GB. Due to improved
+> cache size estimation, this change is unlikely to increase actual RAM usage. See
+> [comments](https://github.com/dgraph-io/dgraph/pull/9515#issuecomment-3513584637) in the PR for
+> more details.
+
+- **Chore**
+  - chore: disable nightly builds (#9536)
+  - chore: update module path and copyright disclaimers (#9533)
+  - chore(test): change upgrade CI tests to a weekly workflow (#9532)
+  - chore: correct the renovate path (#9531)
+  - chore: migrate workflows to Blacksmith runners (#9524)
+  - chore: update readme, other docs for v25 and account change (#9522)
+  - chore: fixes for intermittent test failures (#9517)
+  - Update telemetry URL to use events.dgraph.io (#9518)
+
+- **Dependency Updates**
+  - chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.45.0 (#9530)
+  - chore(deps): Update go minor and patch (main) (#9523)
+
+## [v25.0.0] - 2025-01-16
+
+[v25.0.0]: https://github.com/dgraph-io/dgraph/compare/v24.1.5...v25.0.0
+
+- **Added**
+
+- **Core**
+  - feat(core): Add mcp server (#9389)
+  - feat(core): Add a new string index: n-gram (#9463)
+  - feat(core): Add support for HA and multishard functionality in import APIs (#9406)
+  - Add dgraph import command that imports data using bulk loader (#9443)
+  - Add implementation for AllocateIDs and use the API in live loader (#9400)
+  - Add implementation for RunDQL for v25 (#9355)
+  - Implement Alter with v25 namespaces (#9314)
+  - add grpc API for creating/deleting/rename/listing namespaces (#9252)
+  - add internal predicate for string namespaces (#9282)
+
+- **MCP**
+  - feat(mcp): Add variable support to MCP run_query tool (#9464)
+  - feat(mcp): Add a tool that can validate the syntax of a DQL query (#9465)
+  - fix(mcp): CORS middleware, renaming, error handling (#9423)
+
+- **Fixed**
+
+- **Core**
+  - fix(core): Fix race condition in mutation map (#9473)
+  - fix(core): add additional checks in verifyUniqueWithinMutation for pruned mutations (#9450)
+  - fix(core): add map locking and ensure resource cleanup (#9483)
+  - fix(core): prevent timer/ticker leaks; use unsafe.Add for pointer arithmetic (#9486)
+  - fix(core): Fix bug in export with empty data (#9502)
+  - fix(core): fix reverse edge loss when set and delete occur together (#9403)
+  - fix(core): fix unmarshal protobuf when len val is 0 (#9347)
+  - fix(core): fix read scalar list with rollups (#9350)
+  - fix(core): put new metrics behind a feature flag (#9337, #9348)
+  - fix(core): fix old deletes for scalar postings (#9378)
+  - fix(core): Add maxfrontiersize to shortest path query (#9382)
+  - fix(core): fix variables in live loader (#9394)
+  - fix(core): fix TestLiveLoadAndExportRDFFormat test (#9398)
+  - fix(core): remove duplicate call for remove cache (#9432)
+  - fix(core): change delete-on-updates to remove-on-update and set default false (#9319)
+  - fix(core): upgrade opencensus to opentelemetry (#9310)
+  - fix(core): Added some metrics (#9298)
+
+- **GraphQL**
+  - fix(graphql): fix error handling in webhooks (#9374)
+
+- **Live Loader**
+  - fix(live): fix how xidmap stores value along with upsertPredicate (#9309)
+
+- **Compose Tool**
+  - fix(compose-tool): Calculate peer port considering learner nodes differences (#9507)
+
+- **Query**
   - fix(query): return full float value in query results (#9492)
 - **Vector**
   - fix(vector/hnsw): correct early termination in bottom-layer search to ensure at least k
@@ -16,13 +94,180 @@ adhere to [Semantic Versioning](https://semver.org) starting `v22.0.0`.
   - feat(vector/hnsw): add optional per-query controls to similar_to via a 4th argument: `ef`
     (search breadth override) and `distance_threshold` (metric-domain cutoff); defaults unchanged
 
-## [v24.X.X] - YYYY-MM-DD
+- **Changed**
+
+- **Core**
+  - remove enterprise license completely from dgraph (#9367)
+  - remove EE license and oss build (#9369)
+  - remove enterprise related terminology (#9371)
+  - Remove sentry integration (#9343)
+  - remove telemetry from alpha and push very basic telemetry in zero (#9376)
+  - remove depecrated code used from grpc library (#9345)
+  - Rename v25 APIs to v2 APIs (#9418)
+  - move v2 APIs into v1 APIs (#9501)
+  - rename galaxy to root and guardian to superadmin (#9396)
+  - Switch to s2 for bulk loader and backup/restore (#9315)
+  - make v25 APIs work with no ACL (#9408)
+  - make dgraph import work across the internet (#9456)
+  - Fix bugs with namespaces and add back tests (#9505)
+  - Fix bugs in v25 RunDQL API (#9388)
+  - Handle quotes while building upsert query (#9412)
+  - handle the case for root namespace in namespace and other grpc API (#9377)
+  - Fix running tests on mac (#9441)
+
+- **Perf**
+  - perf(core): Implement parallel merge sorted algo (#9429)
+  - perf(core): Cache uids array in ristretto (#9430)
+  - perf(core): Add sharded map for post query speedup (#9431)
+  - perf(core): improve performance with has filter with order (#9439)
+  - perf(core): improve performance for ineq filters when uidlist is small (#9383)
+  - perf(core): Add scalar list to mutations (#9290)
+  - perf(core): Use Intersect to Narrow Iterate Range and Reduce Memory Allocation in pl.Uids()
+    (#9299)
+  - perf(vector): Improve how vector is passed to hnsw index (#9287)
+
+- **Chore**
+  - upgrade Go to v1.24, Go deps and trunk upgrade, and golangci upgrade to v2 (#9370)
+  - upgrade go version to v1.23.6 from v1.22.12 (#9328)
+  - upgrade dgo to v250.0.0-preview4 (#9420)
+  - upgrade to dgo v250.0.0-preview1 (#9390)
+  - chore: upgrade all dependencies to latest (#9397)
+  - chore: update deps (#9416)
+  - chore: update minor deps to latest working versions (#9294)
+  - chore: normalize copyrights (#9300)
+  - chore: bump Go patch version (#9303, #9307)
+  - chore: replace github.com/pkg/errors with native error package in the acl, algo, audit, backup,
+    check_upgrade and chunker modules (#9372)
+  - bump Ubuntu to v24.04 (#9302)
+  - Reduce memory usage during Alter execution (#9301)
+  - Refactor test code (#9250)
+  - refactor(contrib):remove and relocate contrib folder content (#9316)
+  - Add Dockerfile and cd for pushing nightly docker images (#9313)
+  - update URLs to download data from dgraph-benchmarks repo (#9404)
+  - add test cases for dot product with constant vector (#9401)
+  - update grpc protos (#9452)
+  - update the URL for sending telemetry (#9395)
+  - prepare to release v25 (#9391)
+  - fix XML unmarshalling (#9335)
+  - Fix nightly build (#9487)
+
+- **CI/CD**
+  - .github/workflows: Migrate workflows to Blacksmith runners (#9504)
+  - chore: update benchmark paths (#9305)
+
+- **Test**
+  - chore(test): Improve localcluster tests speed and resiliency (#9499)
+  - chore(test): Increase performance of t-harness tests (#9485)
+  - chore(tests): Future-proof whitelist against Docker network changes (#9500)
+
+- **Documentation**
+  - Update README.md - Neo4j does not support Gremlin (#9421)
+  - Update readme to point to the latest Dgraph version (#9451)
+
+- **Dependency Updates**
+  - chore(deps): Update actions to v6 (main) (major) (#9509)
+  - chore(deps): Update actions to v5 (main) (major) (#9482)
+  - chore(deps): Update go minor and patch (main) (#9494, #9466, #9459, #9455, #9444, #9434, #9424,
+    #9414, #9402, #9397, #9366, #9360, #9358, #9352, #9339, #9331, #9327, #9306, #9297)
+  - chore(deps): Update infra minor and patch (main) (#9495, #9342)
+  - chore(deps): Update golang Docker tag to v1.24.5 (main) (#9470)
+  - chore(deps): Update golang Docker tag to v1.24.4 (main) (#9445)
+  - chore(deps): Update golang Docker tag to v1.24.3 (main) (#9410)
+  - chore(deps): Update golang Docker tag to v1.24.2 (#9384)
+  - chore(deps): Update golang Docker tag to v1.24.1 (#9359)
+  - chore(deps): Update docker/login-action action to v3.5.0 (main) (#9481)
+  - chore(deps): Update docker/login-action action to v3.4.0 (#9353)
+  - chore(deps): Update docker/setup-buildx-action action to v3.11.1 (main) (#9454)
+  - chore(deps): Update docker/build-push-action action to v6.18.0 (main) (#9435)
+  - chore(deps): Update docker/build-push-action action to v6.17.0 (#9415)
+  - chore(deps): Update docker/build-push-action action to v6.16.0 (#9399)
+  - chore(deps): Update docker/build-push-action action to v6.14.0 (#9320)
+  - chore(deps): Update trunk-io/analytics-uploader action to v2 (main) (#9462)
+  - chore(deps): Update module github.com/docker/docker to v28.3.3+incompatible [SECURITY] (main)
+    (#9477)
+  - chore(deps): Update module github.com/docker/docker to v28 (#9334)
+  - chore(deps): Update module github.com/dgraph-io/dgo/v250 to v250.0.0-preview2 (#9411)
+  - chore(deps): Update module github.com/spf13/cobra to v1.9.0 (#9311)
+  - chore(deps): Update module github.com/golang/snappy to v1 (#9341)
+  - chore(deps): Update module github.com/golang-jwt/jwt/v5 to v5.2.2 [SECURITY] (#9357)
+  - chore(deps): Update module github.com/go-jose/go-jose/v4 to v4.0.5 [SECURITY] (#9318)
+  - chore(deps): Update module github.com/IBM/sarama to v1.45.2 (#9425)
+  - chore(deps): Update module github.com/minio/minio-go/v6 to v7 (main) (#9436)
+  - chore(deps): Update github.com/golang/geo digest to e8fe6a7 (main) (#9438)
+  - chore(deps): Update github.com/golang/geo digest to 0a13e5a (#9409)
+  - chore(deps): bump github.com/go-viper/mapstructure/v2 from 2.2.1 to 2.3.0 (#9457)
+
+- **New Contributors**
+  - @mbledkowski made their first contribution in #9421
+  - @nixfit made their first contribution in #9451
+  - @eileenaaa made their first contribution in #9483
+  - @qujoux made their first contribution in #9492
+  - @blacksmith-sh[bot] made their first contribution in #9504
+
+## [v24.1.5] - 2024-12-30
+
+[v24.1.5]: https://github.com/dgraph-io/dgraph/compare/v24.1.4...v24.1.5
+
+- **Fixed**
+  - fix(core): Fix bug in export with empty data (#9502)
+
+## [v24.1.4] - 2024-12-19
+
+[v24.1.4]: https://github.com/dgraph-io/dgraph/compare/v24.1.3...v24.1.4
+
+- **Fixed**
+  - fix(core): add additional checks in verifyUniqueWithinMutation for pruned mutations (#9478)
+  - fix(core): Fix race condition in mutation map (#9473) (#9480)
+
+## [v24.1.3] - 2024-12-17
+
+[v24.1.3]: https://github.com/dgraph-io/dgraph/compare/v24.1.2...v24.1.3
+
+- **Fixed**
+  - fix(graphql): fix error handling in webhooks (#9374) (#9379)
+  - fix(core): delete all before set for scalar postings (#9378) (#9380)
+  - fix(core): fix reverse edge loss when set and delete occur together (#9403)
+
+## [v24.1.2] - 2024-12-16
+
+[v24.1.2]: https://github.com/dgraph-io/dgraph/compare/v24.1.1...v24.1.2
+
+- **Fixed**
+  - undo the breaking change made while removing sentry flag (#9365)
+
+## [v24.1.1] - 2024-12-15
+
+[v24.1.1]: https://github.com/dgraph-io/dgraph/compare/v24.1.0...v24.1.1
+
+> **Warning** This release has an unexpected breaking change in the `dgraph alpha` and `dgraph zero`
+> commands. If you are passing a `--telemetry="sentry=false;"` or something equivalent, you need to
+> remove the sentry option from the command line. This is fixed in
+> [v24.1.2](https://github.com/dgraph-io/dgraph/releases/tag/v24.1.2) and you should use the new
+> version instead of v24.1.1
+
+- **Fixed**
+  - fix(core): put new metrics behind a feature flag (#9337)
+  - fix(core): fix unmarshal protobuf when len val is 0 (#9347) (#9349)
+  - fix(core): fix read scalar list with rollups (#9350) (#9351)
+
+- **Changed**
+  - Remove sentry integration from both Alpha & Zero (#9343) (#9344)
+
+## [v24.1.0] - 2024-12-11
+
+[v24.1.0]: https://github.com/dgraph-io/dgraph/compare/v24.0.5...v24.1.0
+
+- **Added**
 
 - **GraphQL**
-  - feat(graphql): adds translated DQL to extensions response when the "--graphql debug" super flag
-    is set to true (#9280)
+  - feat(graphql): adds translated DQL to extensions response when the "graphql debug" super flag is
+    set to true (#9280)
 
-[v24.X.X]: https://github.com/dgraph-io/dgraph/compare/v24.0.5...v24.X.X
+- **Fixed**
+  - fix(core): change delete-on-update to remove-on-update and set default (#9329)
+
+- **Chore**
+  - Update changelog for v24.1.0 (#9336)
 
 ## [v24.0.5] - 2024-11-05
 

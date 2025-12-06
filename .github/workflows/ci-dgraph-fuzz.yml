@@ -2,13 +2,6 @@ name: ci-dgraph-fuzz
 
 on:
   pull_request:
-    paths:
-      - "**/*.go"
-      - "**/go.mod"
-      - "**/*.yml"
-      - "**/*.json"
-      - "**/Dockerfile"
-      - "**/Makefile"
     types:
       - opened
       - reopened
@@ -22,16 +15,23 @@ permissions:
   contents: read
 
 jobs:
+  check-changes:
+    uses: ./.github/workflows/check-changes.yml
+
   fuzz-test:
-    if: github.event.pull_request.draft == false
+    needs: check-changes
+    if:
+      github.event.pull_request.draft == false && needs.check-changes.outputs.should-skip != 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
       - name: Run fuzz tests
         run: |
           #!/bin/bash
