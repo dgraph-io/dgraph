@@ -36,12 +36,11 @@ func init() {
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
 	flag.StringP("snapshot-dir", "p", "", "Location of p directory")
 	flag.StringP("schema", "s", "", "Location of DQL schema file.")
-	flag.StringP("graphql_schema", "g", "", "Location of the GraphQL schema file.")
-	flag.StringP("graphql-schema", "", "", "Location of the GraphQL schema file.")
+	flag.StringP("graphql-schema", "g", "", "Location of the GraphQL schema file.")
 	flag.String("format", "", "Specify file format (rdf or json)")
 	flag.Bool("drop-all", false, "Drops all the existing data in the cluster before importing data into Dgraph.")
 	flag.Bool("drop-all-confirm", false, "Confirm drop-all operation.")
-	flag.StringP("conn-str", "c", "", "Dgraph connection string.")
+	flag.StringP("conn-str", "c", "dgraph://localhost:9080", "Dgraph connection string.")
 }
 
 func run() {

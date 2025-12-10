@@ -25,6 +25,10 @@ import (
 
 // newClient creates a new import client with the specified endpoint and gRPC options.
 func newClient(connectionString string) (api.DgraphClient, error) {
+	if connectionString == "" {
+		return nil, fmt.Errorf("connection string cannot be empty")
+	}
+
 	dg, err := dgo.Open(connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to endpoint [%s]: %w", connectionString, err)
@@ -35,6 +39,10 @@ func newClient(connectionString string) (api.DgraphClient, error) {
 }
 
 func Import(ctx context.Context, connectionString string, bulkOutDir string) error {
+	if bulkOutDir == "" {
+		return fmt.Errorf("bulk output directory cannot be empty")
+	}
+
 	dg, err := newClient(connectionString)
 	if err != nil {
 		return err
