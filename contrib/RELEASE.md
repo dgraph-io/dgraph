@@ -20,11 +20,11 @@ This document outlines the steps needed to build and push a new release of Dgrap
 1. Once your "prepare for release branch" is merged into main, on the github
    [releases](https://github.com/dgraph-io/dgraph/releases) page, create a new draft release (this step
    will create the tag, in this example we're releasing _v25.1.0-preview1_):
-   <img width="1044" height="775" alt="image" src="https://gist.github.com/user-attachments/assets/cb6fefed-d875-4a98-bd44-26b62cb4e812" />
+   <img width="1491" height="745" alt="image" src="https://github.com/user-attachments/assets/18a2af83-9345-48fc-95cf-368ea4f0a70e" />
    Note: check the toggle to create a Annoucement in our Discussions forum (time saver).
 1. Start the deployment workflow from
    [here](https://github.com/dgraph-io/dgraph/actions/workflows/cd-dgraph.yml):
-   <img width="1491" height="745" alt="image" src="https://gist.github.com/user-attachments/assets/bda5b8b1-d9ad-4931-b031-df6c6a4f919a" />
+   <img width="1491" height="745" alt="image" src="https://github.com/user-attachments/assets/9f3801d1-56dd-4bfe-acdb-9f1518b0bf13" />
    Note: only select the "if checked, images will be pushed to dgraph-custom" if this release is an
    unreleased patch.
 
