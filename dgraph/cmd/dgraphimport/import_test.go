@@ -62,6 +62,18 @@ const expectedSchema = `{
 	]
 }`
 
+func TestEmptyConnStr(t *testing.T) {
+	err := Import(context.Background(), "", "/tmp")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "connection string cannot be empty")
+}
+
+func TestEmptyBulkOutDir(t *testing.T) {
+	err := Import(context.Background(), "dgraph://localhost:9080", "")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "bulk output directory cannot be empty")
+}
+
 func TestDrainModeAfterStartSnapshotStream(t *testing.T) {
 	t.Skip("Skipping... sometimes the query for schema succeeds even when the server is in draining mode")
 
