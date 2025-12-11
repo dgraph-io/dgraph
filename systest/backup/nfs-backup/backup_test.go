@@ -71,6 +71,10 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 
 	// Wait for gRPC connection to be ready with retries
 	t.Log("Waiting for gRPC connection to be ready...")
+	fmt.Println("=================================================")
+	fmt.Println("backup alpha addess ------>", backupAlphaSocketAddr)
+	fmt.Println("=================================================")
+
 	for i := 0; i < 30; i++ {
 		var connErr error
 		dg, connErr = dgo.Open(fmt.Sprintf("dgraph://%s?sslmode=disable", backupAlphaSocketAddr))
