@@ -52,4 +52,4 @@ This document outlines the steps needed to build and push a new release of Dgrap
 1. Check the [Discussions](https://github.com/orgs/dgraph-io/discussions) forum for the announcement
    of the release (create one if you forgot that step above which autocreates one).
 1. If the release has documentation changes, alert the docs team to merge the doc changes in the 
-   [dgraph-docs](https://github.com/dgraph-io/dgraph-docs/) repo to the appropriate release branch.
+   [dgraph-docs](https://github.com/dgraph-io/dgraph-docs/) repo.
