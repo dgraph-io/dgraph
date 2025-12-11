@@ -17,7 +17,7 @@ on:
         description: if checked, images will be pushed to dgraph-custom repo in Dockerhub
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   dgraph-build-amd64:
@@ -260,6 +260,20 @@ jobs:
         with:
           name: dgraph-docker-arm64
 
+      # Download Dgraph Linux AMD64 Binary Artifacts
+      - name: Download Dgraph Linux AMD64 Binary Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: dgraph-amd-release-artifacts
+          path: dgraph-amd-release-artifacts
+
+      # Download Dgraph Linux ARM64 Binary Artifacts
+      - name: Download Dgraph Linux ARM64 Binary Artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: dgraph-arm-release-artifacts
+          path: dgraph-arm-release-artifacts
+
       # Load Dgraph AMD64 Image
       - name: Load AMD64 Docker Image
         run: |
@@ -325,3 +339,18 @@ jobs:
                docker manifest push dgraph/dgraph:latest
             fi
           fi
+
+      - name: Upload Assets to Release
+        if: github.event.inputs.custom-build == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.releasetag }}
+          files: |
+            dgraph-amd-release-artifacts/dgraph/dgraph-linux-amd64.tar.gz
+            dgraph-amd-release-artifacts/dgraph/dgraph-checksum-linux-amd64.sha256
+            dgraph-amd-release-artifacts/badger/badger-linux-amd64.tar.gz
+            dgraph-amd-release-artifacts/badger/badger-checksum-linux-amd64.sha256
+            dgraph-arm-release-artifacts/dgraph/dgraph-linux-arm64.tar.gz
+            dgraph-arm-release-artifacts/dgraph/dgraph-checksum-linux-arm64.sha256
+            dgraph-arm-release-artifacts/badger/badger-linux-arm64.tar.gz
+            dgraph-arm-release-artifacts/badger/badger-checksum-linux-arm64.sha256
