@@ -4,7 +4,7 @@
 - [Setting Up the Development Environment](#setting-up-the-development-environment)
   - [Prerequisites](#prerequisites)
   - [Setup Dgraph from source repo](#setup-dgraph-from-source-repo)
-  - [Setup Badger from source repo](#setup-badger-from-source-repo)
+  - [Setup Badger from source repo](#setup-badger-from-source-repo-optional)
   - [Protocol buffers](#protocol-buffers)
   - [Build Dgraph](#build-dgraph)
   - [Build Docker Image](#build-docker-image)
