@@ -38,13 +38,11 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-	t.Skip("Skipping HA backup test via NFS")
 	backupRestoreTest(t, "alpha1_backup_clust_ha", "zero1_backup_clust_ha",
 		"alpha4_restore_clust_ha", backupDstHA)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
-	t.Skip("Skipping Non-HA backup test via NFS")
 	backupRestoreTest(t, "alpha7_backup_clust_non_ha", "zero7_backup_clust_non_ha",
 		"alpha8_restore_clust_non_ha", backupDstNonHA)
 }
