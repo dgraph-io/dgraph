@@ -59,11 +59,10 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 	backupZero := testutil.ContainerInstance{Name: backupZeroName, Prefix: testutil.DockerPrefix}
 	require.NoError(t, backupZero.BestEffortWaitForHealthy(6080))
 
-	// Resolve addresses after containers are healthy
-	backupAlphaSocketAddr := testutil.ContainerAddr(backupAlphaName, 9080)
-	backupAlphaSocketAddrHttp := testutil.ContainerAddr(backupAlphaName, 8080)
-	restoreAlphaAddr := testutil.ContainerAddr(restoreAlphaName, 8080)
-	backupZeroAddr := testutil.ContainerAddr(backupZeroName, 6080)
+	backupAlphaSocketAddr := testutil.ContainerAddrRetry(backupAlphaName, 9080)
+	backupAlphaSocketAddrHttp := testutil.ContainerAddrRetry(backupAlphaName, 8080)
+	restoreAlphaAddr := testutil.ContainerAddrRetry(restoreAlphaName, 8080)
+	backupZeroAddr := testutil.ContainerAddrRetry(backupZeroName, 6080)
 
 	var dg *dgo.Dgraph
 	var err error
