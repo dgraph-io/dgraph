@@ -229,6 +229,7 @@ func ContainerAddrWithHost(name string, privatePort uint16, host string) string 
 func ContainerAddrWithHostRetry(name string, privatePort uint16, host string) string {
 	maxAttempts := 30
 	for attempt := range maxAttempts {
+		fmt.Printf("Attempt %d to get container address for %s:%d with host %s\n", attempt, name, privatePort, host)
 		c := getContainer(name)
 		for _, p := range c.Ports {
 			if p.PrivatePort == privatePort {
