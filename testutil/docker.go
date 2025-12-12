@@ -226,12 +226,36 @@ func ContainerAddrWithHost(name string, privatePort uint16, host string) string 
 	return host + ":" + strconv.Itoa(int(privatePort))
 }
 
+func ContainerAddrWithHostRetry(name string, privatePort uint16, host string) string {
+	maxAttempts := 30
+	for attempt := range maxAttempts {
+		fmt.Printf("Attempt %d to get container address for %s:%d with host %s\n", attempt, name, privatePort, host)
+		c := getContainer(name)
+		for _, p := range c.Ports {
+			if p.PrivatePort == privatePort {
+				// Found the mapping - return immediately without waiting
+				return host + ":" + strconv.Itoa(int(p.PublicPort))
+			}
+		}
+
+		if attempt < maxAttempts-1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	return host + ":" + strconv.Itoa(int(privatePort))
+}
+
 func ContainerAddrLocalhost(name string, privatePort uint16) string {
 	return ContainerAddrWithHost(name, privatePort, "localhost")
 }
 
 func ContainerAddr(name string, privatePort uint16) string {
 	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
+}
+
+func ContainerAddrRetry(name string, privatePort uint16) string {
+	return ContainerAddrWithHostRetry(name, privatePort, "0.0.0.0")
 }
 
 // DockerStart starts the specified services.

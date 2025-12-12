@@ -38,13 +38,11 @@ var (
 )
 
 func TestBackupHAClust(t *testing.T) {
-	t.Skip("Skipping HA backup test via NFS")
 	backupRestoreTest(t, "alpha1_backup_clust_ha", "zero1_backup_clust_ha",
 		"alpha4_restore_clust_ha", backupDstHA)
 }
 
 func TestBackupNonHAClust(t *testing.T) {
-	t.Skip("Skipping Non-HA backup test via NFS")
 	backupRestoreTest(t, "alpha7_backup_clust_non_ha", "zero7_backup_clust_non_ha",
 		"alpha8_restore_clust_non_ha", backupDstNonHA)
 }
@@ -61,11 +59,10 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 	backupZero := testutil.ContainerInstance{Name: backupZeroName, Prefix: testutil.DockerPrefix}
 	require.NoError(t, backupZero.BestEffortWaitForHealthy(6080))
 
-	// Resolve addresses after containers are healthy
-	backupAlphaSocketAddr := testutil.ContainerAddr(backupAlphaName, 9080)
-	backupAlphaSocketAddrHttp := testutil.ContainerAddr(backupAlphaName, 8080)
-	restoreAlphaAddr := testutil.ContainerAddr(restoreAlphaName, 8080)
-	backupZeroAddr := testutil.ContainerAddr(backupZeroName, 6080)
+	backupAlphaSocketAddr := testutil.ContainerAddrRetry(backupAlphaName, 9080)
+	backupAlphaSocketAddrHttp := testutil.ContainerAddrRetry(backupAlphaName, 8080)
+	restoreAlphaAddr := testutil.ContainerAddrRetry(restoreAlphaName, 8080)
+	backupZeroAddr := testutil.ContainerAddrRetry(backupZeroName, 6080)
 
 	var dg *dgo.Dgraph
 	var err error
@@ -73,6 +70,10 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 
 	// Wait for gRPC connection to be ready with retries
 	t.Log("Waiting for gRPC connection to be ready...")
+	fmt.Println("=================================================")
+	fmt.Println("backup alpha addess ------>", backupAlphaSocketAddr)
+	fmt.Println("=================================================")
+
 	for i := 0; i < 30; i++ {
 		var connErr error
 		dg, connErr = dgo.Open(fmt.Sprintf("dgraph://%s?sslmode=disable", backupAlphaSocketAddr))

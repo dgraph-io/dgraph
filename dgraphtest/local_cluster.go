@@ -930,8 +930,7 @@ func (c *LocalCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 	var conns []*grpc.ClientConn
 	for _, aa := range c.alphas {
 		if !aa.isRunning {
-			// QUESTIONS(shivaji): Should this be 'continue' instead of a break from the loop
-			break
+			continue
 		}
 		url, err := aa.alphaURL(c)
 		if err != nil {
