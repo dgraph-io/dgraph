@@ -2,6 +2,8 @@ version: "3.5"
 services:
   #HA backup cluster
   alpha1_backup_clust_ha:
+    depends_on:
+      - nfs
     image: dgraph-nfs-client:local
     build:
       context: .
@@ -150,6 +152,7 @@ services:
     working_dir: /data/alpha4
     depends_on:
       - alpha1_backup_clust_ha
+      - nfs
     links:
       - nfs:nfs
     privileged: true
