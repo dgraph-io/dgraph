@@ -4,7 +4,7 @@
 - [Setting Up the Development Environment](#setting-up-the-development-environment)
   - [Prerequisites](#prerequisites)
   - [Setup Dgraph from source repo](#setup-dgraph-from-source-repo)
-  - [Setup Badger from source repo](#setup-badger-from-source-repo)
+  - [Setup Badger from source repo](#setup-badger-from-source-repo-optional)
   - [Protocol buffers](#protocol-buffers)
   - [Build Dgraph](#build-dgraph)
   - [Build Docker Image](#build-docker-image)
@@ -30,7 +30,10 @@
   available through your OS package manager)
 - Install [Docker](https://docs.docker.com/install/) and
   [Docker Compose](https://docs.docker.com/compose/install/).
-- [Install Go 1.22.12 or above](https://golang.org/doc/install).
+- [Install Go 1.24.3 or above](https://golang.org/doc/install).
+- Install
+  [trunk](https://docs.trunk.io/code-quality/overview/getting-started/install#install-the-launcher).
+  Our CI uses trunk to lint and check code, having it installed locally will save you time.
 
 ### Setup Dgraph from source repo
 
@@ -43,7 +46,7 @@ make install
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
 compile the binaries to `$GOPATH/bin`.
 
-### Setup Badger from source repo
+### Setup Badger from source repo (optional)
 
 Dgraph source repo vendors its own version of Badger. If you are just working on Dgraph, you do not
 necessarily need to check out Badger from its own repo. However, if you want to contribute to Badger
@@ -58,7 +61,7 @@ This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph
 ### Protocol buffers
 
 We use [protocol buffers](https://developers.google.com/protocol-buffers/) to serialize data between
-our server and the Go client and also for inter-worker communication. If you make any changes to the
+our server and our clients and also for inter-worker communication. If you make any changes to the
 `.proto` files, you would have to recompile them.
 
 Install the `protoc` compiler which is required for compiling proto files used for gRPC
@@ -117,6 +120,11 @@ Licensed variously under the Apache Public License 2.0 and Dgraph Community Lice
 © Istari Digital, Inc.
 ```
 
+#### Building Dgraph on non-Linux machines
+
+See the [README](t/README.md) in the [_t_](t) folder for instructions on building Dgraph on
+non-Linux machines.
+
 ### Build Docker Image
 
 ```sh
@@ -140,8 +148,8 @@ For dependencies, runner flags and instructions for running tests on non-Linux m
 [README](t/README.md) in the [_t_](t) folder.
 
 Other integration tests do not use the testing framework located in the `t` folder. Consult the
-[github actions definitions](.github) folder to discover the tests we run as part of our continuous
-delivery process.
+[github workflow definitions](.github/workflows) folder to discover the tests we run as part of our
+continuous integration process.
 
 Non-integration unit tests exist for many core packages that can be exercised without invoking the
 testing framework. For instance, to unit test the core DQL parsing package:
@@ -157,7 +165,9 @@ coding, or could be achieved by rewriting an entire module, that you may have pa
 yesterday.
 
 - **Pull requests are welcome**, as long as you're willing to put in the effort to meet the
-  guidelines. After you fork dgraph, create your pull request against our `main` branch
+  guidelines. After you fork Dgraph, create your pull request against our `main` branch. Please
+  follow the instructions in the PR template carefully.
+- Be prepared to document your additions/changes in our public documentation (if applicable)
 - Aim for clear, well written, maintainable code
 - Simple and minimal approach to features, like Go
 - New features must include passing unit tests, and integration tests when appropriate
@@ -172,7 +182,8 @@ yesterday.
 ### Code style
 
 - We're following [Go Code Review](https://github.com/golang/go/wiki/CodeReviewComments)
-- Use `go fmt` to format your code before committing
+- At a minimum, use `go fmt` to format your code before committing. Ideally you should use `trunk`
+  as our CI will run `trunk` on your code
 - If you see _any code_ which clearly violates the style guide, please fix it and send a pull
   request. No need to ask for permission
 - Avoid unnecessary vertical spaces. Use your judgment or follow the code review comments
