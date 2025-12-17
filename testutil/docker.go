@@ -50,6 +50,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	if len(port) == 0 {
 		return nil
 	}
+	fmt.Println("--------------------------------")
+	fmt.Println("best effort wait for healthy port ------>", port)
+	fmt.Println("--------------------------------", port == "")
 	checkACL := func(body []byte) error {
 		// Zero returns OK as response
 		if string(body) == "OK" {
@@ -70,6 +73,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	tryWith := func(host string) error {
 		maxAttempts := 60
 		for attempt := range maxAttempts {
+			fmt.Println("--------------------------------")
+			fmt.Println("best effort wait for healthy attempt ------>", attempt)
+			fmt.Println("-------------url-------------------", "http://"+host+":"+port+"/health")
 			resp, err := http.Get("http://" + host + ":" + port + "/health")
 			var body []byte
 			if resp != nil && resp.Body != nil {
@@ -207,9 +213,16 @@ func AllContainers(prefix string) []types.Container {
 
 	var out []types.Container
 	for _, c := range containers {
+		fmt.Println("--------------------------------")
+		fmt.Println("overall containers", c.Names)
+		fmt.Println("-------------prefix-------------------", prefix)
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/"+prefix) {
 				out = append(out, c)
+				fmt.Println("found container", name)
+			} else {
+				fmt.Println("-------------dont have that prefix-------------------", name)
+
 			}
 		}
 	}
@@ -227,7 +240,7 @@ func ContainerAddrWithHost(name string, privatePort uint16, host string) string 
 }
 
 func ContainerAddrWithHostRetry(name string, privatePort uint16, host string) string {
-	maxAttempts := 30
+	maxAttempts := 60
 	for attempt := range maxAttempts {
 		fmt.Printf("Attempt %d to get container address for %s:%d with host %s\n", attempt, name, privatePort, host)
 		c := getContainer(name)
@@ -242,6 +255,8 @@ func ContainerAddrWithHostRetry(name string, privatePort uint16, host string) st
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
+
+	fmt.Printf("\n\n\ndid not find container address for %s:%d with host %s\n\n\n", name, privatePort, host)
 
 	return host + ":" + strconv.Itoa(int(privatePort))
 }

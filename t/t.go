@@ -230,6 +230,10 @@ func detectRace(prefix string) bool {
 }
 
 func outputLogs(prefix string) {
+	fmt.Printf("Outputting logs for prefix: %s\n", prefix)
+	fmt.Println("=================================================")
+	fmt.Println("=================================================")
+	fmt.Println("=================================================")
 	f, err := os.CreateTemp(".", prefix+"*.log")
 	x.Check(err)
 	defer func() {
@@ -237,33 +241,44 @@ func outputLogs(prefix string) {
 			fmt.Printf("error closing file: %v", err)
 		}
 	}()
-	printLogs := func(container string) {
-		in := testutil.GetContainerInstance(prefix, container)
-		c := in.GetContainer()
-		if c == nil {
-			return
-		}
+
+	// Get all containers with this prefix instead of hardcoding container names
+	// This works for both default docker-compose.yml and custom compose files
+	containers := testutil.AllContainers(prefix)
+
+	fmt.Println("-------------------------------------------------")
+	fmt.Printf("Containers: %+v\n", containers)
+	fmt.Println("-------------------------------------------------")
+
+	for _, c := range containers {
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
-		x.Check(err)
+		if err != nil {
+			fmt.Printf("Error getting logs for container %s (ID: %s): %v\n", c.Names, c.ID, err)
+			continue
+		}
 		if _, err := f.Write(out); err != nil {
 			fmt.Printf("error writing container logs to file: %v", err)
 		}
-		fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
-	}
-	for i := 0; i <= 3; i++ {
-		printLogs("zero" + strconv.Itoa(i))
+		// Include container name in the log output for easier debugging
+		containerName := "unknown"
+		if len(c.Names) > 0 {
+			containerName = strings.TrimPrefix(c.Names[0], "/")
+		}
+		fmt.Printf("Docker logs for %s (ID: %s):\n%s\n", containerName, c.ID, string(out))
 	}
 
-	for i := 0; i <= 6; i++ {
-		printLogs("alpha" + strconv.Itoa(i))
-	}
+	fmt.Println("-------------------------------------------------")
+	fmt.Printf("Logs written to file: %s\n", f.Name())
+	fmt.Println("-------------------------------------------------")
+
 	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
 	_, err = oc.Write([]byte(s))
 	x.Check(err)
 }
 
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
+	fmt.Println("in stop cluster function========================")
 	go func() {
 		if err != nil {
 			outputLogs(prefix)
@@ -547,9 +562,15 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		} else {
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
-			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
-				return cerr
+			if err = runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); err != nil {
+				fmt.Printf("Ran custom cluster test for package: %s with error: %v\n", task.pkg.ID, err)
+				fmt.Println("=================================================")
+				fmt.Println("=================================================")
+				return err
 			}
+			fmt.Printf("Ran custom cluster test for package: %s with error: %v\n", task.pkg.ID, err)
+			fmt.Println("=================================================")
+			fmt.Println("=================================================")
 		}
 	}
 	return err

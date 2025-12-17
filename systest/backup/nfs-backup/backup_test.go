@@ -52,6 +52,9 @@ func backupRestoreTest(t *testing.T, backupAlphaName string, backupZeroName stri
 
 	// Wait for containers to be healthy before proceeding
 	t.Logf("Waiting for %s to be healthy...", backupAlphaName)
+	fmt.Println("=================================================")
+	fmt.Println("testutil.DockerPrefix ------>", testutil.DockerPrefix)
+	fmt.Println("=================================================")
 	backupAlpha := testutil.ContainerInstance{Name: backupAlphaName, Prefix: testutil.DockerPrefix}
 	require.NoError(t, backupAlpha.BestEffortWaitForHealthy(8080))
 
