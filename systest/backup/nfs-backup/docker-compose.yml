@@ -26,7 +26,7 @@ services:
       - /bin/sh
       - -c
       - |
-        mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        mount -v -o vers=4.0,loud nfs:/ /mnt 2>&1 &
         for i in $(seq 1 30); do
           if mountpoint -q /mnt 2>/dev/null; then
             break
@@ -170,7 +170,7 @@ services:
       - /bin/sh
       - -c
       - |
-        mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        mount -v -o vers=4.0,loud nfs:/ /mnt 2>&1 &
         for i in $(seq 1 30); do
           if mountpoint -q /mnt 2>/dev/null; then
             break
@@ -334,7 +334,7 @@ services:
       - /bin/sh
       - -c
       - |
-        mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        mount -v -o vers=4.0,loud nfs:/ /mnt 2>&1 &
         for i in $(seq 1 30); do
           if mountpoint -q /mnt 2>/dev/null; then
             break
@@ -391,7 +391,7 @@ services:
       - /bin/sh
       - -c
       - |
-        mount -v -o vers=4,loud nfs:/ /mnt 2>&1 &
+        mount -v -o vers=4.0,loud nfs:/ /mnt 2>&1 &
         for i in $(seq 1 30); do
           if mountpoint -q /mnt 2>/dev/null; then
             break
