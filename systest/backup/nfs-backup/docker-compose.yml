@@ -26,7 +26,7 @@ services:
       - /bin/sh
       - -c
       - |
-        # Load NFS kernel modules (required for NFS mounting)
+        # Load NFS kernel modules (harmless to leave in, though Ganesha doesn't need them)
         modprobe nfs 2>/dev/null || true
         modprobe nfsv3 2>/dev/null || true
 
@@ -38,7 +38,7 @@ services:
         for i in $(seq 1 15); do
           if ping -c 1 -W 1 nfs >/dev/null 2>&1; then
             echo "NFS server is reachable"
-            sleep 2  # Give NFS services time to fully start
+            sleep 2
             break
           fi
           if [ $i -eq 15 ]; then
@@ -47,8 +47,11 @@ services:
           sleep 1
         done
 
-        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
-        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # CRITICAL FIXES:
+        # 1. 'nolock': Disables NLM sidecar protocol (fixes rpc.statd error)
+        # 2. 'nfs:/data': Ganesha exports the full path, not root fsid=0
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/data /mnt
+
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -187,19 +190,16 @@ services:
       - /bin/sh
       - -c
       - |
-        # Load NFS kernel modules (required for NFS mounting)
         modprobe nfs 2>/dev/null || true
         modprobe nfsv3 2>/dev/null || true
 
-        # Create mount point
         mkdir -p /mnt
 
-        # Wait for NFS server to be ready
         echo "Waiting for NFS server to be ready..."
         for i in $(seq 1 15); do
           if ping -c 1 -W 1 nfs >/dev/null 2>&1; then
             echo "NFS server is reachable"
-            sleep 2  # Give NFS services time to fully start
+            sleep 2
             break
           fi
           if [ $i -eq 15 ]; then
@@ -208,8 +208,8 @@ services:
           sleep 1
         done
 
-        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
-        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED MOUNT COMMAND: nolock + /data path
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/data /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -368,19 +368,16 @@ services:
       - /bin/sh
       - -c
       - |
-        # Load NFS kernel modules (required for NFS mounting)
         modprobe nfs 2>/dev/null || true
         modprobe nfsv3 2>/dev/null || true
 
-        # Create mount point
         mkdir -p /mnt
 
-        # Wait for NFS server to be ready
         echo "Waiting for NFS server to be ready..."
         for i in $(seq 1 15); do
           if ping -c 1 -W 1 nfs >/dev/null 2>&1; then
             echo "NFS server is reachable"
-            sleep 2  # Give NFS services time to fully start
+            sleep 2
             break
           fi
           if [ $i -eq 15 ]; then
@@ -389,8 +386,8 @@ services:
           sleep 1
         done
 
-        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
-        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED MOUNT COMMAND: nolock + /data path
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/data /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -442,19 +439,16 @@ services:
       - /bin/sh
       - -c
       - |
-        # Load NFS kernel modules (required for NFS mounting)
         modprobe nfs 2>/dev/null || true
         modprobe nfsv3 2>/dev/null || true
 
-        # Create mount point
         mkdir -p /mnt
 
-        # Wait for NFS server to be ready
         echo "Waiting for NFS server to be ready..."
         for i in $(seq 1 15); do
           if ping -c 1 -W 1 nfs >/dev/null 2>&1; then
             echo "NFS server is reachable"
-            sleep 2  # Give NFS services time to fully start
+            sleep 2
             break
           fi
           if [ $i -eq 15 ]; then
@@ -463,8 +457,8 @@ services:
           sleep 1
         done
 
-        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
-        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED MOUNT COMMAND: nolock + /data path
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/data /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -472,13 +466,15 @@ services:
         echo "NFS mount successful"
         /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --my=alpha8_restore_clust_non_ha:7080  --zero=zero8_restore_clust_non_ha:5080 --logtostderr -v=2  --security "whitelist=0.0.0.0/0;"
 
+  # UPDATED SERVICE
   nfs:
-    image: itsthenetwork/nfs-server-alpine:${NFS_SERVER_IMAGE_ARCH:-12}
+    image: janeczku/nfs-ganesha:latest
+    platform: linux/amd64
     restart: unless-stopped
     privileged: true
-
     environment:
-      - SHARED_DIRECTORY=/data
+      - EXPORT_PATH=/data
+      - EXPORT_ID=1
     volumes:
       - data-volume:/data
 
