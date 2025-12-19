@@ -47,8 +47,8 @@ services:
           sleep 1
         done
 
-        # Mount with NFSv3 (doesn't require nfsd filesystem like v4)
-        mount -v -o vers=3,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -208,8 +208,8 @@ services:
           sleep 1
         done
 
-        # Mount with NFSv3 (doesn't require nfsd filesystem like v4)
-        mount -v -o vers=3,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -389,8 +389,8 @@ services:
           sleep 1
         done
 
-        # Mount with NFSv3 (doesn't require nfsd filesystem like v4)
-        mount -v -o vers=3,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
@@ -463,8 +463,8 @@ services:
           sleep 1
         done
 
-        # Mount with NFSv3 (doesn't require nfsd filesystem like v4)
-        mount -v -o vers=3,soft,timeo=10,retrans=3 nfs:/ /mnt
+        # UPDATED: Added 'nolock' to fix rpc.statd error in CI
+        mount -v -o vers=3,nolock,soft,timeo=10,retrans=3 nfs:/ /mnt
         if ! mountpoint -q /mnt; then
           echo "ERROR: Mount failed"
           exit 1
