@@ -430,9 +430,9 @@ func TestSimilarToOptionsIntegration(t *testing.T) {
 	<0x4> <voptions> "[5,0]" .`
 	require.NoError(t, addTriplesToCluster(rdf))
 
-	t.Run("ef_override_string_syntax", func(t *testing.T) {
+	t.Run("ef_override_named_param", func(t *testing.T) {
 		query := `{
-			results(func: similar_to(voptions, 3, "[0,0]", "ef=2")) {
+			results(func: similar_to(voptions, 3, "[0,0]", ef: 2)) {
 				uid
 			}
 		}`
@@ -457,9 +457,9 @@ func TestSimilarToOptionsIntegration(t *testing.T) {
 		require.Empty(t, expected)
 	})
 
-	t.Run("distance_threshold_json_syntax", func(t *testing.T) {
+	t.Run("distance_threshold_named_param", func(t *testing.T) {
 		query := `{
-			results(func: similar_to(voptions, 4, "[0,0]", {distance_threshold: 1.5})) {
+			results(func: similar_to(voptions, 4, "[0,0]", distance_threshold: 1.5)) {
 				uid
 			}
 		}`

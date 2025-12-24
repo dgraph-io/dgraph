@@ -2541,9 +2541,9 @@ func TestParseFilter_unbalancedbrac(t *testing.T) {
 	require.Contains(t, err.Error(), "Unclosed Brackets")
 }
 
-func TestParseSimilarToObjectLiteral(t *testing.T) {
+func TestParseSimilarToNamedParams(t *testing.T) {
 	query := `{
-		q(func: similar_to(voptions, 4, "[0,0]", {distance_threshold: 1.5, ef: 12})) {
+		q(func: similar_to(voptions, 4, "[0,0]", distance_threshold: 1.5, ef: 12)) {
 			uid
 		}
 	}`
@@ -2553,24 +2553,16 @@ func TestParseSimilarToObjectLiteral(t *testing.T) {
 	require.NotNil(t, res.Query[0])
 	require.NotNil(t, res.Query[0].Func)
 	require.Equal(t, "similar_to", res.Query[0].Func.Name)
-	require.Len(t, res.Query[0].Func.Args, 3)
 	require.Equal(t, "voptions", res.Query[0].Func.Attr)
 	require.Equal(t, "4", res.Query[0].Func.Args[0].Value)
 	require.Equal(t, "[0,0]", res.Query[0].Func.Args[1].Value)
-	require.Equal(t, "{distance_threshold:1.5,ef:12}", res.Query[0].Func.Args[2].Value)
-}
 
-func TestParseSimilarToStringOptions(t *testing.T) {
-	// Test string-based options format (backwards compatibility)
-	query := `{
-		q(func: similar_to(voptions, 4, "[0,0]", "ef=64,distance_threshold=0.45")) {
-			uid
-		}
-	}`
-	res, err := Parse(Request{Str: query})
-	require.NoError(t, err)
-	require.Equal(t, "similar_to", res.Query[0].Func.Name)
-	require.Equal(t, "ef=64,distance_threshold=0.45", res.Query[0].Func.Args[2].Value)
+	// Options are appended as (key, value) pairs after k and vec.
+	require.Len(t, res.Query[0].Func.Args, 6)
+	require.Equal(t, "distance_threshold", res.Query[0].Func.Args[2].Value)
+	require.Equal(t, "1.5", res.Query[0].Func.Args[3].Value)
+	require.Equal(t, "ef", res.Query[0].Func.Args[4].Value)
+	require.Equal(t, "12", res.Query[0].Func.Args[5].Value)
 }
 
 func TestParseSimilarToThreeArgs(t *testing.T) {
@@ -2586,16 +2578,67 @@ func TestParseSimilarToThreeArgs(t *testing.T) {
 	require.Len(t, res.Query[0].Func.Args, 2)
 }
 
-func TestParseSimilarToBraceInWrongPosition(t *testing.T) {
-	// Brace as third argument should be rejected
+func TestParseSimilarToRejectsObjectLiteralSyntax(t *testing.T) {
 	query := `{
-		q(func: similar_to(voptions, 4, {ef: 12})) {
+		q(func: similar_to(voptions, 4, "[0,0]", {ef: 12})) {
 			uid
 		}
 	}`
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Unrecognized character inside a func: U+007B '{'")
+}
+
+func TestParseSimilarToWithQueryVariable(t *testing.T) {
+	query := `query test($eff: int) {
+		q(func: similar_to(voptions, 4, "[0,0]", ef: $eff)) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{
+		Str:       query,
+		Variables: map[string]string{"$eff": "64"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "similar_to", res.Query[0].Func.Name)
+	require.Len(t, res.Query[0].Func.Args, 4)
+	require.Equal(t, "ef", res.Query[0].Func.Args[2].Value)
+	require.Equal(t, "64", res.Query[0].Func.Args[3].Value)
+}
+
+func TestParseSimilarToRejectsLegacyStringOptionsSyntax(t *testing.T) {
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]", "ef=64,distance_threshold=0.45")) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Expected named parameter in similar_to options")
+}
+
+func TestParseSimilarToUnknownOption(t *testing.T) {
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]", foo: 5)) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unknown option")
+	require.Contains(t, err.Error(), "foo")
+}
+
+func TestParseSimilarToDuplicateOption(t *testing.T) {
+	query := `{
+		q(func: similar_to(voptions, 4, "[0,0]", ef: 10, ef: 20)) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate key")
+	require.Contains(t, err.Error(), "ef")
 }
 
 func TestParseNonSimilarToWithBrace(t *testing.T) {

@@ -310,8 +310,7 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			empty = false
 			l.Emit(itemLeftCurl)
 			// Design decision: Emit brace tokens without affecting ArgDepth tracking.
-			// This allows similar_to's JSON-style options ({ef: 64, distance_threshold: 0.45})
-			// to be parsed. The parser validates whether braces are legal in context.
+			// The parser validates whether braces are legal in context.
 			// Trade-off: Queries with multiple syntax errors (e.g., missing ')' AND stray '}')
 			// will report structural errors (Unclosed Brackets) rather than character-specific
 			// errors. This is acceptable as the query is still rejected with a clear error.

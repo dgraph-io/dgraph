@@ -1745,6 +1745,10 @@ L:
 
 		name := collectName(it, item.Val)
 		function.Name = strings.ToLower(name)
+		var similarToOptSeen map[string]struct{}
+		if function.Name == similarToFn {
+			similarToOptSeen = make(map[string]struct{})
+		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
@@ -1896,25 +1900,86 @@ L:
 				expectArg = false
 				continue
 			case itemLeftCurl:
-				// Guard: Only similar_to may use object-literal syntax in its 4th argument.
-				// By checking Name=="similar_to", Attr is set (predicate) and Args has
-				// exactly two elements (k and vector), we ensure the '{' is in position 4.
-				// All other functions receive the historical error for stray braces.
-				if function.Name != "similar_to" || function.Attr == "" || len(function.Args) != 2 {
-					return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007B '{'")
-				}
-				// Parse the object literal: {ef: 64, distance_threshold: 0.45}
-				// The helper consumes tokens until the matching '}' is found.
-				if err := parseSimilarToObjectArg(it, function, itemInFunc); err != nil {
-					return nil, err
-				}
-				expectArg = false
-				continue
+				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007B '{'")
 			case itemRightCurl:
 				// Right curly braces are never valid in function arguments outside of
-				// the object literal parsed above. Always error on stray '}'.
+				// the (unsupported) object literal syntax. Always error on stray '}'.
 				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007D '}'")
 			default:
+				// similar_to supports named optional parameters after the 3rd positional argument:
+				// similar_to(pred, k, vec, ef: 64, distance_threshold: 0.5)
+				//
+				// Internally we represent each option as two args appended after k and vec:
+				// ["ef", "64", "distance_threshold", "0.5", ...]
+				if itemInFunc.Typ == itemName && function.Name == similarToFn &&
+					function.Attr != "" && len(function.Args) >= 2 {
+					next, ok := it.PeekOne()
+					if ok && next.Typ == itemColon {
+						key := strings.ToLower(collectName(it, itemInFunc.Val))
+						switch key {
+						case "ef", "distance_threshold":
+						default:
+							return nil, itemInFunc.Errorf("Unknown option %q in similar_to", key)
+						}
+						if _, exists := similarToOptSeen[key]; exists {
+							return nil, itemInFunc.Errorf("Duplicate key %q in similar_to options", key)
+						}
+						similarToOptSeen[key] = struct{}{}
+
+						if ok := trySkipItemTyp(it, itemColon); !ok {
+							return nil, it.Errorf("Expected colon(:) after %s", key)
+						}
+						if !it.Next() {
+							return nil, it.Errorf("Expected value for %s", key)
+						}
+						valItem := it.Item()
+						switch valItem.Typ {
+						case itemDollar:
+							varName, err := parseVarName(it)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: varName, IsDQLVar: true})
+						case itemMathOp:
+							// Allow signed numeric literals, e.g. distance_threshold: -0.5
+							prefix := valItem.Val
+							if !it.Next() {
+								return nil, it.Errorf("Expected value after %s for %s", prefix, key)
+							}
+							valItem = it.Item()
+							if valItem.Typ != itemName {
+								return nil, valItem.Errorf("Expected value for %s", key)
+							}
+							v := collectName(it, valItem.Val)
+							v = strings.Trim(v, " \t")
+							uq, err := unquoteIfQuoted(v)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: prefix + uq})
+						default:
+							if valItem.Typ != itemName {
+								return nil, valItem.Errorf("Expected value for %s", key)
+							}
+							v := collectName(it, valItem.Val)
+							v = strings.Trim(v, " \t")
+							uq, err := unquoteIfQuoted(v)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: uq})
+						}
+
+						expectArg = false
+						continue
+					}
+
+					// Disallow extra positional args after (k, vec). Options must be named.
+					return nil, itemInFunc.Errorf("Expected named parameter in similar_to options (e.g. ef: 64)")
+				}
 				if itemInFunc.Typ != itemName {
 					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
 						function.Name, itemInFunc)
@@ -3496,33 +3561,4 @@ func trySkipItemTyp(it *lex.ItemIterator, typ lex.ItemType) bool {
 	}
 	it.Next()
 	return true
-}
-
-func parseSimilarToObjectArg(it *lex.ItemIterator, function *Function, start lex.Item) error {
-	depth := 1
-	var builder strings.Builder
-	builder.WriteString(start.Val)
-
-	for depth > 0 {
-		if !it.Next() {
-			return start.Errorf("Unexpected end of object literal while parsing similar_to options")
-		}
-
-		item := it.Item()
-		builder.WriteString(item.Val)
-
-		switch item.Typ {
-		case itemLeftCurl:
-			depth++
-		case itemRightCurl:
-			depth--
-		case itemRightRound:
-			if depth > 0 {
-				return item.Errorf("Expected '}' before ')' in similar_to options")
-			}
-		}
-	}
-
-	function.Args = append(function.Args, Arg{Value: builder.String()})
-	return nil
 }

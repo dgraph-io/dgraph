@@ -2146,17 +2146,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
-		// Allow 2 or 3 args: k, vector_or_uid[, options]
-		if !(len(q.SrcFunc.Args) == 2 || len(q.SrcFunc.Args) == 3) {
-			return nil, errors.Errorf("Function '%s' requires 2 or 3 arguments, but got %d (%v)",
+		// similar_to accepts 2 mandatory args: k, vector_or_uid followed by optional key:value pairs
+		// Example: similar_to(vpred, 3, $vec, ef: 64, distance_threshold: 0.5)
+		if len(q.SrcFunc.Args) < 2 || (len(q.SrcFunc.Args) > 2 && (len(q.SrcFunc.Args)-2)%2 != 0) {
+			return nil, errors.Errorf("Function '%s' requires 2 arguments plus optional key:value pairs, but got %d (%v)",
 				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
 		}
 		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
 		}
-		if len(q.SrcFunc.Args) == 3 {
-			if err := parseSimilarToOptions(q.SrcFunc.Args[2], fc); err != nil {
+		if len(q.SrcFunc.Args) > 2 {
+			if err := parseSimilarToOptions(q.SrcFunc.Args[2:], fc); err != nil {
 				return nil, err
 			}
 		}
@@ -2739,35 +2740,30 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	return nil
 }
 
-// parseSimilarToOptions parses the optional 3rd argument to similar_to.
-// Accepts either "key=value,..." or "{key:value,...}" syntax.
-// Returns an error for unknown keys or malformed values.
-func parseSimilarToOptions(arg string, fc *functionContext) error {
-	raw := strings.TrimSpace(arg)
-	if len(raw) == 0 {
+// parseSimilarToOptions parses named options passed after similar_to 2 mandatory args (k, vecOrUid)
+// The parser encodes these as key/value pairs: ["ef", "64", "distance_threshold", "0.5", ...]
+func parseSimilarToOptions(args []string, fc *functionContext) error {
+	if len(args) == 0 {
 		return nil
 	}
-	if strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}") {
-		raw = strings.TrimSpace(raw[1 : len(raw)-1])
+	if len(args)%2 != 0 {
+		return errors.Errorf("Malformed option in similar_to: expected key:value pairs, got %v", args)
 	}
-	if len(raw) == 0 {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if len(p) == 0 {
-			continue
+	seen := make(map[string]struct{}, len(args)/2)
+	for i := 0; i < len(args); i += 2 {
+		k := strings.ToLower(strings.TrimSpace(args[i]))
+		v := strings.TrimSpace(args[i+1])
+		if strings.HasSuffix(k, ":") {
+			k = strings.TrimSuffix(k, ":")
 		}
-		kv := strings.SplitN(p, ":", 2)
-		if len(kv) != 2 {
-			kv = strings.SplitN(p, "=", 2)
-			if len(kv) != 2 {
-				return errors.Errorf("Malformed option in similar_to: %q", p)
-			}
+		if len(k) == 0 {
+			return errors.Errorf("Malformed option in similar_to: empty key")
 		}
-		k := strings.ToLower(strings.TrimSpace(kv[0]))
-		v := strings.TrimSpace(kv[1])
+		if _, dup := seen[k]; dup {
+			return errors.Errorf("Duplicate key in similar_to options: %q", k)
+		}
+		seen[k] = struct{}{}
+
 		v = strings.Trim(v, "\"'")
 		switch k {
 		case "ef":
