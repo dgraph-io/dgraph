@@ -88,6 +88,11 @@ as a guide.
 
 - **Query**
   - fix(query): return full float value in query results (#9492)
+- **Vector**
+  - fix(vector/hnsw): correct early termination in bottom-layer search to ensure at least k
+    candidates are considered before breaking
+  - feat(vector/hnsw): add optional per-query controls to similar_to via named parameters: `ef`
+    (search breadth override) and `distance_threshold` (metric-domain cutoff); defaults unchanged
 
 - **Changed**
 

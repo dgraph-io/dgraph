@@ -306,6 +306,18 @@ func lexFuncOrArg(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemLeftSquare)
 		case r == rightSquare:
 			l.Emit(itemRightSquare)
+		case r == leftCurl:
+			empty = false
+			l.Emit(itemLeftCurl)
+			// Design decision: Emit brace tokens without affecting ArgDepth tracking.
+			// The parser validates whether braces are legal in context.
+			// Trade-off: Queries with multiple syntax errors (e.g., missing ')' AND stray '}')
+			// will report structural errors (Unclosed Brackets) rather than character-specific
+			// errors. This is acceptable as the query is still rejected with a clear error.
+		case r == rightCurl:
+			l.Emit(itemRightCurl)
+			// Don't decrement ArgDepth for braces; let parser validate context.
+			// See leftCurl case above for full rationale.
 		case r == '#':
 			return lexComment
 		case r == '.':

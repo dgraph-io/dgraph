@@ -368,12 +368,30 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		var nnUids []uint64
-		if srcFn.vectorInfo != nil {
-			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-				int(numNeighbors), index.AcceptAll[float32])
+		// Build optional search options if provided
+		filter := index.AcceptAll[float32]
+		opts := index.VectorIndexOptions[float32]{Filter: filter}
+		if srcFn.vsEfOverride > 0 {
+			opts.EfOverride = srcFn.vsEfOverride
+		}
+		if srcFn.vsDistanceThreshold != nil {
+			opts.DistanceThreshold = srcFn.vsDistanceThreshold
+		}
+		hasOptions := opts.EfOverride > 0 || opts.DistanceThreshold != nil
+		if o, ok := indexer.(index.OptionalSearchOptions[float32]); ok && hasOptions {
+			if srcFn.vectorInfo != nil {
+				nnUids, err = o.SearchWithOptions(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
+			} else {
+				nnUids, err = o.SearchWithUidAndOptions(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+			}
 		} else {
-			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-				int(numNeighbors), index.AcceptAll[float32])
+			if srcFn.vectorInfo != nil {
+				nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+					int(numNeighbors), index.AcceptAll[float32])
+			} else {
+				nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+					int(numNeighbors), index.AcceptAll[float32])
+			}
 		}
 
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
@@ -1792,6 +1810,9 @@ type functionContext struct {
 	atype          types.TypeID
 	vectorInfo     []float32
 	vectorUid      uint64
+	// Optional vector search options parsed from a 3rd arg on similar_to
+	vsEfOverride        int
+	vsDistanceThreshold *float64
 }
 
 const (
@@ -2125,12 +2146,20 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case similarToFn:
-		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
-			return nil, err
+		// similar_to accepts 2 mandatory args: k, vector_or_uid followed by optional key:value pairs
+		// Example: similar_to(vpred, 3, $vec, ef: 64, distance_threshold: 0.5)
+		if len(q.SrcFunc.Args) < 2 || (len(q.SrcFunc.Args) > 2 && (len(q.SrcFunc.Args)-2)%2 != 0) {
+			return nil, errors.Errorf("Function '%s' requires 2 arguments plus optional key:value pairs, but got %d (%v)",
+				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
 		}
 		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
+		}
+		if len(q.SrcFunc.Args) > 2 {
+			if err := parseSimilarToOptions(q.SrcFunc.Args[2:], fc); err != nil {
+				return nil, err
+			}
 		}
 	case uidInFn:
 		for _, arg := range q.SrcFunc.Args {
@@ -2708,5 +2737,57 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 	span.AddEvent("handleHasFunction result", trace.WithAttributes(
 		attribute.Int("uid_count", len(result.Uids))))
 	out.UidMatrix = append(out.UidMatrix, result)
+	return nil
+}
+
+// parseSimilarToOptions parses named options passed after similar_to 2 mandatory args (k, vecOrUid)
+// The parser encodes these as key/value pairs: ["ef", "64", "distance_threshold", "0.5", ...]
+func parseSimilarToOptions(args []string, fc *functionContext) error {
+	if len(args) == 0 {
+		return nil
+	}
+	if len(args)%2 != 0 {
+		return errors.Errorf("Malformed option in similar_to: expected key:value pairs, got %v", args)
+	}
+	seen := make(map[string]struct{}, len(args)/2)
+	for i := 0; i < len(args); i += 2 {
+		k := strings.ToLower(strings.TrimSpace(args[i]))
+		v := strings.TrimSpace(args[i+1])
+		if strings.HasSuffix(k, ":") {
+			k = strings.TrimSuffix(k, ":")
+		}
+		if len(k) == 0 {
+			return errors.Errorf("Malformed option in similar_to: empty key")
+		}
+		if _, dup := seen[k]; dup {
+			return errors.Errorf("Duplicate key in similar_to options: %q", k)
+		}
+		seen[k] = struct{}{}
+
+		v = strings.Trim(v, "\"'")
+		switch k {
+		case "ef":
+			n, perr := strconv.ParseInt(v, 10, 32)
+			if perr != nil {
+				return errors.Errorf("Invalid value for 'ef' in similar_to: %q", v)
+			}
+			if n <= 0 {
+				return errors.Errorf("Value for 'ef' must be positive, got: %d", n)
+			}
+			fc.vsEfOverride = int(n)
+		case "distance_threshold":
+			f, perr := strconv.ParseFloat(v, 64)
+			if perr != nil {
+				return errors.Errorf("Invalid value for 'distance_threshold' in similar_to: %q", v)
+			}
+			if f < 0 {
+				return errors.Errorf("Value for 'distance_threshold' must be non-negative, got: %v", f)
+			}
+			fc.vsDistanceThreshold = new(float64)
+			*fc.vsDistanceThreshold = f
+		default:
+			return errors.Errorf("Unknown option in similar_to: %q", k)
+		}
+	}
 	return nil
 }
