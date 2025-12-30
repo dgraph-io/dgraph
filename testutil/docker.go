@@ -50,6 +50,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	if len(port) == 0 {
 		return nil
 	}
+	fmt.Println("--------------------------------")
+	fmt.Println("best effort wait for healthy port ------>", port)
+	fmt.Println("--------------------------------", port == "")
 	checkACL := func(body []byte) error {
 		// Zero returns OK as response
 		if string(body) == "OK" {
@@ -70,6 +73,9 @@ func (in ContainerInstance) BestEffortWaitForHealthy(privatePort uint16) error {
 	tryWith := func(host string) error {
 		maxAttempts := 60
 		for attempt := range maxAttempts {
+			fmt.Println("--------------------------------")
+			fmt.Println("best effort wait for healthy attempt ------>", attempt)
+			fmt.Println("-------------url-------------------", "http://"+host+":"+port+"/health")
 			resp, err := http.Get("http://" + host + ":" + port + "/health")
 			var body []byte
 			if resp != nil && resp.Body != nil {
@@ -176,16 +182,14 @@ func (in ContainerInstance) GetContainer() *types.Container {
 }
 
 func getContainer(name string) types.Container {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	x.Check(err)
+	containers := AllContainers(DockerPrefix)
 
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
-	if err != nil {
-		log.Fatalf("While listing container: %v\n", err)
-	}
+	fmt.Println("-------------containers-------------------", len(containers))
 
 	q := fmt.Sprintf("/%s_%s_", DockerPrefix, name)
+	fmt.Println("-------------qprefix-------------------", q)
 	for _, c := range containers {
+		fmt.Println("-------------c.names-------------------", c.Names)
 		for _, n := range c.Names {
 			if !strings.HasPrefix(n, q) {
 				continue
@@ -207,9 +211,16 @@ func AllContainers(prefix string) []types.Container {
 
 	var out []types.Container
 	for _, c := range containers {
+		// fmt.Println("--------------------------------")
+		// fmt.Println("overall containers", c.Names)
+		// fmt.Println("-------------prefix-------------------", prefix)
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/"+prefix) {
 				out = append(out, c)
+				fmt.Println("found container", name)
+			} else {
+				fmt.Println("-------------dont have that prefix-------------------", name)
+
 			}
 		}
 	}
@@ -226,12 +237,42 @@ func ContainerAddrWithHost(name string, privatePort uint16, host string) string 
 	return host + ":" + strconv.Itoa(int(privatePort))
 }
 
+func ContainerAddrWithHostRetry(name string, privatePort uint16, host string) string {
+	maxAttempts := 60
+	for attempt := range maxAttempts {
+		fmt.Printf("Attempt %d to get container address for %s:%d with host %s\n", attempt, name, privatePort, host)
+		c := getContainer(name)
+		fmt.Println("-------------c-------------------", c)
+
+		for _, p := range c.Ports {
+			fmt.Println("-------------p.Private port-------------------", p.PrivatePort)
+			fmt.Println("-------------private port-------------------", privatePort)
+			if p.PrivatePort == privatePort {
+				// Found the mapping - return immediately without waiting
+				return host + ":" + strconv.Itoa(int(p.PublicPort))
+			}
+		}
+
+		if attempt < maxAttempts-1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	fmt.Printf("\n\n\ndid not find container address for %s:%d with host %s\n\n\n", name, privatePort, host)
+
+	return host + ":" + strconv.Itoa(int(privatePort))
+}
+
 func ContainerAddrLocalhost(name string, privatePort uint16) string {
 	return ContainerAddrWithHost(name, privatePort, "localhost")
 }
 
 func ContainerAddr(name string, privatePort uint16) string {
 	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
+}
+
+func ContainerAddrRetry(name string, privatePort uint16) string {
+	return ContainerAddrWithHostRetry(name, privatePort, "0.0.0.0")
 }
 
 // DockerStart starts the specified services.
