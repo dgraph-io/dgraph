@@ -879,17 +879,25 @@ func (n *node) Run() {
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
 	readStateCh := make(chan raft.ReadState, 100)
-	closer := z.NewCloser(4)
+	closer := z.NewCloser(0)
 	defer func() {
 		closer.SignalAndWait()
 		n.closer.Done()
 		glog.Infof("Zero Node.Run finished.")
 	}()
 
+	closer.AddRunning(1)
 	go n.snapshotPeriodically(closer)
+
+	closer.AddRunning(1)
 	go n.updateZeroMembershipPeriodically(closer)
+
+	closer.AddRunning(1)
 	go n.checkQuorum(closer)
+
+	closer.AddRunning(1)
 	go n.RunReadIndexLoop(closer, readStateCh)
+
 	if !x.WorkerConfig.HardSync {
 		closer.AddRunning(1)
 		go x.StoreSync(n.Store, closer)
