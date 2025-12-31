@@ -29,7 +29,7 @@ func main() {
 		return b - a
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.Tick(10 * time.Second)
 
 	// Make sure the garbage collector is run periodically.
 	go func() {
@@ -42,7 +42,7 @@ func main() {
 		var js z.MemStats
 		var lastAlloc uint64
 
-		for range ticker.C {
+		for range ticker {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
 			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
@@ -83,7 +83,6 @@ func main() {
 
 	// Run the program.
 	cmd.Execute()
-	ticker.Stop()
 
 	glog.V(2).Infof("Num Allocated Bytes at program end: %d", z.NumAllocBytes())
 	if z.NumAllocBytes() > 0 {

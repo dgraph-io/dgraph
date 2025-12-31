@@ -165,12 +165,9 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 	defer writer.Flush()
 
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
-	limiter := time.NewTicker(time.Millisecond)
-	defer limiter.Stop()
-	cleanupTick := time.NewTicker(5 * time.Minute)
-	defer cleanupTick.Stop()
-	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-	defer forceRollupTick.Stop()
+	limiter := time.Tick(time.Millisecond)
+	cleanupTick := time.Tick(5 * time.Minute)
+	forceRollupTick := time.Tick(500 * time.Millisecond)
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
@@ -193,7 +190,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-cleanupTick.C:
+		case <-cleanupTick:
 			currTs := time.Now().Unix()
 			for hash, ts := range m {
 				// Remove entries from map which have been there for there more than 10 seconds.
@@ -201,7 +198,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 					delete(m, hash)
 				}
 			}
-		case <-forceRollupTick.C:
+		case <-forceRollupTick:
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
 				doRollup(batch, 0)
@@ -214,7 +211,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		case batch := <-ir.priorityKeys[1].keysCh:
 			doRollup(batch, 1)
 			// throttle to 1 batch = 16 rollups per 1 ms.
-			<-limiter.C
+			<-limiter
 		}
 	}
 }
@@ -535,9 +532,9 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 		x.Check(err)
 		go func() {
 			m := cache.Metrics
-			ticker := time.NewTicker(10 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
+			ticker := time.Tick(10 * time.Second)
+
+			for range ticker {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 

@@ -446,9 +446,9 @@ func init() {
 	ctx := MetricsContext()
 	go func() {
 		var v string
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
+		ticker := time.Tick(5 * time.Second)
+
+		for range ticker {
 			v = TagValueStatusOK
 			if err := HealthCheck(); err != nil {
 				v = TagValueStatusError
@@ -696,13 +696,12 @@ func RegisterExporters(conf *viper.Viper, service string) {
 func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(10 * time.Second)
 	backgroundContext := context.Background()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			ostats.Record(backgroundContext, PBlockHitRatio.M(db.BlockCacheMetrics().Ratio()))
 			ostats.Record(backgroundContext, PIndexHitRatio.M(db.IndexCacheMetrics().Ratio()))
 		case <-closer.HasBeenClosed():
@@ -713,10 +712,8 @@ func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 
 func MonitorMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	fastTicker := time.NewTicker(time.Second)
-	defer fastTicker.Stop()
+	ticker := time.Tick(time.Minute)
+	fastTicker := time.Tick(time.Second)
 
 	update := func() {
 		// ReadMemStats stops the world which is expensive especially when the
@@ -752,9 +749,9 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 		select {
 		case <-lc.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-fastTicker:
 			updateAlloc()
-		case <-ticker.C:
+		case <-ticker:
 			update()
 		}
 	}

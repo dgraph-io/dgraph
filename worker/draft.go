@@ -829,15 +829,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 }
 
 func (n *node) processTabletSizes() {
-	defer n.closer.Done()                   // CLOSER:1
-	tick := time.NewTicker(5 * time.Minute) // Once every 5 minutes seems alright.
-	defer tick.Stop()
+	defer n.closer.Done()              // CLOSER:1
+	tick := time.Tick(5 * time.Minute) // Once every 5 minutes seems alright.
 
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
 			return
-		case <-tick.C:
+		case <-tick:
 			n.calculateTabletSizes()
 		}
 	}
@@ -941,8 +940,7 @@ func (n *node) processApplyCh() {
 	}
 
 	maxAge := 10 * time.Minute
-	tick := time.NewTicker(maxAge / 2)
-	defer tick.Stop()
+	tick := time.Tick(maxAge / 2)
 
 	for {
 		select {
@@ -951,7 +949,7 @@ func (n *node) processApplyCh() {
 				return
 			}
 			handle(entries)
-		case <-tick.C:
+		case <-tick:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
 			for key, p := range previous {
@@ -1195,9 +1193,8 @@ func (n *node) updateRaftProgress() error {
 }
 
 func (n *node) checkpointAndClose(done chan struct{}) {
-	slowTicker := time.NewTicker(time.Minute)
+	slowTicker := time.Tick(time.Minute)
 	lastSnapshotTime := time.Now()
-	defer slowTicker.Stop()
 
 	snapshotAfterEntries := x.WorkerConfig.Raft.GetUint64("snapshot-after-entries")
 	x.AssertTruef(snapshotAfterEntries > 10, "raft.snapshot-after must be a number greater than 10")
@@ -1206,7 +1203,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 
 	for {
 		select {
-		case <-slowTicker.C:
+		case <-slowTicker:
 			// Do these operations asynchronously away from the main Run loop to allow heartbeats to
 			// be sent on time. Otherwise, followers would just keep running elections.
 
@@ -1319,8 +1316,7 @@ func (n *node) Run() {
 	// "tick missed to fire" logs. Etcd uses 100ms and they haven't seen those issues.
 	// Additionally, using 100ms for ticks does not cause proposals to slow down, because they get
 	// sent out asap and don't rely on ticks. So, setting this to 100ms instead of 20ms is a NOOP.
-	ticker := time.NewTicker(tickDur)
-	defer ticker.Stop()
+	ticker := time.Tick(tickDur)
 
 	done := make(chan struct{})
 	go n.checkpointAndClose(done)
@@ -1355,7 +1351,7 @@ func (n *node) Run() {
 			// time and if the leader does not send heartbeats out during this time, the followers
 			// start an election process. And that election process would just continue to happen
 			// indefinitely because checkpoints and snapshots are being calculated indefinitely.
-		case <-ticker.C:
+		case <-ticker:
 			n.Raft().Tick()
 
 		case rd := <-n.Raft().Ready():
@@ -2037,9 +2033,9 @@ func (n *node) AmLeader() bool {
 }
 
 func (n *node) monitorRaftMetrics() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
+	ticker := time.Tick(5 * time.Second)
+
+	for range ticker {
 		curPendingSize := atomic.LoadInt64(&n.pendingSize)
 		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
 		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))

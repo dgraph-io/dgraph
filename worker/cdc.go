@@ -324,23 +324,21 @@ func (cdc *CDC) processCDCEvents() {
 		return nil
 	}
 
-	jobTick := time.NewTicker(time.Second)
-	proposalTick := time.NewTicker(3 * time.Minute)
+	jobTick := time.Tick(time.Second)
+	proposalTick := time.Tick(3 * time.Minute)
 	defer cdc.closer.Done()
-	defer jobTick.Stop()
-	defer proposalTick.Stop()
 	var lastSent uint64
 	for {
 		select {
 		case <-cdc.closer.HasBeenClosed():
 			return
-		case <-jobTick.C:
+		case <-jobTick:
 			if groups().Node.AmLeader() {
 				if err := sendEvents(); err != nil {
 					glog.Errorf("unable to send events %+v", err)
 				}
 			}
-		case <-proposalTick.C:
+		case <-proposalTick:
 			// The leader would propose the max sentTs over to the group.
 			// So, in case of a crash or a leadership change, the new leader
 			// would know where to send the cdc events from the Raft logs.

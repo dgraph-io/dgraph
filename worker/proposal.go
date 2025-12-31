@@ -50,10 +50,9 @@ type rateLimiter struct {
 // account. We however, limit solely based on feedback, allowing a certain
 // number of ops to remain pending, and not anymore.
 func (rl *rateLimiter) bleed() {
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
+	tick := time.Tick(time.Second)
 
-	for range tick.C {
+	for range tick {
 		rl.c.L.Lock()
 		iou := rl.iou
 		rl.c.L.Unlock()
@@ -238,7 +237,6 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 		}
 
 		timer := time.NewTimer(timeout)
-		defer timer.Stop()
 
 		for {
 			select {

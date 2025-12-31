@@ -143,8 +143,7 @@ func RunReducer(w Writer, mapDir string) error {
 func (r *reducer) Progress(closer *z.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	start := time.Now()
 	update := func() {
@@ -163,7 +162,7 @@ func (r *reducer) Progress(closer *z.Closer) {
 			update()
 			glog.Infof("Restore REDUCE Done in %s.\n", x.FixedDuration(time.Since(start)))
 			return
-		case <-ticker.C:
+		case <-ticker:
 			update()
 		}
 	}

@@ -150,10 +150,9 @@ func (n *Node) ReportRaftComms() {
 	if !glog.V(3) {
 		return
 	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
-	for range ticker.C {
+	for range ticker {
 		out := atomic.SwapInt64(&n.heartbeatsOut, 0)
 		in := atomic.SwapInt64(&n.heartbeatsIn, 0)
 		glog.Infof("RaftComm: [%#x] Heartbeats out: %d, in: %d", n.Id, out, in)
@@ -401,11 +400,10 @@ func (n *Node) streamMessages(to uint64, s *stream) {
 	// Let's set the deadline to 10s because if we increase it, then it takes longer to recover from
 	// a partition and get a new leader.
 	deadline := time.Now().Add(10 * time.Second)
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	var logged int
-	for range ticker.C { // Don't do this in an busy-wait loop, use a ticker.
+	for range ticker { // Don't do this in a busy-wait loop, use a ticker.
 		// doSendMessage would block doing a stream. So, time.Now().After is
 		// only there to avoid a busy-wait.
 		if err := n.doSendMessage(to, s.msgCh); err != nil {
@@ -460,11 +458,8 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 
 	ctx = mc.Context()
 
-	fastTick := time.NewTicker(5 * time.Second)
-	defer fastTick.Stop()
-
-	ticker := time.NewTicker(3 * time.Minute)
-	defer ticker.Stop()
+	fastTick := time.Tick(5 * time.Second)
+	ticker := time.Tick(3 * time.Minute)
 
 	for {
 		select {
@@ -495,7 +490,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				// RAFT would automatically retry.
 				return err
 			}
-		case <-fastTick.C:
+		case <-fastTick:
 			// We use this ticker, because during network partitions, mc.Send is
 			// unable to actually send packets, and also does not complain about
 			// them. We could have potentially used the separately tracked
@@ -512,7 +507,7 @@ func (n *Node) doSendMessage(to uint64, msgCh chan []byte) error {
 				pool.SetUnhealthy()
 				return errors.Wrapf(err, "while calling IsPeer %x", to)
 			}
-		case <-ticker.C:
+		case <-ticker:
 			if lastPackets == packets {
 				span.AddEvent(fmt.Sprintf("No activity for a while [Packets == %d]. Closing connection.", packets))
 				return mc.CloseSend()

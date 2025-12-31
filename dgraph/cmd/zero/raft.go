@@ -690,12 +690,11 @@ func (n *node) initAndStartNode() error {
 
 func (n *node) updateZeroMembershipPeriodically(closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(10 * time.Second)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			n.server.updateZeroLeader()
 		case <-closer.HasBeenClosed():
 			return
@@ -705,8 +704,7 @@ func (n *node) updateZeroMembershipPeriodically(closer *z.Closer) {
 
 func (n *node) checkQuorum(closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	quorum := func() {
 		// Make this timeout 1.5x the timeout on RunReadIndexLoop.
@@ -733,7 +731,7 @@ func (n *node) checkQuorum(closer *z.Closer) {
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			// Only the leader needs to check for the quorum. The quorum is
 			// used by a leader to identify if it is behind a network partition.
 			if n.amLeader() {
@@ -747,12 +745,11 @@ func (n *node) checkQuorum(closer *z.Closer) {
 
 func (n *node) snapshotPeriodically(closer *z.Closer) {
 	defer closer.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Minute)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			if err := n.calculateAndProposeSnapshot(); err != nil {
 				glog.Errorf("While calculateAndProposeSnapshot: %v", err)
 			}
@@ -873,8 +870,7 @@ func (n *node) Run() {
 	lastLead := uint64(math.MaxUint64)
 
 	var leader bool
-	ticker := time.NewTicker(tickDur)
-	defer ticker.Stop()
+	ticker := time.Tick(tickDur)
 
 	// snapshot can cause select loop to block while deleting entries, so run
 	// it in goroutine
@@ -911,7 +907,7 @@ func (n *node) Run() {
 		case <-n.closer.HasBeenClosed():
 			n.Raft().Stop()
 			return
-		case <-ticker.C:
+		case <-ticker:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
 			timer.Start()

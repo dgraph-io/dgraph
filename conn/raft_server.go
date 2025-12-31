@@ -266,9 +266,6 @@ func (w *RaftServer) RaftMessage(server pb.Raft_RaftMessageServer) error {
 // Heartbeat rpc call is used to check connection with other workers after worker
 // tcp server for this instance starts.
 func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) error {
-	ticker := time.NewTicker(echoDuration)
-	defer ticker.Stop()
-
 	node := w.GetNode()
 	if node == nil {
 		return ErrNoNode
@@ -287,13 +284,14 @@ func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) e
 	}
 
 	ctx := stream.Context()
+	ticker := time.Tick(echoDuration)
 
 	for {
 		info.Uptime = int64(time.Since(node.StartTime) / time.Second)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
+		case <-ticker:
 			if err := stream.Send(&info); err != nil {
 				return err
 			}

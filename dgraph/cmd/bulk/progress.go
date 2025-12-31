@@ -56,13 +56,12 @@ func (p *progress) setPhase(ph phase) {
 }
 
 func (p *progress) report() {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
+	t := time.Tick(time.Second)
 
 	z.StatsPrint() // Just print once.
 	for {
 		select {
-		case <-t.C:
+		case <-t:
 			p.reportOnce()
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}

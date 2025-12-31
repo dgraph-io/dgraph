@@ -203,7 +203,6 @@ func TestBestEffortOnly(t *testing.T) {
 	}()
 
 	timer := time.NewTimer(15 * time.Second)
-	defer timer.Stop()
 
 	select {
 	case <-timer.C:

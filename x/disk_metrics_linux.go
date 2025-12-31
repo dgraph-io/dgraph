@@ -26,8 +26,7 @@ func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
 	defer lc.Done()
 	ctx, err := tag.New(context.Background(), tag.Upsert(KeyDirType, dirTag))
 
-	fastTicker := time.NewTicker(10 * time.Second)
-	defer fastTicker.Stop()
+	fastTicker := time.Tick(10 * time.Second)
 
 	if err != nil {
 		glog.Errorln("Invalid Tag", err)
@@ -38,7 +37,7 @@ func MonitorDiskMetrics(dirTag string, dir string, lc *z.Closer) {
 		select {
 		case <-lc.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-fastTicker:
 			s := syscall.Statfs_t{}
 			err = syscall.Statfs(dir, &s)
 			if err != nil {

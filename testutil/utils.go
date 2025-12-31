@@ -129,10 +129,9 @@ func JsonGet(j interface{}, components ...string) interface{} {
 }
 
 func PollTillPassOrTimeout(t *testing.T, dc *dgo.Dgraph, query, want string, timeout time.Duration) {
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Millisecond)
 	to := time.NewTimer(timeout)
-	defer to.Stop()
+
 	for {
 		select {
 		case <-to.C:
@@ -140,7 +139,7 @@ func PollTillPassOrTimeout(t *testing.T, dc *dgo.Dgraph, query, want string, tim
 			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
 			DiffJSONMaps(t, wantMap, gotMap, "", false)
 			return // timeout
-		case <-ticker.C:
+		case <-ticker:
 			wantMap := UnmarshalJSON(t, want)
 			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
 			if DiffJSONMaps(t, wantMap, gotMap, "", true) {

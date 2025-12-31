@@ -62,12 +62,11 @@ func TestLimiterDeadlock(t *testing.T) {
 	l := &rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: 256}
 	go l.bleed()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	go func() {
 		now := time.Now()
-		for range ticker.C {
+		for range ticker {
 			l.c.L.Lock()
 			fmt.Println("Seconds elapsed :", int64(time.Since(now).Seconds()),
 				"Total proposals: ", atomic.LoadInt64(&currentCount),
@@ -100,7 +99,6 @@ func TestLimiterDeadlock(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	ticker.Stop()
 
 	// After trying all the proposals, (completed + aborted) should be equal to  tried proposal.
 	require.True(t, toTry == completed+aborted,
