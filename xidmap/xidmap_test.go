@@ -100,10 +100,10 @@ func TestXidmapMemory(t *testing.T) {
 		fmt.Printf(" Loop = %.2fM", float64(atomic.LoadUint32(&loop))/1e6)
 		fmt.Printf(" NumGC = %v\n", m.NumGC)
 	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
+
 	go func() {
-		for range ticker.C {
+		for range ticker {
 			printMemory()
 		}
 	}()

@@ -121,12 +121,11 @@ func verifyUid(ctx context.Context, uid uint64) error {
 		return nil
 	}
 	deadline := time.Now().Add(3 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.Tick(100 * time.Millisecond)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			lease := worker.MaxLeaseId()
 			if uid <= lease {
 				return nil

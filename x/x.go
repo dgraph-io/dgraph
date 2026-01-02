@@ -1183,9 +1183,7 @@ func IsSuperAdmin(groups []string) bool {
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	// Runs every 1m
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	ticker := time.Tick(1 * time.Minute)
 
 	abs := func(a, b int64) int64 {
 		if a > b {
@@ -1212,7 +1210,7 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			runGC()
 		}
 	}
@@ -1226,11 +1224,11 @@ func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
 	// We technically don't need to call this due to mmap being able to survive process crashes.
 	// But, once a minute is infrequent enough that we won't lose any performance due to this.
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Minute)
+
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			if err := db.Sync(); err != nil {
 				glog.Errorf("Error while calling db sync: %+v", err)
 			}
@@ -1514,13 +1512,13 @@ func (r *RateLimiter) RefillPeriodically() {
 		})
 	}
 
-	ticker := time.NewTicker(r.refillAfter)
-	defer ticker.Stop()
+	ticker := time.Tick(r.refillAfter)
+
 	for {
 		select {
 		case <-r.closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			refill()
 		}
 	}

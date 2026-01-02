@@ -84,7 +84,6 @@ func processWithBackupRequest(
 	}()
 
 	timer := time.NewTimer(backupRequestGracePeriod)
-	defer timer.Stop()
 
 	select {
 	case <-ctx.Done():
@@ -112,7 +111,6 @@ func processWithBackupRequest(
 	case result := <-chResults:
 		if result.err != nil {
 			cancel() // Might as well cleanup resources ASAP
-			timer.Stop()
 			return invokeNetworkRequest(ctx, addrs[1], f)
 		}
 		return result.reply, nil

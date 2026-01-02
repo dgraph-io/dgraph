@@ -22,12 +22,11 @@ import (
 )
 
 func (n *Node) run(wg *sync.WaitGroup) {
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.Tick(20 * time.Millisecond)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			n.Raft().Tick()
 		case rd := <-n.Raft().Ready():
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)

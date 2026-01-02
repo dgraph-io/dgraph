@@ -172,10 +172,9 @@ func (g *groupi) informZeroAboutTablets() {
 	// directory, and ask Zero if we are allowed to serve it. Do this irrespective of whether
 	// this node is the leader or the follower, because this early on, we might not have
 	// figured that out.
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
-	for range ticker.C {
+	for range ticker {
 		preds := schema.State().Predicates()
 		if _, err := g.Inform(preds); err != nil {
 			glog.Errorf("Error while getting tablet for preds %v", err)
@@ -375,11 +374,11 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 	if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
 		return nil
 	}
-	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
+	t := time.Tick(100 * time.Millisecond)
+
 	for {
 		select {
-		case <-t.C:
+		case <-t:
 			if atomic.LoadUint64(&g.deltaChecksum) == atomic.LoadUint64(&g.membershipChecksum) {
 				return nil
 			}
@@ -781,8 +780,7 @@ func (g *groupi) sendMembershipUpdates() {
 		g.closer.Done() // CLOSER:1
 	}()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	consumeTriggers := func() {
 		for {
@@ -800,7 +798,7 @@ func (g *groupi) sendMembershipUpdates() {
 		select {
 		case <-g.closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			if time.Since(lastSent) > 10*time.Second {
 				// On start of node if it becomes a leader, we would send tablets size for sure.
 				g.triggerMembershipSync()
@@ -828,8 +826,7 @@ func (g *groupi) receiveMembershipUpdates() {
 		g.closer.Done() // CLOSER:1
 	}()
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(10 * time.Second)
 
 START:
 	select {
@@ -903,7 +900,7 @@ OUTER:
 		case state := <-stateCh:
 			lastRecv = time.Now()
 			g.applyState(g.Node.Id, state)
-		case <-ticker.C:
+		case <-ticker:
 			if time.Since(lastRecv) > 10*time.Second {
 				// Zero might have gone under partition. We should recreate our connection.
 				glog.Warningf("No membership update for 10s. Closing connection to Zero.")
@@ -926,8 +923,7 @@ func (g *groupi) processOracleDeltaStream() {
 		g.closer.Done() // CLOSER:1
 	}()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	blockingReceiveAndPropose := func() {
 		glog.Infof("Leader idx=%#x of group=%d is connecting to Zero for txn updates\n",
@@ -995,7 +991,7 @@ func (g *groupi) processOracleDeltaStream() {
 					return
 				}
 				batch++
-			case <-ticker.C:
+			case <-ticker:
 				newLead := g.Leader(0)
 				if newLead == nil || newLead.Addr != pl.Addr {
 					glog.Infof("Zero leadership changed. Renewing oracle delta stream.")
@@ -1082,7 +1078,7 @@ func (g *groupi) processOracleDeltaStream() {
 		select {
 		case <-g.closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			// Only the leader needs to connect to Zero and get transaction
 			// updates.
 			if g.Node.AmLeader() {

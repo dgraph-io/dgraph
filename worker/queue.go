@@ -210,8 +210,8 @@ func (t *tasks) get(id uint64) (TaskMeta, error) {
 
 // worker loops forever, running queued tasks one at a time. Any returned errors are logged.
 func (t *tasks) worker() {
-	shouldCleanup := time.NewTicker(time.Hour)
-	defer shouldCleanup.Stop()
+	shouldCleanup := time.Tick(time.Hour)
+
 	for {
 		// If the server is shutting down, return immediately. Else, fetch a task from the queue.
 		var task taskRequest
@@ -221,7 +221,7 @@ func (t *tasks) worker() {
 				glog.Warningf("error closing log file: %v", err)
 			}
 			return
-		case <-shouldCleanup.C:
+		case <-shouldCleanup:
 			t.cleanup()
 		case task = <-t.queue:
 			if err := t.run(task); err != nil {

@@ -478,8 +478,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 		writerCh <- req
 	}
 
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Minute)
 
 	buffers := make(chan *z.Buffer, 3)
 
@@ -502,7 +501,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 
 			hd.Update(int64(cbuf.LenNoPadding()))
 			select {
-			case <-ticker.C:
+			case <-ticker:
 				fmt.Printf("Histogram of buffer sizes: %s\n", hd.String())
 			default:
 			}

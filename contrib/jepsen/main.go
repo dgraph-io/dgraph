@@ -237,18 +237,15 @@ func jepsenServe() error {
 		// lein run serve runs indefinitely, so there's no need to wait for the
 		// command to finish.
 		_ = cmd.Start()
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
+		ticker := time.Tick(time.Second)
 		timeout := time.NewTimer(5 * time.Minute)
-		defer timeout.Stop()
 		for {
 			select {
 			case <-timeout.C:
 				wg.Done()
 				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
 				return
-			case <-ticker.C:
+			case <-ticker:
 				if err := checkServing(); err == nil {
 					wg.Done()
 					errCh <- nil

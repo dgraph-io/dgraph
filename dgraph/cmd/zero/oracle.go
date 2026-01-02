@@ -184,8 +184,7 @@ func (o *Oracle) removeSubscriber(id int) {
 // and sends the delta object to each subscriber's channel
 func (o *Oracle) sendDeltasToSubscribers() {
 	delta := &pb.OracleDelta{}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	// waitFor calculates the maximum value of delta.MaxAssigned and all the CommitTs of delta.Txns
 	waitFor := func() uint64 {
@@ -201,7 +200,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		var update *pb.OracleDelta
 		select {
 		case update = <-o.updates:
-		case <-ticker.C:
+		case <-ticker:
 			wait := waitFor()
 			if wait == 0 || o.doneUntil.DoneUntil() < wait {
 				goto get_update

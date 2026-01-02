@@ -106,11 +106,10 @@ func (s *Server) periodicallyPostTelemetry() {
 
 	glog.Infof("Starting telemetry data collection for zero...")
 
-	ticker := time.NewTicker(6 * time.Hour)
-	defer ticker.Stop()
+	ticker := time.Tick(6 * time.Hour)
 
 	var lastPostedAt time.Time
-	for range ticker.C {
+	for range ticker {
 		if !s.Node.AmLeader() {
 			continue
 		}
@@ -832,11 +831,11 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 		return err
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
+
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			// Send an update every second.
 			ms, err := s.latestMembershipState(ctx)
 			if err != nil {

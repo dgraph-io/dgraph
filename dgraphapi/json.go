@@ -25,8 +25,8 @@ const (
 )
 
 func PollTillPassOrTimeout(gcli *GrpcClient, query, want string, timeout time.Duration) error {
-	ticker := time.NewTimer(requestTimeout)
-	defer ticker.Stop()
+	timer := time.NewTimer(timeout)
+
 	for {
 		resp, err := gcli.Query(query)
 		if err != nil {
@@ -38,7 +38,7 @@ func PollTillPassOrTimeout(gcli *GrpcClient, query, want string, timeout time.Du
 			return nil
 		}
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			return err
 		default:
 			time.Sleep(waitDurBeforeRetry)

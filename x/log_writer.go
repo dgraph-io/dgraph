@@ -43,12 +43,11 @@ type LogWriter struct {
 	Compress      bool
 	EncryptionKey []byte
 
-	mu          sync.Mutex
-	size        int64
-	file        *os.File
-	writer      *bufio.Writer
-	flushTicker *time.Ticker
-	closer      *z.Closer
+	mu     sync.Mutex
+	size   int64
+	file   *os.File
+	writer *bufio.Writer
+	closer *z.Closer
 	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
@@ -76,7 +75,6 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 		}
 	}()
 
-	l.flushTicker = time.NewTicker(flushInterval)
 	go l.flushPeriodic()
 	return l, nil
 }
@@ -138,7 +136,6 @@ func (l *LogWriter) Close() error {
 		return nil
 	}
 	l.flush()
-	l.flushTicker.Stop()
 	close(l.manageChannel)
 	_ = l.file.Close()
 	l.writer = nil
@@ -151,10 +148,11 @@ func (l *LogWriter) flushPeriodic() {
 	if l == nil {
 		return
 	}
+	ticker := time.Tick(flushInterval)
 	defer l.closer.Done()
 	for {
 		select {
-		case <-l.flushTicker.C:
+		case <-ticker:
 			l.mu.Lock()
 			l.flush()
 			l.mu.Unlock()

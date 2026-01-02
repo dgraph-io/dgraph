@@ -649,8 +649,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 func (m *mapper) Progress() {
 	defer m.closer.Done()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	start := time.Now()
 	update := func() {
@@ -668,7 +667,7 @@ func (m *mapper) Progress() {
 			update()
 			glog.Infof("Restore MAP Done in %s.\n", x.FixedDuration(time.Since(start)))
 			return
-		case <-ticker.C:
+		case <-ticker:
 			update()
 		}
 	}
