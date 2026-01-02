@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
@@ -151,7 +150,7 @@ func (in ContainerInstance) bestEffortTryLogin() error {
 			return nil
 		}
 		if strings.Contains(err.Error(), "Client sent an HTTP request to an HTTPS server.") {
-			// This is TLS enabled cluster. We won't be able to login.
+			// This is a TLS enabled cluster. We won't be able to log in.
 			return nil
 		}
 		fmt.Printf("login failed for %s: %v. Retrying...\n", in, err)
@@ -161,21 +160,21 @@ func (in ContainerInstance) bestEffortTryLogin() error {
 	return fmt.Errorf("unable to login to %s", in)
 }
 
-func (in ContainerInstance) GetContainer() *types.Container {
+func (in ContainerInstance) GetContainer() *container.Summary {
 	containers := AllContainers(in.Prefix)
 
 	q := fmt.Sprintf("/%s_%s_", in.Prefix, in.Name)
-	for _, container := range containers {
-		for _, name := range container.Names {
+	for _, c := range containers {
+		for _, name := range c.Names {
 			if strings.HasPrefix(name, q) {
-				return &container
+				return &c
 			}
 		}
 	}
 	return nil
 }
 
-func getContainer(name string) types.Container {
+func getContainer(name string) container.Summary {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
@@ -193,10 +192,10 @@ func getContainer(name string) types.Container {
 			return c
 		}
 	}
-	return types.Container{}
+	return container.Summary{}
 }
 
-func AllContainers(prefix string) []types.Container {
+func AllContainers(prefix string) []container.Summary {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 
@@ -205,7 +204,7 @@ func AllContainers(prefix string) []types.Container {
 		log.Fatalf("While listing container: %v\n", err)
 	}
 
-	var out []types.Container
+	var out []container.Summary
 	for _, c := range containers {
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, "/"+prefix) {
@@ -234,7 +233,7 @@ func ContainerAddr(name string, privatePort uint16) string {
 	return ContainerAddrWithHost(name, privatePort, "0.0.0.0")
 }
 
-// DockerStart starts the specified services.
+// DockerRun performs the specified operation on the given container instance.
 func DockerRun(instance string, op int) error {
 	c := getContainer(instance)
 	if c.ID == "" {
@@ -299,7 +298,7 @@ func DockerExec(instance string, cmd ...string) error {
 	return Exec(argv...)
 }
 
-func DockerInspect(containerID string) (types.ContainerJSON, error) {
+func DockerInspect(containerID string) (container.InspectResponse, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	x.Check(err)
 	return cli.ContainerInspect(context.Background(), containerID)
