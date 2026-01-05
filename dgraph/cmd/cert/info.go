@@ -85,10 +85,10 @@ func getFileInfo(file string) *certInfo {
 				info.err = errors.Wrapf(err, "could not read parent cert")
 				return &info
 			}
-			if err := cert.CheckSignatureFrom(parent); err != nil {
-				info.verifiedCA = "FAILED"
+			info.verifiedCA = "FAILED"
+			if err := cert.CheckSignatureFrom(parent); err == nil {
+				info.verifiedCA = "PASSED"
 			}
-			info.verifiedCA = "PASSED"
 		}
 
 	case strings.HasSuffix(file, ".key"):
