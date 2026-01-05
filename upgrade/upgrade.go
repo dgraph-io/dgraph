@@ -33,7 +33,6 @@ type versionComparisonResult uint8
 const (
 	dryRun    = "dry-run"
 	alpha     = "alpha"
-	slashGrpc = "slash_grpc_endpoint"
 	authToken = "auth_token"
 	alphaHttp = "alpha-http"
 	user      = "user"
@@ -146,13 +145,8 @@ func init() {
 	flag.Bool(dryRun, false, "dry-run the upgrade")
 	flag.StringP(alpha, "a", "127.0.0.1:9080",
 		"Comma separated list of Dgraph Alpha gRPC server address")
-	flag.String(slashGrpc, "", "Path to Slash GraphQL GRPC endpoint. "+
-		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be "+
-		"ignored")
 	flag.String(authToken, "",
-		"The auth token passed to the server for Alter operation of the schema file. "+
-			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
-			"by Slash GraphQL")
+		"The auth token passed to the server for Alter operation of the schema file")
 	flag.String(alphaHttp, "http://127.0.0.1:8080", "Draph Alpha HTTP(S) endpoint.")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
