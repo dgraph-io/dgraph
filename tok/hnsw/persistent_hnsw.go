@@ -106,7 +106,8 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 		ph.simType = okSimType
 	} else {
 		ph.simType = SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
-			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
+			isSimilarityMetric: false}
 	}
 	return nil
 }
@@ -170,13 +171,15 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 	}
 
 	r.setFirstPathNode(best)
-	candidateHeap := *buildPersistentHeapByInit([]minPersistentHeapElement[T]{best})
+	// Use the appropriate heap type based on metric: min-heap for distance metrics
+	// (lower is better), max-heap for similarity metrics (higher is better).
+	candidateHeap := buildCandidateHeap([]minPersistentHeapElement[T]{best}, ph.simType.isSimilarityMetric)
 
 	var allLayerEdges [][]uint64
 
 	//create set using map to append to on future visited nodes
 	for candidateHeap.Len() != 0 {
-		currCandidate := candidateHeap.Pop().(minPersistentHeapElement[T])
+		currCandidate := candidateHeap.Pop()
 		if r.numNeighbors() >= expectedNeighbors &&
 			ph.simType.isBetterScore(r.lastNeighborScore(), currCandidate.value) {
 			// Standard HNSW termination: once the current best candidate

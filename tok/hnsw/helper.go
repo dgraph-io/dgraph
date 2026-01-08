@@ -210,22 +210,30 @@ type SimilarityType[T c.Float] struct {
 	distanceScore func(v, w []T, floatBits int) (T, error)
 	insortHeap    func(slice []minPersistentHeapElement[T], val minPersistentHeapElement[T]) []minPersistentHeapElement[T]
 	isBetterScore func(a, b T) bool
+	// isSimilarityMetric is true for metrics where higher values indicate better matches
+	// (e.g., cosine similarity, dot product). For distance metrics like euclidean,
+	// this is false because lower values indicate better matches.
+	isSimilarityMetric bool
 }
 
 func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	switch {
 	case indexType == Euclidean:
 		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
-			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
+			isSimilarityMetric: false}
 	case indexType == Cosine:
 		return SimilarityType[T]{indexType: Cosine, distanceScore: cosineSimilarity[T],
-			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T]}
+			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T],
+			isSimilarityMetric: true}
 	case indexType == DotProd:
 		return SimilarityType[T]{indexType: DotProd, distanceScore: dotProduct[T],
-			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T]}
+			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T],
+			isSimilarityMetric: true}
 	default:
 		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
-			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
+			isSimilarityMetric: false}
 	}
 }
 
@@ -619,8 +627,14 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 				h := &HeapDataHolder{
 					data: allLayerEdges[level],
 					compare: func(i, j uint64) bool {
-						return ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec) >
-							ph.distance_betw(ctx, tc, uuid, j, &inVec, &outVec)
+						distI := ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec)
+						distJ := ph.distance_betw(ctx, tc, uuid, j, &inVec, &outVec)
+						// We want to keep the BEST edges and remove the WORST.
+						// Pop removes the root element. We need the WORST at root.
+						// For distance metrics (lower is better): worst = highest, so max-heap (>)
+						// For similarity metrics (higher is better): worst = lowest, so min-heap (<)
+						// Using !isBetterScore gives us the correct heap type for each metric.
+						return !ph.simType.isBetterScore(distI, distJ)
 					}}
 
 				for _, e := range allLayerNeighbors[level] {
