@@ -61,9 +61,9 @@ func (h *minPersistentTupleHeap[T]) Pop() interface{} {
 	return x
 }
 
-// buildPersistentHeapByInit will create a tuple heap using the array of minPersistentHeapElements
+// buildMinPersistentHeapByInit will create a min-heap for distance metrics
 // in time O(n), where n = length of array
-func buildPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]) *minPersistentTupleHeap[T] {
+func buildMinPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]) *minPersistentTupleHeap[T] {
 	// initialize the MinTupleHeap that has implement the heap.Interface
 	minPersistentTupleHeap := &minPersistentTupleHeap[T]{}
 	*minPersistentTupleHeap = array
@@ -169,5 +169,5 @@ func buildCandidateHeap[T c.Float](array []minPersistentHeapElement[T], isSimila
 	if isSimilarityMetric {
 		return &maxHeapWrapper[T]{h: buildMaxPersistentHeapByInit(array)}
 	}
-	return &minHeapWrapper[T]{h: buildPersistentHeapByInit(array)}
+	return &minHeapWrapper[T]{h: buildMinPersistentHeapByInit(array)}
 }
