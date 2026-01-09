@@ -553,15 +553,15 @@ input UserRef {
 
 type Query {
 	getProduct(id: String!): Product
-	querySimilarProductById(id: String!, by: ProductEmbedding!, topK: Int!, filter: ProductFilter): [Product]
-	querySimilarProductByEmbedding(by: ProductEmbedding!, topK: Int!, vector: [Float!]!, filter: ProductFilter): [Product]
+	querySimilarProductById(id: String!, by: ProductEmbedding!, topK: Int!, ef: Int, distance_threshold: Float, filter: ProductFilter): [Product]
+	querySimilarProductByEmbedding(by: ProductEmbedding!, topK: Int!, vector: [Float!]!, ef: Int, distance_threshold: Float, filter: ProductFilter): [Product]
 	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	aggregateProduct(filter: ProductFilter): ProductAggregateResult
 	queryPurchase(filter: PurchaseFilter, order: PurchaseOrder, first: Int, offset: Int): [Purchase]
 	aggregatePurchase(filter: PurchaseFilter): PurchaseAggregateResult
 	getUser(email: String!): User
-	querySimilarUserById(email: String!, by: UserEmbedding!, topK: Int!, filter: UserFilter): [User]
-	querySimilarUserByEmbedding(by: UserEmbedding!, topK: Int!, vector: [Float!]!, filter: UserFilter): [User]
+	querySimilarUserById(email: String!, by: UserEmbedding!, topK: Int!, ef: Int, distance_threshold: Float, filter: UserFilter): [User]
+	querySimilarUserByEmbedding(by: UserEmbedding!, topK: Int!, vector: [Float!]!, ef: Int, distance_threshold: Float, filter: UserFilter): [User]
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	aggregateUser(filter: UserFilter): UserAggregateResult
 }

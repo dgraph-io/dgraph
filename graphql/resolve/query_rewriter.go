@@ -651,9 +651,9 @@ func rewriteAsSimilarByIdQuery(
 	distanceFormula := "math(sqrt((v2 - v1) dot (v2 - v1)))" // default - euclidean
 
 	if metric == schema.SimilarSearchMetricDotProduct {
-		distanceFormula = "math((1.0 - (v1 dot v2)) /2.0)"
+		distanceFormula = "math(1.0 - (v1 dot v2))"
 	} else if metric == schema.SimilarSearchMetricCosine {
-		distanceFormula = "math((1.0 - ((v1 dot v2) / sqrt( (v1 dot v1) * (v2 dot v2) ) )) / 2.0)"
+		distanceFormula = "math(1.0 - ((v1 dot v2) / sqrt( (v1 dot v1) * (v2 dot v2) )))"
 	}
 
 	// First generate the query to fetch the uid
@@ -698,6 +698,32 @@ func rewriteAsSimilarByIdQuery(
 	//	  v2 as Product.embedding
 	//	  distance as math((v2 - v1) dot (v2 - v1))
 	//  }
+	similarToArgs := []dql.Arg{
+		{
+			Value: pred,
+		},
+		{
+			Value: fmt.Sprintf("%v", topK),
+		},
+		{
+			Value: "val(v1)",
+		},
+	}
+
+	// Add optional ef parameter if provided (using "ef: value" format)
+	if ef := query.ArgValue(schema.SimilarEfArgName); ef != nil {
+		similarToArgs = append(similarToArgs,
+			dql.Arg{Value: fmt.Sprintf("%s: %v", schema.SimilarEfArgName, ef)},
+		)
+	}
+
+	// Add optional distance_threshold parameter if provided (using "distance_threshold: value" format)
+	if dt := query.ArgValue(schema.SimilarDistanceThresholdArgName); dt != nil {
+		similarToArgs = append(similarToArgs,
+			dql.Arg{Value: fmt.Sprintf("%s: %v", schema.SimilarDistanceThresholdArgName, dt)},
+		)
+	}
+
 	similarQuery := &dql.GraphQuery{
 		Attr: "var",
 		Children: []*dql.GraphQuery{
@@ -712,17 +738,7 @@ func rewriteAsSimilarByIdQuery(
 		},
 		Func: &dql.Function{
 			Name: "similar_to",
-			Args: []dql.Arg{
-				{
-					Value: pred,
-				},
-				{
-					Value: fmt.Sprintf("%v", topK),
-				},
-				{
-					Value: "val(v1)",
-				},
-			},
+			Args: similarToArgs,
 		},
 	}
 
@@ -811,10 +827,10 @@ func rewriteAsSimilarByEmbeddingQuery(
 	distanceFormula := "math(sqrt((v2 - $search_vector) dot (v2 - $search_vector)))" // default = euclidean
 
 	if metric == schema.SimilarSearchMetricDotProduct {
-		distanceFormula = "math(( 1.0 - (($search_vector) dot v2)) /2.0)"
+		distanceFormula = "math(1.0 - (($search_vector) dot v2))"
 	} else if metric == schema.SimilarSearchMetricCosine {
-		distanceFormula = "math((1.0 - ( (($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector))" +
-			" * (v2 dot v2) ) )) / 2.0)"
+		distanceFormula = "math(1.0 - ((($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector))" +
+			" * (v2 dot v2) )))"
 	}
 
 	// Save vectorString as a query variable, $search_vector
@@ -834,19 +850,35 @@ func rewriteAsSimilarByEmbeddingQuery(
 	// Create similar_to as the root function, passing $search_vector as
 	// the search vector
 	dgQuery[0].Attr = "var"
+	similarToArgs := []dql.Arg{
+		{
+			Value: pred,
+		},
+		{
+			Value: fmt.Sprintf("%v", topK),
+		},
+		{
+			Value: "$search_vector",
+		},
+	}
+
+	// Add optional ef parameter if provided (using "ef: value" format)
+	if ef := query.ArgValue(schema.SimilarEfArgName); ef != nil {
+		similarToArgs = append(similarToArgs,
+			dql.Arg{Value: fmt.Sprintf("%s: %v", schema.SimilarEfArgName, ef)},
+		)
+	}
+
+	// Add optional distance_threshold parameter if provided (using "distance_threshold: value" format)
+	if dt := query.ArgValue(schema.SimilarDistanceThresholdArgName); dt != nil {
+		similarToArgs = append(similarToArgs,
+			dql.Arg{Value: fmt.Sprintf("%s: %v", schema.SimilarDistanceThresholdArgName, dt)},
+		)
+	}
+
 	dgQuery[0].Func = &dql.Function{
 		Name: "similar_to",
-		Args: []dql.Arg{
-			{
-				Value: pred,
-			},
-			{
-				Value: fmt.Sprintf("%v", topK),
-			},
-			{
-				Value: "$search_vector",
-			},
-		},
+		Args: similarToArgs,
 	}
 
 	// Compute the euclidean distance between the neighbor
