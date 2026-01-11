@@ -6,7 +6,6 @@
 package hnsw
 
 import (
-	"container/heap"
 	"context"
 	"fmt"
 	"sync"
@@ -731,25 +730,10 @@ func TestEdgePruningKeepsBestNeighbors(t *testing.T) {
 				scoreMap[uids[i]] = score
 			}
 
-			// Create a HeapDataHolder with the correct comparison
-			h := &HeapDataHolder{
-				data: uids,
-				compare: func(i, j uint64) bool {
-					// This is the fixed logic: use !isBetterScore to create the right heap
-					return !simType.isBetterScore(scoreMap[i], scoreMap[j])
-				},
-			}
-
-			// Simulate the Push+Pop pruning loop
-			// Start with all elements, then push each and pop to maintain size
-			heap.Init(h)
-			for len(h.data) > tc.keepCount {
-				heap.Pop(h)
-			}
-
+			keptUids := pruneUidsByScore(uids, tc.keepCount, simType, scoreMap)
 			// Check that the remaining elements are the best ones
-			keptScores := make([]float64, len(h.data))
-			for i, uid := range h.data {
+			keptScores := make([]float64, len(keptUids))
+			for i, uid := range keptUids {
 				keptScores[i] = scoreMap[uid]
 			}
 

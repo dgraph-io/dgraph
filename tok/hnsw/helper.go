@@ -39,7 +39,6 @@ const (
 	VectorIndexMaxLevels = 5
 	EfConstruction       = 16
 	EfSearch             = 12
-	numEdgesConst        = 2
 	// ByteData indicates the key stores data.
 	ByteData = byte(0x00)
 	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
@@ -78,20 +77,20 @@ func applyDistanceFunction[T c.Float](a, b []T, floatBits int, funcName string,
 		return T(0), err
 	}
 
-	if floatBits == 32 {
+	switch floatBits {
+	case 32:
 		var a1, b1 []float32
 		a1 = *(*[]float32)(unsafe.Pointer(&a))
 		b1 = *(*[]float32)(unsafe.Pointer(&b))
 		return T(applyFn32(a1, b1)), nil
-	} else if floatBits == 64 {
+	case 64:
 		var a1, b1 []float64
 		a1 = *(*[]float64)(unsafe.Pointer(&a))
 		b1 = *(*[]float64)(unsafe.Pointer(&b))
 		return T(applyFn64(a1, b1)), nil
+	default:
+		panic("While applying function on two floats, found an invalid number of float bits")
 	}
-
-	panic("While applying function on two floats, found an invalid number of float bits")
-
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
@@ -535,22 +534,6 @@ func (ph *persistentHNSW[T]) newPersistentEdgeKeyValueEntry(ctx context.Context,
 	return edge, nil
 }
 
-func (ph *persistentHNSW[T]) distance_betw(ctx context.Context, tc *TxnCache, inUuid, outUuid uint64, inVec,
-	outVec *[]T) T {
-	err := ph.getVecFromUid(outUuid, tc, outVec)
-	if err != nil {
-		log.Printf("[ERROR] While getting vector %s", err)
-		return -1
-	}
-
-	d, err := ph.simType.distanceScore(*inVec, *outVec, ph.floatBits)
-	if err != nil {
-		log.Printf("[ERROR] While getting vector %s", err)
-		return -1
-	}
-	return d
-}
-
 type HeapDataHolder struct {
 	data    []uint64
 	compare func(a, b uint64) bool
@@ -576,13 +559,101 @@ func (h *HeapDataHolder) Push(x interface{}) {
 	h.data = append(h.data, x.(uint64))
 }
 
-// Pop removes and returns the maximum element from the heap.
+// Pop is called by container/heap after it has moved the heap's root to the end.
+// It removes and returns the element at the end of the slice.
 func (h *HeapDataHolder) Pop() interface{} {
 	old := h.data
 	n := len(old)
 	x := old[n-1]
 	h.data = old[0 : n-1]
 	return x
+}
+
+func dedupeUidsPreserveOrder(uids []uint64) []uint64 {
+	if len(uids) <= 1 {
+		return uids
+	}
+	seen := make(map[uint64]struct{}, len(uids))
+	out := uids[:0]
+	for _, uid := range uids {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		out = append(out, uid)
+	}
+	return out
+}
+
+func worstScore[T c.Float](simType SimilarityType[T]) T {
+	// For distance metrics, lower is better so the worst score is +Inf
+	// For similarity metrics, higher is better so the worst score is -Inf
+	if simType.isSimilarityMetric {
+		return T(math.Inf(-1))
+	}
+	return T(math.Inf(1))
+}
+
+// pruneUidsByScore keeps the best `keep` uids (based on simType semantics) from uids
+// It returns the kept uids sorted best-to-worst (deterministic)
+func pruneUidsByScore[T c.Float](
+	uids []uint64,
+	keep int,
+	simType SimilarityType[T],
+	scoreMap map[uint64]T,
+) []uint64 {
+	if keep <= 0 || len(uids) == 0 {
+		return []uint64{}
+	}
+	if len(uids) <= keep {
+		// Ensure deterministic best-to-worst ordering for stored edges.
+		sort.Slice(uids, func(i, j int) bool {
+			return simType.isBetterScore(scoreMap[uids[i]], scoreMap[uids[j]])
+		})
+		return uids
+	}
+
+	h := &HeapDataHolder{
+		data: uids,
+		compare: func(i, j uint64) bool {
+			// container/heap is a min-heap according to Less()
+			// We want to remove WORST elements, so we treat WORST as "minimum"
+			// i is worse than j iff j is better than i
+			return simType.isBetterScore(scoreMap[j], scoreMap[i])
+		},
+	}
+	heap.Init(h)
+	for h.Len() > keep {
+		heap.Pop(h) // pops worst
+	}
+
+	kept := h.data
+	sort.Slice(kept, func(i, j int) bool {
+		return simType.isBetterScore(scoreMap[kept[i]], scoreMap[kept[j]])
+	})
+	return kept
+}
+
+func (ph *persistentHNSW[T]) uidScoreForNode(
+	tc *TxnCache,
+	node uint64,
+	nodeVec []T,
+	uid uint64,
+	outVec *[]T,
+) T {
+	score := worstScore(ph.simType)
+	if uid == notAUid || uid == node {
+		return score
+	}
+	if err := ph.getVecFromUid(uid, tc, outVec); err == nil && len(*outVec) != 0 {
+		if s, err := ph.simType.distanceScore(nodeVec, *outVec, ph.floatBits); err == nil {
+			score = s
+		}
+	}
+	return score
 }
 
 // addNeighbors adds the neighbors of the given uuid to the given level.
@@ -611,38 +682,89 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			}
 		}
 	}
-	var inVec, outVec []T
+	var inVec []T
+	inVecReady := false
+	var outVec []T
 	for level := range ph.maxLevels {
 		allLayerEdges[level], nnEdgesErr = ph.removeDeadNodes(allLayerEdges[level], tc)
 		if nnEdgesErr != nil {
 			return nil, nnEdgesErr
 		}
-		// This adds at most efConstruction number of edges for each layer for this node
-		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
-		if len(allLayerEdges[level]) > ph.efConstruction {
-			err := ph.getVecFromUid(uuid, tc, &inVec)
-			if err != nil {
-				log.Printf("[ERROR] While getting vector %s", err)
-			} else {
-				h := &HeapDataHolder{
-					data: allLayerEdges[level],
-					compare: func(i, j uint64) bool {
-						distI := ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec)
-						distJ := ph.distance_betw(ctx, tc, uuid, j, &inVec, &outVec)
-						// We want to keep the BEST edges and remove the WORST.
-						// Pop removes the root element. We need the WORST at root.
-						// For distance metrics (lower is better): worst = highest, so max-heap (>)
-						// For similarity metrics (higher is better): worst = lowest, so min-heap (<)
-						// Using !isBetterScore gives us the correct heap type for each metric.
-						return !ph.simType.isBetterScore(distI, distJ)
-					}}
 
-				for _, e := range allLayerNeighbors[level] {
-					heap.Push(h, e)
-					heap.Pop(h)
+		// Fast-path: if we're not adding any neighbours at this level, don't do any extra work.
+		// This matters because addNeighbors() is called for many nodes where only one layer
+		// actually changes (e.g. inbound edge updates during construction)
+		if len(allLayerNeighbors[level]) == 0 {
+			continue
+		}
+
+		// We maintain the invariant that allLayerEdges[level] is sorted best-to-worst
+		// (according to ph.simType semantics) and bounded by efConstruction.
+		//
+		// This lets us do incremental updates cheaply: for each new neighbor, compute its
+		// score once, binary-search insertion into the sorted list, then truncate.
+		if !inVecReady {
+			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
+				// Without the source vector we can't score edges reliably.
+				// Fall back to "append then truncate" after a cheap de-dupe.
+				allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
+				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
+				if len(allLayerEdges[level]) > ph.efConstruction {
+					allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+				}
+				continue
+			}
+			inVecReady = true
+		}
+
+		// Small local cache for scores computed during this call.
+		scoreCache := make(map[uint64]T, len(allLayerEdges[level])+len(allLayerNeighbors[level]))
+		for _, existing := range allLayerEdges[level] {
+			// Pre-seed cache for existing edges we might binary-search against (lazy fill below).
+			_ = existing
+		}
+
+		contains := func(slice []uint64, uid uint64) bool {
+			for _, v := range slice {
+				if v == uid {
+					return true
 				}
 			}
-			allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+			return false
+		}
+
+		getScore := func(uid uint64) T {
+			if s, ok := scoreCache[uid]; ok {
+				return s
+			}
+			s := ph.uidScoreForNode(tc, uuid, inVec, uid, &outVec)
+			scoreCache[uid] = s
+			return s
+		}
+
+		insertSorted := func(edges []uint64, uid uint64) []uint64 {
+			scoreNew := getScore(uid)
+			pos := sort.Search(len(edges), func(i int) bool {
+				// Find first position where new is better than edges[i].
+				return ph.simType.isBetterScore(scoreNew, getScore(edges[i]))
+			})
+			edges = append(edges, 0)
+			copy(edges[pos+1:], edges[pos:])
+			edges[pos] = uid
+			return edges
+		}
+
+		for _, n := range allLayerNeighbors[level] {
+			if n == notAUid || n == uuid {
+				continue
+			}
+			if contains(allLayerEdges[level], n) {
+				continue
+			}
+			allLayerEdges[level] = insertSorted(allLayerEdges[level], n)
+			if len(allLayerEdges[level]) > ph.efConstruction {
+				allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+			}
 		}
 	}
 
