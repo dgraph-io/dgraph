@@ -730,7 +730,8 @@ func TestEdgePruningKeepsBestNeighbors(t *testing.T) {
 				scoreMap[uids[i]] = score
 			}
 
-			keptUids := pruneUidsByScore(uids, tc.keepCount, simType, scoreMap)
+			scoreFn := func(uid uint64) float64 { return scoreMap[uid] }
+			keptUids := insertUidsTopKByScore(nil, uids, tc.keepCount, simType, scoreFn)
 			// Check that the remaining elements are the best ones
 			keptScores := make([]float64, len(keptUids))
 			for i, uid := range keptUids {

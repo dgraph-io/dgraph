@@ -6,7 +6,6 @@
 package hnsw
 
 import (
-	"container/heap"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -534,41 +533,6 @@ func (ph *persistentHNSW[T]) newPersistentEdgeKeyValueEntry(ctx context.Context,
 	return edge, nil
 }
 
-type HeapDataHolder struct {
-	data    []uint64
-	compare func(a, b uint64) bool
-}
-
-// Len is the number of elements in the collection.
-func (h HeapDataHolder) Len() int {
-	return len(h.data)
-}
-
-// Less reports whether the element with index i should sort before the element with index j.
-func (h HeapDataHolder) Less(i, j int) bool {
-	return h.compare(h.data[i], h.data[j])
-}
-
-// Swap swaps the elements with indexes i and j.
-func (h HeapDataHolder) Swap(i, j int) {
-	h.data[i], h.data[j] = h.data[j], h.data[i]
-}
-
-// Push adds an element to the heap.
-func (h *HeapDataHolder) Push(x interface{}) {
-	h.data = append(h.data, x.(uint64))
-}
-
-// Pop is called by container/heap after it has moved the heap's root to the end.
-// It removes and returns the element at the end of the slice.
-func (h *HeapDataHolder) Pop() interface{} {
-	old := h.data
-	n := len(old)
-	x := old[n-1]
-	h.data = old[0 : n-1]
-	return x
-}
-
 func dedupeUidsPreserveOrder(uids []uint64) []uint64 {
 	if len(uids) <= 1 {
 		return uids
@@ -597,46 +561,6 @@ func worstScore[T c.Float](simType SimilarityType[T]) T {
 	return T(math.Inf(1))
 }
 
-// pruneUidsByScore keeps the best `keep` uids (based on simType semantics) from uids
-// It returns the kept uids sorted best-to-worst (deterministic)
-func pruneUidsByScore[T c.Float](
-	uids []uint64,
-	keep int,
-	simType SimilarityType[T],
-	scoreMap map[uint64]T,
-) []uint64 {
-	if keep <= 0 || len(uids) == 0 {
-		return []uint64{}
-	}
-	if len(uids) <= keep {
-		// Ensure deterministic best-to-worst ordering for stored edges.
-		sort.Slice(uids, func(i, j int) bool {
-			return simType.isBetterScore(scoreMap[uids[i]], scoreMap[uids[j]])
-		})
-		return uids
-	}
-
-	h := &HeapDataHolder{
-		data: uids,
-		compare: func(i, j uint64) bool {
-			// container/heap is a min-heap according to Less()
-			// We want to remove WORST elements, so we treat WORST as "minimum"
-			// i is worse than j iff j is better than i
-			return simType.isBetterScore(scoreMap[j], scoreMap[i])
-		},
-	}
-	heap.Init(h)
-	for h.Len() > keep {
-		heap.Pop(h) // pops worst
-	}
-
-	kept := h.data
-	sort.Slice(kept, func(i, j int) bool {
-		return simType.isBetterScore(scoreMap[kept[i]], scoreMap[kept[j]])
-	})
-	return kept
-}
-
 func (ph *persistentHNSW[T]) uidScoreForNode(
 	tc *TxnCache,
 	node uint64,
@@ -654,6 +578,63 @@ func (ph *persistentHNSW[T]) uidScoreForNode(
 		}
 	}
 	return score
+}
+
+// insertUidsTopKByScore incrementally maintains a best-to-worst sorted uid list capped at `keep`.
+// It assumes `edges` is already sorted best-to-worst according to simType semantics.
+func insertUidsTopKByScore[T c.Float](
+	edges []uint64,
+	newUids []uint64,
+	keep int,
+	simType SimilarityType[T],
+	score func(uint64) T,
+) []uint64 {
+	if keep <= 0 {
+		return []uint64{}
+	}
+	if len(edges) > keep {
+		edges = edges[:keep]
+	}
+
+	seen := make(map[uint64]struct{}, len(edges)+len(newUids))
+	filtered := edges[:0]
+	for _, uid := range edges {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		filtered = append(filtered, uid)
+	}
+	edges = filtered
+
+	insertSorted := func(edges []uint64, uid uint64) []uint64 {
+		scoreNew := score(uid)
+		pos := sort.Search(len(edges), func(i int) bool {
+			return simType.isBetterScore(scoreNew, score(edges[i]))
+		})
+		edges = append(edges, 0)
+		copy(edges[pos+1:], edges[pos:])
+		edges[pos] = uid
+		return edges
+	}
+
+	for _, uid := range newUids {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		edges = insertSorted(edges, uid)
+		if len(edges) > keep {
+			edges = edges[:keep]
+		}
+	}
+	return edges
 }
 
 // addNeighbors adds the neighbors of the given uuid to the given level.
@@ -719,19 +700,6 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 
 		// Small local cache for scores computed during this call.
 		scoreCache := make(map[uint64]T, len(allLayerEdges[level])+len(allLayerNeighbors[level]))
-		for _, existing := range allLayerEdges[level] {
-			// Pre-seed cache for existing edges we might binary-search against (lazy fill below).
-			_ = existing
-		}
-
-		contains := func(slice []uint64, uid uint64) bool {
-			for _, v := range slice {
-				if v == uid {
-					return true
-				}
-			}
-			return false
-		}
 
 		getScore := func(uid uint64) T {
 			if s, ok := scoreCache[uid]; ok {
@@ -742,30 +710,19 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			return s
 		}
 
-		insertSorted := func(edges []uint64, uid uint64) []uint64 {
-			scoreNew := getScore(uid)
-			pos := sort.Search(len(edges), func(i int) bool {
-				// Find first position where new is better than edges[i].
-				return ph.simType.isBetterScore(scoreNew, getScore(edges[i]))
-			})
-			edges = append(edges, 0)
-			copy(edges[pos+1:], edges[pos:])
-			edges[pos] = uid
-			return edges
+		// Filter out self-loops here (helper only knows about notAUid).
+		newUids := allLayerNeighbors[level]
+		if uuid != notAUid {
+			dst := newUids[:0]
+			for _, uid := range newUids {
+				if uid != uuid {
+					dst = append(dst, uid)
+				}
+			}
+			newUids = dst
 		}
 
-		for _, n := range allLayerNeighbors[level] {
-			if n == notAUid || n == uuid {
-				continue
-			}
-			if contains(allLayerEdges[level], n) {
-				continue
-			}
-			allLayerEdges[level] = insertSorted(allLayerEdges[level], n)
-			if len(allLayerEdges[level]) > ph.efConstruction {
-				allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
-			}
-		}
+		allLayerEdges[level] = insertUidsTopKByScore(allLayerEdges[level], newUids, ph.efConstruction, ph.simType, getScore)
 	}
 
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading
