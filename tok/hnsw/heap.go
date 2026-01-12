@@ -13,7 +13,7 @@ import (
 
 const notAUid uint64 = 0
 
-type minPersistentHeapElement[T c.Float] struct {
+type persistentHeapElement[T c.Float] struct {
 	value T
 	index uint64
 	// An element that is "filteredOut" is one that should be removed
@@ -23,15 +23,15 @@ type minPersistentHeapElement[T c.Float] struct {
 }
 
 func initPersistentHeapElement[T c.Float](
-	val T, i uint64, filteredOut bool) *minPersistentHeapElement[T] {
-	return &minPersistentHeapElement[T]{
+	val T, i uint64, filteredOut bool) *persistentHeapElement[T] {
+	return &persistentHeapElement[T]{
 		value:       val,
 		index:       i,
 		filteredOut: filteredOut,
 	}
 }
 
-type minPersistentTupleHeap[T c.Float] []minPersistentHeapElement[T]
+type minPersistentTupleHeap[T c.Float] []persistentHeapElement[T]
 
 func (h minPersistentTupleHeap[T]) Len() int {
 	return len(h)
@@ -46,7 +46,7 @@ func (h minPersistentTupleHeap[T]) Swap(i, j int) {
 }
 
 func (h *minPersistentTupleHeap[T]) Push(x interface{}) {
-	*h = append(*h, x.(minPersistentHeapElement[T]))
+	*h = append(*h, x.(persistentHeapElement[T]))
 }
 
 func (h *minPersistentTupleHeap[T]) PopLast() {
@@ -63,7 +63,7 @@ func (h *minPersistentTupleHeap[T]) Pop() interface{} {
 
 // buildMinPersistentHeapByInit will create a min-heap for distance metrics
 // in time O(n), where n = length of array
-func buildMinPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]) *minPersistentTupleHeap[T] {
+func buildMinPersistentHeapByInit[T c.Float](array []persistentHeapElement[T]) *minPersistentTupleHeap[T] {
 	// initialize the MinTupleHeap that has implement the heap.Interface
 	minPersistentTupleHeap := &minPersistentTupleHeap[T]{}
 	*minPersistentTupleHeap = array
@@ -73,7 +73,7 @@ func buildMinPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]
 
 // maxPersistentTupleHeap is a max-heap for similarity metrics (cosine, dot-product)
 // where higher values indicate better matches.
-type maxPersistentTupleHeap[T c.Float] []minPersistentHeapElement[T]
+type maxPersistentTupleHeap[T c.Float] []persistentHeapElement[T]
 
 func (h maxPersistentTupleHeap[T]) Len() int {
 	return len(h)
@@ -88,7 +88,7 @@ func (h maxPersistentTupleHeap[T]) Swap(i, j int) {
 }
 
 func (h *maxPersistentTupleHeap[T]) Push(x interface{}) {
-	*h = append(*h, x.(minPersistentHeapElement[T]))
+	*h = append(*h, x.(persistentHeapElement[T]))
 }
 
 func (h *maxPersistentTupleHeap[T]) PopLast() {
@@ -105,7 +105,7 @@ func (h *maxPersistentTupleHeap[T]) Pop() interface{} {
 
 // buildMaxPersistentHeapByInit will create a max-heap for similarity metrics
 // in time O(n), where n = length of array
-func buildMaxPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]) *maxPersistentTupleHeap[T] {
+func buildMaxPersistentHeapByInit[T c.Float](array []persistentHeapElement[T]) *maxPersistentTupleHeap[T] {
 	maxHeap := &maxPersistentTupleHeap[T]{}
 	*maxHeap = array
 	heap.Init(maxHeap)
@@ -116,8 +116,8 @@ func buildMaxPersistentHeapByInit[T c.Float](array []minPersistentHeapElement[T]
 // It abstracts over min-heap (for distance metrics) and max-heap (for similarity metrics).
 type candidateHeap[T c.Float] interface {
 	Len() int
-	Push(x minPersistentHeapElement[T])
-	Pop() minPersistentHeapElement[T]
+	Push(x persistentHeapElement[T])
+	Pop() persistentHeapElement[T]
 	PopLast()
 }
 
@@ -130,12 +130,12 @@ func (w *minHeapWrapper[T]) Len() int {
 	return w.h.Len()
 }
 
-func (w *minHeapWrapper[T]) Push(x minPersistentHeapElement[T]) {
+func (w *minHeapWrapper[T]) Push(x persistentHeapElement[T]) {
 	heap.Push(w.h, x)
 }
 
-func (w *minHeapWrapper[T]) Pop() minPersistentHeapElement[T] {
-	return heap.Pop(w.h).(minPersistentHeapElement[T])
+func (w *minHeapWrapper[T]) Pop() persistentHeapElement[T] {
+	return heap.Pop(w.h).(persistentHeapElement[T])
 }
 
 func (w *minHeapWrapper[T]) PopLast() {
@@ -151,12 +151,12 @@ func (w *maxHeapWrapper[T]) Len() int {
 	return w.h.Len()
 }
 
-func (w *maxHeapWrapper[T]) Push(x minPersistentHeapElement[T]) {
+func (w *maxHeapWrapper[T]) Push(x persistentHeapElement[T]) {
 	heap.Push(w.h, x)
 }
 
-func (w *maxHeapWrapper[T]) Pop() minPersistentHeapElement[T] {
-	return heap.Pop(w.h).(minPersistentHeapElement[T])
+func (w *maxHeapWrapper[T]) Pop() persistentHeapElement[T] {
+	return heap.Pop(w.h).(persistentHeapElement[T])
 }
 
 func (w *maxHeapWrapper[T]) PopLast() {
@@ -165,7 +165,7 @@ func (w *maxHeapWrapper[T]) PopLast() {
 
 // buildCandidateHeap creates the appropriate heap based on whether we're using
 // a distance metric (lower is better) or similarity metric (higher is better).
-func buildCandidateHeap[T c.Float](array []minPersistentHeapElement[T], isSimilarityMetric bool) candidateHeap[T] {
+func buildCandidateHeap[T c.Float](array []persistentHeapElement[T], isSimilarityMetric bool) candidateHeap[T] {
 	if isSimilarityMetric {
 		return &maxHeapWrapper[T]{h: buildMaxPersistentHeapByInit(array)}
 	}

@@ -114,8 +114,8 @@ func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 
 // Used for distance, since shorter distance is better
 func insortPersistentHeapAscending[T c.Float](
-	slice []minPersistentHeapElement[T],
-	val minPersistentHeapElement[T]) []minPersistentHeapElement[T] {
+	slice []persistentHeapElement[T],
+	val persistentHeapElement[T]) []persistentHeapElement[T] {
 	i := sort.Search(len(slice), func(i int) bool { return slice[i].value > val.value })
 	var empty T
 	slice = append(slice, *initPersistentHeapElement(empty, notAUid, false))
@@ -126,8 +126,8 @@ func insortPersistentHeapAscending[T c.Float](
 
 // Used for cosine similarity, since higher similarity score is better
 func insortPersistentHeapDescending[T c.Float](
-	slice []minPersistentHeapElement[T],
-	val minPersistentHeapElement[T]) []minPersistentHeapElement[T] {
+	slice []persistentHeapElement[T],
+	val persistentHeapElement[T]) []persistentHeapElement[T] {
 	i := sort.Search(len(slice), func(i int) bool { return slice[i].value < val.value })
 	var empty T
 	slice = append(slice, *initPersistentHeapElement(empty, notAUid, false))
@@ -206,7 +206,7 @@ func cannotConvertToUintSlice(s string) error {
 type SimilarityType[T c.Float] struct {
 	indexType     string
 	distanceScore func(v, w []T, floatBits int) (T, error)
-	insortHeap    func(slice []minPersistentHeapElement[T], val minPersistentHeapElement[T]) []minPersistentHeapElement[T]
+	insortHeap    func(slice []persistentHeapElement[T], val persistentHeapElement[T]) []persistentHeapElement[T]
 	isBetterScore func(a, b T) bool
 	// isSimilarityMetric is true for metrics where higher values indicate better matches
 	// (e.g., cosine similarity, dot product). For distance metrics like euclidean,

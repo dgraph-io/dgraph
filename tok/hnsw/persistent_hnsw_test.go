@@ -553,7 +553,7 @@ func TestBasicSearchPersistentFlatStorage(t *testing.T) {
 // TestCandidateHeapMinHeap verifies that the min-heap (for distance metrics like euclidean)
 // pops elements in ascending order (smallest first).
 func TestCandidateHeapMinHeap(t *testing.T) {
-	elements := []minPersistentHeapElement[float64]{
+	elements := []persistentHeapElement[float64]{
 		{value: 0.5, index: 1},
 		{value: 0.1, index: 2},
 		{value: 0.9, index: 3},
@@ -583,7 +583,7 @@ func TestCandidateHeapMinHeap(t *testing.T) {
 // TestCandidateHeapMaxHeap verifies that the max-heap (for similarity metrics like cosine)
 // pops elements in descending order (largest first).
 func TestCandidateHeapMaxHeap(t *testing.T) {
-	elements := []minPersistentHeapElement[float64]{
+	elements := []persistentHeapElement[float64]{
 		{value: 0.5, index: 1},
 		{value: 0.1, index: 2},
 		{value: 0.9, index: 3},
@@ -613,11 +613,11 @@ func TestCandidateHeapMaxHeap(t *testing.T) {
 // TestCandidateHeapPushPop verifies that Push and Pop work correctly for both heap types.
 func TestCandidateHeapPushPop(t *testing.T) {
 	t.Run("MinHeap", func(t *testing.T) {
-		heap := buildCandidateHeap([]minPersistentHeapElement[float64]{}, false)
+		heap := buildCandidateHeap([]persistentHeapElement[float64]{}, false)
 
-		heap.Push(minPersistentHeapElement[float64]{value: 0.5, index: 1})
-		heap.Push(minPersistentHeapElement[float64]{value: 0.2, index: 2})
-		heap.Push(minPersistentHeapElement[float64]{value: 0.8, index: 3})
+		heap.Push(persistentHeapElement[float64]{value: 0.5, index: 1})
+		heap.Push(persistentHeapElement[float64]{value: 0.2, index: 2})
+		heap.Push(persistentHeapElement[float64]{value: 0.8, index: 3})
 
 		// Min-heap should pop smallest first
 		elem := heap.Pop()
@@ -635,11 +635,11 @@ func TestCandidateHeapPushPop(t *testing.T) {
 	})
 
 	t.Run("MaxHeap", func(t *testing.T) {
-		heap := buildCandidateHeap([]minPersistentHeapElement[float64]{}, true)
+		heap := buildCandidateHeap([]persistentHeapElement[float64]{}, true)
 
-		heap.Push(minPersistentHeapElement[float64]{value: 0.5, index: 1})
-		heap.Push(minPersistentHeapElement[float64]{value: 0.2, index: 2})
-		heap.Push(minPersistentHeapElement[float64]{value: 0.8, index: 3})
+		heap.Push(persistentHeapElement[float64]{value: 0.5, index: 1})
+		heap.Push(persistentHeapElement[float64]{value: 0.2, index: 2})
+		heap.Push(persistentHeapElement[float64]{value: 0.8, index: 3})
 
 		// Max-heap should pop largest first
 		elem := heap.Pop()
