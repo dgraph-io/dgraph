@@ -298,7 +298,7 @@ func InStream(stream api.Dgraph_StreamExtSnapshotServer) error {
 		return fmt.Errorf("failed to establish stream with leader: %v", err)
 	}
 	glog.Infof("[import] [forward %d -> %d] start", groups().Node.gid, groupId)
-	glog.Infof("[import] [forward %d -> %d] start", groups().Node.MyAddr, groups().Leader(groupId).Addr)
+	glog.Infof("[import] [forward %v -> %d] start", groups().Node.MyAddr, groups().Leader(groupId).Addr)
 
 	glog.Infof("[import] sending forward true to leader of group [%v]", groupId)
 	forwardReq := &api.StreamExtSnapshotRequest{Forward: true}
@@ -313,12 +313,6 @@ func InStream(stream api.Dgraph_StreamExtSnapshotServer) error {
 func pipeTwoStream(in api.Dgraph_StreamExtSnapshotServer, out pb.Worker_StreamExtSnapshotClient, groupId uint32) error {
 	currentGroup := groups().Node.gid
 	ctx := in.Context()
-	if err := out.Send(&api.StreamExtSnapshotRequest{GroupId: groupId}); err != nil {
-		return fmt.Errorf("send groupId downstream(%d): %w", groupId, err)
-	}
-	if _, err := out.Recv(); err != nil {
-		return fmt.Errorf("ack groupId downstream(%d): %w", groupId, err)
-	}
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -487,7 +481,7 @@ func streamInGroup(stream api.Dgraph_StreamExtSnapshotServer, forward bool) erro
 		if forward {
 			// We are not going to return any error from here because we care about the majority of nodes.
 			// If the majority of nodes are able to receive the data, the remaining ones can catch up later.
-			glog.Infof("[import] Streaming external snapshot to [%v] from [%v] forward [%v]", member.Addr, node.MyAddr)
+			glog.Infof("[import] Streaming external snapshot to [%v] from [%v]", member.Addr, node.MyAddr)
 			eg.Go(func() error {
 				glog.Infof(`[import:forward] streaming external snapshot to [%v] from [%v]`, member.Addr, node.MyAddr)
 				if member.AmDead {
