@@ -10,12 +10,15 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/dql"
@@ -2884,6 +2887,70 @@ func TestDateTimeQuery(t *testing.T) {
 	require.JSONEq(t,
 		`{"data":{"q":[{"uid":"0x133","created_at":"2019-05-28T07:41:57+23:00"}]}}`,
 		processQueryNoErr(t, query))
+}
+
+// TestLossyIndexInUncommittedTxn tests that queries within an uncommitted
+// transaction can find data that was mutated in that same transaction when using
+// a lossy index like @index(hour).
+//
+// Issue #9556: The bug occurs because lossy indexes require a two-step query:
+// 1. Index lookup - finds candidate UIDs
+// 2. Value verification - re-checks actual values since hour granularity is imprecise
+func TestLossyIndexInUncommittedTxn(t *testing.T) {
+	ctx := context.Background()
+
+	// Use a unique datetime value to avoid conflicts with existing test data
+	testTime := time.Now().UTC().Truncate(time.Second)
+	testTimeStr := testTime.Format(time.RFC3339)
+
+	// Create a new transaction - DO NOT commit yet
+	txn := client.NewTxn()
+	defer func() {
+		if err := txn.Discard(ctx); err != nil {
+			t.Logf("error discarding txn: %v", err)
+		}
+	}()
+
+	mutationJSON := fmt.Sprintf(`{
+		"uid": "_:newnode",
+		"dgraph.type": "TestNode",
+		"created_at": "%s"
+	}`, testTimeStr)
+
+	resp, err := txn.Mutate(ctx, &api.Mutation{
+		SetJson: []byte(mutationJSON),
+	})
+	require.NoError(t, err, "mutation should succeed")
+	require.NotEmpty(t, resp.Uids["newnode"], "should get a UID for the new node")
+
+	newUID := resp.Uids["newnode"]
+	t.Logf("Created node with UID %s and created_at=%s", newUID, testTimeStr)
+
+	// Query for the same data within the SAME uncommitted transaction
+	// This query uses the lossy @index(hour) on created_at
+	query := fmt.Sprintf(`{
+		q(func: eq(created_at, "%s")) {
+			uid
+			created_at
+		}
+	}`, testTimeStr)
+
+	queryResp, err := txn.Query(ctx, query)
+	require.NoError(t, err, "query should succeed")
+
+	var result struct {
+		Q []struct {
+			UID       string `json:"uid"`
+			CreatedAt string `json:"created_at"`
+		} `json:"q"`
+	}
+	err = json.Unmarshal(queryResp.Json, &result)
+	require.NoError(t, err, "should be able to parse response")
+
+	t.Logf("Query response: %s", string(queryResp.Json))
+
+	require.Len(t, result.Q, 1, "should find exactly 1 node with the matching created_at")
+	require.Equal(t, newUID, result.Q[0].UID, "should find the node we just created")
 }
 
 func TestCountUidWithAlias(t *testing.T) {
