@@ -1396,7 +1396,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 			switch lang {
 			case "":
 				if isList {
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+					pl, err := qs.cache.Get(x.DataKey(attr, uid))
 					if err != nil {
 						filterErr = err
 						return false
@@ -1418,7 +1418,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return false
 				}
 
-				pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+				pl, err := qs.cache.Get(x.DataKey(attr, uid))
 				if err != nil {
 					filterErr = err
 					return false
@@ -1433,7 +1433,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				dst, err := types.Convert(sv, typ)
 				return err == nil && compareFunc(dst)
 			case ".":
-				pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
+				pl, err := qs.cache.Get(x.DataKey(attr, uid))
 				if err != nil {
 					filterErr = err
 					return false
@@ -1451,17 +1451,26 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				}
 				return false
 			default:
-				sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+				pl, err := qs.cache.Get(x.DataKey(attr, uid))
+				if err != nil {
+					filterErr = err
+					return false
+				}
+				src, err := pl.ValueFor(arg.q.ReadTs, arg.q.Langs)
 				if err != nil {
 					if err != posting.ErrNoValue {
 						filterErr = err
 					}
 					return false
 				}
-				if sv.Value == nil {
+				dst, err := types.Convert(src, typ)
+				if err != nil {
 					return false
 				}
-				return compareFunc(sv)
+				if dst.Value == nil {
+					return false
+				}
+				return compareFunc(dst)
 			}
 		})
 		if filterErr != nil {
