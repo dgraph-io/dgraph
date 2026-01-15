@@ -14,9 +14,9 @@ import (
 
 type searchLayerResult[T c.Float] struct {
 	// neighbors represents the candidates with the best scores so far.
-	neighbors []minPersistentHeapElement[T]
+	neighbors []persistentHeapElement[T]
 	// visited represents elements seen (so we don't try to re-visit).
-	visited map[uint64]minPersistentHeapElement[T]
+	visited map[uint64]persistentHeapElement[T]
 	path    []uint64
 	metrics map[string]uint64
 	level   int
@@ -33,23 +33,23 @@ type searchLayerResult[T c.Float] struct {
 
 func newLayerResult[T c.Float](level int) *searchLayerResult[T] {
 	return &searchLayerResult[T]{
-		neighbors: []minPersistentHeapElement[T]{},
-		visited:   make(map[uint64]minPersistentHeapElement[T]),
+		neighbors: []persistentHeapElement[T]{},
+		visited:   make(map[uint64]persistentHeapElement[T]),
 		path:      []uint64{},
 		metrics:   make(map[string]uint64),
 		level:     level,
 	}
 }
 
-func (slr *searchLayerResult[T]) setFirstPathNode(n minPersistentHeapElement[T]) {
-	slr.neighbors = []minPersistentHeapElement[T]{n}
-	slr.visited = make(map[uint64]minPersistentHeapElement[T])
+func (slr *searchLayerResult[T]) setFirstPathNode(n persistentHeapElement[T]) {
+	slr.neighbors = []persistentHeapElement[T]{n}
+	slr.visited = make(map[uint64]persistentHeapElement[T])
 	slr.visited[n.index] = n
 	slr.path = []uint64{n.index}
 }
 
 func (slr *searchLayerResult[T]) addPathNode(
-	n minPersistentHeapElement[T],
+	n persistentHeapElement[T],
 	simType SimilarityType[T],
 	maxResults int) {
 	slr.neighbors = simType.insortHeap(slr.neighbors, n)
@@ -80,7 +80,7 @@ func (slr *searchLayerResult[T]) incrementDistanceComputations() {
 
 // slr.lastNeighborScore() returns the "score" (based on similarity type)
 // of the last neighbor being tracked. The score is reflected as a value
-// of the minPersistentHeapElement.
+// of the persistentHeapElement.
 // If slr is empty, this will panic.
 func (slr *searchLayerResult[T]) lastNeighborScore() T {
 	return slr.neighbors[len(slr.neighbors)-1].value
@@ -88,7 +88,7 @@ func (slr *searchLayerResult[T]) lastNeighborScore() T {
 
 // slr.bestNeighbor() returns the heap element with the "best" score.
 // panics if there is no such element.
-func (slr *searchLayerResult[T]) bestNeighbor() minPersistentHeapElement[T] {
+func (slr *searchLayerResult[T]) bestNeighbor() persistentHeapElement[T] {
 	return slr.neighbors[0]
 }
 
@@ -97,7 +97,7 @@ func (slr *searchLayerResult[T]) indexVisited(n uint64) bool {
 	return ok
 }
 
-func (slr *searchLayerResult[T]) addToVisited(n minPersistentHeapElement[T]) {
+func (slr *searchLayerResult[T]) addToVisited(n persistentHeapElement[T]) {
 	slr.visited[n.index] = n
 }
 

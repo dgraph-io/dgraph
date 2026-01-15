@@ -6,7 +6,6 @@
 package hnsw
 
 import (
-	"container/heap"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -39,7 +38,6 @@ const (
 	VectorIndexMaxLevels = 5
 	EfConstruction       = 16
 	EfSearch             = 12
-	numEdgesConst        = 2
 	// ByteData indicates the key stores data.
 	ByteData = byte(0x00)
 	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
@@ -78,20 +76,20 @@ func applyDistanceFunction[T c.Float](a, b []T, floatBits int, funcName string,
 		return T(0), err
 	}
 
-	if floatBits == 32 {
+	switch floatBits {
+	case 32:
 		var a1, b1 []float32
 		a1 = *(*[]float32)(unsafe.Pointer(&a))
 		b1 = *(*[]float32)(unsafe.Pointer(&b))
 		return T(applyFn32(a1, b1)), nil
-	} else if floatBits == 64 {
+	case 64:
 		var a1, b1 []float64
 		a1 = *(*[]float64)(unsafe.Pointer(&a))
 		b1 = *(*[]float64)(unsafe.Pointer(&b))
 		return T(applyFn64(a1, b1)), nil
+	default:
+		panic("While applying function on two floats, found an invalid number of float bits")
 	}
-
-	panic("While applying function on two floats, found an invalid number of float bits")
-
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
@@ -116,8 +114,8 @@ func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 
 // Used for distance, since shorter distance is better
 func insortPersistentHeapAscending[T c.Float](
-	slice []minPersistentHeapElement[T],
-	val minPersistentHeapElement[T]) []minPersistentHeapElement[T] {
+	slice []persistentHeapElement[T],
+	val persistentHeapElement[T]) []persistentHeapElement[T] {
 	i := sort.Search(len(slice), func(i int) bool { return slice[i].value > val.value })
 	var empty T
 	slice = append(slice, *initPersistentHeapElement(empty, notAUid, false))
@@ -128,8 +126,8 @@ func insortPersistentHeapAscending[T c.Float](
 
 // Used for cosine similarity, since higher similarity score is better
 func insortPersistentHeapDescending[T c.Float](
-	slice []minPersistentHeapElement[T],
-	val minPersistentHeapElement[T]) []minPersistentHeapElement[T] {
+	slice []persistentHeapElement[T],
+	val persistentHeapElement[T]) []persistentHeapElement[T] {
 	i := sort.Search(len(slice), func(i int) bool { return slice[i].value < val.value })
 	var empty T
 	slice = append(slice, *initPersistentHeapElement(empty, notAUid, false))
@@ -208,24 +206,32 @@ func cannotConvertToUintSlice(s string) error {
 type SimilarityType[T c.Float] struct {
 	indexType     string
 	distanceScore func(v, w []T, floatBits int) (T, error)
-	insortHeap    func(slice []minPersistentHeapElement[T], val minPersistentHeapElement[T]) []minPersistentHeapElement[T]
+	insortHeap    func(slice []persistentHeapElement[T], val persistentHeapElement[T]) []persistentHeapElement[T]
 	isBetterScore func(a, b T) bool
+	// isSimilarityMetric is true for metrics where higher values indicate better matches
+	// (e.g., cosine similarity, dot product). For distance metrics like euclidean,
+	// this is false because lower values indicate better matches.
+	isSimilarityMetric bool
 }
 
 func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	switch {
 	case indexType == Euclidean:
 		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
-			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
+			isSimilarityMetric: false}
 	case indexType == Cosine:
 		return SimilarityType[T]{indexType: Cosine, distanceScore: cosineSimilarity[T],
-			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T]}
+			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T],
+			isSimilarityMetric: true}
 	case indexType == DotProd:
 		return SimilarityType[T]{indexType: DotProd, distanceScore: dotProduct[T],
-			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T]}
+			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T],
+			isSimilarityMetric: true}
 	default:
 		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
-			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T]}
+			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
+			isSimilarityMetric: false}
 	}
 }
 
@@ -527,54 +533,108 @@ func (ph *persistentHNSW[T]) newPersistentEdgeKeyValueEntry(ctx context.Context,
 	return edge, nil
 }
 
-func (ph *persistentHNSW[T]) distance_betw(ctx context.Context, tc *TxnCache, inUuid, outUuid uint64, inVec,
-	outVec *[]T) T {
-	err := ph.getVecFromUid(outUuid, tc, outVec)
-	if err != nil {
-		log.Printf("[ERROR] While getting vector %s", err)
-		return -1
+func dedupeUidsPreserveOrder(uids []uint64) []uint64 {
+	if len(uids) <= 1 {
+		return uids
+	}
+	seen := make(map[uint64]struct{}, len(uids))
+	out := uids[:0]
+	for _, uid := range uids {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		out = append(out, uid)
+	}
+	return out
+}
+
+func worstScore[T c.Float](simType SimilarityType[T]) T {
+	// For distance metrics, lower is better so the worst score is +Inf
+	// For similarity metrics, higher is better so the worst score is -Inf
+	if simType.isSimilarityMetric {
+		return T(math.Inf(-1))
+	}
+	return T(math.Inf(1))
+}
+
+func (ph *persistentHNSW[T]) uidScoreForNode(
+	tc *TxnCache,
+	node uint64,
+	nodeVec []T,
+	uid uint64,
+	outVec *[]T,
+) T {
+	score := worstScore(ph.simType)
+	if uid == notAUid || uid == node {
+		return score
+	}
+	if err := ph.getVecFromUid(uid, tc, outVec); err == nil && len(*outVec) != 0 {
+		if s, err := ph.simType.distanceScore(nodeVec, *outVec, ph.floatBits); err == nil {
+			score = s
+		}
+	}
+	return score
+}
+
+// insertUidsTopKByScore incrementally maintains a best-to-worst sorted uid list capped at `keep`.
+// It assumes `edges` is already sorted best-to-worst according to simType semantics.
+func insertUidsTopKByScore[T c.Float](
+	edges []uint64,
+	newUids []uint64,
+	keep int,
+	simType SimilarityType[T],
+	score func(uint64) T,
+) []uint64 {
+	if keep <= 0 {
+		return []uint64{}
+	}
+	if len(edges) > keep {
+		edges = edges[:keep]
 	}
 
-	d, err := ph.simType.distanceScore(*inVec, *outVec, ph.floatBits)
-	if err != nil {
-		log.Printf("[ERROR] While getting vector %s", err)
-		return -1
+	seen := make(map[uint64]struct{}, len(edges)+len(newUids))
+	filtered := edges[:0]
+	for _, uid := range edges {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		filtered = append(filtered, uid)
 	}
-	return d
-}
+	edges = filtered
 
-type HeapDataHolder struct {
-	data    []uint64
-	compare func(a, b uint64) bool
-}
+	insertSorted := func(edges []uint64, uid uint64) []uint64 {
+		scoreNew := score(uid)
+		pos := sort.Search(len(edges), func(i int) bool {
+			return simType.isBetterScore(scoreNew, score(edges[i]))
+		})
+		edges = append(edges, 0)
+		copy(edges[pos+1:], edges[pos:])
+		edges[pos] = uid
+		return edges
+	}
 
-// Len is the number of elements in the collection.
-func (h HeapDataHolder) Len() int {
-	return len(h.data)
-}
-
-// Less reports whether the element with index i should sort before the element with index j.
-func (h HeapDataHolder) Less(i, j int) bool {
-	return h.compare(h.data[i], h.data[j])
-}
-
-// Swap swaps the elements with indexes i and j.
-func (h HeapDataHolder) Swap(i, j int) {
-	h.data[i], h.data[j] = h.data[j], h.data[i]
-}
-
-// Push adds an element to the heap.
-func (h *HeapDataHolder) Push(x interface{}) {
-	h.data = append(h.data, x.(uint64))
-}
-
-// Pop removes and returns the maximum element from the heap.
-func (h *HeapDataHolder) Pop() interface{} {
-	old := h.data
-	n := len(old)
-	x := old[n-1]
-	h.data = old[0 : n-1]
-	return x
+	for _, uid := range newUids {
+		if uid == notAUid {
+			continue
+		}
+		if _, ok := seen[uid]; ok {
+			continue
+		}
+		seen[uid] = struct{}{}
+		edges = insertSorted(edges, uid)
+		if len(edges) > keep {
+			edges = edges[:keep]
+		}
+	}
+	return edges
 }
 
 // addNeighbors adds the neighbors of the given uuid to the given level.
@@ -603,33 +663,66 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			}
 		}
 	}
-	var inVec, outVec []T
+	var inVec []T
+	inVecReady := false
+	var outVec []T
 	for level := range ph.maxLevels {
 		allLayerEdges[level], nnEdgesErr = ph.removeDeadNodes(allLayerEdges[level], tc)
 		if nnEdgesErr != nil {
 			return nil, nnEdgesErr
 		}
-		// This adds at most efConstruction number of edges for each layer for this node
-		allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
-		if len(allLayerEdges[level]) > ph.efConstruction {
-			err := ph.getVecFromUid(uuid, tc, &inVec)
-			if err != nil {
-				log.Printf("[ERROR] While getting vector %s", err)
-			} else {
-				h := &HeapDataHolder{
-					data: allLayerEdges[level],
-					compare: func(i, j uint64) bool {
-						return ph.distance_betw(ctx, tc, uuid, i, &inVec, &outVec) >
-							ph.distance_betw(ctx, tc, uuid, j, &inVec, &outVec)
-					}}
 
-				for _, e := range allLayerNeighbors[level] {
-					heap.Push(h, e)
-					heap.Pop(h)
+		// Fast-path: if we're not adding any neighbours at this level, don't do any extra work.
+		// This matters because addNeighbors() is called for many nodes where only one layer
+		// actually changes (e.g. inbound edge updates during construction)
+		if len(allLayerNeighbors[level]) == 0 {
+			continue
+		}
+
+		// We maintain the invariant that allLayerEdges[level] is sorted best-to-worst
+		// (according to ph.simType semantics) and bounded by efConstruction.
+		//
+		// This lets us do incremental updates cheaply: for each new neighbor, compute its
+		// score once, binary-search insertion into the sorted list, then truncate.
+		if !inVecReady {
+			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
+				// Without the source vector we can't score edges reliably.
+				// Fall back to "append then truncate" after a cheap de-dupe.
+				allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
+				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
+				if len(allLayerEdges[level]) > ph.efConstruction {
+					allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+				}
+				continue
+			}
+			inVecReady = true
+		}
+
+		// Small local cache for scores computed during this call.
+		scoreCache := make(map[uint64]T, len(allLayerEdges[level])+len(allLayerNeighbors[level]))
+
+		getScore := func(uid uint64) T {
+			if s, ok := scoreCache[uid]; ok {
+				return s
+			}
+			s := ph.uidScoreForNode(tc, uuid, inVec, uid, &outVec)
+			scoreCache[uid] = s
+			return s
+		}
+
+		// Filter out self-loops here (helper only knows about notAUid).
+		newUids := allLayerNeighbors[level]
+		if uuid != notAUid {
+			dst := newUids[:0]
+			for _, uid := range newUids {
+				if uid != uuid {
+					dst = append(dst, uid)
 				}
 			}
-			allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+			newUids = dst
 		}
+
+		allLayerEdges[level] = insertUidsTopKByScore(allLayerEdges[level], newUids, ph.efConstruction, ph.simType, getScore)
 	}
 
 	// on every modification of the layer edges, add it to in mem map so you dont have to always be reading

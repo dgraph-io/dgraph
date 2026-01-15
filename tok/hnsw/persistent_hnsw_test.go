@@ -549,3 +549,293 @@ func TestBasicSearchPersistentFlatStorage(t *testing.T) {
 		}
 	}
 }
+
+// TestCandidateHeapMinHeap verifies that the min-heap (for distance metrics like euclidean)
+// pops elements in ascending order (smallest first).
+func TestCandidateHeapMinHeap(t *testing.T) {
+	elements := []persistentHeapElement[float64]{
+		{value: 0.5, index: 1},
+		{value: 0.1, index: 2},
+		{value: 0.9, index: 3},
+		{value: 0.3, index: 4},
+	}
+
+	// isSimilarityMetric=false means min-heap (for distance metrics)
+	heap := buildCandidateHeap(elements, false)
+
+	// Should pop in ascending order: 0.1, 0.3, 0.5, 0.9
+	expectedOrder := []float64{0.1, 0.3, 0.5, 0.9}
+	for i, expected := range expectedOrder {
+		if heap.Len() == 0 {
+			t.Fatalf("Heap empty before popping element %d", i)
+		}
+		elem := heap.Pop()
+		if elem.value != expected {
+			t.Errorf("Min-heap pop %d: expected value %v, got %v", i, expected, elem.value)
+		}
+	}
+
+	if heap.Len() != 0 {
+		t.Errorf("Expected heap to be empty, but has %d elements", heap.Len())
+	}
+}
+
+// TestCandidateHeapMaxHeap verifies that the max-heap (for similarity metrics like cosine)
+// pops elements in descending order (largest first).
+func TestCandidateHeapMaxHeap(t *testing.T) {
+	elements := []persistentHeapElement[float64]{
+		{value: 0.5, index: 1},
+		{value: 0.1, index: 2},
+		{value: 0.9, index: 3},
+		{value: 0.3, index: 4},
+	}
+
+	// isSimilarityMetric=true means max-heap (for similarity metrics)
+	heap := buildCandidateHeap(elements, true)
+
+	// Should pop in descending order: 0.9, 0.5, 0.3, 0.1
+	expectedOrder := []float64{0.9, 0.5, 0.3, 0.1}
+	for i, expected := range expectedOrder {
+		if heap.Len() == 0 {
+			t.Fatalf("Heap empty before popping element %d", i)
+		}
+		elem := heap.Pop()
+		if elem.value != expected {
+			t.Errorf("Max-heap pop %d: expected value %v, got %v", i, expected, elem.value)
+		}
+	}
+
+	if heap.Len() != 0 {
+		t.Errorf("Expected heap to be empty, but has %d elements", heap.Len())
+	}
+}
+
+// TestCandidateHeapPushPop verifies that Push and Pop work correctly for both heap types.
+func TestCandidateHeapPushPop(t *testing.T) {
+	t.Run("MinHeap", func(t *testing.T) {
+		heap := buildCandidateHeap([]persistentHeapElement[float64]{}, false)
+
+		heap.Push(persistentHeapElement[float64]{value: 0.5, index: 1})
+		heap.Push(persistentHeapElement[float64]{value: 0.2, index: 2})
+		heap.Push(persistentHeapElement[float64]{value: 0.8, index: 3})
+
+		// Min-heap should pop smallest first
+		elem := heap.Pop()
+		if elem.value != 0.2 {
+			t.Errorf("Expected 0.2, got %v", elem.value)
+		}
+		elem = heap.Pop()
+		if elem.value != 0.5 {
+			t.Errorf("Expected 0.5, got %v", elem.value)
+		}
+		elem = heap.Pop()
+		if elem.value != 0.8 {
+			t.Errorf("Expected 0.8, got %v", elem.value)
+		}
+	})
+
+	t.Run("MaxHeap", func(t *testing.T) {
+		heap := buildCandidateHeap([]persistentHeapElement[float64]{}, true)
+
+		heap.Push(persistentHeapElement[float64]{value: 0.5, index: 1})
+		heap.Push(persistentHeapElement[float64]{value: 0.2, index: 2})
+		heap.Push(persistentHeapElement[float64]{value: 0.8, index: 3})
+
+		// Max-heap should pop largest first
+		elem := heap.Pop()
+		if elem.value != 0.8 {
+			t.Errorf("Expected 0.8, got %v", elem.value)
+		}
+		elem = heap.Pop()
+		if elem.value != 0.5 {
+			t.Errorf("Expected 0.5, got %v", elem.value)
+		}
+		elem = heap.Pop()
+		if elem.value != 0.2 {
+			t.Errorf("Expected 0.2, got %v", elem.value)
+		}
+	})
+}
+
+// TestSimilarityTypeIsSimilarityMetric verifies that GetSimType sets isSimilarityMetric correctly.
+func TestSimilarityTypeIsSimilarityMetric(t *testing.T) {
+	tests := []struct {
+		indexType         string
+		expectedIsSimilar bool
+	}{
+		{Euclidean, false},
+		{Cosine, true},
+		{DotProd, true},
+		{"unknown", false}, // defaults to euclidean
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.indexType, func(t *testing.T) {
+			simType := GetSimType[float64](tc.indexType, 64)
+			if simType.isSimilarityMetric != tc.expectedIsSimilar {
+				t.Errorf("GetSimType(%q).isSimilarityMetric = %v, expected %v",
+					tc.indexType, simType.isSimilarityMetric, tc.expectedIsSimilar)
+			}
+		})
+	}
+}
+
+// TestEdgePruningKeepsBestNeighbors verifies that when edges are pruned during
+// graph construction, the BEST neighbors are kept (not the worst).
+// This test would have caught the bug where the HeapDataHolder comparison was
+// hardcoded to ">", which kept lowest similarities for cosine/dot-product.
+func TestEdgePruningKeepsBestNeighbors(t *testing.T) {
+	testCases := []struct {
+		name       string
+		metricType string
+		// For each metric, define scores and which should be kept
+		// Euclidean: lower is better, so keep [0.1, 0.2] from [0.1, 0.2, 0.8, 0.9]
+		// Cosine: higher is better, so keep [0.8, 0.9] from [0.1, 0.2, 0.8, 0.9]
+		scores       []float64
+		keepCount    int
+		expectedBest []float64 // the scores that should be kept
+	}{
+		{
+			name:         "Euclidean_KeepsLowest",
+			metricType:   Euclidean,
+			scores:       []float64{0.5, 0.1, 0.9, 0.2},
+			keepCount:    2,
+			expectedBest: []float64{0.1, 0.2}, // lowest distances
+		},
+		{
+			name:         "Cosine_KeepsHighest",
+			metricType:   Cosine,
+			scores:       []float64{0.5, 0.1, 0.9, 0.2},
+			keepCount:    2,
+			expectedBest: []float64{0.9, 0.5}, // highest similarities
+		},
+		{
+			name:         "DotProd_KeepsHighest",
+			metricType:   DotProd,
+			scores:       []float64{0.5, 0.1, 0.9, 0.2},
+			keepCount:    2,
+			expectedBest: []float64{0.9, 0.5}, // highest similarities
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			simType := GetSimType[float64](tc.metricType, 64)
+
+			// Create UIDs for each score
+			uids := make([]uint64, len(tc.scores))
+			scoreMap := make(map[uint64]float64)
+			for i, score := range tc.scores {
+				uids[i] = uint64(i + 1)
+				scoreMap[uids[i]] = score
+			}
+
+			scoreFn := func(uid uint64) float64 { return scoreMap[uid] }
+			keptUids := insertUidsTopKByScore(nil, uids, tc.keepCount, simType, scoreFn)
+			// Check that the remaining elements are the best ones
+			keptScores := make([]float64, len(keptUids))
+			for i, uid := range keptUids {
+				keptScores[i] = scoreMap[uid]
+			}
+
+			// Sort both for comparison
+			slices.Sort(keptScores)
+			expectedSorted := make([]float64, len(tc.expectedBest))
+			copy(expectedSorted, tc.expectedBest)
+			slices.Sort(expectedSorted)
+
+			if !slices.Equal(keptScores, expectedSorted) {
+				t.Errorf("Expected to keep scores %v, but got %v", expectedSorted, keptScores)
+			}
+		})
+	}
+}
+
+// TestSearchReturnsCorrectOrderForAllMetrics verifies that search returns
+// the most relevant results for each metric type.
+func TestSearchReturnsCorrectOrderForAllMetrics(t *testing.T) {
+	// Test data: vectors that have clear ordering differences
+	// Vec A (uid=10): [1, 0, 0] - unit vector along x-axis
+	// Vec B (uid=20): [0.9, 0.1, 0] - close to x-axis (high cosine sim to A)
+	// Vec C (uid=30): [0.1, 0.9, 0] - far from x-axis (low cosine sim to A)
+	// Query: [1, 0, 0]
+
+	testCases := []struct {
+		name       string
+		metricType string
+	}{
+		{"Euclidean", Euclidean},
+		{"Cosine", Cosine},
+		{"DotProd", DotProd},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			emptyTsDbs()
+
+			// Use "0-" prefix like other tests (namespace format)
+			pred := "0-test" + tc.metricType
+			flatPh := &persistentHNSW[float64]{
+				maxLevels:      1,
+				efConstruction: 16,
+				efSearch:       12,
+				pred:           pred,
+				vecEntryKey:    ConcatStrings(pred, VecEntry),
+				vecKey:         ConcatStrings(pred, VecKeyword),
+				vecDead:        ConcatStrings(pred, VecDead),
+				floatBits:      64,
+				simType:        GetSimType[float64](tc.metricType, 64),
+				nodeAllEdges:   make(map[uint64][][]uint64),
+			}
+
+			// Insert vectors
+			inserts := []insertToPersistentFlatStorageTest{
+				{
+					tc:     NewTxnCache(&inMemTxn{startTs: 0, commitTs: 1}, 0),
+					inUuid: uint64(10),
+					inVec:  []float64{1.0, 0.0, 0.0},
+				},
+				{
+					tc:     NewTxnCache(&inMemTxn{startTs: 1, commitTs: 2}, 1),
+					inUuid: uint64(20),
+					inVec:  []float64{0.9, 0.1, 0.0},
+				},
+				{
+					tc:     NewTxnCache(&inMemTxn{startTs: 2, commitTs: 3}, 2),
+					inUuid: uint64(30),
+					inVec:  []float64{0.1, 0.9, 0.0},
+				},
+			}
+
+			for _, in := range inserts {
+				for i := range tsDbs {
+					key := DataKey(flatPh.pred, in.inUuid)
+					tsDbs[i].inMemTestDb[string(key[:])] = floatArrayAsBytes(in.inVec)
+				}
+				_, err := flatPh.Insert(context.TODO(), in.tc, in.inUuid, in.inVec)
+				if err != nil {
+					t.Fatalf("Insert failed: %v", err)
+				}
+			}
+
+			// Search for vector closest to [1, 0, 0]
+			query := []float64{1.0, 0.0, 0.0}
+			qc := NewQueryCache(&inMemLocalCache{readTs: 10}, 10)
+			results, err := flatPh.Search(context.TODO(), qc, query, 2, index.AcceptAll[float64])
+			if err != nil {
+				t.Fatalf("Search failed: %v", err)
+			}
+
+			if len(results) == 0 {
+				t.Fatal("Expected at least one result")
+			}
+
+			// The first result should be the query vector itself (uid=10) or
+			// the closest match (uid=20). Both are acceptable as "top".
+			// What matters is that uid=30 is NOT first (it's the farthest).
+			if results[0] == 30 {
+				t.Errorf("Expected uid 10 or 20 to be first, but got uid 30 (farthest vector)")
+			}
+		})
+	}
+}
