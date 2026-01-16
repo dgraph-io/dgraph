@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -790,7 +789,7 @@ func removeAllTestContainers() {
 	var wg sync.WaitGroup
 	for _, c := range containers {
 		wg.Add(1)
-		go func(c types.Container) {
+		go func(c container.Summary) {
 			defer wg.Done()
 			o := container.StopOptions{Timeout: &dur}
 			err := cli.ContainerStop(ctxb, c.ID, o)
