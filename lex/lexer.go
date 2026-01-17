@@ -99,7 +99,7 @@ func (p *ItemIterator) Prev() bool {
 	return false
 }
 
-// Restore restores the the iterator to position specified.
+// Restore restores the iterator to position specified.
 func (p *ItemIterator) Restore(pos int) {
 	x.AssertTrue(pos <= len(p.l.items) && pos >= -1)
 	p.idx = pos

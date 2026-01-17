@@ -647,7 +647,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		// TODO (pawan) - Why do we do this? Looks like it it is only useful for language.
+		// TODO (pawan) - Why do we do this? Looks like it is only useful for language.
 		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}
