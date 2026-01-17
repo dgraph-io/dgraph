@@ -1232,7 +1232,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 	return nil, it.Errorf("Invalid schema block.")
 }
 
-// parseDqlVariables parses the the DQL variable declaration.
+// parseDqlVariables parses the DQL variable declaration.
 func parseDqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
@@ -1824,7 +1824,7 @@ L:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
 				case uidFunc:
-					// TODO (Anurag): See if is is possible to support uid(1,2,3) when
+					// TODO (Anurag): See if it is possible to support uid(1,2,3) when
 					// uid is nested inside a function like @filter(uid_in(predicate, uid()))
 					if len(nestedFunc.NeedsVar) != 1 {
 						return nil,
