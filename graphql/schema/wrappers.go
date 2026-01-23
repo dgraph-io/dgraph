@@ -76,38 +76,40 @@ type EntityRepresentations struct {
 
 // Query/Mutation types and arg names
 const (
-	GetQuery                      QueryType    = "get"
-	SimilarByIdQuery              QueryType    = "querySimilarById"
-	SimilarByEmbeddingQuery       QueryType    = "querySimilarByEmbedding"
-	FilterQuery                   QueryType    = "query"
-	AggregateQuery                QueryType    = "aggregate"
-	SchemaQuery                   QueryType    = "schema"
-	EntitiesQuery                 QueryType    = "entities"
-	PasswordQuery                 QueryType    = "checkPassword"
-	HTTPQuery                     QueryType    = "http"
-	DQLQuery                      QueryType    = "dql"
-	NotSupportedQuery             QueryType    = "notsupported"
-	AddMutation                   MutationType = "add"
-	UpdateMutation                MutationType = "update"
-	DeleteMutation                MutationType = "delete"
-	HTTPMutation                  MutationType = "http"
-	NotSupportedMutation          MutationType = "notsupported"
-	IDType                                     = "ID"
-	InputArgName                               = "input"
-	UpsertArgName                              = "upsert"
-	FilterArgName                              = "filter"
-	SimilarByArgName                           = "by"
-	SimilarTopKArgName                         = "topK"
-	SimilarVectorArgName                       = "vector"
-	EmbeddingEnumSuffix                        = "Embedding"
-	SimilarQueryPrefix                         = "querySimilar"
-	SimilarByIdQuerySuffix                     = "ById"
-	SimilarByEmbeddingQuerySuffix              = "ByEmbedding"
-	SimilarQueryResultTypeSuffix               = "WithDistance"
-	SimilarQueryDistanceFieldName              = "vector_distance"
-	SimilarSearchMetricEuclidean               = "euclidean"
-	SimilarSearchMetricDotProduct              = "dotproduct"
-	SimilarSearchMetricCosine                  = "cosine"
+	GetQuery                        QueryType    = "get"
+	SimilarByIdQuery                QueryType    = "querySimilarById"
+	SimilarByEmbeddingQuery         QueryType    = "querySimilarByEmbedding"
+	FilterQuery                     QueryType    = "query"
+	AggregateQuery                  QueryType    = "aggregate"
+	SchemaQuery                     QueryType    = "schema"
+	EntitiesQuery                   QueryType    = "entities"
+	PasswordQuery                   QueryType    = "checkPassword"
+	HTTPQuery                       QueryType    = "http"
+	DQLQuery                        QueryType    = "dql"
+	NotSupportedQuery               QueryType    = "notsupported"
+	AddMutation                     MutationType = "add"
+	UpdateMutation                  MutationType = "update"
+	DeleteMutation                  MutationType = "delete"
+	HTTPMutation                    MutationType = "http"
+	NotSupportedMutation            MutationType = "notsupported"
+	IDType                                       = "ID"
+	InputArgName                                 = "input"
+	UpsertArgName                                = "upsert"
+	FilterArgName                                = "filter"
+	SimilarByArgName                             = "by"
+	SimilarTopKArgName                           = "topK"
+	SimilarVectorArgName                         = "vector"
+	SimilarEfArgName                             = "ef"
+	SimilarDistanceThresholdArgName              = "distance_threshold"
+	EmbeddingEnumSuffix                          = "Embedding"
+	SimilarQueryPrefix                           = "querySimilar"
+	SimilarByIdQuerySuffix                       = "ById"
+	SimilarByEmbeddingQuerySuffix                = "ByEmbedding"
+	SimilarQueryResultTypeSuffix                 = "WithDistance"
+	SimilarQueryDistanceFieldName                = "vector_distance"
+	SimilarSearchMetricEuclidean                 = "euclidean"
+	SimilarSearchMetricDotProduct                = "dotproduct"
+	SimilarSearchMetricCosine                    = "cosine"
 )
 
 // Schema represents a valid GraphQL schema
@@ -1388,7 +1390,9 @@ func (f *field) IDArgValue() (xids map[string]string, uid uint64, err error) {
 		if (idField == nil || arg.Name != idField.Name()) &&
 			(passwordField == nil || arg.Name != passwordField.Name()) &&
 			(queryType(f.field.Name, nil) != SimilarByIdQuery ||
-				(arg.Name != SimilarTopKArgName && arg.Name != SimilarByArgName && arg.Name != "filter")) {
+				(arg.Name != SimilarTopKArgName && arg.Name != SimilarByArgName &&
+					arg.Name != SimilarEfArgName && arg.Name != SimilarDistanceThresholdArgName &&
+					arg.Name != "filter")) {
 			xidArgName = arg.Name
 		}
 
