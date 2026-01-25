@@ -233,7 +233,9 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 		return &emptyPayload, errors.Errorf("While waiting for txn ts: %d. Error: %v", in.TxnTs, err)
 	}
 
-	gid, err := groups().BelongsTo(in.Predicate)
+	// For predicate move, get label from stored schema
+	label, _ := schema.State().GetLabel(context.Background(), in.Predicate)
+	gid, err := groups().BelongsTo(in.Predicate, label)
 	switch {
 	case err != nil:
 		return &emptyPayload, err

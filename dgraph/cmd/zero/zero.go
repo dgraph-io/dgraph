@@ -439,8 +439,13 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
 	proposal.Tablets = make([]*pb.Tablet, 0)
+
+	// Acquire read lock for label-related lookups
+	s.RLock()
 	for _, t := range unknownTablets {
-		if x.IsReservedPredicate(t.Predicate) {
+		glog.Infof("Zero.Inform: routing tablet %s (label=%q, groupId=%d)", t.Predicate, t.Label, t.GroupId)
+		switch {
+		case x.IsReservedPredicate(t.Predicate):
 			// Force all the reserved predicates to be allocated to group 1.
 			// This is to make it easier to stream ACL updates to all alpha servers
 			// since they only need to open one pipeline to receive updates for all
@@ -448,10 +453,29 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 			// This will also make it easier to restore the reserved predicates after
 			// a DropAll operation.
 			t.GroupId = 1
+		case t.Label != "":
+			{
+				// Labeled predicate: route to matching labeled group
+				gid, err := s.labelGroupId(t.Label)
+				if err != nil {
+					s.RUnlock()
+					return nil, err
+				}
+				glog.Infof("Zero.Inform: labeled predicate %s (label=%q) routed to group %d", t.Predicate, t.Label, gid)
+				t.GroupId = gid
+			}
+		case s.isLabeledGroupId(t.GroupId):
+			// make sure unlabeled predicates don't go an labeled group
+			gid, err := s.firstUnlabeledGroupId()
+			if err != nil {
+				s.RUnlock()
+				return nil, err
+			}
+			t.GroupId = gid
 		}
 		proposal.Tablets = append(proposal.Tablets, t)
 	}
-
+	s.RUnlock()
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return nil, err
@@ -682,10 +706,20 @@ func (s *Server) ShouldServe(
 	tab := s.ServingTablet(tablet.Predicate)
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	if tab != nil && !tablet.Force {
-		// Someone is serving this tablet. Could be the caller as well.
-		// The caller should compare the returned group against the group it holds to check who's
-		// serving.
-		return tab, nil
+		// If the existing tablet has a different label than requested, we need to re-route.
+		// This can happen when a schema is applied with @label after the predicate was
+		// created without a label (e.g., during DropAll).
+		if tablet.Label != "" && tab.Label != tablet.Label {
+			glog.Infof("ShouldServe: tablet %s has label %q but request has label %q, re-routing",
+				tablet.Predicate, tab.Label, tablet.Label)
+			// Fall through to re-assign the tablet with the new label
+			// The handleTablet function will allow this because labels differ
+		} else {
+			// Someone is serving this tablet. Could be the caller as well.
+			// The caller should compare the returned group against the group it holds to check who's
+			// serving.
+			return tab, nil
+		}
 	}
 
 	// Read-only requests should return an empty tablet instead of asking zero
@@ -697,7 +731,10 @@ func (s *Server) ShouldServe(
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
 
-	if x.IsReservedPredicate(tablet.Predicate) {
+	// Acquire read lock for label-related lookups
+	s.RLock()
+	switch {
+	case x.IsReservedPredicate(tablet.Predicate):
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
 		// since they only need to open one pipeline to receive updates for all
@@ -705,7 +742,25 @@ func (s *Server) ShouldServe(
 		// This will also make it easier to restore the reserved predicates after
 		// a DropAll operation.
 		tablet.GroupId = 1
+	case tablet.Label != "":
+		// Labeled predicate: route to matching labeled group
+		gid, err := s.labelGroupId(tablet.Label)
+		if err != nil {
+			s.RUnlock()
+			return nil, err
+		}
+		glog.Infof("ShouldServe: labeled predicate %s (label=%q) routed to group %d", tablet.Predicate, tablet.Label, gid)
+		tablet.GroupId = gid
+	case s.isLabeledGroupId(tablet.GroupId):
+		// Make sure unlabeled predicates don't go to a labeled group
+		gid, err := s.firstUnlabeledGroupId()
+		if err != nil {
+			s.RUnlock()
+			return nil, err
+		}
+		tablet.GroupId = gid
 	}
+	s.RUnlock()
 	proposal.Tablet = tablet
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
@@ -861,4 +916,48 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 		return &pb.MembershipState{}, nil
 	}
 	return ms, nil
+}
+
+// groupLabel returns the label for a group (from first labeled member found)
+func (s *Server) groupLabel(gid uint32) string {
+	s.AssertRLock()
+	group := s.state.Groups[gid]
+	if group == nil {
+		return ""
+	}
+	for _, member := range group.Members {
+		if member.Label != "" {
+			return member.Label
+		}
+	}
+	return ""
+}
+
+// labelGroupId the group ID that has the given label, or 0 if none
+func (s *Server) labelGroupId(label string) (uint32, error) {
+	s.AssertRLock()
+	for gid, group := range s.state.Groups {
+		for _, member := range group.Members {
+			if member.Label == label {
+				return gid, nil
+			}
+		}
+	}
+	return 0, errors.Errorf("No alpha group with label '%s' found", label)
+}
+
+// isLabeledGroupId returns true if any member in the group has a label
+func (s *Server) isLabeledGroupId(gid uint32) bool {
+	s.AssertRLock()
+	return s.groupLabel(gid) != ""
+}
+
+func (s *Server) firstUnlabeledGroupId() (uint32, error) {
+	s.AssertRLock()
+	for gid := range s.state.Groups {
+		if !s.isLabeledGroupId(gid) {
+			return gid, nil
+		}
+	}
+	return 0, errors.Errorf("No unlabeled alpha groups exist.")
 }

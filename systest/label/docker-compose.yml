@@ -1,0 +1,73 @@
+# Docker compose for label-based sharding integration tests
+# Setup: 3 alphas in different groups with different labels
+#   - alpha1: group=1, no label (serves unlabeled predicates)
+#   - alpha2: group=2, --label=secret (serves @label(secret) predicates)
+#   - alpha3: group=3, --label=top_secret (serves @label(top_secret) predicates)
+#
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:local
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+      - "8080"
+      - "9080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2
+      --raft "group=1" --security "whitelist=0.0.0.0/0;"
+  alpha2:
+    image: dgraph/dgraph:local
+    working_dir: /data/alpha2
+    labels:
+      cluster: test
+    ports:
+      - "8080"
+      - "9080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr -v=2
+      --raft "group=2" --label=secret --security "whitelist=0.0.0.0/0;"
+  alpha3:
+    image: dgraph/dgraph:local
+    working_dir: /data/alpha3
+    labels:
+      cluster: test
+    ports:
+      - "8080"
+      - "9080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2
+      --raft "group=3" --label=top_secret --security "whitelist=0.0.0.0/0;"
+  zero1:
+    image: dgraph/dgraph:local
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+      - "5080"
+      - "6080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false;" --raft="idx=1;"
+      --my=zero1:5080 --replicas=1 --logtostderr -v=2 --bindall
+volumes: {}

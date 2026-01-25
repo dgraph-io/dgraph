@@ -140,6 +140,13 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if tab == nil {
 		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
+	dstGroupLabel := s.groupLabel(dstGroup)
+	if dstGroupLabel != tab.Label {
+		// Don't allow a predicate to be moved to a group that doesn't share it's label.
+		// (label will be empty string on either if unassigned)
+		return errors.Errorf("Unable to move predicate [%v] with label '%s' to group with label '%s'",
+			predicate, tab.Label, dstGroupLabel)
+	}
 	msg := fmt.Sprintf("Going to move predicate: [%v], size: [ondisk: %v, uncompressed: %v]"+
 		" from group %d to %d\n", predicate, humanize.IBytes(uint64(tab.OnDiskBytes)),
 		humanize.IBytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup)
@@ -266,11 +273,14 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		size := int64(0)
 		group := s.state.Groups[srcGroup]
 		for _, tab := range group.Tablets {
-			// Reserved predicates should always be in group 1 so do not re-balance them.
 			if x.IsReservedPredicate(tab.Predicate) {
+				// Reserved predicates should always be in group 1 so do not re-balance them.
 				continue
 			}
-
+			if tab.Label != "" {
+				// labeled predicates are pinned and should not be re-balanced either
+				continue
+			}
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
 			if tab.OnDiskBytes <= sizeDiff/2 && tab.OnDiskBytes > size {

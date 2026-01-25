@@ -335,6 +335,13 @@ func (n *node) handleTablet(tablet *pb.Tablet) error {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, tablet.Predicate)
+		} else if tablet.Label != "" && prev.Label != tablet.Label {
+			// Allow re-routing when labels differ. This happens when a schema with @label
+			// is applied after the predicate was created without a label.
+			glog.Infof("Tablet for attr: [%s] re-routing from group %d to %d due to label change (%q -> %q)",
+				tablet.Predicate, prev.GroupId, tablet.GroupId, prev.Label, tablet.Label)
+			originalGroup := state.Groups[prev.GroupId]
+			delete(originalGroup.Tablets, tablet.Predicate)
 		} else if prev.GroupId != tablet.GroupId {
 			glog.Infof(
 				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
