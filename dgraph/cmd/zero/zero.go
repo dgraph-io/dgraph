@@ -440,42 +440,45 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	var proposal pb.ZeroProposal
 	proposal.Tablets = make([]*pb.Tablet, 0)
 
-	// Acquire read lock for label-related lookups
-	s.RLock()
 	for _, t := range unknownTablets {
 		glog.Infof("Zero.Inform: routing tablet %s (label=%q, groupId=%d)", t.Predicate, t.Label, t.GroupId)
-		switch {
-		case x.IsReservedPredicate(t.Predicate):
-			// Force all the reserved predicates to be allocated to group 1.
-			// This is to make it easier to stream ACL updates to all alpha servers
-			// since they only need to open one pipeline to receive updates for all
-			// ACL predicates.
-			// This will also make it easier to restore the reserved predicates after
-			// a DropAll operation.
-			t.GroupId = 1
-		case t.Label != "":
-			{
+		// Use closure to ensure lock is always released via defer, even on error paths.
+		// This pattern prevents lock leaks if new error conditions are added later.
+		if err := func() error {
+			s.RLock()
+			defer s.RUnlock()
+			switch {
+			case x.IsReservedPredicate(t.Predicate):
+				// Force all the reserved predicates to be allocated to group 1.
+				// This is to make it easier to stream ACL updates to all alpha servers
+				// since they only need to open one pipeline to receive updates for all
+				// ACL predicates.
+				// This will also make it easier to restore the reserved predicates after
+				// a DropAll operation.
+				t.GroupId = 1
+			case t.Label != "":
 				// Labeled predicate: route to matching labeled group
 				gid, err := s.labelGroupId(t.Label)
 				if err != nil {
-					s.RUnlock()
-					return nil, err
+					return err
 				}
 				glog.Infof("Zero.Inform: labeled predicate %s (label=%q) routed to group %d", t.Predicate, t.Label, gid)
 				t.GroupId = gid
+			case s.isLabeledGroupId(t.GroupId):
+				// make sure unlabeled predicates don't go an labeled group
+				gid, err := s.firstUnlabeledGroupId()
+				if err != nil {
+					return err
+				}
+				t.GroupId = gid
 			}
-		case s.isLabeledGroupId(t.GroupId):
-			// make sure unlabeled predicates don't go an labeled group
-			gid, err := s.firstUnlabeledGroupId()
-			if err != nil {
-				s.RUnlock()
-				return nil, err
-			}
-			t.GroupId = gid
+			return nil
+		}(); err != nil {
+			return nil, err
 		}
 		proposal.Tablets = append(proposal.Tablets, t)
 	}
-	s.RUnlock()
+
 	if err := s.Node.proposeAndWait(ctx, &proposal); err != nil && err != errTabletAlreadyServed {
 		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return nil, err
@@ -705,6 +708,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
+	span.SetAttributes(attribute.String("tablet_label", tablet.Label))
 	if tab != nil && !tablet.Force {
 		// If the existing tablet has a different label than requested, we need to re-route.
 		// This can happen when a schema is applied with @label after the predicate was
@@ -919,6 +923,7 @@ func (s *Server) latestMembershipState(ctx context.Context) (*pb.MembershipState
 }
 
 // groupLabel returns the label for a group (from first labeled member found)
+// Caller must hold the read lock.
 func (s *Server) groupLabel(gid uint32) string {
 	s.AssertRLock()
 	group := s.state.Groups[gid]
@@ -931,6 +936,14 @@ func (s *Server) groupLabel(gid uint32) string {
 		}
 	}
 	return ""
+}
+
+// getGroupLabel is like groupLabel but handles its own locking.
+// Use this when calling from code that doesn't already hold the lock.
+func (s *Server) getGroupLabel(gid uint32) string {
+	s.RLock()
+	defer s.RUnlock()
+	return s.groupLabel(gid)
 }
 
 // labelGroupId the group ID that has the given label, or 0 if none

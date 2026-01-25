@@ -140,7 +140,7 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if tab == nil {
 		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
 	}
-	dstGroupLabel := s.groupLabel(dstGroup)
+	dstGroupLabel := s.getGroupLabel(dstGroup)
 	if dstGroupLabel != tab.Label {
 		// Don't allow a predicate to be moved to a group that doesn't share it's label.
 		// (label will be empty string on either if unassigned)
