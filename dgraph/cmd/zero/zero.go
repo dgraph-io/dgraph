@@ -458,15 +458,15 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 				t.GroupId = 1
 			case t.Label != "":
 				// Labeled predicate: route to matching labeled group
-				gid, err := s.labelGroupId(t.Label)
+				gid, err := s.labelGroup(t.Label)
 				if err != nil {
 					return err
 				}
 				glog.Infof("Zero.Inform: labeled predicate %s (label=%q) routed to group %d", t.Predicate, t.Label, gid)
 				t.GroupId = gid
-			case s.isLabeledGroupId(t.GroupId):
+			case s.isLabeledGroup(t.GroupId):
 				// make sure unlabeled predicates don't go an labeled group
-				gid, err := s.firstUnlabeledGroupId()
+				gid, err := s.firstUnlabeledGroup()
 				if err != nil {
 					return err
 				}
@@ -748,16 +748,16 @@ func (s *Server) ShouldServe(
 		tablet.GroupId = 1
 	case tablet.Label != "":
 		// Labeled predicate: route to matching labeled group
-		gid, err := s.labelGroupId(tablet.Label)
+		gid, err := s.labelGroup(tablet.Label)
 		if err != nil {
 			s.RUnlock()
 			return nil, err
 		}
 		glog.Infof("ShouldServe: labeled predicate %s (label=%q) routed to group %d", tablet.Predicate, tablet.Label, gid)
 		tablet.GroupId = gid
-	case s.isLabeledGroupId(tablet.GroupId):
+	case s.isLabeledGroup(tablet.GroupId):
 		// Make sure unlabeled predicates don't go to a labeled group
-		gid, err := s.firstUnlabeledGroupId()
+		gid, err := s.firstUnlabeledGroup()
 		if err != nil {
 			s.RUnlock()
 			return nil, err
@@ -946,8 +946,8 @@ func (s *Server) getGroupLabel(gid uint32) string {
 	return s.groupLabel(gid)
 }
 
-// labelGroupId the group ID that has the given label, or 0 if none
-func (s *Server) labelGroupId(label string) (uint32, error) {
+// labelGroup the group ID that has the given label, or 0 if none
+func (s *Server) labelGroup(label string) (uint32, error) {
 	s.AssertRLock()
 	for gid, group := range s.state.Groups {
 		for _, member := range group.Members {
@@ -959,16 +959,16 @@ func (s *Server) labelGroupId(label string) (uint32, error) {
 	return 0, errors.Errorf("No alpha group with label '%s' found", label)
 }
 
-// isLabeledGroupId returns true if any member in the group has a label
-func (s *Server) isLabeledGroupId(gid uint32) bool {
+// isLabeledGroup returns true if any member in the group has a label
+func (s *Server) isLabeledGroup(gid uint32) bool {
 	s.AssertRLock()
 	return s.groupLabel(gid) != ""
 }
 
-func (s *Server) firstUnlabeledGroupId() (uint32, error) {
+func (s *Server) firstUnlabeledGroup() (uint32, error) {
 	s.AssertRLock()
 	for gid := range s.state.Groups {
-		if !s.isLabeledGroupId(gid) {
+		if !s.isLabeledGroup(gid) {
 			return gid, nil
 		}
 	}
