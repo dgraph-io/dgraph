@@ -24,6 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjemalloc-dev \
     less \
     sysstat \
+    gnupg \
+    gnupg2 \
+    tar \
+    libpam0g \
     && rm -rf /var/lib/apt/lists/*
 
 ADD linux /usr/local/bin
