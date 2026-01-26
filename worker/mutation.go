@@ -19,15 +19,14 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/metadata"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/hooks"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -108,8 +107,8 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	t := time.Now()
 	plist, err := getFn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
-		span := trace.SpanFromContext(ctx)
-		span.AddEvent("Slow GetLru", trace.WithAttributes(
+		span := oteltrace.SpanFromContext(ctx)
+		span.AddEvent("Slow GetLru", oteltrace.WithAttributes(
 			attribute.Bool("slow-get", true),
 			attribute.String("duration", dur.String())))
 	}
@@ -598,49 +597,31 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 
 // AssignNsIdsOverNetwork sends a request to assign Namespace IDs to the current zero leader.
 func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().Leader(0)
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
-	num.Type = pb.Num_NS_ID
-	return c.AssignIds(ctx, num)
+	h := hooks.GetHooks()
+	return h.AssignNsIDs(ctx, num)
 }
 
 // AssignUidsOverNetwork sends a request to assign UIDs from the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
-	pl := groups().Leader(0)
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	h := hooks.GetHooks()
 	num.Type = pb.Num_UID
-	return c.AssignIds(ctx, num)
+	return h.AssignUIDs(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().connToZeroLeader()
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
-	return c.Timestamps(ctx, num)
+	h := hooks.GetHooks()
+	return h.AssignTimestamps(ctx, num)
 }
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.FillContext(tctx, groups().groupId(), isErrored)
+		// In embedded mode, use group 1 as the default
+		gid := uint32(1)
+		if !hooks.IsEnabled() {
+			gid = groups().groupId()
+		}
+		txn.FillContext(tctx, gid, isErrored)
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
@@ -650,38 +631,9 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 // the leader of the group gid for proposing.
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
-	if groups().ServesGroup(gid) {
-		res.ctx = &api.TxnContext{}
-		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
-		chr <- res
-		return
-	}
 
-	pl := groups().Leader(gid)
-	if pl == nil {
-		res.err = conn.ErrNoConnection
-		chr <- res
-		return
-	}
-
-	var tc *api.TxnContext
-	c := pb.NewWorkerClient(pl.Get())
-
-	ch := make(chan error, 1)
-	go func() {
-		var err error
-		tc, err = c.Mutate(ctx, m)
-		ch <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		res.err = ctx.Err()
-		res.ctx = nil
-	case err := <-ch:
-		res.err = err
-		res.ctx = tc
-	}
+	h := hooks.GetHooks()
+	res.ctx, res.err = h.ApplyMutations(ctx, m)
 	chr <- res
 }
 
@@ -768,9 +720,9 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			span.AddEvent("State information", trace.WithAttributes(
+			span.AddEvent("State information", oteltrace.WithAttributes(
 				attribute.String("state", groups().state.String())))
-			span.AddEvent("Group id zero for mutation", trace.WithAttributes(
+			span.AddEvent("Group id zero for mutation", oteltrace.WithAttributes(
 				attribute.String("mutation", mu.String())))
 			return tctx, errNonExistentTablet
 		}
@@ -895,30 +847,19 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		clientDiscard = true
 	}
 
-	pl := groups().Leader(0)
-	if pl == nil {
-		return 0, conn.ErrNoConnection
-	}
-
-	// Do de-duplication before sending the request to zero.
-	tc.Keys = x.Unique(tc.Keys)
-	tc.Preds = x.Unique(tc.Preds)
-
-	zc := pb.NewZeroClient(pl.Get())
-	tctx, err := zc.CommitOrAbort(ctx, tc)
-
+	h := hooks.GetHooks()
+	tctx, err := h.CommitOrAbort(ctx, tc)
 	if err != nil {
-		span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
+		span.AddEvent("Error in embedded CommitOrAbort", oteltrace.WithAttributes(
 			attribute.String("error", err.Error())))
 		return 0, err
 	}
-	span.AddEvent("Commit status", trace.WithAttributes(
+	span.AddEvent("Embedded commit status", oteltrace.WithAttributes(
 		attribute.Int64("commitTs", int64(tctx.CommitTs)),
 		attribute.Bool("committed", tctx.CommitTs > 0)))
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
 		if !clientDiscard {
-			// The server aborted the txn (not the client)
 			ostats.Record(ctx, x.TxnAborts.M(1))
 		}
 		return 0, dgo.ErrAborted
