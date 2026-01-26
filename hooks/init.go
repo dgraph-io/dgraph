@@ -7,7 +7,7 @@ package hooks
 
 // This package provides configuration and hooks for running Dgraph in embedded mode.
 // The actual initialization functions that would create import cycles are intentionally
-// left to be called directly by the host application (e.g., modusGraph) using the
+// left to be called directly by the host application using the
 // individual packages (edgraph, worker, posting, schema, x).
 //
 // Usage:
