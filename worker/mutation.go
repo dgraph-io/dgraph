@@ -850,11 +850,11 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	h := hooks.GetHooks()
 	tctx, err := h.CommitOrAbort(ctx, tc)
 	if err != nil {
-		span.AddEvent("Error in embedded CommitOrAbort", oteltrace.WithAttributes(
+		span.AddEvent("Error in CommitOrAbort", oteltrace.WithAttributes(
 			attribute.String("error", err.Error())))
 		return 0, err
 	}
-	span.AddEvent("Embedded commit status", oteltrace.WithAttributes(
+	span.AddEvent("Commit status", oteltrace.WithAttributes(
 		attribute.Int64("commitTs", int64(tctx.CommitTs)),
 		attribute.Bool("committed", tctx.CommitTs > 0)))
 
