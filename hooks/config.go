@@ -118,5 +118,5 @@ func GetHooks() ZeroHooks {
 	if h := defaultZeroHooks.Load(); h != nil {
 		return h.(ZeroHooks)
 	}
-	return nil
+	panic("no ZeroHooks configured - ensure worker package is imported or hooks.Enable() is called")
 }
