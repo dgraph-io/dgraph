@@ -19,7 +19,7 @@ import (
 	ostats "go.opencensus.io/stats"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	oteltrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -107,8 +107,8 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	t := time.Now()
 	plist, err := getFn(key)
 	if dur := time.Since(t); dur > time.Millisecond {
-		span := oteltrace.SpanFromContext(ctx)
-		span.AddEvent("Slow GetLru", oteltrace.WithAttributes(
+		span := trace.SpanFromContext(ctx)
+		span.AddEvent("Slow GetLru", trace.WithAttributes(
 			attribute.Bool("slow-get", true),
 			attribute.String("duration", dur.String())))
 	}
@@ -720,9 +720,9 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 	resCh := make(chan res, len(mutationMap))
 	for gid, mu := range mutationMap {
 		if gid == 0 {
-			span.AddEvent("State information", oteltrace.WithAttributes(
+			span.AddEvent("State information", trace.WithAttributes(
 				attribute.String("state", groups().state.String())))
-			span.AddEvent("Group id zero for mutation", oteltrace.WithAttributes(
+			span.AddEvent("Group id zero for mutation", trace.WithAttributes(
 				attribute.String("mutation", mu.String())))
 			return tctx, errNonExistentTablet
 		}
@@ -850,11 +850,11 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	h := hooks.GetHooks()
 	tctx, err := h.CommitOrAbort(ctx, tc)
 	if err != nil {
-		span.AddEvent("Error in CommitOrAbort", oteltrace.WithAttributes(
+		span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
 			attribute.String("error", err.Error())))
 		return 0, err
 	}
-	span.AddEvent("Commit status", oteltrace.WithAttributes(
+	span.AddEvent("Commit status", trace.WithAttributes(
 		attribute.Int64("commitTs", int64(tctx.CommitTs)),
 		attribute.Bool("committed", tctx.CommitTs > 0)))
 
