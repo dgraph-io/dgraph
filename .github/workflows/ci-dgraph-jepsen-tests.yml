@@ -5,7 +5,7 @@ on:
     - cron: 0 4 * * 3,6 # run twice weekly
 
 env:
-  GOPATH: /home/ubuntu/go
+  GOPATH: /home/runner/go
 
 permissions:
   contents: read
