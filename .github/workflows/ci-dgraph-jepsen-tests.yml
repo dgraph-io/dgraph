@@ -1,6 +1,7 @@
 name: ci-dgraph-jepsen-tests
 
 on:
+  workflow_dispatch: # allows manual trigger from GitHub UI
   schedule:
     - cron: 0 4 * * 3,6 # run twice weekly
 
