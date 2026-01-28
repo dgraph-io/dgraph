@@ -207,12 +207,15 @@ func jepsenServe() error {
 	checkServing := func() error {
 		url := jepsenURL()
 		resp, err := http.Get(url) // nolint:gosec
+		if err != nil {
+			return err
+		}
 		defer func() {
-			if err = resp.Body.Close(); err != nil {
-				glog.Errorf("Error while closing response body: %v", err)
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				glog.Errorf("Error while closing response body: %v", closeErr)
 			}
 		}()
-		return err
+		return nil
 	}
 	if err := checkServing(); err == nil {
 		return nil
