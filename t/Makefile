@@ -19,7 +19,7 @@ endif
 all: test
 
 .PHONY: check
-check: check-go check-docker check-gotestsum check-ack
+check: check-go check-jq check-docker check-gotestsum check-ack
 	@if [ "$(GOOS)" = "linux" ]; then \
 		which protoc > /dev/null 2>&1 || (echo "Error: protoc is not installed or not in PATH" && exit 1); \
 	fi
@@ -31,6 +31,10 @@ check: check-go check-docker check-gotestsum check-ack
 		echo "Error: dgraph binary not found at $(GOPATH_LINUX_BIN)/dgraph" && exit 1; \
 	fi
 	@echo "The dgraph binary is a Linux executable (as required)"
+
+.PHONY: check-jq
+check-jq:
+	@./scripts/check-jq.sh
 
 .PHONY: check-docker
 check-docker:
