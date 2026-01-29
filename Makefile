@@ -199,6 +199,16 @@ help: ## Show available targets and variables
 	@echo "  FUZZ      Enable fuzz testing (e.g., make test FUZZ=1)"
 	@echo "  FUZZTIME  Fuzz duration per package (e.g., make test FUZZ=1 FUZZTIME=60s)"
 	@echo ""
+	@printf "  Available SUITE values: "
+	@grep -o 'allowed := \[\]string{[^}]*}' t/t.go 2>/dev/null | \
+		sed 's/allowed := \[\]string{"\([^}]*\)"}/\1/' | \
+		tr -d '"' | tr ',' ' ' || echo "all, unit, core, systest, vector, ldbc, load"
+	@printf "  Available TAGS values:  "
+	@grep -roh "//go:build [a-z0-9]*" --include="*_test.go" . 2>/dev/null | \
+		awk '{print $$2}' | \
+		grep -E '^(integration|integration2|upgrade)$$' | \
+		sort -u | tr '\n' ' ' && echo ""
+	@echo ""
 	@echo "Examples:"
 	@echo "  make test TAGS=integration2 PKG=systest/vector        # integration2 tests for vector"
 	@echo "  make test TAGS=upgrade PKG=acl TEST=TestACL           # specific upgrade test"
