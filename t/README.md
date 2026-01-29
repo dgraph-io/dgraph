@@ -1,13 +1,13 @@
 # Dgraph Testing Framework
 
-Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage.
-Due to the comprehensive nature of these tests, a complete test run can take several hours,
-depending on your hardware. To manage this complex testing process efficiently, we've developed a
-custom test framework implemented in Go: [t.go](t.go). This specialized runner provides enhanced
-control and flexibility beyond what's available through the standard Go testing framework.
+> 📖 For a comprehensive guide to all Dgraph testing approaches (unit tests, build tags, test
+> conventions), see [TESTING.md](../TESTING.md) in the repository root.
 
-**Note:** This testing framework was built with Linux in mind. Non-Linux testing _can_ be
-achieved—see [Running tests on OSX](#running-tests-on-osx) below.
+Dgraph employs a sophisticated testing framework that includes extensive test coverage. Due to the
+comprehensive nature of these tests, a complete test run can take several hours, depending on your
+hardware. To manage this complex testing process efficiently, we've developed a custom test
+framework implemented in Go: [t.go](t.go). This specialized runner provides enhanced control and
+flexibility beyond what's available through the standard Go testing framework.
 
 ## Requirements
 
@@ -43,15 +43,9 @@ Or, `sudo apt update && sudo apt install -y protobuf-compiler`.
 
 ## Running Tests
 
-The tests use the Dgraph binary found at $(GOPATH)/bin/dgraph. To check your current $GOPATH:
-`go env GOPATH`.
-
----
-
-Use the `make install` target in the top-level Makefile to build a binary with your changes that
-need testing. Note for non-Linux users: because the binary is run in the Docker environment, it
-needs to be a valid Linux executable. See the section below on
-[Running tests on OSX](#running-tests-on-osx).
+Use the `make install` target in the top-level Makefile to build a binary with your changes. On
+non-Linux systems (macOS), this automatically builds both a native binary and a Linux binary for
+Docker-based tests.
 
 First, build the `t` program if you haven't already:
 
@@ -114,50 +108,23 @@ unique Docker configurations not covered by existing compose files, you should c
 directory with your tests also containing a custom docker-compose.yml file tailored to your specific
 testing requirements.
 
-## Running tests on OSX
+## Running tests on macOS
 
-The testing framework works well on Linux systems. Some additional steps need to be taken for the
-tests to run on OSX.
+The build system automatically handles cross-compilation. When you run `make install` on macOS, it
+builds both:
 
-### Install location
+- A native macOS binary at `$GOPATH/bin/dgraph`
+- A Linux binary at `$GOPATH/linux_<arch>/dgraph` (used by Docker tests)
 
-The Docker environment used to perform integration testing uses the dgraph binary found in
-$GOPATH/bin. This binary is required to be a GOOS=linux image. The following commands need to be run
-prior to starting tests to ensure the appropriate images are in place. Note, if your GOPATH variable
-is not set, run ``export GOPATH=`go env GOPATH` ``
+No additional setup is required. Just run:
 
 ```sh
-cd ..
-# builds the OSX version
 make install
-mv $GOPATH/bin/dgraph $GOPATH/bin/dgraph_osx
-# builds the linux version, take note of where the target reports it has written the dgraph executable
-GOOS=linux make install
-mv $GOPATH/bin/linux_arm64/dgraph $GOPATH/bin/dgraph
-cd t
-make check
+cd t && make check && go build .
+./t --pkg=<package>
 ```
 
-The following environment variables are needed when tests are executed:
+### Troubleshooting
 
-- GOPATH - needed to map the Dgraph image in Docker environments
-- DGRAPH_BINARY - the system-native (OSX) dgraph image, used by some tests not in the Docker
-  environment
-- DOCKER_HOST - on newer Docker Desktop versions, the Docker communications socket was moved to your
-  home folder
-
-Example:
-
-```sh
-export GOPATH=`go env GOPATH`
-export DGRAPH_BINARY=$GOPATH/bin/dgraph_osx
-export DOCKER_HOST=unix://${HOME}/.docker/run/docker.sock
-```
-
-At this point, the `t` executable can be run as described above.
-
-### Common Pitfalls
-
-If you see `exec format error` output from test runs, it is most likely because some tests attempt
-to run the Dgraph image copied from the filesystem in the Docker environment. This is a known issue
-with some integration tests.
+If tests fail to start, run `make check` to verify all dependencies are installed and the dgraph
+binaries are properly built.
