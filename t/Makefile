@@ -5,30 +5,63 @@
 
 # linux || darwin
 GOOS          ?= $(shell go env GOOS)
-GOPATH        ?= $(shell go env GOPATH)
-MIN_GO_VERSION = "1.24.3"
+export GOPATH ?= $(shell go env GOPATH)
+GOHOSTOS      := $(shell go env GOHOSTOS)
+GOHOSTARCH    := $(shell go env GOHOSTARCH)
+
+# On non-Linux systems, use a separate directory for Linux binaries
+ifeq ($(GOHOSTOS),linux)
+    export GOPATH_LINUX_BIN ?= $(GOPATH)/bin
+else
+    export GOPATH_LINUX_BIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
+endif
 
 all: test
 
 .PHONY: check
-check:
-	@which go > /dev/null 2>&1 || (echo "Error: Go is not installed or not in PATH" && exit 1)
-	@go version | awk '{split($$3,v,"go"); if(v[2] < $(MIN_GO_VERSION)) {print "Error: Go version must be $(MIN_GO_VERSION) or higher"; exit 1}}'
-	@which docker > /dev/null 2>&1 || (echo "Error: Docker is not installed or not in PATH" && exit 1)
-	@which gotestsum > /dev/null 2>&1 || (echo "Error: gotestsum is not installed or not in PATH" && exit 1)
+check: check-go check-docker check-gotestsum check-ack
 	@if [ "$(GOOS)" = "linux" ]; then \
 		which protoc > /dev/null 2>&1 || (echo "Error: protoc is not installed or not in PATH" && exit 1); \
 	fi
 	@echo "All dependencies are installed"
-	@if [ -f "$(GOPATH)/bin/dgraph" ]; then \
-		file $(GOPATH)/bin/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary is not a Linux executable" && exit 1); \
+	@echo "GOPATH_LINUX_BIN=$(GOPATH_LINUX_BIN)"
+	@if [ -f "$(GOPATH_LINUX_BIN)/dgraph" ]; then \
+		file $(GOPATH_LINUX_BIN)/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary at $(GOPATH_LINUX_BIN)/dgraph is not a Linux executable" && exit 1); \
 	else \
-		echo "Error: dgraph binary not found in $(GOPATH)/bin" && exit 1; \
+		echo "Error: dgraph binary not found at $(GOPATH_LINUX_BIN)/dgraph" && exit 1; \
 	fi
 	@echo "The dgraph binary is a Linux executable (as required)"
 
+.PHONY: check-docker
+check-docker:
+	@./scripts/check-docker.sh
+
+.PHONY: check-gotestsum
+check-gotestsum:
+	@./scripts/check-gotestsum.sh
+
+.PHONY: check-ack
+check-ack:
+	@./scripts/check-ack.sh
+
+.PHONY: check-protoc
+check-protoc:
+	@./scripts/check-protoc.sh
+
+.PHONY: check-go
+check-go:
+	@./scripts/check-go.sh
+
+.PHONY: check-brew
+check-brew:
+	@./scripts/check-brew.sh
+
+.PHONY: dgraph-installed
+dgraph-installed:
+	@$(MAKE) -C .. dgraph-installed
+
 .PHONY: test
-test: check
+test: dgraph-installed check
 # 	build the t.go binary
 	@go build .
 #	clean go testcache
