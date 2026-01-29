@@ -29,10 +29,10 @@ endif
 DGRAPH_VERSION ?= local
 
 .PHONY: all
-all: dgraph
+all: dgraph ## Build all targets
 
 .PHONY: dgraph
-dgraph:
+dgraph: ## Build dgraph binary
 	$(MAKE) -w -C $@ all
 
 .PHONY: dgraph-coverage
@@ -40,7 +40,7 @@ dgraph-coverage:
 	$(MAKE) -w -C dgraph test-coverage-binary
 
 .PHONY: version
-version:
+version: ## Show build version info
 	@echo Dgraph: ${BUILD_VERSION}
 	@echo Build: ${BUILD}
 	@echo Codename: ${BUILD_CODENAME}
@@ -49,7 +49,7 @@ version:
 	@echo Go version: $(shell go version)
 
 .PHONY: install
-install:
+install: ## Install dgraph binary
 	@echo "Installing dgraph ($(GOHOSTOS)/$(GOHOSTARCH))..."
 	@$(MAKE) -C dgraph install
 ifneq ($(GOHOSTOS),linux)
@@ -62,7 +62,7 @@ endif
 
 
 .PHONY: uninstall
-uninstall:
+uninstall: ## Uninstall dgraph binary
 	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
@@ -117,14 +117,18 @@ linux-dependency:
 	sudo apt-get -y install protobuf-compiler
 
 .PHONY: help
-help:
-	@echo
-	@echo Build commands:
-	@echo "  make [all]     - Build all targets [EE]"
-	@echo "  make dgraph    - Build dgraph binary"
-	@echo "  make install   - Install all targets"
-	@echo "  make uninstall - Uninstall known targets"
-	@echo "  make version   - Show current build info"
-	@echo "  make help      - This help"
-	@echo "  make test      - Make local image and run t.go"
-	@echo
+help: ## Show available targets and variables
+	@echo "Usage: make [target] [VAR=value ...]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Variables:"
+	@echo "  SUITE     Select t/ runner suite (unit, core, systest, vector, ldbc, load, all)"
+	@echo "  TAGS      Go build tags - bypasses t/ runner (integration, integration2, upgrade)"
+	@echo "  PKG       Limit to specific package (e.g., PKG=systest/export)"
+	@echo "  TEST      Run specific test function (e.g., TEST=TestGQLSchema)"
+	@echo "  FUZZ      Enable fuzz testing (FUZZ=1)"
+	@echo "  FUZZTIME  Fuzz duration per package (default: 300s)"
