@@ -273,7 +273,7 @@ go test -v ./types/... -run TestConvert
 
 **Expected output:**
 
-```
+```text
 === RUN   TestConvertToDefault
 --- PASS: TestConvertToDefault (0.00s)
 ...
@@ -843,7 +843,7 @@ Controlled by `DGRAPH_UPGRADE_MAIN_ONLY` environment variable:
 - Includes specific cloud commits
 - Runs in scheduled CI (comprehensive but slow)
 
-### How to Run
+### Running Upgrade Tests
 
 **Run all upgrade tests:**
 
@@ -1023,7 +1023,7 @@ func TestSomething(t *testing.T) {
 
 ### Anti-Patterns to Avoid
 
-#### ❌ Don't use time.Sleep for synchronization:
+#### ❌ Don't use time.Sleep for synchronization
 
 ```go
 // BAD
@@ -1033,7 +1033,7 @@ time.Sleep(5 * time.Second) // Flaky!
 require.NoError(t, c.HealthCheck(false)) // Wait for actual condition
 ```
 
-#### ❌ Don't share mutable state between tests:
+#### ❌ Don't share mutable state between tests
 
 ```go
 // BAD
@@ -1045,7 +1045,7 @@ func TestX(t *testing.T) {
 }
 ```
 
-#### ❌ Don't depend on test execution order:
+#### ❌ Don't depend on test execution order
 
 ```go
 // BAD - Test2 depends on Test1 running first
@@ -1059,7 +1059,7 @@ func TestQuery(t *testing.T) {
 }
 ```
 
-#### ❌ Don't ignore errors in tests:
+#### ❌ Don't ignore errors in tests
 
 ```go
 // BAD
@@ -1172,7 +1172,7 @@ Go's native fuzzing generates random inputs to find crashes, panics, or unexpect
 
 - `dql/parser_fuzz_test.go` - DQL query parser fuzzing
 
-### How to Run
+### Running Fuzz Tests
 
 ```bash
 # Run fuzz test for 5 minutes
