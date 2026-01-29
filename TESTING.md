@@ -309,7 +309,7 @@ make test
 
 # Common shortcuts
 make test-unit          # Unit tests only (no Docker)
-make test-integration   # Integration tests via t/ runner
+make test-integration   # Integration tests (go test with tags)
 make test-integration2  # Integration2 tests via dgraphtest
 make test-fuzz          # Fuzz testing (auto-discovers packages)
 make test-upgrade       # Upgrade tests

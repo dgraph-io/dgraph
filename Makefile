@@ -105,7 +105,7 @@ test-core: ## Run core tests
 	@SUITE=core $(MAKE) test
 
 .PHONY: test-integration
-test-integration: ## Run integration tests via t/ runner
+test-integration: ## Run integration tests (go test with tags)
 	@TAGS=integration $(MAKE) test
 
 .PHONY: test-integration2
