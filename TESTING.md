@@ -153,6 +153,10 @@ The check scripts validate:
 
 ### Required Tools
 
+> **Note:** You don't need to install these manually. Running `AUTO_INSTALL=true make check` from
+> the `t/` directory (or `AUTO_INSTALL=true make test` from the repo root) automatically installs
+> missing dependencies. The commands below are listed for reference.
+
 #### 1. Go (1.21+)
 
 ```bash
