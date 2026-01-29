@@ -97,47 +97,47 @@ else
 endif
 
 .PHONY: test-unit
-test-unit: ## Run unit tests (no Docker required)
+test-unit: ## Unit tests, no Docker (same as: 'SUITE=unit make test')
 	@SUITE=unit $(MAKE) test
 
 .PHONY: test-core
-test-core: ## Run core tests
+test-core: ## Core tests (same as: 'SUITE=core make test')
 	@SUITE=core $(MAKE) test
 
 .PHONY: test-integration
-test-integration: ## Run integration tests (go test with tags)
+test-integration: ## Integration tests (same as: 'TAGS=integration make test')
 	@TAGS=integration $(MAKE) test
 
 .PHONY: test-integration2
-test-integration2: ## Run integration2 tests via dgraphtest
+test-integration2: ## Integration2 tests via dgraphtest (same as: 'TAGS=integration2 make test')
 	@TAGS=integration2 $(MAKE) test
 
 .PHONY: test-upgrade
-test-upgrade: ## Run upgrade tests
+test-upgrade: ## Upgrade tests (same as: 'TAGS=upgrade make test')
 	@TAGS=upgrade $(MAKE) test
 
 .PHONY: test-systest
-test-systest: ## Run system integration tests
+test-systest: ## System integration tests (same as: 'SUITE=systest make test')
 	@SUITE=systest $(MAKE) test
 
 .PHONY: test-vector
-test-vector: ## Run vector search tests
+test-vector: ## Vector search tests (same as: 'SUITE=vector make test')
 	@SUITE=vector $(MAKE) test
 
 .PHONY: test-fuzz
-test-fuzz: ## Run fuzz tests (auto-discovers packages)
+test-fuzz: ## Fuzz tests, auto-discovers packages (same as: 'FUZZ=1 make test')
 	@FUZZ=1 $(MAKE) test
 
 .PHONY: test-ldbc
-test-ldbc: ## Run LDBC benchmark tests
+test-ldbc: ## LDBC benchmark tests (same as: 'SUITE=ldbc make test')
 	@SUITE=ldbc $(MAKE) test
 
 .PHONY: test-load
-test-load: ## Run heavy load tests
+test-load: ## Heavy load tests (same as: 'SUITE=load make test')
 	@SUITE=load $(MAKE) test
 
 .PHONY: test-benchmark
-test-benchmark: ## Run Go benchmarks
+test-benchmark: ## Go benchmarks (same as: 'go test -bench')
 	go test -bench=. -benchmem $(if $(PKG),./$(PKG)/...,./...)
 
 .PHONY: local-image
