@@ -34,7 +34,12 @@ This document outlines the steps needed to build and push a new release of Dgrap
 1. Verify the push
    1. Ensure the image tags are pushed to
       [https://hub.docker.com/r/dgraph/dgraph/tags](https://hub.docker.com/r/dgraph/dgraph/tags)
-   1. Run this command to verify the version: `docker run dgraph/dgraph:vXX.X.X dgraph version`
+   1. Run these commands to verify the version: 
+      ```
+      docker run --pull always dgraph/dgraph:vXX.X.X dgraph version
+      docker run --pull always dgraph/dgraph:latest dgraph version
+      docker run --pull always dgraph/standalone:latest dgraph version
+      ```
    1. The new CD workflow _should_ copy all artifacts to the release (there should be 10 artifacts
       with the release). If not, at the end of the CD workflow, you'll find the created artifacts
       that you'll need to download and then re-upload to the release, sigh... (click on the 'edit'
