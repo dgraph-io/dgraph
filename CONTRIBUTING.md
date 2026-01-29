@@ -141,14 +141,22 @@ Dgraph employs a ~~complex~~ sophisticated testing framework with extensive test
 test run can take several hours. We've developed a custom test runner in Go in the [t/](t)
 directory, providing control and flexibility beyond the standard Go testing framework.
 
-Unit tests for core packages can be run directly:
+The simplest way to run tests is via Make:
 
 ```bash
-go test github.com/dgraph-io/dgraph/v25/dql
+# Run all tests
+make test
+
+# Run specific test types
+make test-unit          # Unit tests only (no Docker)
+make test-integration2  # Integration2 tests via dgraphtest
+make test-upgrade       # Upgrade tests
+
+# Use variables for more control
+make test TAGS=integration2 PKG=systest/vector
 ```
 
-Other integration tests are defined in [.github/workflows](.github/workflows). See
-[t/README.md](t/README.md) for dependencies, runner flags, and cross-platform instructions.
+Run `make help` to see all available targets and variables.
 
 For a comprehensive testing guide, see [TESTING.md](TESTING.md).
 

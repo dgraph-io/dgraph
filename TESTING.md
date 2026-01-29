@@ -307,28 +307,34 @@ The simplest way to run tests:
 # Run all tests (default)
 make test
 
-# Common shortcuts
-make test-unit          # Unit tests only (no Docker)
-make test-integration   # Integration tests (go test with tags)
-make test-integration2  # Integration2 tests via dgraphtest
-make test-fuzz          # Fuzz testing (auto-discovers packages)
-make test-upgrade       # Upgrade tests
+# Common shortcuts (run 'make help' for full list)
+make test-unit          # Unit tests, no Docker (same as: 'SUITE=unit make test')
+make test-core          # Core tests (same as: 'SUITE=core make test')
+make test-integration   # Integration tests (same as: 'TAGS=integration make test')
+make test-integration2  # Integration2 tests via dgraphtest (same as: 'TAGS=integration2 make test')
+make test-upgrade       # Upgrade tests (same as: 'TAGS=upgrade make test')
+make test-systest       # System integration tests (same as: 'SUITE=systest make test')
+make test-vector        # Vector search tests (same as: 'SUITE=vector make test')
+make test-fuzz          # Fuzz tests, auto-discovers packages (same as: 'FUZZ=1 make test')
+make test-ldbc          # LDBC benchmark tests (same as: 'SUITE=ldbc make test')
+make test-load          # Heavy load tests (same as: 'SUITE=load make test')
+make test-benchmark     # Go benchmarks (same as: 'go test -bench')
 ```
 
-Run `make help` to see all available targets.
+Run `make help` to see all available targets and variables.
 
-### Using Environment Variables
+### Using Variables
 
-For more control, use environment variables with `make test`:
+For more control, pass variables to `make test`:
 
-| Variable   | Purpose                     | Example                        |
-| ---------- | --------------------------- | ------------------------------ |
-| `SUITE`    | Select t/ runner suite      | `SUITE=systest make test`      |
-| `TAGS`     | Go build tags (bypasses t/) | `TAGS=integration2 make test`  |
-| `PKG`      | Limit to specific package   | `PKG=systest/export make test` |
-| `TEST`     | Run specific test function  | `TEST=TestGQLSchema make test` |
-| `FUZZ`     | Enable fuzz testing         | `FUZZ=1 make test`             |
-| `FUZZTIME` | Fuzz duration per package   | `FUZZTIME=60s make test`       |
+| Variable   | Purpose                            | Example                         |
+| ---------- | ---------------------------------- | ------------------------------- |
+| `SUITE`    | Select t/ runner suite             | `make test SUITE=systest`       |
+| `TAGS`     | Go build tags - bypasses t/ runner | `make test TAGS=integration2`   |
+| `PKG`      | Limit to specific package          | `make test PKG=systest/export`  |
+| `TEST`     | Run specific test function         | `make test TEST=TestGQLSchema`  |
+| `FUZZ`     | Enable fuzz testing                | `make test FUZZ=1`              |
+| `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
 **Precedence:** `TAGS` > `FUZZ` > `SUITE` (first match wins)
 
@@ -336,16 +342,19 @@ For more control, use environment variables with `make test`:
 
 ```bash
 # Run integration2 tests for vector package
-TAGS=integration2 PKG=systest/vector make test
+make test TAGS=integration2 PKG=systest/vector
 
 # Run upgrade tests for ACL with specific test
-TAGS=upgrade TEST=TestACLUpgrade PKG=acl make test
+make test TAGS=upgrade PKG=acl TEST=TestACL
 
 # Run fuzz tests with custom duration
-FUZZ=1 FUZZTIME=60s PKG=dql make test
+make test FUZZ=1 PKG=dql FUZZTIME=30s
 
-# Run unit tests on a specific package
-PKG=types make test-unit
+# Run systest for backup package
+make test SUITE=systest PKG=systest/backup/filesystem
+
+# Benchmark a specific package
+make test-benchmark PKG=posting
 ```
 
 ---
