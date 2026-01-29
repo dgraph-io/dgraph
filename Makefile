@@ -74,8 +74,27 @@ dgraph-installed:
 	fi
 
 .PHONY: test
-test: dgraph-installed local-image
-	@$(MAKE) -C t test
+test: dgraph-installed local-image ## Run tests (see 'make help' for options)
+ifdef TAGS
+	@echo "Running tests with tags: $(TAGS)"
+	go test -v --tags="$(TAGS)" \
+		$(if $(TEST),--run="$(TEST)") \
+		$(if $(PKG),./$(PKG)/...,./...)
+else ifdef FUZZ
+	@echo "Discovering and running fuzz tests..."
+ifdef PKG
+	go test -v -fuzz=Fuzz -fuzztime=$(or $(FUZZTIME),300s) ./$(PKG)/...
+else
+	@grep -r "^func Fuzz" --include="*_test.go" -l . 2>/dev/null | \
+		xargs -I{} dirname {} | sort -u | while read dir; do \
+			echo "Fuzzing $$dir..."; \
+			go test -v -fuzz=Fuzz -fuzztime=$(or $(FUZZTIME),300s) ./$$dir/...; \
+		done
+endif
+else
+	@echo "Running test suite: $(or $(SUITE),all)"
+	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\")"
+endif
 
 .PHONY: image-local local-image
 image-local local-image:
