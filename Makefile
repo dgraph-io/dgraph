@@ -96,6 +96,50 @@ else
 	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\")"
 endif
 
+.PHONY: test-unit
+test-unit: ## Run unit tests (no Docker required)
+	@SUITE=unit $(MAKE) test
+
+.PHONY: test-core
+test-core: ## Run core tests
+	@SUITE=core $(MAKE) test
+
+.PHONY: test-integration
+test-integration: ## Run integration tests via t/ runner
+	@TAGS=integration $(MAKE) test
+
+.PHONY: test-integration2
+test-integration2: ## Run integration2 tests via dgraphtest
+	@TAGS=integration2 $(MAKE) test
+
+.PHONY: test-upgrade
+test-upgrade: ## Run upgrade tests
+	@TAGS=upgrade $(MAKE) test
+
+.PHONY: test-systest
+test-systest: ## Run system integration tests
+	@SUITE=systest $(MAKE) test
+
+.PHONY: test-vector
+test-vector: ## Run vector search tests
+	@SUITE=vector $(MAKE) test
+
+.PHONY: test-fuzz
+test-fuzz: ## Run fuzz tests (auto-discovers packages)
+	@FUZZ=1 $(MAKE) test
+
+.PHONY: test-ldbc
+test-ldbc: ## Run LDBC benchmark tests
+	@SUITE=ldbc $(MAKE) test
+
+.PHONY: test-load
+test-load: ## Run heavy load tests
+	@SUITE=load $(MAKE) test
+
+.PHONY: test-benchmark
+test-benchmark: ## Run Go benchmarks
+	go test -bench=. -benchmem $(if $(PKG),./$(PKG)/...,./...)
+
 .PHONY: image-local local-image
 image-local local-image:
 	@echo building local docker image
@@ -140,7 +184,7 @@ help: ## Show available targets and variables
 	@echo "Usage: make [target] [VAR=value ...]"
 	@echo ""
 	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 	@echo ""
