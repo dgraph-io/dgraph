@@ -1273,15 +1273,10 @@ The following items from the original wishlist have been implemented:
 - **✅ Prerequisites handled automatically:** Running `make test` validates dependencies and builds
   required binaries before running tests.
 
-### Remaining Ideas
+- **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
+  test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
 
-The following improvements could still enhance the developer experience:
-
-- **Unified test interface:** A single `make test` entry point that accepts arguments to run any
-  test type (unit, integration, integration2, upgrade, fuzz) without needing to navigate to
-  subdirectories or know specific incantations.
-
-- **Example commands that "just work":**
+- **✅ Example commands that "just work":** The following now work as expected:
 
   ```bash
   make test SUITE=systest
@@ -1289,6 +1284,10 @@ The following improvements could still enhance the developer experience:
   make test TAGS=upgrade PKG=acl
   make test TAGS=integration PKG=systest/plugin
   ```
+
+### Remaining Ideas
+
+The following improvements could still enhance the developer experience:
 
 - **Extend t/ runner:** Have the `t/` runner also handle unit and integration2 tests, providing a
   consistent interface for all test types.
