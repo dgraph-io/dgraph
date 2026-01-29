@@ -308,17 +308,17 @@ The simplest way to run tests:
 make test
 
 # Common shortcuts (run 'make help' for full list)
-make test-unit          # Unit tests, no Docker (same as: 'SUITE=unit make test')
-make test-core          # Core tests (same as: 'SUITE=core make test')
-make test-integration   # Integration tests (same as: 'TAGS=integration make test')
-make test-integration2  # Integration2 tests via dgraphtest (same as: 'TAGS=integration2 make test')
-make test-upgrade       # Upgrade tests (same as: 'TAGS=upgrade make test')
-make test-systest       # System integration tests (same as: 'SUITE=systest make test')
-make test-vector        # Vector search tests (same as: 'SUITE=vector make test')
-make test-fuzz          # Fuzz tests, auto-discovers packages (same as: 'FUZZ=1 make test')
-make test-ldbc          # LDBC benchmark tests (same as: 'SUITE=ldbc make test')
-make test-load          # Heavy load tests (same as: 'SUITE=load make test')
-make test-benchmark     # Go benchmarks (same as: 'go test -bench')
+make test-unit          # Unit tests, no Docker (i.e. 'SUITE=unit make test')
+make test-core          # Core tests (i.e. 'SUITE=core make test')
+make test-integration   # Integration tests (i.e. 'TAGS=integration make test')
+make test-integration2  # Integration2 tests via dgraphtest (i.e. 'TAGS=integration2 make test')
+make test-upgrade       # Upgrade tests (i.e. 'TAGS=upgrade make test')
+make test-systest       # System integration tests (i.e. 'SUITE=systest make test')
+make test-vector        # Vector search tests (i.e. 'SUITE=vector make test')
+make test-fuzz          # Fuzz tests, auto-discovers packages (i.e. 'FUZZ=1 make test')
+make test-ldbc          # LDBC benchmark tests (i.e. 'SUITE=ldbc make test')
+make test-load          # Heavy load tests (i.e. 'SUITE=load make test')
+make test-benchmark     # Go benchmarks (i.e. 'go test -bench')
 ```
 
 Run `make help` to see all available targets and variables.

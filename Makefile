@@ -97,47 +97,47 @@ else
 endif
 
 .PHONY: test-unit
-test-unit: ## Unit tests, no Docker (same as: 'SUITE=unit make test')
+test-unit: ## Unit tests, no Docker (i.e. 'SUITE=unit make test')
 	@SUITE=unit $(MAKE) test
 
 .PHONY: test-core
-test-core: ## Core tests (same as: 'SUITE=core make test')
+test-core: ## Core tests (i.e. 'SUITE=core make test')
 	@SUITE=core $(MAKE) test
 
 .PHONY: test-integration
-test-integration: ## Integration tests (same as: 'TAGS=integration make test')
+test-integration: ## Integration tests (i.e. 'TAGS=integration make test')
 	@TAGS=integration $(MAKE) test
 
 .PHONY: test-integration2
-test-integration2: ## Integration2 tests via dgraphtest (same as: 'TAGS=integration2 make test')
+test-integration2: ## Integration2 tests via dgraphtest (i.e. 'TAGS=integration2 make test')
 	@TAGS=integration2 $(MAKE) test
 
 .PHONY: test-upgrade
-test-upgrade: ## Upgrade tests (same as: 'TAGS=upgrade make test')
+test-upgrade: ## Upgrade tests (i.e. 'TAGS=upgrade make test')
 	@TAGS=upgrade $(MAKE) test
 
 .PHONY: test-systest
-test-systest: ## System integration tests (same as: 'SUITE=systest make test')
+test-systest: ## System integration tests (i.e. 'SUITE=systest make test')
 	@SUITE=systest $(MAKE) test
 
 .PHONY: test-vector
-test-vector: ## Vector search tests (same as: 'SUITE=vector make test')
+test-vector: ## Vector search tests (i.e. 'SUITE=vector make test')
 	@SUITE=vector $(MAKE) test
 
 .PHONY: test-fuzz
-test-fuzz: ## Fuzz tests, auto-discovers packages (same as: 'FUZZ=1 make test')
+test-fuzz: ## Fuzz tests, auto-discovers packages (i.e. 'FUZZ=1 make test')
 	@FUZZ=1 $(MAKE) test
 
 .PHONY: test-ldbc
-test-ldbc: ## LDBC benchmark tests (same as: 'SUITE=ldbc make test')
+test-ldbc: ## LDBC benchmark tests (i.e. 'SUITE=ldbc make test')
 	@SUITE=ldbc $(MAKE) test
 
 .PHONY: test-load
-test-load: ## Heavy load tests (same as: 'SUITE=load make test')
+test-load: ## Heavy load tests (i.e. 'SUITE=load make test')
 	@SUITE=load $(MAKE) test
 
 .PHONY: test-benchmark
-test-benchmark: ## Go benchmarks (same as: 'go test -bench')
+test-benchmark: ## Go benchmarks (i.e. 'go test -bench')
 	go test -bench=. -benchmem $(if $(PKG),./$(PKG)/...,./...)
 
 .PHONY: local-image
