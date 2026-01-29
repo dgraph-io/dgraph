@@ -237,8 +237,8 @@ That's it! The `make install` command:
 - On **macOS**: Installs native binary to `$GOPATH/bin/dgraph` AND Linux binary to
   `$GOPATH/linux_<arch>/dgraph`
 
-The Docker Compose files automatically use the correct binary path via the `GOPATH_LINUX_BIN`
-environment variable.
+The Docker Compose files automatically use the correct binary path via the `LINUX_GOBIN` environment
+variable.
 
 ### macOS Notes
 
@@ -246,7 +246,7 @@ The build system now automatically handles cross-compilation for macOS users:
 
 - `make install` builds both native macOS and Linux binaries automatically
 - Linux binaries are stored in `$GOPATH/linux_<arch>/dgraph`
-- Docker Compose files use `${GOPATH_LINUX_BIN:-$GOPATH/bin}` to find the correct binary
+- Docker Compose files use `${LINUX_GOBIN:-$GOPATH/bin}` to find the correct binary
 - No manual binary swapping required!
 
 After code changes, simply run `make install` again — it handles everything.
@@ -1208,9 +1208,9 @@ The following items from the original wishlist have been implemented:
   and automatically builds the correct binaries. On macOS, `make install` builds both native and
   Linux binaries without manual intervention.
 
-- **✅ Automatic binary path management:** The `GOPATH_LINUX_BIN` environment variable is
-  automatically set based on OS. Docker Compose files use `${GOPATH_LINUX_BIN:-$GOPATH/bin}` to
-  mount the correct binary.
+- **✅ Automatic binary path management:** The `LINUX_GOBIN` environment variable is automatically
+  set based on OS. Docker Compose files use `${LINUX_GOBIN:-$GOPATH/bin}` to mount the correct
+  binary.
 
 - **✅ No manual setup scripts required:** The `make test` target now depends on `dgraph-installed`
   which automatically builds binaries if missing. Dependency checking scripts in `t/scripts/` can

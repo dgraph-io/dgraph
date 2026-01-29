@@ -14,7 +14,7 @@ services:
       - "9080"
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: volume
@@ -36,7 +36,7 @@ services:
       - "9080"
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: volume
@@ -58,7 +58,7 @@ services:
       - "9080"
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: volume
@@ -85,7 +85,7 @@ services:
       - "6080"
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:

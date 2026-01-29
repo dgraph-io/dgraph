@@ -15,9 +15,9 @@ GOHOSTARCH     := $(shell go env GOHOSTARCH)
 
 # On non-Linux systems, use a separate directory for Linux binaries
 ifeq ($(GOHOSTOS),linux)
-    export GOPATH_LINUX_BIN ?= $(GOPATH)/bin
+    export LINUX_GOBIN ?= $(GOPATH)/bin
 else
-    export GOPATH_LINUX_BIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
+    export LINUX_GOBIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
 endif
 
 ######################
@@ -53,11 +53,11 @@ install:
 	@echo "Installing dgraph ($(GOHOSTOS)/$(GOHOSTARCH))..."
 	@$(MAKE) -C dgraph install
 ifneq ($(GOHOSTOS),linux)
-	@mkdir -p $(GOPATH_LINUX_BIN)
+	@mkdir -p $(LINUX_GOBIN)
 	@echo "Installing dgraph (linux/$(GOHOSTARCH))..."
 	@GOOS=linux GOARCH=$(GOHOSTARCH) $(MAKE) -C dgraph dgraph
-	@mv dgraph/dgraph $(GOPATH_LINUX_BIN)/dgraph
-	@echo "Installed dgraph (linux/$(GOHOSTARCH)) to $(GOPATH_LINUX_BIN)/dgraph"
+	@mv dgraph/dgraph $(LINUX_GOBIN)/dgraph
+	@echo "Installed dgraph (linux/$(GOHOSTARCH)) to $(LINUX_GOBIN)/dgraph"
 endif
 
 
@@ -68,7 +68,7 @@ uninstall:
 
 .PHONY: dgraph-installed
 dgraph-installed:
-	@if [ ! -f "$(GOPATH)/bin/dgraph" ] || [ ! -f "$(GOPATH_LINUX_BIN)/dgraph" ]; then \
+	@if [ ! -f "$(GOPATH)/bin/dgraph" ] || [ ! -f "$(LINUX_GOBIN)/dgraph" ]; then \
 		echo "Dgraph binary missing, running make install..."; \
 		$(MAKE) install; \
 	fi

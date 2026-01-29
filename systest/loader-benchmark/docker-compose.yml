@@ -13,7 +13,7 @@ services:
       cluster: test
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:
@@ -26,7 +26,7 @@ services:
     working_dir: /data/dg1
     volumes:
       - type: bind
-        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: volume

@@ -169,11 +169,11 @@ func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
 
-// ensureGoPathLinuxBinEnvVarSet sets GOPATH_LINUX_BIN environment variable if not already set.
+// ensureGoPathLinuxBinEnvVarSet sets LINUX_GOBIN environment variable if not already set.
 // On Linux, it defaults to $GOPATH/bin. On other systems (macOS, etc.), it defaults
 // to $GOPATH/linux_$GOARCH/bin to support cross-compiled Linux binaries for Docker tests.
 func ensureGoPathLinuxBinEnvVarSet() {
-	if os.Getenv("GOPATH_LINUX_BIN") != "" {
+	if os.Getenv("LINUX_GOBIN") != "" {
 		return // already set
 	}
 
@@ -188,14 +188,14 @@ func ensureGoPathLinuxBinEnvVarSet() {
 	} else {
 		gopathLinuxBin = filepath.Join(gopath, "linux_"+runtime.GOARCH)
 	}
-	os.Setenv("GOPATH_LINUX_BIN", gopathLinuxBin)
+	os.Setenv("LINUX_GOBIN", gopathLinuxBin)
 }
 
-// ensureDgraphLinuxBinary checks if the dgraph binary exists under GOPATH_LINUX_BIN.
+// ensureDgraphLinuxBinary checks if the dgraph binary exists under LINUX_GOBIN.
 // If not found, it runs make install to build it.
 func ensureDgraphLinuxBinary() error {
 	ensureGoPathLinuxBinEnvVarSet()
-	gopathLinuxBin := os.Getenv("GOPATH_LINUX_BIN")
+	gopathLinuxBin := os.Getenv("LINUX_GOBIN")
 	dgraphBin := filepath.Join(gopathLinuxBin, "dgraph")
 
 	if _, err := os.Stat(dgraphBin); err == nil {

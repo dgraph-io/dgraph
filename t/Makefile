@@ -11,9 +11,9 @@ GOHOSTARCH    := $(shell go env GOHOSTARCH)
 
 # On non-Linux systems, use a separate directory for Linux binaries
 ifeq ($(GOHOSTOS),linux)
-    export GOPATH_LINUX_BIN ?= $(GOPATH)/bin
+    export LINUX_GOBIN ?= $(GOPATH)/bin
 else
-    export GOPATH_LINUX_BIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
+    export LINUX_GOBIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
 endif
 
 all: test
@@ -24,11 +24,11 @@ check: check-go check-docker check-gotestsum check-ack
 		which protoc > /dev/null 2>&1 || (echo "Error: protoc is not installed or not in PATH" && exit 1); \
 	fi
 	@echo "All dependencies are installed"
-	@echo "GOPATH_LINUX_BIN=$(GOPATH_LINUX_BIN)"
-	@if [ -f "$(GOPATH_LINUX_BIN)/dgraph" ]; then \
-		file $(GOPATH_LINUX_BIN)/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary at $(GOPATH_LINUX_BIN)/dgraph is not a Linux executable" && exit 1); \
+	@echo "LINUX_GOBIN=$(LINUX_GOBIN)"
+	@if [ -f "$(LINUX_GOBIN)/dgraph" ]; then \
+		file $(LINUX_GOBIN)/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary at $(LINUX_GOBIN)/dgraph is not a Linux executable" && exit 1); \
 	else \
-		echo "Error: dgraph binary not found at $(GOPATH_LINUX_BIN)/dgraph" && exit 1; \
+		echo "Error: dgraph binary not found at $(LINUX_GOBIN)/dgraph" && exit 1; \
 	fi
 	@echo "The dgraph binary is a Linux executable (as required)"
 
