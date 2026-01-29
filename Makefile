@@ -9,7 +9,16 @@ BUILD_DATE     ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 BUILD_VERSION  ?= $(shell git describe --always --tags)
 
-GOPATH         ?= $(shell go env GOPATH)
+export GOPATH  ?= $(shell go env GOPATH)
+GOHOSTOS       := $(shell go env GOHOSTOS)
+GOHOSTARCH     := $(shell go env GOHOSTARCH)
+
+# On non-Linux systems, use a separate directory for Linux binaries
+ifeq ($(GOHOSTOS),linux)
+    export GOPATH_LINUX_BIN ?= $(GOPATH)/bin
+else
+    export GOPATH_LINUX_BIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
+endif
 
 ######################
 # Build & Release Parameters
@@ -41,17 +50,31 @@ version:
 
 .PHONY: install
 install:
-	@echo "Installing Dgraph..."; \
-		$(MAKE) -C dgraph install; \
+	@echo "Installing dgraph ($(GOHOSTOS)/$(GOHOSTARCH))..."
+	@$(MAKE) -C dgraph install
+ifneq ($(GOHOSTOS),linux)
+	@mkdir -p $(GOPATH_LINUX_BIN)
+	@echo "Installing dgraph (linux/$(GOHOSTARCH))..."
+	@GOOS=linux GOARCH=$(GOHOSTARCH) $(MAKE) -C dgraph dgraph
+	@mv dgraph/dgraph $(GOPATH_LINUX_BIN)/dgraph
+	@echo "Installed dgraph (linux/$(GOHOSTARCH)) to $(GOPATH_LINUX_BIN)/dgraph"
+endif
+
 
 .PHONY: uninstall
 uninstall:
 	@echo "Uninstalling Dgraph ..."; \
 		$(MAKE) -C dgraph uninstall; \
 
+.PHONY: dgraph-installed
+dgraph-installed:
+	@if [ ! -f "$(GOPATH)/bin/dgraph" ] || [ ! -f "$(GOPATH_LINUX_BIN)/dgraph" ]; then \
+		echo "Dgraph binary missing, running make install..."; \
+		$(MAKE) install; \
+	fi
+
 .PHONY: test
-test: docker-image
-	@mv dgraph/dgraph ${GOPATH}/bin/dgraph
+test: dgraph-installed
 	@$(MAKE) -C t test
 
 .PHONY: image-local local-image
@@ -104,3 +127,5 @@ help:
 	@echo "  make help      - This help"
 	@echo "  make test      - Make local image and run t.go"
 	@echo
+
+

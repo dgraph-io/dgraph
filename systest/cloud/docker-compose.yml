@@ -11,7 +11,7 @@ services:
       service: zero
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:
@@ -25,7 +25,7 @@ services:
       - ./../../dgraph/minio.env
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${GOPATH_LINUX_BIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: bind
