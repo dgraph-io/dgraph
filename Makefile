@@ -96,44 +96,48 @@ else
 	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\")"
 endif
 
+.PHONY: test-all
+test-all: ## All test suites via t/ runner (i.e. 'make test SUITE=all')
+	@SUITE=all $(MAKE) test
+
 .PHONY: test-unit
-test-unit: ## Unit tests, no Docker (i.e. 'SUITE=unit make test')
+test-unit: ## Unit tests, no Docker (i.e. 'make test SUITE=unit')
 	@SUITE=unit $(MAKE) test
 
 .PHONY: test-core
-test-core: ## Core tests (i.e. 'SUITE=core make test')
+test-core: ## Core tests (i.e. 'make test SUITE=core')
 	@SUITE=core $(MAKE) test
 
 .PHONY: test-integration
-test-integration: ## Integration tests (i.e. 'TAGS=integration make test')
+test-integration: ## Integration tests (i.e. 'make test TAGS=integration')
 	@TAGS=integration $(MAKE) test
 
 .PHONY: test-integration2
-test-integration2: ## Integration2 tests via dgraphtest (i.e. 'TAGS=integration2 make test')
+test-integration2: ## Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
 	@TAGS=integration2 $(MAKE) test
 
 .PHONY: test-upgrade
-test-upgrade: ## Upgrade tests (i.e. 'TAGS=upgrade make test')
+test-upgrade: ## Upgrade tests (i.e. 'make test TAGS=upgrade')
 	@TAGS=upgrade $(MAKE) test
 
 .PHONY: test-systest
-test-systest: ## System integration tests (i.e. 'SUITE=systest make test')
+test-systest: ## System integration tests (i.e. 'make test SUITE=systest')
 	@SUITE=systest $(MAKE) test
 
 .PHONY: test-vector
-test-vector: ## Vector search tests (i.e. 'SUITE=vector make test')
+test-vector: ## Vector search tests (i.e. 'make test SUITE=vector')
 	@SUITE=vector $(MAKE) test
 
 .PHONY: test-fuzz
-test-fuzz: ## Fuzz tests, auto-discovers packages (i.e. 'FUZZ=1 make test')
+test-fuzz: ## Fuzz tests, auto-discovers packages (i.e. 'make test FUZZ=1')
 	@FUZZ=1 $(MAKE) test
 
 .PHONY: test-ldbc
-test-ldbc: ## LDBC benchmark tests (i.e. 'SUITE=ldbc make test')
+test-ldbc: ## LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
 	@SUITE=ldbc $(MAKE) test
 
 .PHONY: test-load
-test-load: ## Heavy load tests (i.e. 'SUITE=load make test')
+test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
 	@SUITE=load $(MAKE) test
 
 .PHONY: test-benchmark

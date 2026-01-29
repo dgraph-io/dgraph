@@ -308,20 +308,22 @@ The simplest way to run tests:
 make test
 
 # Common shortcuts (run 'make help' for full list)
-make test-unit          # Unit tests, no Docker (i.e. 'SUITE=unit make test')
-make test-core          # Core tests (i.e. 'SUITE=core make test')
-make test-integration   # Integration tests (i.e. 'TAGS=integration make test')
-make test-integration2  # Integration2 tests via dgraphtest (i.e. 'TAGS=integration2 make test')
-make test-upgrade       # Upgrade tests (i.e. 'TAGS=upgrade make test')
-make test-systest       # System integration tests (i.e. 'SUITE=systest make test')
-make test-vector        # Vector search tests (i.e. 'SUITE=vector make test')
-make test-fuzz          # Fuzz tests, auto-discovers packages (i.e. 'FUZZ=1 make test')
-make test-ldbc          # LDBC benchmark tests (i.e. 'SUITE=ldbc make test')
-make test-load          # Heavy load tests (i.e. 'SUITE=load make test')
+make test-all           # All test suites via t/ runner (i.e. 'make test SUITE=all')
+make test-unit          # Unit tests, no Docker (i.e. 'make test SUITE=unit')
+make test-core          # Core tests (i.e. 'make test SUITE=core')
+make test-systest       # System integration tests (i.e. 'make test SUITE=systest')
+make test-vector        # Vector search tests (i.e. 'make test SUITE=vector')
+make test-ldbc          # LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
+make test-load          # Heavy load tests (i.e. 'make test SUITE=load')
+make test-integration   # Integration tests (i.e. 'make test TAGS=integration')
+make test-integration2  # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
+make test-upgrade       # Upgrade tests (i.e. 'make test TAGS=upgrade')
+make test-fuzz          # Fuzz tests, auto-discovers packages (i.e. 'make test FUZZ=1')
 make test-benchmark     # Go benchmarks (i.e. 'go test -bench')
 ```
 
-Run `make help` to see all available targets and variables.
+Run `make help` to see all available targets, variables, and dynamically discovered SUITE/TAGS
+values.
 
 ### Using Variables
 
