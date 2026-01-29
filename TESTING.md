@@ -6,6 +6,7 @@
 - [Test Types and Build Tags](#test-types-and-build-tags)
 - [Module Structure](#module-structure)
 - [Prerequisites & Setup](#prerequisites--setup)
+- [Quick Start: Running Tests](#quick-start-running-tests)
 - [Quick Decision Guide](#quick-decision-guide)
 - [Unit Tests](#unit-tests)
 - [Integration Tests via t/ Runner](#integration-tests-via-t-runner)
@@ -293,6 +294,59 @@ cd t && go build . && ./t --test=TestGQLSchema
 ```
 
 If both pass, you're ready to run all test types!
+
+---
+
+## Quick Start: Running Tests
+
+### Using Make Targets
+
+The simplest way to run tests:
+
+```bash
+# Run all tests (default)
+make test
+
+# Common shortcuts
+make test-unit          # Unit tests only (no Docker)
+make test-integration   # Integration tests via t/ runner
+make test-integration2  # Integration2 tests via dgraphtest
+make test-fuzz          # Fuzz testing (auto-discovers packages)
+make test-upgrade       # Upgrade tests
+```
+
+Run `make help` to see all available targets.
+
+### Using Environment Variables
+
+For more control, use environment variables with `make test`:
+
+| Variable   | Purpose                     | Example                        |
+| ---------- | --------------------------- | ------------------------------ |
+| `SUITE`    | Select t/ runner suite      | `SUITE=systest make test`      |
+| `TAGS`     | Go build tags (bypasses t/) | `TAGS=integration2 make test`  |
+| `PKG`      | Limit to specific package   | `PKG=systest/export make test` |
+| `TEST`     | Run specific test function  | `TEST=TestGQLSchema make test` |
+| `FUZZ`     | Enable fuzz testing         | `FUZZ=1 make test`             |
+| `FUZZTIME` | Fuzz duration per package   | `FUZZTIME=60s make test`       |
+
+**Precedence:** `TAGS` > `FUZZ` > `SUITE` (first match wins)
+
+### Examples
+
+```bash
+# Run integration2 tests for vector package
+TAGS=integration2 PKG=systest/vector make test
+
+# Run upgrade tests for ACL with specific test
+TAGS=upgrade TEST=TestACLUpgrade PKG=acl make test
+
+# Run fuzz tests with custom duration
+FUZZ=1 FUZZTIME=60s PKG=dql make test
+
+# Run unit tests on a specific package
+PKG=types make test-unit
+```
 
 ---
 
