@@ -140,8 +140,8 @@ test-load: ## Run heavy load tests
 test-benchmark: ## Run Go benchmarks
 	go test -bench=. -benchmem $(if $(PKG),./$(PKG)/...,./...)
 
-.PHONY: image-local local-image
-image-local local-image:
+.PHONY: local-image
+local-image: ## Build local Docker image (dgraph/dgraph:local)
 	@echo building local docker image
 	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
 	@mkdir -p linux
@@ -149,8 +149,11 @@ image-local local-image:
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
+.PHONY: image-local
+image-local: local-image ## Alias for local-image
+
 .PHONY: docker-image
-docker-image: dgraph
+docker-image: dgraph ## Build Docker image (dgraph/dgraph:$VERSION)
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
