@@ -306,7 +306,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	for _, pred := range restorePreds {
 		// Force the tablet to be moved to this group, even
 		// if it's currently being served by another group.
-		tablet, err := groups().ForceTablet(pred)
+		// Get label from stored schema (schema is restored before data).
+		label, _ := schema.State().GetLabel(context.Background(), pred)
+		tablet, err := groups().ForceTablet(pred, label)
 		if err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		}

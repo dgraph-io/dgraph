@@ -28,6 +28,7 @@ type Member struct {
 	ID         string `json:"id"`
 	LastUpdate string `json:"lastUpdate"`
 	Leader     bool   `json:"leader"`
+	Label      string `json:"label,omitempty"`
 }
 
 // StateResponse represents the structure of the JSON object returned by calling
@@ -41,6 +42,7 @@ type StateResponse struct {
 		Tablets map[string]struct {
 			GroupID   int    `json:"groupId"`
 			Predicate string `json:"predicate"`
+			Label     string `json:"label,omitempty"`
 		} `json:"tablets"`
 	} `json:"groups"`
 	Removed []struct {

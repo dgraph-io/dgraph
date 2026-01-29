@@ -73,12 +73,38 @@ func parseDirective(it *lex.ItemIterator, schema *pb.SchemaUpdate, t types.TypeI
 				" Got: [%v] for attr: [%v]", t.Name(), schema.Predicate)
 		}
 		schema.Lang = true
+	case "label":
+		labelName, err := parseLabelDirective(it)
+		if err != nil {
+			return err
+		}
+		schema.Label = labelName
 	default:
 		return next.Errorf("Invalid index specification")
 	}
 	it.Next()
 
 	return nil
+}
+
+func parseLabelDirective(it *lex.ItemIterator) (string, error) {
+	it.Next()
+	next := it.Item()
+	if next.Typ != itemLeftRound {
+		return "", next.Errorf("Missing '(' after @label")
+	}
+	it.Next()
+	next = it.Item()
+	if next.Typ != itemText {
+		return "", next.Errorf("Missing name inside @label()")
+	}
+	labelName := next.Val
+	it.Next()
+	next = it.Item()
+	if next.Typ != itemRightRound {
+		return "", next.Errorf("Missing ')' after @label(name")
+	}
+	return labelName, nil
 }
 
 func parseScalarPair(it *lex.ItemIterator, predicate string, ns uint64) (*pb.SchemaUpdate, error) {

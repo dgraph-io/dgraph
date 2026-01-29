@@ -240,6 +240,14 @@ func (s *state) SetType(typeName string, typ *pb.TypeUpdate) {
 	s.elog.Printf(logTypeUpdate(typ, typeName))
 }
 
+// Gets the label for the given predicate
+func (s *state) GetLabel(ctx context.Context, pred string) (string, bool) {
+	if sch, ok := s.Get(ctx, pred); ok {
+		return sch.Label, true
+	}
+	return "", false
+}
+
 // Get gets the schema for the given predicate.
 func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
 	isWrite, _ := ctx.Value(IsWrite).(bool)

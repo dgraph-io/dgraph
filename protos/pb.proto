@@ -11,7 +11,6 @@
 syntax = "proto3";
 
 package pb;
-
 import "github.com/dgraph-io/dgo/v250/protos/api.proto";
 import "github.com/dgraph-io/badger/v4/pb/pb.proto";
 import "google/protobuf/descriptor.proto";
@@ -125,6 +124,7 @@ message Member {
 
 	bool clusterInfoOnly = 13;
 	bool forceGroupId = 14;
+  string label = 15; // Label for sharding affinity
 }
 
 message Group {
@@ -200,6 +200,7 @@ message Tablet {
   bool readOnly = 9; // If true, do not ask zero to serve any tablets.
   uint64 moveTs = 10;
   int64 uncompressed_bytes = 11; // Estimated uncompressed size of tablet in bytes
+  string label = 12;  // Label from predicate schema (for routing)
 }
 
 message DirectedEdge {
@@ -485,6 +486,7 @@ message SchemaUpdate {
   bool lang = 9;
   bool unique = 14;
 
+
   // Fields required for type system.
   bool non_nullable = 10;
   bool non_nullable_list = 11;
@@ -494,6 +496,10 @@ message SchemaUpdate {
   string object_type_name = 12;
 
   bool no_conflict = 13;
+
+  string label = 16; // Label from @label directive (for sharding affinity)
+
+
 
   // Deleted field:
   reserved 7;

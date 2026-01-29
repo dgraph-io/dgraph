@@ -114,6 +114,9 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("mcp", false, "run MCP server along with alpha.")
 
+	flag.String("label", "",
+		"Label for this alpha. Labeled alphas only serve predicates with matching @label directive.")
+
 	// By default Go GRPC traces all requests.
 	grpc.EnableTracing = false
 
@@ -750,6 +753,7 @@ func run() {
 		AclPublicKey:        keys.AclPublicKey,
 		Audit:               opts.Audit != nil,
 		Badger:              bopts,
+		Label:               Alpha.Conf.GetString("label"),
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
