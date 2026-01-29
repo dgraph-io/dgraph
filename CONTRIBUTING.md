@@ -137,23 +137,25 @@ then use this local image to test Dgraph in your local Docker setup.
 
 ### Testing
 
-Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage.
-Due to the comprehensive nature of these tests, a complete test run can take several hours,
-depending on your hardware. To manage this complex testing process efficiently, we've developed a
-custom test framework implemented in Go, which resides in the [./t](/t) directory. This specialized
-framework provides enhanced control and flexibility beyond what's available through standard Go
-testing framework.
+For comprehensive testing documentation, see [TESTING.md](TESTING.md).
+
+Dgraph employs a sophisticated testing framework that includes extensive test coverage. Due to the
+comprehensive nature of these tests, a complete test run can take several hours, depending on your
+hardware. To manage this complex testing process efficiently, we've developed a custom test
+framework implemented in Go, which resides in the [./t](/t) directory.
 
 For dependencies, runner flags and instructions for running tests on non-Linux machines, see the
 [README](t/README.md) in the [_t_](t) folder.
 
-Other integration tests do not use the testing framework located in the `t` folder. Consult the
-[github workflow definitions](.github/workflows) folder to discover the tests we run as part of our
-continuous integration process.
+Quick start:
 
-Non-integration unit tests exist for many core packages that can be exercised without invoking the
-testing framework. For instance, to unit test the core DQL parsing package:
-`go test github.com/dgraph-io/dgraph/v25/dql`.
+```bash
+# Run unit tests
+go test github.com/dgraph-io/dgraph/v25/dql
+
+# Run integration tests (requires Docker)
+cd t && go build . && ./t --suite=unit
+```
 
 ## Contributing
 
