@@ -457,6 +457,19 @@ func (g *groupi) ServesTablet(key string) (bool, error) {
 	return false, nil
 }
 
+// GetTabletLabel returns the label for a predicate from the cached tablet info.
+// This is used for authorization to get labels for predicates that may be served
+// by other groups (labeled alphas). Returns empty string if tablet not cached.
+func (g *groupi) GetTabletLabel(key string) string {
+	g.RLock()
+	tablet := g.tablets[key]
+	g.RUnlock()
+	if tablet != nil {
+		return tablet.Label
+	}
+	return ""
+}
+
 func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
@@ -679,6 +692,12 @@ func (g *groupi) KnownGroups() (gids []uint32) {
 // KnownGroups returns the known groups using the global groupi instance.
 func KnownGroups() []uint32 {
 	return groups().KnownGroups()
+}
+
+// GetTabletLabel returns the label for a predicate from the cached tablet info.
+// Used for authorization to get labels for predicates served by other groups.
+func GetTabletLabel(pred string) string {
+	return groups().GetTabletLabel(pred)
 }
 
 // GroupId returns the group to which this worker belongs to.
