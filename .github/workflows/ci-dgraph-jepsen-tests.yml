@@ -1,11 +1,12 @@
 name: ci-dgraph-jepsen-tests
 
 on:
+  workflow_dispatch: # allows manual trigger from GitHub UI
   schedule:
     - cron: 0 4 * * 3,6 # run twice weekly
 
 env:
-  GOPATH: /home/ubuntu/go
+  GOPATH: /home/runner/go
 
 permissions:
   contents: read

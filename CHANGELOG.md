@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [v25.2.0] - 2026-01-28
+
+[v25.2.0]: https://github.com/dgraph-io/dgraph/compare/v25.1.0...v25.2.0
+
+- **Added**
+
+- **GraphQL**
+  - feat(graphql): Add support for ef and distance_threshold in generated GraphQL queries for
+    similarity search (#9562).
+    > **WARNING** In #9562, the computed distances (automatically returned in the `vector_distance`
+    > field) for cosine and dot product metrics are no longer normalized to [0, 1], but instead
+    > return the raw distance computed by the metric.
+
+- **Vector**
+  - feat(vector/hnsw): add per-query `ef` and `distance_threshold` to `similar_to`, fix early
+    termination (#9514)
+
+- **Fixed**
+
+- **Core**
+  - fix(txn): for lossy indexes, change comparison function to first check the txn cache (#9567)
+  - fix(cmd): store correct CA verification status (#9554)
+  - fix(zero): make zero shutdown cleanly (#9525)
+
+- **Vector**
+  - fix(vector): Fix similarity-based HNSW search for cosine and dot product metrics (#9559)
+    > **WARNING** To benefit from the fix in #9559, you must reindex vector predicates that use
+    > cosine or dot product metrics.
+
+- **Chore**
+  - docs: fix typos in comments (#9569)
+  - chore(ci): update go toolchain version to v1.25.6 (#9568)
+  - fix(ci): update trunk go runtime to match go.mod version (#9575)
+  - chore(test): replace deprecated docker struct types in testing harness (#9549)
+  - chore(test): unskip previously skipped tests (#9537)
+  - chore(core): use Tick() instead of NewTicker() (#9548)
+
 ## [v25.1.0] - 2025-12-04
 
 [v25.1.0]: https://github.com/dgraph-io/dgraph/compare/v25.0.0...v25.1.0
