@@ -481,7 +481,7 @@ go test [flags] [package] [test-filter]
 - `./types/`: Single package
 - `./types/...`: Package and all subpackages recursively
 
-#### Examples
+#### Go Test Examples
 
 ```bash
 # Run all tests in types package
