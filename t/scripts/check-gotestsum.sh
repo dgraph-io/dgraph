@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2310
 set -euo pipefail
 
 # shellcheck source=checkhelper.sh

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2312
 # Common functions for check scripts
+# This is a library sourced by other scripts - functions are invoked indirectly
 
 err() { printf "ERROR: %s\n" "$*" >&2; }
 warn() { printf "WARN:  %s\n" "$*" >&2; }
