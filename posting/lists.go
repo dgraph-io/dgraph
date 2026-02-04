@@ -57,6 +57,15 @@ func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
 	return getNew(key, pstore, readTs, false)
 }
 
+// GetNoStoreSafe is like GetNoStore but returns nil if the store is not initialized.
+// This is safe to call even before the posting package is fully initialized.
+func GetNoStoreSafe(key []byte, readTs uint64) (rlist *List, err error) {
+	if pstore == nil {
+		return nil, nil
+	}
+	return getNew(key, pstore, readTs, false)
+}
+
 // LocalCache stores a cache of posting lists and deltas.
 // This doesn't sync, so call this only when you don't care about dirty posting lists in
 // memory(for example before populating snapshot) or after calling syncAllMarks

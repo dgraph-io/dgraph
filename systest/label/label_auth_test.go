@@ -833,6 +833,149 @@ func TestProgramAuthUidTraversal(t *testing.T) {
 	t.Log("Test passed: UID traversal respects program auth")
 }
 
+// TestProgramAuthUpdateBlocked tests that users cannot update program-protected data they don't have access to.
+func TestProgramAuthUpdateBlocked(t *testing.T) {
+	t.Log("=== TestProgramAuthUpdateBlocked: Users cannot update data they can't access ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	resp, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Secret" .`),
+	})
+	require.NoError(t, err)
+	uid := resp.Uids["p1"]
+	t.Logf("Created ALPHA-protected node with UID: %s", uid)
+
+	// Try to update with BRAVO program - should fail
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	t.Log("Attempting to update ALPHA data with BRAVO credentials...")
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`<%s> <name> "Hacked by BRAVO" .`, uid)),
+	})
+	require.Error(t, err, "BRAVO user should not be able to update ALPHA data")
+	require.Contains(t, err.Error(), "not authorized", "error should indicate authorization failure")
+	t.Log("Test passed: update correctly blocked")
+}
+
+// TestProgramAuthDeleteBlocked tests that users cannot delete program-protected data they don't have access to.
+func TestProgramAuthDeleteBlocked(t *testing.T) {
+	t.Log("=== TestProgramAuthDeleteBlocked: Users cannot delete data they can't access ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	resp, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Secret" .`),
+	})
+	require.NoError(t, err)
+	uid := resp.Uids["p1"]
+	t.Logf("Created ALPHA-protected node with UID: %s", uid)
+
+	// Try to delete with BRAVO program - should fail
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	t.Log("Attempting to delete ALPHA data with BRAVO credentials...")
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf(`<%s> <name> * .`, uid)),
+	})
+	require.Error(t, err, "BRAVO user should not be able to delete ALPHA data")
+	require.Contains(t, err.Error(), "not authorized", "error should indicate authorization failure")
+
+	// Verify data still exists with ALPHA credentials
+	queryResp, err := dg.NewTxn().Query(ctxAlpha, fmt.Sprintf(`
+		{
+			node(func: uid(%s)) {
+				name
+			}
+		}
+	`, uid))
+	require.NoError(t, err)
+	require.Contains(t, string(queryResp.GetJson()), "Alpha Secret", "data should still exist")
+	t.Log("Test passed: delete correctly blocked")
+}
+
+// TestProgramAuthUpdateAllowed tests that authorized users can update their own data.
+func TestProgramAuthUpdateAllowed(t *testing.T) {
+	t.Log("=== TestProgramAuthUpdateAllowed: Users can update data they have access to ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	resp, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Original Name" .`),
+	})
+	require.NoError(t, err)
+	uid := resp.Uids["p1"]
+
+	// Update with same ALPHA program - should succeed
+	t.Log("Updating with ALPHA credentials...")
+	_, err = dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`<%s> <name> "Updated Name" .`, uid)),
+	})
+	require.NoError(t, err, "ALPHA user should be able to update ALPHA data")
+
+	// Verify update
+	queryResp, err := dg.NewTxn().Query(ctxAlpha, fmt.Sprintf(`
+		{
+			node(func: uid(%s)) {
+				name
+			}
+		}
+	`, uid))
+	require.NoError(t, err)
+	require.Contains(t, string(queryResp.GetJson()), "Updated Name")
+	t.Log("Test passed: authorized update succeeded")
+}
+
+// TestProgramAuthNoAuthCannotModifyProtected tests that users without auth cannot modify protected data.
+func TestProgramAuthNoAuthCannotModifyProtected(t *testing.T) {
+	t.Log("=== TestProgramAuthNoAuthCannotModifyProtected: No-auth users cannot modify protected data ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	resp, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Protected Data" .`),
+	})
+	require.NoError(t, err)
+	uid := resp.Uids["p1"]
+
+	// Try to update with empty auth context (auth active but no programs)
+	ctxEmpty := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{},
+	})
+	t.Log("Attempting to update protected data with empty auth...")
+	_, err = dg.NewTxn().Mutate(ctxEmpty, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`<%s> <name> "Attempted Overwrite" .`, uid)),
+	})
+	require.Error(t, err, "user with no programs should not be able to modify protected data")
+	t.Log("Test passed: empty auth cannot modify protected data")
+}
+
 // TestProgramAuthComparisonOps tests program auth with comparison operators (lt, gt, le, ge).
 func TestProgramAuthComparisonOps(t *testing.T) {
 	t.Log("=== TestProgramAuthComparisonOps: comparison operators should respect program auth ===")

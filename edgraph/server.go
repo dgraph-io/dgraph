@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -573,6 +574,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if err != nil {
 		return errors.Wrapf(err, "While doing mutations:")
 	}
+
+	// Check program authorization for modifying existing data (after namespace is available)
+	if err := checkMutationProgramAuth(ctx, edges, ns); err != nil {
+		return err
+	}
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
@@ -660,6 +666,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Txn.Keys = resp.Txn.Keys[:0]
 	resp.Txn.CommitTs = cts
 	calculateMutationMetrics()
+
+	// Update the program facet cache for future authorization checks
+	updateProgramFacetCache(ns, edges)
+
 	return nil
 }
 
@@ -2243,6 +2253,148 @@ func parseSubject(predSubject string) (uint64, error) {
 	} else {
 		return dql.ParseUid(predSubject)
 	}
+}
+
+// programFacetCache stores recently committed program facets for authorization checks.
+//
+// WHY THIS EXISTS:
+// Dgraph's MemoryLayer is a read-through cache - it only populates on reads, not writes.
+// When a mutation commits, the data goes to badger asynchronously. The MemoryLayer's
+// updateItemInCache() only updates keys that are ALREADY cached; it doesn't add new ones.
+// (See posting/mvcc.go:589-591)
+//
+// For program authorization, we need to check if a user can modify existing data BEFORE
+// the Raft proposal. But for recently created data, the MemoryLayer won't have it cached
+// and badger won't have synced it yet, so GetNoStoreSafe returns 0 postings.
+//
+// This cache provides write-through semantics specifically for program facets:
+// - Updated after successful CommitOverNetwork in doMutate()
+// - Checked in checkMutationProgramAuth() before the posting store fallback
+//
+// FUTURE CONSIDERATION:
+// A more holistic approach might store program data directly in the Posting protobuf
+// rather than as facets, which would integrate naturally with the existing caching.
+// However, that would require protobuf changes and migration strategy.
+var programFacetCache = struct {
+	sync.RWMutex
+	// Key: "namespace-predicate-entity", Value: comma-separated programs
+	data map[string]string
+}{data: make(map[string]string)}
+
+func programFacetCacheKey(ns uint64, attr string, entity uint64) string {
+	return fmt.Sprintf("%d-%s-%d", ns, attr, entity)
+}
+
+// updateProgramFacetCache updates the cache with program facets from committed mutations.
+func updateProgramFacetCache(ns uint64, edges []*pb.DirectedEdge) {
+	programFacetCache.Lock()
+	defer programFacetCache.Unlock()
+
+	for _, edge := range edges {
+		if edge.Entity == 0 {
+			continue
+		}
+		for _, f := range edge.Facets {
+			if f.Key == x.ProgramFacetKey {
+				key := programFacetCacheKey(ns, edge.Attr, edge.Entity)
+				programFacetCache.data[key] = string(f.Value)
+				glog.V(1).Infof("updateProgramFacetCache: cached programs=%s for key=%s", f.Value, key)
+				break
+			}
+		}
+	}
+}
+
+// checkMutationProgramAuth verifies that the user is authorized to modify existing data
+// protected by program facets. This check happens before Raft proposal.
+func checkMutationProgramAuth(ctx context.Context, edges []*pb.DirectedEdge, ns uint64) error {
+	authCtx := auth.ExtractOrNil(ctx)
+	if authCtx == nil || authCtx.IsNil {
+		// No auth context means no program restrictions - allow mutation
+		glog.V(1).Infof("checkMutationProgramAuth: no auth context, allowing mutation")
+		return nil
+	}
+
+	glog.V(1).Infof("checkMutationProgramAuth: auth context has programs=%v", authCtx.Programs)
+
+	// Build a set of user's programs for fast lookup
+	userPrograms := make(map[string]bool)
+	for _, p := range authCtx.Programs {
+		userPrograms[p] = true
+	}
+
+	for _, edge := range edges {
+		// Only check existing entities (non-zero UID)
+		if edge.Entity == 0 {
+			continue
+		}
+
+		// First check the in-memory cache for recently committed program facets
+		cacheKey := programFacetCacheKey(ns, edge.Attr, edge.Entity)
+		programFacetCache.RLock()
+		cachedPrograms, found := programFacetCache.data[cacheKey]
+		programFacetCache.RUnlock()
+
+		if found {
+			glog.V(1).Infof("checkMutationProgramAuth: found cached programs=%s for Entity=%d, Attr=%s",
+				cachedPrograms, edge.Entity, edge.Attr)
+			programs := strings.Split(cachedPrograms, ",")
+			hasMatch := false
+			for _, prog := range programs {
+				if userPrograms[prog] {
+					hasMatch = true
+					break
+				}
+			}
+			if !hasMatch && len(programs) > 0 && programs[0] != "" {
+				glog.V(1).Infof("checkMutationProgramAuth: DENYING - no program match (from cache)")
+				return errors.Errorf("not authorized to modify program-protected data")
+			}
+			continue // Authorized via cache, move to next edge
+		}
+
+		// Fall back to reading from posting store for older data
+		namespacedAttr := x.NamespaceAttr(ns, edge.Attr)
+		key := x.DataKey(namespacedAttr, edge.Entity)
+		glog.V(1).Infof("checkMutationProgramAuth: checking store for Entity=%d, Attr=%s", edge.Entity, edge.Attr)
+
+		pl, err := posting.GetNoStoreSafe(key, math.MaxUint64)
+		if err != nil || pl == nil {
+			continue
+		}
+
+		// Check each existing posting for program authorization
+		var authErr error
+		pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+			for _, f := range p.Facets {
+				if f.Key == x.ProgramFacetKey {
+					programs := strings.Split(string(f.Value), ",")
+					glog.V(1).Infof("checkMutationProgramAuth: store has programs=%v, user has=%v", programs, authCtx.Programs)
+					hasMatch := false
+					for _, prog := range programs {
+						if userPrograms[prog] {
+							hasMatch = true
+							break
+						}
+					}
+					if !hasMatch && len(programs) > 0 && programs[0] != "" {
+						glog.V(1).Infof("checkMutationProgramAuth: DENYING - no program match (from store)")
+						authErr = errors.Errorf("not authorized to modify program-protected data")
+						return posting.ErrStopIteration
+					}
+					break
+				}
+			}
+			return nil
+		})
+
+		if authErr != nil {
+			return authErr
+		}
+	}
+
+	glog.V(1).Infof("checkMutationProgramAuth: allowing mutation")
+	return nil
 }
 
 // injectProgramFacets adds the dgraph.programs facet to edges based on the auth context.
