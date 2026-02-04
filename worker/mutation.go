@@ -700,13 +700,69 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 	chr <- res
 }
 
+// Global entity label cache, initialized during group setup.
+var elCache *entityLabelCache
+
+func initEntityLabelCache() {
+	elCache = newEntityLabelCache(1_000_000) // 1M entries ~= 16MB
+}
+
+// resolveEntityLabel returns the entity-level label for a UID.
+// Priority: batch labels > cache > read from group 1.
+func resolveEntityLabel(uid uint64, batchLabels map[uint64]string) string {
+	if label, ok := batchLabels[uid]; ok {
+		return label
+	}
+	if elCache != nil {
+		if label, ok := elCache.Get(uid); ok {
+			return label
+		}
+	}
+	// TODO: Cache miss — read dgraph.label from group 1.
+	// For now, return "" (unlabeled). The group-1 read will be added
+	// in a follow-up task once the integration test cluster is running.
+	return ""
+}
+
+// resolveLabel determines the effective label for routing an edge.
+// Priority: entity label > predicate @label > unlabeled.
+func resolveLabel(uid uint64, predicate string, batchLabels map[uint64]string) string {
+	if label := resolveEntityLabel(uid, batchLabels); label != "" {
+		return label
+	}
+	label, _ := schema.State().GetLabel(context.Background(), predicate)
+	return label
+}
+
 // populateMutationMap populates a map from group id to the mutation that
 // should be sent to that group.
 func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 	mm := make(map[uint32]*pb.Mutations)
+
+	// PHASE 1: Scan for dgraph.label edges to build entity -> label map.
+	// This handles new entities whose labels are set in the same mutation batch.
+	batchLabels := make(map[uint64]string)
 	for _, edge := range src.Edges {
-		// For data mutations, get the label from stored schema
-		label, _ := schema.State().GetLabel(context.Background(), edge.Attr)
+		pred := x.ParseAttr(edge.Attr)
+		if pred == "dgraph.label" {
+			batchLabels[edge.Entity] = string(edge.Value)
+		}
+	}
+
+	// PHASE 2: Route each edge using the entity's resolved label.
+	for _, edge := range src.Edges {
+		pred := x.ParseAttr(edge.Attr)
+
+		var label string
+		if x.IsReservedPredicate(pred) {
+			// Reserved predicates (dgraph.label, dgraph.type, ACL) always use
+			// predicate-level routing (typically group 1).
+			label, _ = schema.State().GetLabel(context.Background(), edge.Attr)
+		} else {
+			// Non-reserved predicates use entity-label-aware resolution.
+			label = resolveLabel(edge.Entity, edge.Attr, batchLabels)
+		}
+
 		gid, err := groups().BelongsTo(edge.Attr, label)
 		if err != nil {
 			return nil, err
@@ -721,9 +777,8 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Metadata = src.Metadata
 	}
 
+	// Schema mutations — unchanged, use predicate-level label.
 	for _, schemaUpdate := range src.Schema {
-		// For schema mutations, use the label from the SchemaUpdate itself
-		// This is critical for new predicates where the schema isn't stored yet
 		gid, err := groups().BelongsTo(schemaUpdate.Predicate, schemaUpdate.Label)
 		if err != nil {
 			return nil, err
