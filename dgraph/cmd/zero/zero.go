@@ -318,6 +318,34 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	return nil
 }
 
+// ServingSubTablet returns the tablet for the given (predicate, label) pair.
+// For labeled sub-tablets the map key is "predicate@label".
+// For unlabeled sub-tablets the key is the bare predicate name.
+func (s *Server) ServingSubTablet(predicate, label string) *pb.Tablet {
+	s.RLock()
+	defer s.RUnlock()
+	return s.servingSubTablet(predicate, label)
+}
+
+// ServingTablets returns all sub-tablets for a given predicate across all groups.
+// This includes both the unlabeled sub-tablet (key = predicate) and any labeled
+// sub-tablets (key = predicate@label). Used for query fan-out.
+func (s *Server) ServingTablets(predicate string) []*pb.Tablet {
+	s.RLock()
+	defer s.RUnlock()
+
+	var tablets []*pb.Tablet
+	for _, group := range s.state.Groups {
+		for key, tab := range group.Tablets {
+			tabPred, _ := pb.ParseTabletKey(key)
+			if tabPred == predicate {
+				tablets = append(tablets, tab)
+			}
+		}
+	}
+	return tablets
+}
+
 func (s *Server) blockTablet(pred string) func() {
 	s.blockCommitsOn.Store(pred, struct{}{})
 	return func() {
@@ -335,6 +363,21 @@ func (s *Server) servingTablet(tablet string) *pb.Tablet {
 
 	for _, group := range s.state.Groups {
 		if tab, ok := group.Tablets[tablet]; ok {
+			return tab
+		}
+	}
+	return nil
+}
+
+// servingSubTablet returns the tablet for the given (predicate, label) pair.
+// For unlabeled sub-tablets, the key is just the predicate name.
+// For labeled sub-tablets, the key is "predicate@label".
+// Caller must hold at least a read lock.
+func (s *Server) servingSubTablet(predicate, label string) *pb.Tablet {
+	s.AssertRLock()
+	key := pb.TabletKey(predicate, label)
+	for _, group := range s.state.Groups {
+		if tab, ok := group.Tablets[key]; ok {
 			return tab
 		}
 	}
