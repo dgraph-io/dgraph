@@ -367,6 +367,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// TODO: Revisit this when we work on posting cache. Don't clear entire cache.
 		// We don't want to drop entire cache, just due to one namespace.
 		posting.ResetCache()
+		if elCache != nil {
+			elCache.Clear()
+		}
 		return nil
 	}
 
@@ -384,6 +387,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// TODO: Revisit this when we work on posting cache. Don't clear entire cache.
 		// We don't want to drop entire cache, just due to one namespace.
 		posting.ResetCache()
+		if elCache != nil {
+			elCache.Clear()
+		}
 		return nil
 	}
 
@@ -398,6 +404,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		// Clear entire cache.
 		posting.ResetCache()
+		if elCache != nil {
+			elCache.Clear()
+		}
 
 		// It should be okay to set the schema at timestamp 1 after drop all operation.
 		if groups().groupId() == 1 {
