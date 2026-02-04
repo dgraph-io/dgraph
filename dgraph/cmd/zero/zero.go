@@ -456,7 +456,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 				// This will also make it easier to restore the reserved predicates after
 				// a DropAll operation.
 				t.GroupId = 1
-			case t.Label != "":
+			case t.IsLabeled():
 				// Labeled predicate: route to matching labeled group
 				gid, err := s.labelGroup(t.Label)
 				if err != nil {
@@ -713,7 +713,7 @@ func (s *Server) ShouldServe(
 		// If the existing tablet has a different label than requested, we need to re-route.
 		// This can happen when a schema is applied with @label after the predicate was
 		// created without a label (e.g., during DropAll).
-		if tablet.Label != "" && tab.Label != tablet.Label {
+		if tablet.IsLabeled() && tab.Label != tablet.Label {
 			glog.Infof("ShouldServe: tablet %s has label %q but request has label %q, re-routing",
 				tablet.Predicate, tab.Label, tablet.Label)
 			// Fall through to re-assign the tablet with the new label
@@ -746,7 +746,7 @@ func (s *Server) ShouldServe(
 		// This will also make it easier to restore the reserved predicates after
 		// a DropAll operation.
 		tablet.GroupId = 1
-	case tablet.Label != "":
+	case tablet.IsLabeled():
 		// Labeled predicate: route to matching labeled group
 		gid, err := s.labelGroup(tablet.Label)
 		if err != nil {
@@ -931,7 +931,7 @@ func (s *Server) groupLabel(gid uint32) string {
 		return ""
 	}
 	for _, member := range group.Members {
-		if member.Label != "" {
+		if member.IsLabeled() {
 			return member.Label
 		}
 	}

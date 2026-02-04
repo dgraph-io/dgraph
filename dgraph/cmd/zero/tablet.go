@@ -277,7 +277,7 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 				// Reserved predicates should always be in group 1 so do not re-balance them.
 				continue
 			}
-			if tab.Label != "" {
+			if tab.IsLabeled() {
 				// labeled predicates are pinned and should not be re-balanced either
 				continue
 			}

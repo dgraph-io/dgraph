@@ -224,7 +224,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			// For labeled predicates, the tablet is intentionally served by a different group.
 			// We still need to record the schema metadata so queries know the predicate type,
 			// but we skip all index operations since we don't store the data.
-			if su.Label != "" {
+			if su.IsLabeled() {
 				glog.V(2).Infof("Recording schema metadata for labeled predicate %s (label: %s), served by group %d",
 					su.Predicate, su.Label, tablet.GetGroupId())
 				if err := checkSchema(su); err != nil {
