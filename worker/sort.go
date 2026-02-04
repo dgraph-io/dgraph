@@ -46,23 +46,35 @@ type sortresult struct {
 
 // SortOverNetwork sends sort query over the network.
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
-	gid, err := groups().BelongsToReadOnly(q.Order[0].Attr, q.ReadTs)
+	attr := q.Order[0].Attr
+
+	// Check for multi-sub-tablet fan-out.
+	subTablets, err := groups().AllSubTablets(attr, q.ReadTs)
+	if err != nil {
+		return &emptySortResult, err
+	}
+
+	if len(subTablets) > 1 {
+		return processSortFanOut(ctx, q, subTablets)
+	}
+
+	// Fast path: single sub-tablet.
+	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
 		return &emptySortResult,
-			errors.Errorf("Cannot sort by unknown attribute %s", x.ParseAttr(q.Order[0].Attr))
+			errors.Errorf("Cannot sort by unknown attribute %s", x.ParseAttr(attr))
 	}
 
 	if span := trace.SpanFromContext(ctx); span != nil {
 		span.SetAttributes(
-			attribute.String("attribute", q.Order[0].Attr),
+			attribute.String("attribute", attr),
 			attribute.Int("groupId", int(gid)),
 		)
 	}
 
 	if groups().ServesGroup(gid) {
-		// No need for a network call, as this should be run from within this instance.
 		return processSort(ctx, q)
 	}
 
@@ -74,6 +86,71 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return &emptySortResult, err
 	}
 	return result.(*pb.SortResult), nil
+}
+
+func processSortFanOut(ctx context.Context, q *pb.SortMessage, subTablets []*pb.Tablet) (*pb.SortResult, error) {
+	type fanOutResult struct {
+		result *pb.SortResult
+		err    error
+	}
+
+	ch := make(chan fanOutResult, len(subTablets))
+	for _, tab := range subTablets {
+		gid := tab.GroupId
+		go func(gid uint32) {
+			if groups().ServesGroup(gid) {
+				r, err := processSort(ctx, q)
+				ch <- fanOutResult{r, err}
+				return
+			}
+			r, err := processWithBackupRequest(ctx, gid,
+				func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
+					return c.Sort(ctx, q)
+				})
+			if err != nil {
+				ch <- fanOutResult{nil, err}
+				return
+			}
+			ch <- fanOutResult{r.(*pb.SortResult), nil}
+		}(gid)
+	}
+
+	var results []*pb.SortResult
+	for range subTablets {
+		r := <-ch
+		if r.err != nil {
+			return &emptySortResult, r.err
+		}
+		results = append(results, r.result)
+	}
+
+	return mergeSortResults(results, q), nil
+}
+
+func mergeSortResults(results []*pb.SortResult, q *pb.SortMessage) *pb.SortResult {
+	if len(results) == 0 {
+		return &emptySortResult
+	}
+	if len(results) == 1 {
+		return results[0]
+	}
+
+	// Merge UID matrices from all sub-tablets.
+	merged := &pb.SortResult{}
+	if len(results[0].UidMatrix) > 0 {
+		merged.UidMatrix = make([]*pb.List, len(results[0].UidMatrix))
+		for i := range merged.UidMatrix {
+			merged.UidMatrix[i] = &pb.List{}
+		}
+		for _, r := range results {
+			for i, list := range r.UidMatrix {
+				if i < len(merged.UidMatrix) {
+					merged.UidMatrix[i].Uids = append(merged.UidMatrix[i].Uids, list.Uids...)
+				}
+			}
+		}
+	}
+	return merged
 }
 
 // Sort is used to sort given UID matrix.
