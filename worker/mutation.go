@@ -751,13 +751,11 @@ func resolveEntityLabel(uid uint64, batchLabels map[uint64]string) string {
 }
 
 // resolveLabel determines the effective label for routing an edge.
-// Priority: entity label > predicate @label > unlabeled.
-func resolveLabel(uid uint64, predicate string, batchLabels map[uint64]string) string {
-	if label := resolveEntityLabel(uid, batchLabels); label != "" {
-		return label
-	}
-	label, _ := schema.State().GetLabel(context.Background(), predicate)
-	return label
+// Only entity-level labels (dgraph.label) trigger label-aware routing.
+// Predicate-level @label routing is handled by Zero's tablet assignments
+// and does not require the alpha to resolve labels.
+func resolveLabel(uid uint64, _ string, batchLabels map[uint64]string) string {
+	return resolveEntityLabel(uid, batchLabels)
 }
 
 // populateMutationMap populates a map from group id to the mutation that
@@ -777,10 +775,8 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 
 	// PHASE 2: Route each edge using the entity's resolved label.
 	for _, edge := range src.Edges {
-		pred := x.ParseAttr(edge.Attr)
-
 		var label string
-		if x.IsReservedPredicate(pred) {
+		if x.IsReservedPredicate(edge.Attr) {
 			// Reserved predicates (dgraph.label, dgraph.type, ACL) always use
 			// predicate-level routing (typically group 1).
 			label, _ = schema.State().GetLabel(context.Background(), edge.Attr)

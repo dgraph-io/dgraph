@@ -144,6 +144,13 @@ func mergeResults(results []*pb.Result) *pb.Result {
 				}
 			}
 		}
+		// Sort merged UID lists. Downstream consumers (algo.IndexOf in
+		// outputnode.go, algo.MergeSorted in query.go) use binary search
+		// and assume sorted order. Fan-out goroutines complete in
+		// non-deterministic order, so the appended UIDs need sorting.
+		for _, list := range merged.UidMatrix {
+			sort.Slice(list.Uids, func(i, j int) bool { return list.Uids[i] < list.Uids[j] })
+		}
 	}
 
 	// Merge value matrices similarly.
@@ -270,6 +277,7 @@ func processTaskFanOut(ctx context.Context, q *pb.Query, subTablets []*pb.Tablet
 	for range subTablets {
 		r := <-ch
 		if r.err != nil {
+			glog.Warningf("processTaskFanOut(%q): sub-tablet returned error: %v", q.Attr, r.err)
 			return nil, r.err
 		}
 		results = append(results, r.result)

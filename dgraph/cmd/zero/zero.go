@@ -310,9 +310,21 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 
+	// Exact key lookup (handles both bare and composite keys).
 	for _, group := range s.state.Groups {
 		if tab, ok := group.Tablets[tablet]; ok {
 			return tab
+		}
+	}
+	// Fallback: search sub-tablets whose predicate matches.
+	// This handles the case where a caller passes a bare predicate but the
+	// tablet exists under a composite key (predicate@label).
+	for _, group := range s.state.Groups {
+		for key, tab := range group.Tablets {
+			pred, _ := pb.ParseTabletKey(key)
+			if pred == tablet {
+				return tab
+			}
 		}
 	}
 	return nil
@@ -450,7 +462,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	tablets := make([]*pb.Tablet, 0)
 	unknownTablets := make([]*pb.Tablet, 0)
 	for _, t := range req.Tablets {
-		tab := s.ServingTablet(t.Predicate)
+		tab := s.ServingTablet(pb.TabletKey(t.Predicate, t.Label))
 		span.SetAttributes(attribute.String("tablet_predicate", t.Predicate))
 		switch {
 		case tab != nil && !t.Force:
@@ -517,7 +529,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	}
 
 	for _, t := range unknownTablets {
-		tab := s.ServingTablet(t.Predicate)
+		tab := s.ServingTablet(pb.TabletKey(t.Predicate, t.Label))
 		x.AssertTrue(tab != nil)
 		span.AddEvent(fmt.Sprintf("Tablet served: %+v", tab))
 		tablets = append(tablets, tab)
@@ -737,8 +749,10 @@ func (s *Server) ShouldServe(
 		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
-	// Check who is serving this tablet.
-	tab := s.ServingTablet(tablet.Predicate)
+	// Check who is serving this tablet. Use ServingTablet with composite key
+	// so that an unlabeled request (label="") finds labeled sub-tablets via
+	// the sub-tablet fallback search.
+	tab := s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	span.SetAttributes(attribute.String("tablet_label", tablet.Label))
 	if tab != nil && !tablet.Force {
@@ -752,8 +766,23 @@ func (s *Server) ShouldServe(
 			// The handleTablet function will allow this because labels differ
 		} else {
 			// Someone is serving this tablet. Could be the caller as well.
-			// The caller should compare the returned group against the group it holds to check who's
-			// serving.
+			// If the found tablet belongs to a different group than the requester,
+			// check if the requesting group serves a sub-tablet of this predicate.
+			// This handles entity-level routing where the alpha sends an unlabeled
+			// request (label="") but its group has a labeled sub-tablet.
+			if tablet.GroupId > 0 && tab.GroupId != tablet.GroupId {
+				s.RLock()
+				if reqGroup, ok := s.state.Groups[tablet.GroupId]; ok {
+					for key, subTab := range reqGroup.Tablets {
+						pred, _ := pb.ParseTabletKey(key)
+						if pred == tablet.Predicate {
+							s.RUnlock()
+							return subTab, nil
+						}
+					}
+				}
+				s.RUnlock()
+			}
 			return tab, nil
 		}
 	}
@@ -802,7 +831,7 @@ func (s *Server) ShouldServe(
 		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return tablet, err
 	}
-	tab = s.ServingTablet(tablet.Predicate)
+	tab = s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	x.AssertTrue(tab != nil)
 	span.SetAttributes(attribute.String("tablet_predicate_served", tablet.Predicate))
 	return tab, nil

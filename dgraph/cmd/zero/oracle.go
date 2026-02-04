@@ -370,13 +370,20 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			if strings.Contains(pred, hnsw.VecKeyword) {
 				pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
 			}
-			tablet := s.ServingTablet(pred)
-			if tablet == nil {
+			tablets := s.ServingTablets(pred)
+			if len(tablets) == 0 {
 				return errors.Errorf("Tablet for %s is nil", pred)
 			}
-			if tablet.GroupId != uint32(gid) {
-				return errors.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
-					gid, pred, tablet.GroupId)
+			found := false
+			for _, t := range tablets {
+				if t.GroupId == uint32(gid) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return errors.Errorf("Mutation done in group: %d. Predicate %s not assigned there",
+					gid, pred)
 			}
 			if s.isBlocked(pred) {
 				return errors.Errorf("Commits on predicate %s are blocked due to predicate move", pred)

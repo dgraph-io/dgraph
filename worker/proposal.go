@@ -146,16 +146,20 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	var noTimeout bool
 
 	// checkTablet verifies that this group serves the given predicate.
-	// For data mutations, we get the label from stored schema.
+	// Uses BelongsToReadOnly instead of Tablet to avoid label-resolution issues
+	// with entity-level sub-tablets. The bare-predicate key in the tablet cache
+	// always maps to the own group's tablet (due to two-pass ordering in applyState),
+	// so a direct cache lookup correctly validates that this group serves some
+	// sub-tablet for the predicate. This avoids depending on schema.State().GetLabel()
+	// which returns a single label and may not match the receiving group's sub-tablet.
 	checkTablet := func(pred string) error {
-		label, _ := schema.State().GetLabel(context.Background(), pred)
-		tablet, err := groups().Tablet(pred, label)
+		gid, err := groups().BelongsToReadOnly(pred, 0)
 		switch {
 		case err != nil:
 			return err
-		case tablet == nil || tablet.GroupId == 0:
+		case gid == 0:
 			return errNonExistentTablet
-		case tablet.GroupId != groups().groupId():
+		case gid != groups().groupId():
 			return errUnservedTablet
 		default:
 			return nil
