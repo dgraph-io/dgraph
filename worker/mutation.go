@@ -707,6 +707,30 @@ func initEntityLabelCache() {
 	elCache = newEntityLabelCache(1_000_000) // 1M entries ~= 16MB
 }
 
+// readEntityLabelFromStore reads dgraph.label for a UID via ProcessTaskOverNetwork.
+// This issues a query to group 1 (where dgraph.label is served) to look up
+// the entity's label on a cache miss.
+func readEntityLabelFromStore(uid uint64) string {
+	ctx := context.Background()
+	q := &pb.Query{
+		Attr:    x.NamespaceAttr(x.RootNamespace, "dgraph.label"),
+		UidList: &pb.List{Uids: []uint64{uid}},
+		ReadTs:  State.GetTimestamp(false),
+	}
+	result, err := ProcessTaskOverNetwork(ctx, q)
+	if err != nil {
+		glog.V(2).Infof("Failed to read dgraph.label for uid %d: %v", uid, err)
+		return ""
+	}
+	if len(result.ValueMatrix) > 0 && len(result.ValueMatrix[0].Values) > 0 {
+		val := result.ValueMatrix[0].Values[0]
+		if len(val.Val) > 0 {
+			return string(val.Val)
+		}
+	}
+	return ""
+}
+
 // resolveEntityLabel returns the entity-level label for a UID.
 // Priority: batch labels > cache > read from group 1.
 func resolveEntityLabel(uid uint64, batchLabels map[uint64]string) string {
@@ -718,10 +742,12 @@ func resolveEntityLabel(uid uint64, batchLabels map[uint64]string) string {
 			return label
 		}
 	}
-	// TODO: Cache miss — read dgraph.label from group 1.
-	// For now, return "" (unlabeled). The group-1 read will be added
-	// in a follow-up task once the integration test cluster is running.
-	return ""
+	// Cache miss — read dgraph.label from the store.
+	label := readEntityLabelFromStore(uid)
+	if elCache != nil {
+		elCache.Set(uid, label)
+	}
+	return label
 }
 
 // resolveLabel determines the effective label for routing an edge.
