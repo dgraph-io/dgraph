@@ -5,6 +5,30 @@
 
 package pb
 
+import "strings"
+
+const tabletKeySep = "@"
+
+// TabletKey returns the composite key for a sub-tablet. Unlabeled sub-tablets
+// use the bare predicate name for backward compatibility.
+func TabletKey(predicate, label string) string {
+	if label == "" {
+		return predicate
+	}
+	return predicate + tabletKeySep + label
+}
+
+// ParseTabletKey splits a composite tablet key into its predicate and label
+// components. Uses the rightmost '@' as the separator as a defensive choice,
+// though '@' is not valid in Dgraph predicate names (allowed: a-zA-Z0-9_.~).
+// For keys without a label (no '@' separator), the label is "".
+func ParseTabletKey(key string) (predicate, label string) {
+	if idx := strings.LastIndex(key, tabletKeySep); idx >= 0 {
+		return key[:idx], key[idx+1:]
+	}
+	return key, ""
+}
+
 // IsLabeled returns true if this tablet has a label assigned via the @label
 // schema directive. Labeled tablets are pinned to specific alpha groups and
 // receive special routing, rebalancing, and authorization treatment.
