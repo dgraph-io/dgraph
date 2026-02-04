@@ -315,11 +315,14 @@ func (n *node) handleTablet(tablet *pb.Tablet) error {
 	if tablet.GroupId == 0 {
 		return errors.Errorf("Tablet group id is zero: %+v", tablet)
 	}
+
+	key := pb.TabletKey(tablet.Predicate, tablet.Label)
+
 	group := state.Groups[tablet.GroupId]
 	if tablet.Remove {
-		glog.Infof("Removing tablet for attr: [%v], gid: [%v]\n", tablet.Predicate, tablet.GroupId)
+		glog.Infof("Removing tablet for key: [%v], gid: [%v]\n", key, tablet.GroupId)
 		if group != nil {
-			delete(group.Tablets, tablet.Predicate)
+			delete(group.Tablets, key)
 		}
 		return nil
 	}
@@ -328,29 +331,28 @@ func (n *node) handleTablet(tablet *pb.Tablet) error {
 		state.Groups[tablet.GroupId] = group
 	}
 
-	// There's a edge case that we're handling.
-	// Two servers ask to serve the same tablet, then we need to ensure that
-	// only the first one succeeds.
-	if prev := n.server.servingTablet(tablet.Predicate); prev != nil {
+	// Duplicate detection: check if this (predicate, label) pair is already served.
+	// Multiple groups CAN serve the same predicate as long as they have different labels.
+	if prev := n.server.servingSubTablet(tablet.Predicate, tablet.Label); prev != nil {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
-			delete(originalGroup.Tablets, tablet.Predicate)
+			delete(originalGroup.Tablets, key)
 		} else if tablet.IsLabeled() && prev.Label != tablet.Label {
 			// Allow re-routing when labels differ. This happens when a schema with @label
 			// is applied after the predicate was created without a label.
-			glog.Infof("Tablet for attr: [%s] re-routing from group %d to %d due to label change (%q -> %q)",
-				tablet.Predicate, prev.GroupId, tablet.GroupId, prev.Label, tablet.Label)
+			glog.Infof("Tablet for key: [%s] re-routing from group %d to %d due to label change (%q -> %q)",
+				key, prev.GroupId, tablet.GroupId, prev.Label, tablet.Label)
 			originalGroup := state.Groups[prev.GroupId]
-			delete(originalGroup.Tablets, tablet.Predicate)
+			delete(originalGroup.Tablets, key)
 		} else if prev.GroupId != tablet.GroupId {
 			glog.Infof(
-				"Tablet for attr: [%s], gid: [%d] already served by group: [%d]\n",
-				prev.Predicate, tablet.GroupId, prev.GroupId)
+				"Tablet for key: [%s], gid: [%d] already served by group: [%d]\n",
+				key, tablet.GroupId, prev.GroupId)
 			return errTabletAlreadyServed
 		}
 	}
 	tablet.Force = false
-	group.Tablets[tablet.Predicate] = tablet
+	group.Tablets[key] = tablet
 	return nil
 }
 

@@ -358,17 +358,6 @@ func (s *Server) isBlocked(pred string) bool {
 	return blocked
 }
 
-func (s *Server) servingTablet(tablet string) *pb.Tablet {
-	s.AssertRLock()
-
-	for _, group := range s.state.Groups {
-		if tab, ok := group.Tablets[tablet]; ok {
-			return tab
-		}
-	}
-	return nil
-}
-
 // servingSubTablet returns the tablet for the given (predicate, label) pair.
 // For unlabeled sub-tablets, the key is just the predicate name.
 // For labeled sub-tablets, the key is "predicate@label".
