@@ -445,6 +445,32 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	return out.GetGroupId(), nil
 }
 
+// AllSubTablets returns all cached sub-tablets for a predicate.
+// This is used for query fan-out when a predicate has multiple sub-tablets.
+// Returns nil if only a single sub-tablet exists (fast path).
+func (g *groupi) AllSubTablets(predicate string, ts uint64) ([]*pb.Tablet, error) {
+	g.RLock()
+	var tablets []*pb.Tablet
+	for key, tablet := range g.tablets {
+		tabPred, _ := pb.ParseTabletKey(key)
+		if tabPred == predicate {
+			if ts > 0 && ts < tablet.MoveTs {
+				g.RUnlock()
+				return nil, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
+					ts, tablet.MoveTs, key)
+			}
+			tablets = append(tablets, tablet)
+		}
+	}
+	g.RUnlock()
+
+	if len(tablets) <= 1 {
+		// Single sub-tablet or no sub-tablets — handled by normal BelongsToReadOnly path.
+		return nil, nil
+	}
+	return tablets, nil
+}
+
 // ServesTablet checks if this group serves the given predicate.
 // Uses stored schema to get the label for existing predicates.
 func (g *groupi) ServesTablet(key string) (bool, error) {
