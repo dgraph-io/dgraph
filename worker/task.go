@@ -118,11 +118,84 @@ func processWithBackupRequest(
 	}
 }
 
+// mergeResults combines results from multiple sub-tablet queries.
+// Each sub-tablet returns results only for UIDs it has postings for.
+func mergeResults(results []*pb.Result) *pb.Result {
+	if len(results) == 0 {
+		return &pb.Result{}
+	}
+	if len(results) == 1 {
+		return results[0]
+	}
+
+	merged := &pb.Result{}
+	// Merge UID matrices: each result has one UidMatrix entry per query UID.
+	// For fan-out, all results have the same number of UidMatrix entries.
+	// Merge by appending UIDs from each sub-tablet's response.
+	if len(results[0].UidMatrix) > 0 {
+		merged.UidMatrix = make([]*pb.List, len(results[0].UidMatrix))
+		for i := range merged.UidMatrix {
+			merged.UidMatrix[i] = &pb.List{}
+		}
+		for _, r := range results {
+			for i, list := range r.UidMatrix {
+				if i < len(merged.UidMatrix) {
+					merged.UidMatrix[i].Uids = append(merged.UidMatrix[i].Uids, list.Uids...)
+				}
+			}
+		}
+	}
+
+	// Merge value matrices similarly.
+	if len(results[0].ValueMatrix) > 0 {
+		merged.ValueMatrix = make([]*pb.ValueList, len(results[0].ValueMatrix))
+		for i := range merged.ValueMatrix {
+			merged.ValueMatrix[i] = &pb.ValueList{}
+		}
+		for _, r := range results {
+			for i, vl := range r.ValueMatrix {
+				if i < len(merged.ValueMatrix) {
+					merged.ValueMatrix[i].Values = append(merged.ValueMatrix[i].Values, vl.Values...)
+				}
+			}
+		}
+	}
+
+	// Merge counts.
+	if len(results[0].Counts) > 0 {
+		merged.Counts = make([]uint32, len(results[0].Counts))
+		for _, r := range results {
+			for i, c := range r.Counts {
+				if i < len(merged.Counts) {
+					merged.Counts[i] += c
+				}
+			}
+		}
+	}
+
+	// IntersectDest is not relevant for fan-out queries.
+	// LinRead is not relevant for fan-out queries.
+	return merged
+}
+
 // ProcessTaskOverNetwork is used to process the query and get the result from
 // the instance which stores posting list corresponding to the predicate in the
 // query.
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
+
+	// Check for multi-sub-tablet fan-out.
+	subTablets, err := groups().AllSubTablets(attr, q.ReadTs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(subTablets) > 1 {
+		// Fan-out path: send query to all sub-tablet groups in parallel.
+		return processTaskFanOut(ctx, q, subTablets)
+	}
+
+	// Fast path: single sub-tablet (or none), use existing routing.
 	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	switch {
 	case err != nil:
@@ -139,7 +212,6 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		attribute.String("node_id", fmt.Sprintf("%d", groups().Node.Id))))
 
 	if groups().ServesGroup(gid) {
-		// No need for a network call, as this should be run from within this instance.
 		return processTask(ctx, q, gid)
 	}
 
@@ -157,6 +229,57 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		attribute.Int64("gid", int64(gid)),
 		attribute.String("attr", attr)))
 	return reply, nil
+}
+
+// processTaskFanOut sends the query to all sub-tablet groups in parallel
+// and merges the results.
+func processTaskFanOut(ctx context.Context, q *pb.Query, subTablets []*pb.Tablet) (*pb.Result, error) {
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("ProcessTaskFanOut", trace.WithAttributes(
+		attribute.String("attr", q.Attr),
+		attribute.Int("sub_tablets", len(subTablets)),
+		attribute.String("readTs", fmt.Sprintf("%d", q.ReadTs))))
+
+	type fanOutResult struct {
+		result *pb.Result
+		err    error
+	}
+
+	ch := make(chan fanOutResult, len(subTablets))
+	for _, tab := range subTablets {
+		gid := tab.GroupId
+		go func(gid uint32) {
+			if groups().ServesGroup(gid) {
+				r, err := processTask(ctx, q, gid)
+				ch <- fanOutResult{r, err}
+				return
+			}
+			r, err := processWithBackupRequest(ctx, gid,
+				func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
+					return c.ServeTask(ctx, q)
+				})
+			if err != nil {
+				ch <- fanOutResult{nil, err}
+				return
+			}
+			ch <- fanOutResult{r.(*pb.Result), nil}
+		}(gid)
+	}
+
+	var results []*pb.Result
+	for range subTablets {
+		r := <-ch
+		if r.err != nil {
+			return nil, r.err
+		}
+		results = append(results, r.result)
+	}
+
+	merged := mergeResults(results)
+	span.AddEvent("FanOut merged", trace.WithAttributes(
+		attribute.Int("result_count", len(results)),
+		attribute.String("attr", q.Attr)))
+	return merged, nil
 }
 
 // convertValue converts the data to the schema.State() type of predicate.
