@@ -782,3 +782,13 @@ func IsPreDefinedType(typ string) bool {
 func isReservedName(name string) bool {
 	return strings.HasPrefix(strings.ToLower(name), "dgraph.")
 }
+
+// ProgramFacetKey is the reserved facet key used for storing program labels on edges.
+// This facet is automatically added during mutations when the user has programs in their
+// auth context, and is used for server-side filtering during queries.
+const ProgramFacetKey = "dgraph.programs"
+
+// IsReservedFacetKey returns true if the facet key is reserved for internal usage.
+func IsReservedFacetKey(key string) bool {
+	return key == ProgramFacetKey
+}

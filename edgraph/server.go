@@ -48,6 +48,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/worker"
 	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x/auth"
 )
 
 const (
@@ -555,6 +556,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
 	edges, err := query.ToDirectedEdges(qc.gmuList, newUids)
 	if err != nil {
+		return err
+	}
+
+	// Inject program facets from auth context into edges
+	if err := injectProgramFacets(ctx, edges); err != nil {
 		return err
 	}
 
@@ -2237,4 +2243,49 @@ func parseSubject(predSubject string) (uint64, error) {
 	} else {
 		return dql.ParseUid(predSubject)
 	}
+}
+
+// injectProgramFacets adds the dgraph.programs facet to edges based on the auth context.
+// If the user has programs in their auth context, those programs are attached to each edge
+// being mutated. This enables server-side filtering during queries.
+func injectProgramFacets(ctx context.Context, edges []*pb.DirectedEdge) error {
+	authCtx := auth.ExtractOrNil(ctx)
+	if authCtx == nil || len(authCtx.Programs) == 0 {
+		return nil
+	}
+
+	// Create the program facet with comma-separated programs
+	programsValue := strings.Join(authCtx.Programs, ",")
+	programFacet := &api.Facet{
+		Key:     x.ProgramFacetKey,
+		Value:   []byte(programsValue),
+		ValType: api.Facet_STRING,
+	}
+
+	// Add the program facet to each SET edge
+	for _, edge := range edges {
+		if edge.Op != pb.DirectedEdge_SET {
+			continue
+		}
+
+		// Check if program facet already exists (user explicitly set it)
+		hasProgram := false
+		for _, f := range edge.Facets {
+			if f.Key == x.ProgramFacetKey {
+				hasProgram = true
+				break
+			}
+		}
+
+		// Only add if not already present
+		if !hasProgram {
+			edge.Facets = append(edge.Facets, programFacet)
+			// Re-sort facets to maintain order
+			sort.Slice(edge.Facets, func(i, j int) bool {
+				return edge.Facets[i].Key < edge.Facets[j].Key
+			})
+		}
+	}
+
+	return nil
 }

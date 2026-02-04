@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x/auth"
 )
 
 func invokeNetworkRequest(ctx context.Context, addr string,
@@ -296,6 +297,7 @@ func needsIntersect(fnName string) bool {
 }
 
 type funcArgs struct {
+	ctx   context.Context
 	q     *pb.Query
 	gid   uint32
 	srcFn *functionContext
@@ -395,8 +397,28 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
 			return err
 		}
-		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
+		// Filter UIDs by program authorization
+		var authorizedUids []uint64
+		for _, uid := range nnUids {
+			key := x.DataKey(q.Attr, uid)
+			pl, err := qs.cache.Get(key)
+			if err != nil {
+				continue
+			}
+			hasAuthorized := false
+			_ = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+				if checkProgramAuthorization(ctx, p.Facets) {
+					hasAuthorized = true
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if hasAuthorized {
+				authorizedUids = append(authorizedUids, uid)
+			}
+		}
+		sort.Slice(authorizedUids, func(i, j int) bool { return authorizedUids[i] < authorizedUids[j] })
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: authorizedUids})
 		return nil
 	}
 
@@ -471,8 +493,22 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 						&pb.ValueList{Values: []*pb.TaskValue{}})
 					continue
 				}
-				vals = make([]types.Val, len(pl.Postings))
-				for i, p := range pl.Postings {
+				// Filter postings by program authorization
+				var authorizedPostings []*pb.Posting
+				for _, p := range pl.Postings {
+					if checkProgramAuthorization(ctx, p.Facets) {
+						authorizedPostings = append(authorizedPostings, p)
+					}
+				}
+				if len(authorizedPostings) == 0 {
+					out.UidMatrix = append(out.UidMatrix, &pb.List{})
+					out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
+					out.ValueMatrix = append(out.ValueMatrix,
+						&pb.ValueList{Values: []*pb.TaskValue{}})
+					continue
+				}
+				vals = make([]types.Val, len(authorizedPostings))
+				for i, p := range authorizedPostings {
 					vals[i] = types.Val{
 						Tid:   types.TypeID(p.ValType),
 						Value: p.Value,
@@ -667,6 +703,12 @@ func facetsFilterValuePostingList(args funcArgs, pl *posting.List, facetsTree *f
 		if err != nil {
 			return err
 		}
+
+		// Check program authorization - filter out postings user doesn't have access to
+		if picked && !checkProgramAuthorization(args.ctx, p.Facets) {
+			picked = false
+		}
+
 		if picked {
 			fn(p)
 		}
@@ -715,7 +757,7 @@ func retrieveValuesAndFacets(args funcArgs, pl *posting.List, facetsTree *facets
 	return vals, &pb.FacetsList{FacetsList: fcs}, nil
 }
 
-func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
+func facetsFilterUidPostingList(ctx context.Context, pl *posting.List, facetsTree *facetsTree, opts posting.ListOptions,
 	fn func(*pb.Posting)) error {
 
 	return pl.Postings(opts, func(p *pb.Posting) error {
@@ -724,6 +766,12 @@ func facetsFilterUidPostingList(pl *posting.List, facetsTree *facetsTree, opts p
 		if err != nil {
 			return err
 		}
+
+		// Check program authorization - filter out postings user doesn't have access to
+		if pick && !checkProgramAuthorization(ctx, p.Facets) {
+			pick = false
+		}
+
 		if pick {
 			fn(p)
 		}
@@ -735,7 +783,7 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 	opts posting.ListOptions) (int, error) {
 
 	var filteredCount int
-	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+	err := facetsFilterUidPostingList(args.ctx, pl, facetsTree, opts, func(p *pb.Posting) {
 		filteredCount++
 	})
 	if err != nil {
@@ -754,7 +802,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
 	}
 
-	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
+	err := facetsFilterUidPostingList(args.ctx, pl, facetsTree, opts, func(p *pb.Posting) {
 		uidList.Uids = append(uidList.Uids, p.Uid)
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
@@ -915,8 +963,22 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					// Check program authorization before including this UID
+					hasAuthorized := false
+					iterErr := pl.Iterate(args.q.ReadTs, 0, func(p *pb.Posting) error {
+						if checkProgramAuthorization(ctx, p.Facets) {
+							hasAuthorized = true
+							return posting.ErrStopIteration
+						}
+						return nil
+					})
+					if iterErr != nil && iterErr != posting.ErrStopIteration {
+						return iterErr
+					}
+					if hasAuthorized {
+						tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
+						out.UidMatrix = append(out.UidMatrix, tlist)
+					}
 				}
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
@@ -934,8 +996,22 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if len(plist.Uids) > 0 {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					// Check program authorization before including this UID
+					hasAuthorized := false
+					iterErr := pl.Iterate(args.q.ReadTs, 0, func(p *pb.Posting) error {
+						if checkProgramAuthorization(ctx, p.Facets) {
+							hasAuthorized = true
+							return posting.ErrStopIteration
+						}
+						return nil
+					})
+					if iterErr != nil && iterErr != posting.ErrStopIteration {
+						return iterErr
+					}
+					if hasAuthorized {
+						tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
+						out.UidMatrix = append(out.UidMatrix, tlist)
+					}
 				}
 			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
@@ -953,7 +1029,8 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.AddEvent("default no facets")
 				}
-				uidList, err := pl.Uids(opts)
+				// Use facetsFilterUidPostingList to apply program authorization even without facet params
+				uidList, _, err := retrieveUidsAndFacets(args, pl, nil, opts)
 				if err != nil {
 					return err
 				}
@@ -1119,7 +1196,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		opts.Intersect = q.UidList
 	}
 
-	args := funcArgs{q, gid, srcFn, out}
+	args := funcArgs{ctx, q, gid, srcFn, out}
 	needsValPostings, err := srcFn.needsValuePostings(typ)
 	if err != nil {
 		return nil, err
@@ -1311,6 +1388,19 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			return err
 		}
 
+		// Check program authorization before processing
+		hasAuthorized := false
+		_ = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+			if checkProgramAuthorization(ctx, p.Facets) {
+				hasAuthorized = true
+				return posting.ErrStopIteration
+			}
+			return nil
+		})
+		if !hasAuthorized {
+			continue
+		}
+
 		vals := make([]types.Val, 1)
 		switch {
 		case lang != "":
@@ -1393,14 +1483,27 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 
 		var filterErr error
 		algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
+			// Check program authorization first
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				filterErr = err
+				return false
+			}
+			hasAuthorized := false
+			_ = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+				if checkProgramAuthorization(ctx, p.Facets) {
+					hasAuthorized = true
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if !hasAuthorized {
+				return false
+			}
+
 			switch lang {
 			case "":
 				if isList {
-					pl, err := qs.cache.Get(x.DataKey(attr, uid))
-					if err != nil {
-						filterErr = err
-						return false
-					}
 					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
 					if err != nil {
 						if err != posting.ErrNoValue {
@@ -1418,11 +1521,6 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return false
 				}
 
-				pl, err := qs.cache.Get(x.DataKey(attr, uid))
-				if err != nil {
-					filterErr = err
-					return false
-				}
 				sv, err := pl.Value(arg.q.ReadTs)
 				if err != nil {
 					if err != posting.ErrNoValue {
@@ -1433,11 +1531,6 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				dst, err := types.Convert(sv, typ)
 				return err == nil && compareFunc(dst)
 			case ".":
-				pl, err := qs.cache.Get(x.DataKey(attr, uid))
-				if err != nil {
-					filterErr = err
-					return false
-				}
 				values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
 				if err != nil {
 					filterErr = err
@@ -1451,11 +1544,6 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				}
 				return false
 			default:
-				pl, err := qs.cache.Get(x.DataKey(attr, uid))
-				if err != nil {
-					filterErr = err
-					return false
-				}
 				src, err := pl.ValueFor(arg.q.ReadTs, arg.q.Langs)
 				if err != nil {
 					if err != posting.ErrNoValue {
@@ -1573,6 +1661,19 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 		pl, err := qs.cache.Get(x.DataKey(attr, uid))
 		if err != nil {
 			return err
+		}
+
+		// Check program authorization before processing
+		hasAuthorized := false
+		_ = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+			if checkProgramAuthorization(ctx, p.Facets) {
+				hasAuthorized = true
+				return posting.ErrStopIteration
+			}
+			return nil
+		})
+		if !hasAuthorized {
+			continue
 		}
 
 		vals := make([]types.Val, 1)
@@ -2631,6 +2732,23 @@ func (qs *queryState) handleHasWithOrderFunction(ctx context.Context, q *pb.Quer
 				if err := checkInclusion(uid); err != nil {
 					continue
 				}
+				// Check program authorization for this UID
+				dataKey := x.DataKey(q.Attr, uid)
+				dataList, err := qs.cache.Get(dataKey)
+				if err != nil {
+					continue
+				}
+				hasAuthorized := false
+				_ = dataList.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+					if checkProgramAuthorization(ctx, p.Facets) {
+						hasAuthorized = true
+						return posting.ErrStopIteration
+					}
+					return nil
+				})
+				if !hasAuthorized {
+					continue
+				}
 				result.Uids = append(result.Uids, uid)
 			}
 
@@ -2723,6 +2841,22 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		AllVersions:    true,
 		CheckInclusion: checkInclusion,
 		Function: func(l *posting.List, pk x.ParsedKey) error {
+			// Check program authorization - iterate postings to see if any are authorized
+			hasAuthorizedPosting := false
+			err := l.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+				if checkProgramAuthorization(ctx, p.Facets) {
+					hasAuthorizedPosting = true
+					return posting.ErrStopIteration
+				}
+				return nil
+			})
+			if err != nil && err != posting.ErrStopIteration {
+				return err
+			}
+			if !hasAuthorizedPosting {
+				return nil // Skip this UID - no authorized postings
+			}
+
 			if cnt < q.Offset {
 				cnt++
 				return nil
@@ -2797,4 +2931,53 @@ func parseSimilarToOptions(args []string, fc *functionContext) error {
 		}
 	}
 	return nil
+}
+
+// checkProgramAuthorization checks if a posting is authorized based on the user's programs.
+// Returns true if the posting should be included, false if it should be filtered out.
+// If the auth context is nil (no auth active), all postings are allowed (backward compat).
+// If the posting has no program facet, it's accessible to everyone.
+// If the posting has programs but user has none, access is denied.
+// If both have programs, at least one must match (OR logic).
+func checkProgramAuthorization(ctx context.Context, postingFacets []*api.Facet) bool {
+	authCtx := auth.ExtractOrNil(ctx)
+	if authCtx == nil {
+		// No auth context - allow all postings (backward compatibility)
+		return true
+	}
+
+	// Find the program facet on this posting
+	var programFacet *api.Facet
+	for _, f := range postingFacets {
+		if f.Key == x.ProgramFacetKey {
+			programFacet = f
+			break
+		}
+	}
+
+	if programFacet == nil {
+		// No program facet on posting - accessible to everyone
+		return true
+	}
+
+	// Posting has programs - user must have at least one matching program
+	if len(authCtx.Programs) == 0 {
+		// User has no programs but posting requires them - deny access
+		return false
+	}
+
+	// Parse the comma-separated programs from the facet
+	postingPrograms := strings.Split(string(programFacet.Value), ",")
+
+	// Check if any user program matches any posting program (OR logic)
+	for _, userProg := range authCtx.Programs {
+		for _, postProg := range postingPrograms {
+			if strings.TrimSpace(userProg) == strings.TrimSpace(postProg) {
+				return true
+			}
+		}
+	}
+
+	// No matching programs - filter out this posting
+	return false
 }

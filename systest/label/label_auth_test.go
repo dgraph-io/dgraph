@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -296,4 +297,606 @@ func TestLabelAuthWithoutACL(t *testing.T) {
 	require.Equal(t, "007", result.Agents[0].Codename)
 	require.Empty(t, result.Agents[0].Alias)
 	t.Log("Test passed: label auth works without ACL enabled")
+}
+
+// setupProgramAuthTest sets up test data with program-labeled edges for program auth tests.
+func setupProgramAuthTest(t *testing.T) {
+	t.Log("Setting up program auth test...")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Drop all and set up schema
+	t.Log("Dropping all data...")
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	// Simple schema without labels - we'll use program facets on the data
+	t.Log("Applying schema...")
+	schema := `
+		name: string @index(term) .
+		project: string @index(term) .
+		location: string @index(term) .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	t.Log("Waiting 2s for schema to propagate...")
+	time.Sleep(2 * time.Second)
+}
+
+// TestProgramAuthMutationInjectsPrograms verifies that mutations automatically get program facets.
+func TestProgramAuthMutationInjectsPrograms(t *testing.T) {
+	t.Log("=== TestProgramAuthMutationInjectsPrograms: Mutations should auto-inject program facets ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Create context with programs - these should be auto-injected as facets
+	ctx := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA", "BRAVO"},
+	})
+
+	// Insert data with program context
+	t.Log("Inserting data with programs ALPHA,BRAVO...")
+	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:p1 <name> "Project Alpha-Bravo" .
+			_:p1 <project> "classified" .
+		`),
+	})
+	require.NoError(t, err)
+
+	// Query with same programs - should see the data (program filtering is server-side)
+	t.Log("Querying with matching programs...")
+	resp, err := dg.NewTxn().Query(ctx, `
+		{
+			projects(func: has(name)) {
+				name
+				project
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("Query response: %s", string(resp.GetJson()))
+
+	// Verify data is returned (program facets are enforced server-side, not via @facets directive)
+	var result struct {
+		Projects []struct {
+			Name    string `json:"name"`
+			Project string `json:"project"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "should have 1 project")
+	require.Equal(t, "Project Alpha-Bravo", result.Projects[0].Name)
+	require.Equal(t, "classified", result.Projects[0].Project)
+	t.Log("Test passed: mutation injected programs and query returned data")
+}
+
+// TestProgramAuthFiltersByProgram verifies that queries filter data based on user programs.
+func TestProgramAuthFiltersByProgram(t *testing.T) {
+	t.Log("=== TestProgramAuthFiltersByProgram: Queries should filter based on user programs ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	t.Log("Inserting ALPHA project...")
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert data with BRAVO program
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	t.Log("Inserting BRAVO project...")
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "Bravo Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with ALPHA program - should only see ALPHA data
+	t.Log("Querying with ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: has(name)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("ALPHA query response: %s", string(resp.GetJson()))
+
+	var alphaResult struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &alphaResult))
+	require.Len(t, alphaResult.Projects, 1, "ALPHA user should see 1 project")
+	require.Equal(t, "Alpha Project", alphaResult.Projects[0].Name)
+
+	// Query with BRAVO program - should only see BRAVO data
+	t.Log("Querying with BRAVO program...")
+	resp, err = dg.NewTxn().Query(ctxBravo, `
+		{
+			projects(func: has(name)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("BRAVO query response: %s", string(resp.GetJson()))
+
+	var bravoResult struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &bravoResult))
+	require.Len(t, bravoResult.Projects, 1, "BRAVO user should see 1 project")
+	require.Equal(t, "Bravo Project", bravoResult.Projects[0].Name)
+
+	t.Log("Test passed: queries correctly filter by program")
+}
+
+// TestProgramAuthNoPrograms verifies that users without programs only see public data.
+func TestProgramAuthNoPrograms(t *testing.T) {
+	t.Log("=== TestProgramAuthNoPrograms: Users without programs should only see public data ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert data with ALPHA program (protected)
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	t.Log("Inserting ALPHA project (protected)...")
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert data without programs (public - accessible to everyone)
+	t.Log("Inserting public project (no programs)...")
+	_, err = dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "Public Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with empty programs (auth active but no programs) - should only see public data
+	ctxNoPrograms := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{},
+	})
+	t.Log("Querying with auth active but no programs...")
+	resp, err := dg.NewTxn().Query(ctxNoPrograms, `
+		{
+			projects(func: has(name)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("No-program query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	// Should only see public project (user has no programs, can't access program-protected data)
+	require.Len(t, result.Projects, 1, "user without programs should only see public data")
+	require.Equal(t, "Public Project", result.Projects[0].Name)
+	t.Log("Test passed: users without programs only see public data")
+}
+
+// TestProgramAuthMultiplePrograms verifies OR logic for multiple programs.
+func TestProgramAuthMultiplePrograms(t *testing.T) {
+	t.Log("=== TestProgramAuthMultiplePrograms: Multiple programs use OR logic ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert ALPHA project
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Only" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "Bravo Only" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with both ALPHA and BRAVO programs - should see both
+	ctxBoth := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA", "BRAVO"},
+	})
+	t.Log("Querying with ALPHA and BRAVO programs...")
+	resp, err := dg.NewTxn().Query(ctxBoth, `
+		{
+			projects(func: has(name)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("Multi-program query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 2, "user with both programs should see both projects")
+	t.Log("Test passed: multiple programs use OR logic")
+}
+
+// TestProgramAuthEqFunction tests program auth with eq() comparison function.
+func TestProgramAuthEqFunction(t *testing.T) {
+	t.Log("=== TestProgramAuthEqFunction: eq() should respect program auth ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert ALPHA project
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Alpha Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project with same name pattern
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "Alpha Project" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with eq() using ALPHA program - should only see ALPHA's data
+	t.Log("Querying with eq() and ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: eq(name, "Alpha Project")) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("eq() query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "ALPHA user should see only 1 matching project")
+	t.Log("Test passed: eq() respects program auth")
+}
+
+// TestProgramAuthTermSearch tests program auth with term search functions.
+func TestProgramAuthTermSearch(t *testing.T) {
+	t.Log("=== TestProgramAuthTermSearch: allofterms/anyofterms should respect program auth ===")
+	setupProgramAuthTest(t)
+	dg := waitForCluster(t)
+
+	// Insert ALPHA project
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "secret mission alpha" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project with overlapping terms
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "secret mission bravo" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with anyofterms using ALPHA program
+	t.Log("Querying with anyofterms() and ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: anyofterms(name, "secret mission")) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("anyofterms() query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "ALPHA user should see only their project")
+	require.Contains(t, result.Projects[0].Name, "alpha")
+	t.Log("Test passed: term search respects program auth")
+}
+
+// TestProgramAuthRegexp tests program auth with regexp() function.
+func TestProgramAuthRegexp(t *testing.T) {
+	t.Log("=== TestProgramAuthRegexp: regexp() should respect program auth ===")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Setup schema with trigram index for regexp
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	schema := `
+		name: string @index(trigram) .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	time.Sleep(2 * time.Second)
+
+	// Insert ALPHA project
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "Project-Alpha-001" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "Project-Bravo-002" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with regexp using ALPHA program
+	t.Log("Querying with regexp() and ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: regexp(name, /Project-.*/)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("regexp() query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "ALPHA user should see only their project")
+	require.Contains(t, result.Projects[0].Name, "Alpha")
+	t.Log("Test passed: regexp() respects program auth")
+}
+
+// TestProgramAuthMatch tests program auth with match() fuzzy function.
+func TestProgramAuthMatch(t *testing.T) {
+	t.Log("=== TestProgramAuthMatch: match() should respect program auth ===")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Setup schema with trigram index for match
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	schema := `
+		name: string @index(trigram) .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	time.Sleep(2 * time.Second)
+
+	// Insert ALPHA project
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p1 <name> "AlphaProject" .`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`_:p2 <name> "BravoProject" .`),
+	})
+	require.NoError(t, err)
+
+	// Query with match using ALPHA program (fuzzy match with edit distance 3)
+	t.Log("Querying with match() and ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: match(name, "AlphaProjct", 3)) {
+				name
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("match() query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "ALPHA user should see only their project")
+	require.Equal(t, "AlphaProject", result.Projects[0].Name)
+	t.Log("Test passed: match() respects program auth")
+}
+
+// TestProgramAuthUidTraversal tests program auth with UID traversal.
+func TestProgramAuthUidTraversal(t *testing.T) {
+	t.Log("=== TestProgramAuthUidTraversal: UID traversal should respect program auth ===")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Setup schema with edges
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	schema := `
+		name: string @index(term) .
+		member: [uid] .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	time.Sleep(2 * time.Second)
+
+	// Insert team and members with ALPHA program
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	resp, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:team <name> "Alpha Team" .
+			_:m1 <name> "Alice" .
+			_:m2 <name> "Bob" .
+			_:team <member> _:m1 .
+			_:team <member> _:m2 .
+		`),
+	})
+	require.NoError(t, err)
+	teamUID := resp.Uids["team"]
+
+	// Insert team with BRAVO program
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:team2 <name> "Bravo Team" .
+			_:m3 <name> "Charlie" .
+			_:team2 <member> _:m3 .
+		`),
+	})
+	require.NoError(t, err)
+
+	// Query team by UID with ALPHA program - should see team and members
+	t.Log("Querying team by UID with ALPHA program...")
+	queryResp, err := dg.NewTxn().Query(ctxAlpha, fmt.Sprintf(`
+		{
+			team(func: uid(%s)) {
+				name
+				member {
+					name
+				}
+			}
+		}
+	`, teamUID))
+	require.NoError(t, err)
+	t.Logf("UID traversal response: %s", string(queryResp.GetJson()))
+
+	var result struct {
+		Team []struct {
+			Name   string `json:"name"`
+			Member []struct {
+				Name string `json:"name"`
+			} `json:"member"`
+		} `json:"team"`
+	}
+	require.NoError(t, json.Unmarshal(queryResp.GetJson(), &result))
+	require.Len(t, result.Team, 1)
+	require.Equal(t, "Alpha Team", result.Team[0].Name)
+	require.Len(t, result.Team[0].Member, 2, "should see both members")
+	t.Log("Test passed: UID traversal respects program auth")
+}
+
+// TestProgramAuthComparisonOps tests program auth with comparison operators (lt, gt, le, ge).
+func TestProgramAuthComparisonOps(t *testing.T) {
+	t.Log("=== TestProgramAuthComparisonOps: comparison operators should respect program auth ===")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Setup schema with int index
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+	schema := `
+		name: string @index(term) .
+		priority: int @index(int) .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	time.Sleep(2 * time.Second)
+
+	// Insert ALPHA projects with various priorities
+	ctxAlpha := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"ALPHA"},
+	})
+	_, err := dg.NewTxn().Mutate(ctxAlpha, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:p1 <name> "Alpha High" .
+			_:p1 <priority> "10" .
+			_:p2 <name> "Alpha Low" .
+			_:p2 <priority> "2" .
+		`),
+	})
+	require.NoError(t, err)
+
+	// Insert BRAVO project with high priority
+	ctxBravo := auth.AttachToOutgoingContext(context.Background(), &auth.AuthContext{
+		Programs: []string{"BRAVO"},
+	})
+	_, err = dg.NewTxn().Mutate(ctxBravo, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:p3 <name> "Bravo High" .
+			_:p3 <priority> "10" .
+		`),
+	})
+	require.NoError(t, err)
+
+	// Query with gt() using ALPHA program
+	t.Log("Querying with gt() and ALPHA program...")
+	resp, err := dg.NewTxn().Query(ctxAlpha, `
+		{
+			projects(func: gt(priority, 5)) {
+				name
+				priority
+			}
+		}
+	`)
+	require.NoError(t, err)
+	t.Logf("gt() query response: %s", string(resp.GetJson()))
+
+	var result struct {
+		Projects []struct {
+			Name     string `json:"name"`
+			Priority int    `json:"priority"`
+		} `json:"projects"`
+	}
+	require.NoError(t, json.Unmarshal(resp.GetJson(), &result))
+	require.Len(t, result.Projects, 1, "ALPHA user should see only their high priority project")
+	require.Equal(t, "Alpha High", result.Projects[0].Name)
+	t.Log("Test passed: comparison operators respect program auth")
 }
