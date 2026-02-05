@@ -14,7 +14,7 @@ services:
       - 9080
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: bind
@@ -36,7 +36,7 @@ services:
       - 6080
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - data-volume:/data/backups/
@@ -56,7 +56,7 @@ services:
       - 9080
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: bind
@@ -78,7 +78,7 @@ services:
       - 6080
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - data-volume:/data/backups/
