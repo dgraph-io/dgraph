@@ -217,9 +217,24 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 	var closer *z.Closer
 	for _, su := range updates {
-		if tablet, err := groups().Tablet(su.Predicate); err != nil {
+		// Use the label from the SchemaUpdate since the schema might not be stored yet.
+		if tablet, err := groups().Tablet(su.Predicate, su.Label); err != nil {
 			return err
 		} else if tablet.GetGroupId() != groups().groupId() {
+			// For labeled predicates, the tablet is intentionally served by a different group.
+			// We still need to record the schema metadata so queries know the predicate type,
+			// but we skip all index operations since we don't store the data.
+			if su.IsLabeled() {
+				glog.V(2).Infof("Recording schema metadata for labeled predicate %s (label: %s), served by group %d",
+					su.Predicate, su.Label, tablet.GetGroupId())
+				if err := checkSchema(su); err != nil {
+					return err
+				}
+				// Just record the schema metadata, skip index operations
+				schema.State().Set(su.Predicate, su)
+				schema.State().SetMutSchema(su.Predicate, su)
+				continue
+			}
 			return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 		}
 
@@ -690,7 +705,9 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 	mm := make(map[uint32]*pb.Mutations)
 	for _, edge := range src.Edges {
-		gid, err := groups().BelongsTo(edge.Attr)
+		// For data mutations, get the label from stored schema
+		label, _ := schema.State().GetLabel(context.Background(), edge.Attr)
+		gid, err := groups().BelongsTo(edge.Attr, label)
 		if err != nil {
 			return nil, err
 		}
@@ -704,8 +721,10 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Metadata = src.Metadata
 	}
 
-	for _, schema := range src.Schema {
-		gid, err := groups().BelongsTo(schema.Predicate)
+	for _, schemaUpdate := range src.Schema {
+		// For schema mutations, use the label from the SchemaUpdate itself
+		// This is critical for new predicates where the schema isn't stored yet
+		gid, err := groups().BelongsTo(schemaUpdate.Predicate, schemaUpdate.Label)
 		if err != nil {
 			return nil, err
 		}
@@ -715,7 +734,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 			mu = &pb.Mutations{GroupId: gid}
 			mm[gid] = mu
 		}
-		mu.Schema = append(mu.Schema, schema)
+		mu.Schema = append(mu.Schema, schemaUpdate)
 	}
 
 	if src.DropOp > 0 {

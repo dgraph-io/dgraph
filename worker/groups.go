@@ -98,6 +98,7 @@ func StartRaftNodes(walStore *raftwal.DiskStorage, bindall bool) {
 		GroupId: x.WorkerConfig.ProposedGroupId,
 		Addr:    x.WorkerConfig.MyAddr,
 		Learner: x.WorkerConfig.Raft.GetBool("learner"),
+		Label:   x.WorkerConfig.Label,
 	}
 	if m.GroupId > 0 {
 		m.ForceGroupId = true
@@ -173,7 +174,6 @@ func (g *groupi) informZeroAboutTablets() {
 	// this node is the leader or the follower, because this early on, we might not have
 	// figured that out.
 	ticker := time.Tick(time.Second)
-
 	for range ticker {
 		preds := schema.State().Predicates()
 		if _, err := g.Inform(preds); err != nil {
@@ -388,8 +388,11 @@ func (g *groupi) ChecksumsMatch(ctx context.Context) error {
 	}
 }
 
-func (g *groupi) BelongsTo(key string) (uint32, error) {
-	if tablet, err := g.Tablet(key); err != nil {
+// BelongsTo returns the group ID that serves the given predicate with the specified label.
+// For new predicates (schema mutations), the label should be passed from the SchemaUpdate.
+// For existing predicates (data mutations), get the label from schema.State().GetLabel().
+func (g *groupi) BelongsTo(key string, label string) (uint32, error) {
+	if tablet, err := g.Tablet(key, label); err != nil {
 		return 0, err
 	} else if tablet != nil {
 		return tablet.GroupId, nil
@@ -442,13 +445,29 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	return out.GetGroupId(), nil
 }
 
+// ServesTablet checks if this group serves the given predicate.
+// Uses stored schema to get the label for existing predicates.
 func (g *groupi) ServesTablet(key string) (bool, error) {
-	if tablet, err := g.Tablet(key); err != nil {
+	label, _ := schema.State().GetLabel(context.Background(), key)
+	if tablet, err := g.Tablet(key, label); err != nil {
 		return false, err
 	} else if tablet != nil && tablet.GroupId == groups().groupId() {
 		return true, nil
 	}
 	return false, nil
+}
+
+// GetTabletLabel returns the label for a predicate from the cached tablet info.
+// This is used for authorization to get labels for predicates that may be served
+// by other groups (labeled alphas). Returns empty string if tablet not cached.
+func (g *groupi) GetTabletLabel(key string) string {
+	g.RLock()
+	tablet := g.tablets[key]
+	g.RUnlock()
+	if tablet != nil {
+		return tablet.Label
+	}
+	return ""
 }
 
 func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
@@ -483,19 +502,22 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 		if len(p) == 0 {
 			continue
 		}
-
 		if tab, ok := g.tablets[p]; !ok {
-			unknownPreds = append(unknownPreds, &pb.Tablet{GroupId: g.groupId(), Predicate: p})
+			tablet := &pb.Tablet{GroupId: g.groupId(), Predicate: p}
+			// Get label from schema and set if exists
+			if label, ok := schema.State().GetLabel(context.Background(), p); ok {
+				tablet.Label = label
+				glog.Infof("Inform: predicate %s has label %q from schema", p, label)
+			}
+			unknownPreds = append(unknownPreds, tablet)
 		} else {
 			tablets = append(tablets, tab)
 		}
 	}
 	g.RUnlock()
-
 	if len(unknownPreds) == 0 {
 		return nil, nil
 	}
-
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 	out, err := zc.Inform(g.Ctx(), &pb.TabletRequest{
@@ -524,24 +546,42 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	return tablets, nil
 }
 
-// Do not modify the returned Tablet
-func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
+// Tablet returns tablet information for the given predicate with the specified label.
+// The label parameter is required to ensure correct routing for labeled predicates.
+// For schema mutations, pass the label from SchemaUpdate.Label.
+// For data mutations, get the label from schema.State().GetLabel().
+// Do not modify the returned Tablet.
+func (g *groupi) Tablet(key string, label string) (*pb.Tablet, error) {
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 	if ok {
-		return tablet, nil
+		// If labels match (or both empty), return cached tablet
+		if tablet.Label == label {
+			glog.V(2).Infof("Tablet: predicate %s cached (groupId=%d, label=%q)", key, tablet.GroupId, tablet.Label)
+			return tablet, nil
+		}
+		// Labels don't match - clear our cache and re-request from Zero
+		// This can happen after DropAll when tablets are re-created with different labels
+		glog.Infof("Tablet: predicate %s cached with label %q but need %q, clearing cache and re-requesting",
+			key, tablet.Label, label)
+		g.Lock()
+		delete(g.tablets, key)
+		g.Unlock()
 	}
 
-	// We don't know about this tablet.
+	// We don't know about this tablet (or labels didn't match).
 	// Check with dgraphzero if we can serve it.
-	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key}
+	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key, Label: label}
+	glog.V(2).Infof("Tablet: predicate %s requesting with label %q", key, label)
 	return g.sendTablet(tablet)
 }
 
-func (g *groupi) ForceTablet(key string) (*pb.Tablet, error) {
-	return g.sendTablet(&pb.Tablet{GroupId: g.groupId(), Predicate: key, Force: true})
+// ForceTablet forces this group to serve the given predicate, even if another
+// group is currently serving it. Used during restore operations.
+func (g *groupi) ForceTablet(key string, label string) (*pb.Tablet, error) {
+	return g.sendTablet(&pb.Tablet{GroupId: g.groupId(), Predicate: key, Label: label, Force: true})
 }
 
 func (g *groupi) HasMeInState() bool {
@@ -654,6 +694,12 @@ func KnownGroups() []uint32 {
 	return groups().KnownGroups()
 }
 
+// GetTabletLabel returns the label for a predicate from the cached tablet info.
+// Used for authorization to get labels for predicates served by other groups.
+func GetTabletLabel(pred string) string {
+	return groups().GetTabletLabel(pred)
+}
+
 // GroupId returns the group to which this worker belongs to.
 func GroupId() uint32 {
 	return groups().groupId()
@@ -741,6 +787,7 @@ func (g *groupi) doSendMembership(tablets map[string]*pb.Tablet) error {
 		Addr:       x.WorkerConfig.MyAddr,
 		Leader:     leader,
 		LastUpdate: uint64(time.Now().Unix()),
+		Label:      x.WorkerConfig.Label,
 	}
 	group := &pb.Group{
 		Members: make(map[uint64]*pb.Member),

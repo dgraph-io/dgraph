@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/worker"
 	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x/auth"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
 
@@ -951,14 +952,50 @@ func shouldAllowAcls(ns uint64) bool {
 	return !x.Config.SharedInstance || ns == x.RootNamespace
 }
 
-// authorizeQuery authorizes the query using the aclCachePtr. It will silently drop all
-// unauthorized predicates from query.
+// authorizeLabeledPreds filters predicates based on security labels.
+// This runs independently of ACL - it checks if the user's security level
+// allows access to predicates with @label directives.
+// Returns a map of blocked predicates.
+func authorizeLabeledPreds(ctx context.Context, authCtx *auth.AuthContext, preds []string, namespace uint64) map[string]struct{} {
+	blocked := make(map[string]struct{})
+
+	glog.V(2).Infof("authorizeLabeledPreds: user level=%q, isNil=%v, preds=%v, namespace=%d",
+		authCtx.Level, authCtx.IsNil, preds, namespace)
+
+	// If no auth credentials provided (nil token), skip label filtering for backward compatibility
+	if authCtx.IsNil {
+		glog.V(2).Infof("authorizeLabeledPreds: nil token, skipping label filtering")
+		return blocked
+	}
+
+	for _, pred := range preds {
+		// Get the predicate's label from tablet cache (works across distributed schema)
+		nsPred := x.NamespaceAttr(namespace, pred)
+		label := worker.GetTabletLabel(nsPred)
+		glog.V(2).Infof("  pred=%q nsPred=%q label=%q", pred, nsPred, label)
+		if label == "" {
+			// No label on predicate = accessible to all authenticated users
+			continue
+		}
+
+		// Check if user's level can access this label
+		canAccess := auth.CanAccess(authCtx.Level, label)
+		glog.V(2).Infof("  CanAccess(%q, %q) = %v", authCtx.Level, label, canAccess)
+		if authCtx.Level == "" || !canAccess {
+			blocked[pred] = struct{}{}
+		}
+	}
+
+	glog.V(2).Infof("authorizeLabeledPreds: blocked=%v", blocked)
+	return blocked
+}
+
+// authorizeQuery authorizes the query using the aclCachePtr and label-based security.
+// It will silently drop all unauthorized predicates from query.
 // At this stage, namespace is not attached in the predicates.
 func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) error {
-	if worker.Config.AclSecretKey == nil {
-		// the user has not turned on the acl feature
-		return nil
-	}
+	// Extract auth context (nil token if no credentials)
+	authCtx := auth.ExtractOrNil(ctx)
 
 	var userId string
 	var groupIds []string
@@ -972,6 +1009,27 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 	predToVarsMap := make(map[string]string)
 	for k, v := range varsToPredMap {
 		predToVarsMap[v] = k
+	}
+
+	// 1. Label-based filtering (ALWAYS runs, ACL-independent)
+	// Use authCtx.Namespace for label checks
+	labelBlocked := authorizeLabeledPreds(ctx, authCtx, preds, authCtx.Namespace)
+
+	// 2. ACL-based filtering (only if ACL enabled)
+	if worker.Config.AclSecretKey == nil {
+		// ACL not enabled, but still apply label filtering if any predicates were blocked
+		if len(labelBlocked) > 0 {
+			blockedVars := make(map[string]struct{})
+			for predicate := range labelBlocked {
+				if variable, found := predToVarsMap[predicate]; found {
+					labelBlocked[variable] = struct{}{}
+					blockedVars[variable] = struct{}{}
+				}
+			}
+			parsedReq.Query = removePredsFromQuery(parsedReq.Query, labelBlocked)
+			parsedReq.QueryVars = removeVarsFromQueryVars(parsedReq.QueryVars, blockedVars)
+		}
+		return nil
 	}
 
 	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
@@ -996,9 +1054,19 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 		return result.blocked, result.allowed, nil
 	}
 
-	blockedPreds, allowedPreds, err := doAuthorizeQuery()
+	aclBlocked, allowedPreds, err := doAuthorizeQuery()
 	if err != nil {
 		return err
+	}
+
+	// 3. Merge label-blocked and ACL-blocked predicates
+	// Both checks must pass - if either blocks a predicate, it's blocked
+	allBlocked := make(map[string]struct{})
+	for pred := range labelBlocked {
+		allBlocked[pred] = struct{}{}
+	}
+	for pred := range aclBlocked {
+		allBlocked[pred] = struct{}{}
 	}
 
 	if span := otrace.FromContext(ctx); span != nil {
@@ -1011,32 +1079,32 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 		}).String())
 	}
 
-	if len(blockedPreds) != 0 {
+	if len(allBlocked) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
 		if graphql && shouldAllowAcls(namespace) {
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
-			// blockedPreds might have acl predicates which we want to allow access through
+			// allBlocked might have acl predicates which we want to allow access through
 			// graphql, so deleting those from here.
 			for _, pred := range x.AllACLPredicates() {
-				delete(blockedPreds, pred)
+				delete(allBlocked, pred)
 			}
 			// In query context ~predicate and predicate are considered different.
-			delete(blockedPreds, "~dgraph.user.group")
+			delete(allBlocked, "~dgraph.user.group")
 		}
 
 		blockedVars := make(map[string]struct{})
-		for predicate := range blockedPreds {
+		for predicate := range allBlocked {
 			if variable, found := predToVarsMap[predicate]; found {
-				// Add variables to blockedPreds to delete from Query
-				blockedPreds[variable] = struct{}{}
+				// Add variables to allBlocked to delete from Query
+				allBlocked[variable] = struct{}{}
 				// Collect blocked Variables to remove from QueryVars
 				blockedVars[variable] = struct{}{}
 			}
 		}
-		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+		parsedReq.Query = removePredsFromQuery(parsedReq.Query, allBlocked)
 		parsedReq.QueryVars = removeVarsFromQueryVars(parsedReq.QueryVars, blockedVars)
 	}
 	for i := range parsedReq.Query {

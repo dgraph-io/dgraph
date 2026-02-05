@@ -145,8 +145,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// timeout.
 	var noTimeout bool
 
+	// checkTablet verifies that this group serves the given predicate.
+	// For data mutations, we get the label from stored schema.
 	checkTablet := func(pred string) error {
-		tablet, err := groups().Tablet(pred)
+		label, _ := schema.State().GetLabel(context.Background(), pred)
+		tablet, err := groups().Tablet(pred, label)
 		switch {
 		case err != nil:
 			return err
@@ -184,8 +187,33 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 		}
 
+		// checkSchemaTablet validates tablet assignment for schema mutations.
+		// For labeled predicates, we only verify the tablet was assigned to some group -
+		// we don't require it to be served by this instance since labeled predicates
+		// are intentionally routed to a different group (the one with matching label).
+		checkSchemaTablet := func(pred string, label string) error {
+			tablet, err := groups().Tablet(pred, label)
+			switch {
+			case err != nil:
+				return err
+			case tablet == nil || tablet.GroupId == 0:
+				return errNonExistentTablet
+			case label != "":
+				// Labeled predicates are served by the labeled group, not this instance.
+				// Just verify the tablet was assigned successfully.
+				return nil
+			case tablet.GroupId != groups().groupId():
+				// Unlabeled schema predicates should be served by this instance
+				return errUnservedTablet
+			default:
+				return nil
+			}
+		}
 		for _, schema := range proposal.Mutations.Schema {
-			if err := checkTablet(schema.Predicate); err != nil {
+			// Use checkSchemaTablet to pass the label from the schema update
+			// since the schema isn't stored yet when we're processing it.
+			// For labeled predicates, we don't require this instance to serve the tablet.
+			if err := checkSchemaTablet(schema.Predicate, schema.Label); err != nil {
 				return err
 			}
 			if err := checkSchema(schema); err != nil {
