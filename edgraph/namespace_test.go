@@ -10,12 +10,39 @@ package edgraph
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 )
+
+// waitForNamespaceCount polls ListNamespaces until the expected count is reached or timeout.
+// This is needed because DropAll and DropNamespace are asynchronous operations.
+func waitForNamespaceCount(t *testing.T, client *dgraphapi.GrpcClient, expected int, timeout time.Duration) {
+	t.Helper()
+	ctx := context.Background()
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		nsMaps, err := client.ListNamespaces(ctx)
+		if err != nil {
+			t.Logf("ListNamespaces error (will retry): %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if len(nsMaps) == expected {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Final check with assertion on timeout
+	nsMaps, err := client.ListNamespaces(ctx)
+	require.NoError(t, err)
+	require.Len(t, nsMaps, expected)
+}
 
 func TestNamespaces(t *testing.T) {
 	dc := dgraphtest.NewComposeCluster()
@@ -85,6 +112,9 @@ func TestDropNamespaceErr(t *testing.T) {
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword))
 	require.NoError(t, client.DropAll())
 
+	// Wait for DropAll to complete (async operation)
+	waitForNamespaceCount(t, client, 1, 30*time.Second)
+
 	// create ns1
 	ctx := context.Background()
 	ns1, err := client.CreateNamespace(ctx)
@@ -94,7 +124,6 @@ func TestDropNamespaceErr(t *testing.T) {
 	require.NoError(t, client.DropNamespace(ctx, ns1))
 	require.NoError(t, client.DropNamespace(ctx, uint64(10000000)))
 
-	nsMaps, err := client.ListNamespaces(ctx)
-	require.NoError(t, err)
-	require.Len(t, nsMaps, 1)
+	// Wait for DropNamespace to complete (async operation)
+	waitForNamespaceCount(t, client, 1, 30*time.Second)
 }
