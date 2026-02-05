@@ -632,11 +632,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 
 		// Set up Jaeger exporter if configured
 		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create Jaeger exporter using OpenTelemetry OTLP
 			jaegerExp, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)
@@ -659,11 +661,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 		// Set up OTLP exporter for Datadog if configured
 		// Note: In OpenTelemetry, typically Datadog integration uses the OTLP exporter
 		if collector := t.GetString("datadog"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create OTLP exporter for Datadog
 			ddExporter, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)
