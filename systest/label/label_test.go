@@ -9,9 +9,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"testing"
 	"time"
 
@@ -158,20 +160,22 @@ func TestLabeledPredicateRouting(t *testing.T) {
 	require.Equal(t, "1", predicateToGroup["0-name"],
 		"'name' predicate should be in group 1 (unlabeled)")
 
-	// Verify 'codename' is in the 'secret' labeled group
+	// Verify 'codename' is in the 'secret' labeled group.
+	// With composite tablet keys, the tablet is stored as "0-codename@secret".
 	secretGroup := labelToGroup["secret"]
 	t.Logf("  'secret' label maps to group: %s", secretGroup)
 	require.NotEmpty(t, secretGroup, "should have a 'secret' labeled group")
-	t.Logf("  Checking 'codename' is in secret group... actual: %s", predicateToGroup["0-codename"])
-	require.Equal(t, secretGroup, predicateToGroup["0-codename"],
+	t.Logf("  Checking 'codename@secret' is in secret group... actual: %s", predicateToGroup["0-codename@secret"])
+	require.Equal(t, secretGroup, predicateToGroup["0-codename@secret"],
 		"'codename' predicate should be in the 'secret' labeled group")
 
-	// Verify 'alias' is in the 'top_secret' labeled group
+	// Verify 'alias' is in the 'top_secret' labeled group.
+	// With composite tablet keys, the tablet is stored as "0-alias@top_secret".
 	topSecretGroup := labelToGroup["top_secret"]
 	t.Logf("  'top_secret' label maps to group: %s", topSecretGroup)
 	require.NotEmpty(t, topSecretGroup, "should have a 'top_secret' labeled group")
-	t.Logf("  Checking 'alias' is in top_secret group... actual: %s", predicateToGroup["0-alias"])
-	require.Equal(t, topSecretGroup, predicateToGroup["0-alias"],
+	t.Logf("  Checking 'alias@top_secret' is in top_secret group... actual: %s", predicateToGroup["0-alias@top_secret"])
+	require.Equal(t, topSecretGroup, predicateToGroup["0-alias@top_secret"],
 		"'alias' predicate should be in the 'top_secret' labeled group")
 	t.Log("All predicate routing verified successfully!")
 }
@@ -263,10 +267,10 @@ func TestLabeledPredicateCannotBeMoved(t *testing.T) {
 	state, err := testutil.GetState()
 	require.NoError(t, err)
 
-	// Find the group with 'codename' predicate (stored with namespace prefix "0-")
+	// Find the group with 'codename' predicate (stored as composite key "0-codename@secret")
 	var codenameGroup string
 	for groupID, group := range state.Groups {
-		if _, ok := group.Tablets["0-codename"]; ok {
+		if _, ok := group.Tablets["0-codename@secret"]; ok {
 			codenameGroup = groupID
 			break
 		}
@@ -296,7 +300,7 @@ func TestLabeledPredicateCannotBeMoved(t *testing.T) {
 
 	var newCodenameGroup string
 	for groupID, group := range state2.Groups {
-		if _, ok := group.Tablets["0-codename"]; ok {
+		if _, ok := group.Tablets["0-codename@secret"]; ok {
 			newCodenameGroup = groupID
 			break
 		}
@@ -347,9 +351,10 @@ func TestUnlabeledPredicateNotOnLabeledGroup(t *testing.T) {
 		}
 	}
 
-	// Verify unlabeled predicates are not in labeled groups
+	// Verify unlabeled predicates are not in labeled groups.
+	// Tablet keys in the state use the namespace prefix "0-" (e.g., "0-name").
 	t.Log("Verifying unlabeled predicates are not in labeled groups...")
-	unlabeledPreds := []string{"name", "email", "phone"}
+	unlabeledPreds := []string{"0-name", "0-email", "0-phone"}
 	for _, pred := range unlabeledPreds {
 		for groupID, group := range state.Groups {
 			if _, ok := group.Tablets[pred]; ok {
@@ -389,4 +394,180 @@ func TestMissingLabelGroupError(t *testing.T) {
 	require.Contains(t, err.Error(), "nonexistent_label",
 		"error should mention the missing label")
 	t.Log("Verified: non-existent label produces correct error!")
+}
+
+// TestEntityLevelRouting verifies that setting dgraph.label on a UID pins all its predicates
+// to the labeled group, creating composite tablet keys like "predicate@label" in Zero's state.
+func TestEntityLevelRouting(t *testing.T) {
+	t.Log("=== TestEntityLevelRouting: Verifying entity-level tablet routing ===")
+	dg := waitForCluster(t)
+	ctx := context.Background()
+
+	// Step 1: Drop all data and apply schema without @label directives.
+	// Entity-level routing uses dgraph.label on the UID, not schema-level @label.
+	t.Log("Dropping all data...")
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	t.Log("Applying schema (no @label directives — routing is entity-level via dgraph.label)...")
+	schema := `
+		Document.name: string @index(term) .
+		Document.text: string @index(term) .
+	`
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: schema}))
+	t.Log("Schema applied successfully")
+
+	// Step 2: Create 3 entities with different dgraph.label values in a single mutation.
+	t.Log("Inserting 3 entities with different dgraph.label values...")
+	_, err := dg.NewTxn().Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:doc1 <dgraph.label> "secret" .
+			_:doc1 <Document.name> "Secret.pdf" .
+			_:doc1 <Document.text> "Classified" .
+
+			_:doc2 <dgraph.label> "top_secret" .
+			_:doc2 <Document.name> "TopSecret.pdf" .
+			_:doc2 <Document.text> "Highly classified" .
+
+			_:doc3 <Document.name> "Boring.pdf" .
+			_:doc3 <Document.text> "Unclassified" .
+		`),
+	})
+	require.NoError(t, err)
+	t.Log("Entities inserted successfully")
+
+	// Step 3: Verify tablet assignments in Zero's state.
+	t.Log("Waiting 5s for tablet assignments to propagate...")
+	time.Sleep(5 * time.Second)
+
+	t.Log("Fetching cluster state to verify tablet assignments...")
+	state, err := testutil.GetState()
+	require.NoError(t, err)
+
+	// Build a map of label -> groupID from members
+	labelToGroup := make(map[string]string)
+	for groupID, group := range state.Groups {
+		for _, member := range group.Members {
+			if member.Label != "" {
+				labelToGroup[member.Label] = groupID
+				t.Logf("  Group %s has label: %s", groupID, member.Label)
+			}
+		}
+	}
+	secretGroup := labelToGroup["secret"]
+	topSecretGroup := labelToGroup["top_secret"]
+	require.NotEmpty(t, secretGroup, "should have a 'secret' labeled group")
+	require.NotEmpty(t, topSecretGroup, "should have a 'top_secret' labeled group")
+
+	// Build a map of tablet key -> groupID from all groups
+	tabletToGroup := make(map[string]string)
+	for groupID, group := range state.Groups {
+		for tabletKey := range group.Tablets {
+			tabletToGroup[tabletKey] = groupID
+			t.Logf("  Tablet %q is in group %s", tabletKey, groupID)
+		}
+	}
+
+	// Verify unlabeled tablets exist (for doc3 which has no dgraph.label)
+	t.Log("Verifying unlabeled tablets (for doc3)...")
+	_, hasDocName := tabletToGroup["0-Document.name"]
+	require.True(t, hasDocName, "unlabeled tablet '0-Document.name' should exist")
+
+	_, hasDocText := tabletToGroup["0-Document.text"]
+	require.True(t, hasDocText, "unlabeled tablet '0-Document.text' should exist")
+
+	// Verify 'secret' tablets (for doc1)
+	t.Log("Verifying 'secret' tablets (for doc1)...")
+	secretNameGroup, hasSecretName := tabletToGroup["0-Document.name@secret"]
+	require.True(t, hasSecretName, "tablet '0-Document.name@secret' should exist")
+	require.Equal(t, secretGroup, secretNameGroup,
+		"'0-Document.name@secret' should be in the 'secret' group")
+
+	secretTextGroup, hasSecretText := tabletToGroup["0-Document.text@secret"]
+	require.True(t, hasSecretText, "tablet '0-Document.text@secret' should exist")
+	require.Equal(t, secretGroup, secretTextGroup,
+		"'0-Document.text@secret' should be in the 'secret' group")
+
+	// Verify 'top_secret' tablets (for doc2)
+	t.Log("Verifying 'top_secret' tablets (for doc2)...")
+	topSecretNameGroup, hasTopSecretName := tabletToGroup["0-Document.name@top_secret"]
+	require.True(t, hasTopSecretName, "tablet '0-Document.name@top_secret' should exist")
+	require.Equal(t, topSecretGroup, topSecretNameGroup,
+		"'0-Document.name@top_secret' should be in the 'top_secret' group")
+
+	topSecretTextGroup, hasTopSecretText := tabletToGroup["0-Document.text@top_secret"]
+	require.True(t, hasTopSecretText, "tablet '0-Document.text@top_secret' should exist")
+	require.Equal(t, topSecretGroup, topSecretTextGroup,
+		"'0-Document.text@top_secret' should be in the 'top_secret' group")
+
+	t.Log("All tablet assignments verified!")
+
+	// Step 4: Verify query fan-out — all 3 documents should be returned despite
+	// living on 3 different groups.
+	// NOTE: We avoid orderasc in the DQL query because the sort operation fans out
+	// to all tablet groups and concatenates sorted runs instead of merging them,
+	// causing triplication. Sorting in Go is the correct approach for now.
+	//
+	// We poll with retries because AllTablets (used for query fan-out) reads the
+	// alpha's local tablet cache, which is updated asynchronously via applyState from
+	// Zero. Until all tablets propagate, the query may only reach a subset of groups.
+	t.Log("Querying all documents via has(Document.name) to verify fan-out across groups...")
+	type docResult struct {
+		Name string `json:"Document.name"`
+		Text string `json:"Document.text"`
+	}
+	var result struct {
+		Docs []docResult `json:"docs"`
+	}
+	var lastResp string
+	deadline := time.Now().Add(30 * time.Second)
+	for attempt := 1; time.Now().Before(deadline); attempt++ {
+		resp, err := dg.NewTxn().Query(ctx, `
+			{
+				docs(func: has(Document.name)) {
+					Document.name
+					Document.text
+				}
+			}
+		`)
+		require.NoError(t, err)
+		lastResp = string(resp.GetJson())
+
+		var r struct {
+			Docs []docResult `json:"docs"`
+		}
+		require.NoError(t, json.Unmarshal(resp.GetJson(), &r))
+		if len(r.Docs) == 3 {
+			result = r
+			t.Logf("Query returned 3 docs on attempt %d", attempt)
+			break
+		}
+		t.Logf("Attempt %d: got %d docs (need 3), retrying in 2s... (response: %s)",
+			attempt, len(r.Docs), lastResp)
+		time.Sleep(2 * time.Second)
+	}
+	require.Len(t, result.Docs, 3,
+		"should return all 3 documents from 3 different groups (last response: %s)", lastResp)
+
+	// Sort results in Go for deterministic verification
+	sort.Slice(result.Docs, func(i, j int) bool {
+		return result.Docs[i].Name < result.Docs[j].Name
+	})
+
+	// Verify each document is present
+	expectedDocs := []struct {
+		Name string
+		Text string
+	}{
+		{"Boring.pdf", "Unclassified"},
+		{"Secret.pdf", "Classified"},
+		{"TopSecret.pdf", "Highly classified"},
+	}
+	for i, expected := range expectedDocs {
+		require.Equal(t, expected.Name, result.Docs[i].Name, "document name mismatch at index %d", i)
+		require.Equal(t, expected.Text, result.Docs[i].Text, "document text mismatch at index %d", i)
+		t.Logf("  Found document: %s -> %s", result.Docs[i].Name, result.Docs[i].Text)
+	}
+
+	t.Log("Entity-level routing test passed: all documents returned via fan-out!")
 }

@@ -224,7 +224,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			// For labeled predicates, the tablet is intentionally served by a different group.
 			// We still need to record the schema metadata so queries know the predicate type,
 			// but we skip all index operations since we don't store the data.
-			if su.Label != "" {
+			if su.IsLabeled() {
 				glog.V(2).Infof("Recording schema metadata for labeled predicate %s (label: %s), served by group %d",
 					su.Predicate, su.Label, tablet.GetGroupId())
 				if err := checkSchema(su); err != nil {
@@ -700,13 +700,91 @@ func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan re
 	chr <- res
 }
 
+// Global entity label cache, initialized during group setup.
+var elCache *entityLabelCache
+
+func initEntityLabelCache() {
+	elCache = newEntityLabelCache(1_000_000) // 1M entries ~= 16MB
+}
+
+// readEntityLabelFromStore reads dgraph.label for a UID via ProcessTaskOverNetwork.
+// This issues a query to group 1 (where dgraph.label is served) to look up
+// the entity's label on a cache miss.
+func readEntityLabelFromStore(uid uint64) string {
+	ctx := context.Background()
+	q := &pb.Query{
+		Attr:    x.NamespaceAttr(x.RootNamespace, "dgraph.label"),
+		UidList: &pb.List{Uids: []uint64{uid}},
+		ReadTs:  State.GetTimestamp(false),
+	}
+	result, err := ProcessTaskOverNetwork(ctx, q)
+	if err != nil {
+		glog.V(2).Infof("Failed to read dgraph.label for uid %d: %v", uid, err)
+		return ""
+	}
+	if len(result.ValueMatrix) > 0 && len(result.ValueMatrix[0].Values) > 0 {
+		val := result.ValueMatrix[0].Values[0]
+		if len(val.Val) > 0 {
+			return string(val.Val)
+		}
+	}
+	return ""
+}
+
+// resolveEntityLabel returns the entity-level label for a UID.
+// Priority: batch labels > cache > read from group 1.
+func resolveEntityLabel(uid uint64, batchLabels map[uint64]string) string {
+	if label, ok := batchLabels[uid]; ok {
+		return label
+	}
+	if elCache != nil {
+		if label, ok := elCache.Get(uid); ok {
+			return label
+		}
+	}
+	// Cache miss — read dgraph.label from the store.
+	label := readEntityLabelFromStore(uid)
+	if elCache != nil {
+		elCache.Set(uid, label)
+	}
+	return label
+}
+
+// resolveLabel determines the effective label for routing an edge.
+// Only entity-level labels (dgraph.label) trigger label-aware routing.
+// Predicate-level @label routing is handled by Zero's tablet assignments
+// and does not require the alpha to resolve labels.
+func resolveLabel(uid uint64, _ string, batchLabels map[uint64]string) string {
+	return resolveEntityLabel(uid, batchLabels)
+}
+
 // populateMutationMap populates a map from group id to the mutation that
 // should be sent to that group.
 func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 	mm := make(map[uint32]*pb.Mutations)
+
+	// PHASE 1: Scan for dgraph.label edges to build entity -> label map.
+	// This handles new entities whose labels are set in the same mutation batch.
+	batchLabels := make(map[uint64]string)
 	for _, edge := range src.Edges {
-		// For data mutations, get the label from stored schema
-		label, _ := schema.State().GetLabel(context.Background(), edge.Attr)
+		pred := x.ParseAttr(edge.Attr)
+		if pred == "dgraph.label" {
+			batchLabels[edge.Entity] = string(edge.Value)
+		}
+	}
+
+	// PHASE 2: Route each edge using the entity's resolved label.
+	for _, edge := range src.Edges {
+		var label string
+		if x.IsReservedPredicate(edge.Attr) {
+			// Reserved predicates (dgraph.label, dgraph.type, ACL) always use
+			// predicate-level routing (typically group 1).
+			label, _ = schema.State().GetLabel(context.Background(), edge.Attr)
+		} else {
+			// Non-reserved predicates use entity-label-aware resolution.
+			label = resolveLabel(edge.Entity, edge.Attr, batchLabels)
+		}
+
 		gid, err := groups().BelongsTo(edge.Attr, label)
 		if err != nil {
 			return nil, err
@@ -721,9 +799,8 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		mu.Metadata = src.Metadata
 	}
 
+	// Schema mutations — unchanged, use predicate-level label.
 	for _, schemaUpdate := range src.Schema {
-		// For schema mutations, use the label from the SchemaUpdate itself
-		// This is critical for new predicates where the schema isn't stored yet
 		gid, err := groups().BelongsTo(schemaUpdate.Predicate, schemaUpdate.Label)
 		if err != nil {
 			return nil, err

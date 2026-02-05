@@ -632,7 +632,8 @@ func IsDropOpKey(key []byte) (bool, error) {
 
 // These predicates appear for queries that have * as predicate in them.
 var starAllPredicateMap = map[string]struct{}{
-	"dgraph.type": {},
+	"dgraph.type":  {},
+	"dgraph.label": {},
 }
 
 var aclPredicateMap = map[string]struct{}{

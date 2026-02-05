@@ -26,7 +26,7 @@ func InitForLite(ps *badger.DB) {
 func InitTablet(pred string) {
 	groups().Lock()
 	defer groups().Unlock()
-	groups().tablets[pred] = &pb.Tablet{GroupId: 1, Predicate: pred}
+	groups().tabletIndex.Set(pred, "", &pb.Tablet{GroupId: 1, Predicate: pred})
 }
 
 func ApplyMutations(ctx context.Context, p *pb.Proposal) error {

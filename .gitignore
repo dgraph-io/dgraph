@@ -50,3 +50,4 @@ x/log_test/*.enc
 ##
 .claude/
 CLAUDE.md
+.osgrep

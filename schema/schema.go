@@ -788,6 +788,12 @@ func initialSchemaInternal(namespace uint64, all bool) []*pb.SchemaUpdate {
 			List:      true,
 		},
 		{
+			Predicate: "dgraph.label",
+			ValueType: pb.Posting_STRING,
+			Directive: pb.SchemaUpdate_INDEX,
+			Tokenizer: []string{"exact"},
+		},
+		{
 			Predicate: "dgraph.drop.op",
 			ValueType: pb.Posting_STRING,
 		},

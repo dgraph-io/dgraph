@@ -63,6 +63,10 @@ type Server struct {
 	blockCommitsOn *sync.Map
 
 	checkpointPerGroup map[uint32]uint64
+
+	// tabletIndex is a nested index rebuilt from flat proto maps for O(1) lookups.
+	tabletIndex *pb.TabletIndex
+
 	// embedding the pb.UnimplementedZeroServer struct to ensure forward compatibility of the server.
 	pb.UnimplementedZeroServer
 }
@@ -89,6 +93,7 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
+	s.tabletIndex = pb.NewTabletIndex()
 	if opts.limiterConfig.UidLeaseLimit > 0 {
 		// rate limiting is not enabled when lease limit is set to zero.
 		s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
@@ -253,6 +258,12 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	}
 
 	s.nextGroup = uint32(len(state.Groups) + 1)
+
+	// Rebuild the tablet index from flat proto maps.
+	s.tabletIndex = pb.NewTabletIndex()
+	for _, g := range state.Groups {
+		s.tabletIndex.BuildFromFlat(g.Tablets)
+	}
 }
 
 // MarshalMembershipState returns the marshaled membership state.
@@ -309,13 +320,23 @@ func (s *Server) removeZero(nodeId uint64) {
 func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
+	pred, label := pb.ParseTabletKey(tablet)
+	return s.tabletIndex.Get(pred, label)
+}
 
-	for _, group := range s.state.Groups {
-		if tab, ok := group.Tablets[tablet]; ok {
-			return tab
-		}
+// ServingTablets returns all tablets for a given predicate across all groups.
+func (s *Server) ServingTablets(predicate string) []*pb.Tablet {
+	s.RLock()
+	defer s.RUnlock()
+	labels := s.tabletIndex.AllForPredicate(predicate)
+	if labels == nil {
+		return nil
 	}
-	return nil
+	tablets := make([]*pb.Tablet, 0, len(labels))
+	for _, tab := range labels {
+		tablets = append(tablets, tab)
+	}
+	return tablets
 }
 
 func (s *Server) blockTablet(pred string) func() {
@@ -330,15 +351,11 @@ func (s *Server) isBlocked(pred string) bool {
 	return blocked
 }
 
-func (s *Server) servingTablet(tablet string) *pb.Tablet {
+// servingTablet returns the tablet for the given (predicate, label) pair.
+// Caller must hold at least a read lock.
+func (s *Server) servingTablet(predicate, label string) *pb.Tablet {
 	s.AssertRLock()
-
-	for _, group := range s.state.Groups {
-		if tab, ok := group.Tablets[tablet]; ok {
-			return tab
-		}
-	}
-	return nil
+	return s.tabletIndex.Get(predicate, label)
 }
 
 func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
@@ -418,7 +435,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	tablets := make([]*pb.Tablet, 0)
 	unknownTablets := make([]*pb.Tablet, 0)
 	for _, t := range req.Tablets {
-		tab := s.ServingTablet(t.Predicate)
+		tab := s.ServingTablet(pb.TabletKey(t.Predicate, t.Label))
 		span.SetAttributes(attribute.String("tablet_predicate", t.Predicate))
 		switch {
 		case tab != nil && !t.Force:
@@ -456,7 +473,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 				// This will also make it easier to restore the reserved predicates after
 				// a DropAll operation.
 				t.GroupId = 1
-			case t.Label != "":
+			case t.IsLabeled():
 				// Labeled predicate: route to matching labeled group
 				gid, err := s.labelGroup(t.Label)
 				if err != nil {
@@ -485,7 +502,7 @@ func (s *Server) Inform(ctx context.Context, req *pb.TabletRequest) (*pb.TabletR
 	}
 
 	for _, t := range unknownTablets {
-		tab := s.ServingTablet(t.Predicate)
+		tab := s.ServingTablet(pb.TabletKey(t.Predicate, t.Label))
 		x.AssertTrue(tab != nil)
 		span.AddEvent(fmt.Sprintf("Tablet served: %+v", tab))
 		tablets = append(tablets, tab)
@@ -705,23 +722,37 @@ func (s *Server) ShouldServe(
 		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
-	// Check who is serving this tablet.
-	tab := s.ServingTablet(tablet.Predicate)
+	// Use the index to find the exact (predicate, label) match.
+	tab := s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	span.SetAttributes(attribute.String("tablet_label", tablet.Label))
+	if tab == nil && !tablet.IsLabeled() {
+		// Unlabeled request: check if any labeled tablet exists for this predicate.
+		s.RLock()
+		tab = s.tabletIndex.GetAny(tablet.Predicate)
+		s.RUnlock()
+	}
 	if tab != nil && !tablet.Force {
 		// If the existing tablet has a different label than requested, we need to re-route.
-		// This can happen when a schema is applied with @label after the predicate was
-		// created without a label (e.g., during DropAll).
-		if tablet.Label != "" && tab.Label != tablet.Label {
+		if tablet.IsLabeled() && tab.Label != tablet.Label {
 			glog.Infof("ShouldServe: tablet %s has label %q but request has label %q, re-routing",
 				tablet.Predicate, tab.Label, tablet.Label)
-			// Fall through to re-assign the tablet with the new label
-			// The handleTablet function will allow this because labels differ
+			// Fall through to re-assign the tablet with the new label.
 		} else {
-			// Someone is serving this tablet. Could be the caller as well.
-			// The caller should compare the returned group against the group it holds to check who's
-			// serving.
+			// Someone is serving this tablet. If the found tablet belongs to a
+			// different group than the requester, check if the requesting group
+			// serves a tablet for this predicate under a different label.
+			if tablet.GroupId > 0 && tab.GroupId != tablet.GroupId {
+				s.RLock()
+				labels := s.tabletIndex.AllForPredicate(tablet.Predicate)
+				for _, labelTab := range labels {
+					if labelTab.GroupId == tablet.GroupId {
+						s.RUnlock()
+						return labelTab, nil
+					}
+				}
+				s.RUnlock()
+			}
 			return tab, nil
 		}
 	}
@@ -746,7 +777,7 @@ func (s *Server) ShouldServe(
 		// This will also make it easier to restore the reserved predicates after
 		// a DropAll operation.
 		tablet.GroupId = 1
-	case tablet.Label != "":
+	case tablet.IsLabeled():
 		// Labeled predicate: route to matching labeled group
 		gid, err := s.labelGroup(tablet.Label)
 		if err != nil {
@@ -770,7 +801,7 @@ func (s *Server) ShouldServe(
 		span.AddEvent(fmt.Sprintf("Error proposing tablet: %+v. Error: %v", &proposal, err))
 		return tablet, err
 	}
-	tab = s.ServingTablet(tablet.Predicate)
+	tab = s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	x.AssertTrue(tab != nil)
 	span.SetAttributes(attribute.String("tablet_predicate_served", tablet.Predicate))
 	return tab, nil
@@ -931,7 +962,7 @@ func (s *Server) groupLabel(gid uint32) string {
 		return ""
 	}
 	for _, member := range group.Members {
-		if member.Label != "" {
+		if member.IsLabeled() {
 			return member.Label
 		}
 	}

@@ -33,7 +33,7 @@ type groupi struct {
 	state        *pb.MembershipState
 	Node         *node
 	gid          uint32
-	tablets      map[string]*pb.Tablet
+	tabletIndex  *pb.TabletIndex
 	triggerCh    chan struct{} // Used to trigger membership sync
 	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *z.Closer
@@ -46,7 +46,7 @@ type groupi struct {
 
 var gr = &groupi{
 	blockDeletes: new(sync.Mutex),
-	tablets:      make(map[string]*pb.Tablet),
+	tabletIndex:  pb.NewTabletIndex(),
 	closer:       z.NewCloser(3), // Match CLOSER:1 in this file.
 }
 
@@ -304,7 +304,6 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 
 	// Sometimes this can cause us to lose latest tablet info, but that shouldn't cause any issues.
 	var foundSelf bool
-	g.tablets = make(map[string]*pb.Tablet)
 	for gid, group := range g.state.Groups {
 		for _, member := range group.Members {
 			if myId == member.Id {
@@ -315,14 +314,19 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 				conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
 			}
 		}
-		for _, tablet := range group.Tablets {
-			g.tablets[tablet.Predicate] = tablet
-		}
 		if gid == g.groupId() {
 			glog.V(3).Infof("group %d checksum: %d", g.groupId(), group.Checksum)
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
+	// Build tablet index from all groups' flat proto maps in a single pass.
+	// TabletIndex.GetForGroup handles what the previous two-pass ordering guaranteed:
+	// preferring the tablet belonging to this group for bare-predicate lookups.
+	idx := pb.NewTabletIndex()
+	for _, group := range g.state.Groups {
+		idx.BuildFromFlat(group.Tablets)
+	}
+	g.tabletIndex = idx
 	for _, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
@@ -407,7 +411,7 @@ func (g *groupi) BelongsTo(key string, label string) (uint32, error) {
 // should reject that query.
 func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	g.RLock()
-	tablet := g.tablets[key]
+	tablet := g.tabletIndex.GetForGroup(key, g.groupId())
 	g.RUnlock()
 	if tablet != nil {
 		if ts > 0 && ts < tablet.MoveTs {
@@ -416,15 +420,16 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 		}
 		return tablet.GetGroupId(), nil
 	}
-
 	// We don't know about this tablet. Talk to dgraphzero to find out who is
-	// serving this tablet.
+	// serving this tablet. We pass our own GroupId so Zero can check if this
+	// group serves a tablet for the predicate (entity-level routing).
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
 	tablet = &pb.Tablet{
 		Predicate: key,
 		ReadOnly:  true,
+		GroupId:   g.groupId(),
 	}
 	out, err := zc.ShouldServe(g.Ctx(), tablet)
 	if err != nil {
@@ -437,12 +442,35 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 
 	g.Lock()
 	defer g.Unlock()
-	g.tablets[key] = out
+	g.tabletIndex.Set(out.GetPredicate(), out.GetLabel(), out)
 	if out != nil && ts > 0 && ts < out.MoveTs {
 		return 0, errors.Errorf("StartTs: %d is from before MoveTs: %d for pred: %q",
 			ts, out.MoveTs, key)
 	}
 	return out.GetGroupId(), nil
+}
+
+// AllTablets returns all cached tablets for a predicate (across all labels).
+// This is used for query fan-out when a predicate has multiple tablets.
+// Returns nil if only a single tablet exists (fast path).
+func (g *groupi) AllTablets(predicate string, ts uint64) ([]*pb.Tablet, error) {
+	g.RLock()
+	labels := g.tabletIndex.AllForPredicate(predicate)
+	if len(labels) <= 1 {
+		g.RUnlock()
+		return nil, nil
+	}
+	tablets := make([]*pb.Tablet, 0, len(labels))
+	for _, tablet := range labels {
+		if ts > 0 && ts < tablet.MoveTs {
+			g.RUnlock()
+			return nil, errors.Errorf("StartTs: %d is before MoveTs: %d for pred: %q",
+				ts, tablet.MoveTs, predicate)
+		}
+		tablets = append(tablets, tablet)
+	}
+	g.RUnlock()
+	return tablets, nil
 }
 
 // ServesTablet checks if this group serves the given predicate.
@@ -462,7 +490,7 @@ func (g *groupi) ServesTablet(key string) (bool, error) {
 // by other groups (labeled alphas). Returns empty string if tablet not cached.
 func (g *groupi) GetTabletLabel(key string) string {
 	g.RLock()
-	tablet := g.tablets[key]
+	tablet := g.tabletIndex.GetAny(key)
 	g.RUnlock()
 	if tablet != nil {
 		return tablet.Label
@@ -481,10 +509,10 @@ func (g *groupi) sendTablet(tablet *pb.Tablet) (*pb.Tablet, error) {
 	}
 
 	// Do not store tablets with group ID 0, as they are just dummy tablets for
-	// predicates that do no exist.
+	// predicates that do not exist.
 	if out.GroupId > 0 {
 		g.Lock()
-		g.tablets[out.GetPredicate()] = out
+		g.tabletIndex.Set(out.GetPredicate(), out.GetLabel(), out)
 		g.Unlock()
 	}
 
@@ -502,16 +530,16 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 		if len(p) == 0 {
 			continue
 		}
-		if tab, ok := g.tablets[p]; !ok {
+		if tab := g.tabletIndex.GetAny(p); tab != nil {
+			tablets = append(tablets, tab)
+		} else {
 			tablet := &pb.Tablet{GroupId: g.groupId(), Predicate: p}
 			// Get label from schema and set if exists
 			if label, ok := schema.State().GetLabel(context.Background(), p); ok {
 				tablet.Label = label
-				glog.Infof("Inform: predicate %s has label %q from schema", p, label)
+				glog.V(2).Infof("Inform: predicate %s has label %q from schema", p, label)
 			}
 			unknownPreds = append(unknownPreds, tablet)
-		} else {
-			tablets = append(tablets, tab)
 		}
 	}
 	g.RUnlock()
@@ -530,11 +558,11 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 	}
 
 	// Do not store tablets with group ID 0, as they are just dummy tablets for
-	// predicates that do no exist.
+	// predicates that do not exist.
 	g.Lock()
 	for _, t := range out.Tablets {
 		if t.GroupId > 0 {
-			g.tablets[t.GetPredicate()] = t
+			g.tabletIndex.Set(t.GetPredicate(), t.GetLabel(), t)
 			tablets = append(tablets, t)
 		}
 
@@ -552,30 +580,14 @@ func (g *groupi) Inform(preds []string) ([]*pb.Tablet, error) {
 // For data mutations, get the label from schema.State().GetLabel().
 // Do not modify the returned Tablet.
 func (g *groupi) Tablet(key string, label string) (*pb.Tablet, error) {
-	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
-	tablet, ok := g.tablets[key]
+	tablet := g.tabletIndex.Get(key, label)
 	g.RUnlock()
-	if ok {
-		// If labels match (or both empty), return cached tablet
-		if tablet.Label == label {
-			glog.V(2).Infof("Tablet: predicate %s cached (groupId=%d, label=%q)", key, tablet.GroupId, tablet.Label)
-			return tablet, nil
-		}
-		// Labels don't match - clear our cache and re-request from Zero
-		// This can happen after DropAll when tablets are re-created with different labels
-		glog.Infof("Tablet: predicate %s cached with label %q but need %q, clearing cache and re-requesting",
-			key, tablet.Label, label)
-		g.Lock()
-		delete(g.tablets, key)
-		g.Unlock()
+	if tablet != nil {
+		return tablet, nil
 	}
-
-	// We don't know about this tablet (or labels didn't match).
-	// Check with dgraphzero if we can serve it.
-	tablet = &pb.Tablet{GroupId: g.groupId(), Predicate: key, Label: label}
-	glog.V(2).Infof("Tablet: predicate %s requesting with label %q", key, label)
-	return g.sendTablet(tablet)
+	// Cache miss — query Zero.
+	return g.sendTablet(&pb.Tablet{GroupId: g.groupId(), Predicate: key, Label: label})
 }
 
 // ForceTablet forces this group to serve the given predicate, even if another
