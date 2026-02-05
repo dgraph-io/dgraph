@@ -13,6 +13,11 @@ export GOPATH  ?= $(shell go env GOPATH)
 GOHOSTOS       := $(shell go env GOHOSTOS)
 GOHOSTARCH     := $(shell go env GOHOSTARCH)
 
+# Guard against empty GOPATH, which would resolve paths to root (e.g. /bin)
+ifeq ($(GOPATH),)
+    $(error GOPATH is not set. Please set it explicitly, e.g. export GOPATH=$$HOME/go)
+endif
+
 # On non-Linux systems, use a separate directory for Linux binaries
 ifeq ($(GOHOSTOS),linux)
     export LINUX_GOBIN ?= $(GOPATH)/bin
