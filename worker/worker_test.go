@@ -504,10 +504,10 @@ func TestMain(m *testing.M) {
 	posting.Config.CommitFraction = 0.10
 	gr = new(groupi)
 	gr.gid = 1
-	gr.tablets = make(map[string]*pb.Tablet)
+	gr.tabletIndex = pb.NewTabletIndex()
 	addTablets := func(attrs []string, gid uint32, namespace uint64) {
 		for _, attr := range attrs {
-			gr.tablets[x.NamespaceAttr(namespace, attr)] = &pb.Tablet{GroupId: gid}
+			gr.tabletIndex.Set(x.NamespaceAttr(namespace, attr), "", &pb.Tablet{GroupId: gid})
 		}
 	}
 

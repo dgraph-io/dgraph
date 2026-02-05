@@ -63,6 +63,10 @@ type Server struct {
 	blockCommitsOn *sync.Map
 
 	checkpointPerGroup map[uint32]uint64
+
+	// tabletIndex is a nested index rebuilt from flat proto maps for O(1) lookups.
+	tabletIndex *pb.TabletIndex
+
 	// embedding the pb.UnimplementedZeroServer struct to ensure forward compatibility of the server.
 	pb.UnimplementedZeroServer
 }
@@ -89,6 +93,7 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.checkpointPerGroup = make(map[uint32]uint64)
+	s.tabletIndex = pb.NewTabletIndex()
 	if opts.limiterConfig.UidLeaseLimit > 0 {
 		// rate limiting is not enabled when lease limit is set to zero.
 		s.rateLimiter = x.NewRateLimiter(int64(opts.limiterConfig.UidLeaseLimit),
@@ -253,6 +258,12 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	}
 
 	s.nextGroup = uint32(len(state.Groups) + 1)
+
+	// Rebuild the tablet index from flat proto maps.
+	s.tabletIndex = pb.NewTabletIndex()
+	for _, g := range state.Groups {
+		s.tabletIndex.BuildFromFlat(g.Tablets)
+	}
 }
 
 // MarshalMembershipState returns the marshaled membership state.
@@ -309,51 +320,28 @@ func (s *Server) removeZero(nodeId uint64) {
 func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
-
-	// Exact key lookup (handles both bare and composite keys).
-	for _, group := range s.state.Groups {
-		if tab, ok := group.Tablets[tablet]; ok {
-			return tab
-		}
-	}
-	// Fallback: search sub-tablets whose predicate matches.
-	// This handles the case where a caller passes a bare predicate but the
-	// tablet exists under a composite key (predicate@label).
-	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			pred, _ := pb.ParseTabletKey(key)
-			if pred == tablet {
-				return tab
-			}
-		}
-	}
-	return nil
+	pred, label := pb.ParseTabletKey(tablet)
+	return s.tabletIndex.Get(pred, label)
 }
 
-// ServingSubTablet returns the tablet for the given (predicate, label) pair.
-// For labeled sub-tablets the map key is "predicate@label".
-// For unlabeled sub-tablets the key is the bare predicate name.
-func (s *Server) ServingSubTablet(predicate, label string) *pb.Tablet {
+// ServingLabelTablet returns the tablet for the given (predicate, label) pair.
+func (s *Server) ServingLabelTablet(predicate, label string) *pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
-	return s.servingSubTablet(predicate, label)
+	return s.servingLabelTablet(predicate, label)
 }
 
-// ServingTablets returns all sub-tablets for a given predicate across all groups.
-// This includes both the unlabeled sub-tablet (key = predicate) and any labeled
-// sub-tablets (key = predicate@label). Used for query fan-out.
-func (s *Server) ServingTablets(predicate string) []*pb.Tablet {
+// ServingLabelTablets returns all label tablets for a given predicate across all groups.
+func (s *Server) ServingLabelTablets(predicate string) []*pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
-
-	var tablets []*pb.Tablet
-	for _, group := range s.state.Groups {
-		for key, tab := range group.Tablets {
-			tabPred, _ := pb.ParseTabletKey(key)
-			if tabPred == predicate {
-				tablets = append(tablets, tab)
-			}
-		}
+	labels := s.tabletIndex.AllForPredicate(predicate)
+	if labels == nil {
+		return nil
+	}
+	tablets := make([]*pb.Tablet, 0, len(labels))
+	for _, tab := range labels {
+		tablets = append(tablets, tab)
 	}
 	return tablets
 }
@@ -370,19 +358,11 @@ func (s *Server) isBlocked(pred string) bool {
 	return blocked
 }
 
-// servingSubTablet returns the tablet for the given (predicate, label) pair.
-// For unlabeled sub-tablets, the key is just the predicate name.
-// For labeled sub-tablets, the key is "predicate@label".
+// servingLabelTablet returns the tablet for the given (predicate, label) pair.
 // Caller must hold at least a read lock.
-func (s *Server) servingSubTablet(predicate, label string) *pb.Tablet {
+func (s *Server) servingLabelTablet(predicate, label string) *pb.Tablet {
 	s.AssertRLock()
-	key := pb.TabletKey(predicate, label)
-	for _, group := range s.state.Groups {
-		if tab, ok := group.Tablets[key]; ok {
-			return tab
-		}
-	}
-	return nil
+	return s.tabletIndex.Get(predicate, label)
 }
 
 func (s *Server) createProposals(dst *pb.Group) ([]*pb.ZeroProposal, error) {
@@ -749,36 +729,33 @@ func (s *Server) ShouldServe(
 		return resp, errors.Errorf("Group ID is Zero in %+v", tablet)
 	}
 
-	// Check who is serving this tablet. Use ServingTablet with composite key
-	// so that an unlabeled request (label="") finds labeled sub-tablets via
-	// the sub-tablet fallback search.
+	// Use the index to find the exact (predicate, label) match.
 	tab := s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	span.SetAttributes(attribute.String("tablet_label", tablet.Label))
+	if tab == nil && tablet.Label == "" {
+		// Unlabeled request: check if any labeled tablet exists for this predicate.
+		s.RLock()
+		tab = s.tabletIndex.GetAny(tablet.Predicate)
+		s.RUnlock()
+	}
 	if tab != nil && !tablet.Force {
 		// If the existing tablet has a different label than requested, we need to re-route.
-		// This can happen when a schema is applied with @label after the predicate was
-		// created without a label (e.g., during DropAll).
 		if tablet.IsLabeled() && tab.Label != tablet.Label {
 			glog.Infof("ShouldServe: tablet %s has label %q but request has label %q, re-routing",
 				tablet.Predicate, tab.Label, tablet.Label)
-			// Fall through to re-assign the tablet with the new label
-			// The handleTablet function will allow this because labels differ
+			// Fall through to re-assign the tablet with the new label.
 		} else {
-			// Someone is serving this tablet. Could be the caller as well.
-			// If the found tablet belongs to a different group than the requester,
-			// check if the requesting group serves a sub-tablet of this predicate.
-			// This handles entity-level routing where the alpha sends an unlabeled
-			// request (label="") but its group has a labeled sub-tablet.
+			// Someone is serving this tablet. If the found tablet belongs to a
+			// different group than the requester, check if the requesting group
+			// serves a label tablet of this predicate.
 			if tablet.GroupId > 0 && tab.GroupId != tablet.GroupId {
 				s.RLock()
-				if reqGroup, ok := s.state.Groups[tablet.GroupId]; ok {
-					for key, subTab := range reqGroup.Tablets {
-						pred, _ := pb.ParseTabletKey(key)
-						if pred == tablet.Predicate {
-							s.RUnlock()
-							return subTab, nil
-						}
+				labels := s.tabletIndex.AllForPredicate(tablet.Predicate)
+				for _, labelTab := range labels {
+					if labelTab.GroupId == tablet.GroupId {
+						s.RUnlock()
+						return labelTab, nil
 					}
 				}
 				s.RUnlock()

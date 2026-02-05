@@ -284,6 +284,13 @@ func (n *node) regenerateChecksum() {
 		g.Checksum = farm.Fingerprint64([]byte(strings.Join(preds, "")))
 	}
 
+	// Rebuild tablet index from authoritative flat proto maps.
+	idx := pb.NewTabletIndex()
+	for _, g := range state.GetGroups() {
+		idx.BuildFromFlat(g.GetTablets())
+	}
+	n.server.tabletIndex = idx
+
 	if n.AmLeader() {
 		// It is important to push something to Oracle updates channel, so the subscribers would
 		// get the latest checksum that we calculated above. Otherwise, if all the queries are
@@ -333,7 +340,7 @@ func (n *node) handleTablet(tablet *pb.Tablet) error {
 
 	// Duplicate detection: check if this (predicate, label) pair is already served.
 	// Multiple groups CAN serve the same predicate as long as they have different labels.
-	if prev := n.server.servingSubTablet(tablet.Predicate, tablet.Label); prev != nil {
+	if prev := n.server.servingLabelTablet(tablet.Predicate, tablet.Label); prev != nil {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, key)

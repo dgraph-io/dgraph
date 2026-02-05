@@ -370,7 +370,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 			if strings.Contains(pred, hnsw.VecKeyword) {
 				pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
 			}
-			tablets := s.ServingTablets(pred)
+			tablets := s.ServingLabelTablets(pred)
 			if len(tablets) == 0 {
 				return errors.Errorf("Tablet for %s is nil", pred)
 			}

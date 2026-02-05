@@ -48,17 +48,17 @@ type sortresult struct {
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
 	attr := q.Order[0].Attr
 
-	// Check for multi-sub-tablet fan-out.
-	subTablets, err := groups().AllSubTablets(attr, q.ReadTs)
+	// Check for multi-label-tablet fan-out.
+	labelTablets, err := groups().AllLabelTablets(attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
 	}
 
-	if len(subTablets) > 1 {
-		return processSortFanOut(ctx, q, subTablets)
+	if len(labelTablets) > 1 {
+		return processSortFanOut(ctx, q, labelTablets)
 	}
 
-	// Fast path: single sub-tablet.
+	// Fast path: single label tablet.
 	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
@@ -88,14 +88,14 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	return result.(*pb.SortResult), nil
 }
 
-func processSortFanOut(ctx context.Context, q *pb.SortMessage, subTablets []*pb.Tablet) (*pb.SortResult, error) {
+func processSortFanOut(ctx context.Context, q *pb.SortMessage, labelTablets []*pb.Tablet) (*pb.SortResult, error) {
 	type fanOutResult struct {
 		result *pb.SortResult
 		err    error
 	}
 
-	ch := make(chan fanOutResult, len(subTablets))
-	for _, tab := range subTablets {
+	ch := make(chan fanOutResult, len(labelTablets))
+	for _, tab := range labelTablets {
 		gid := tab.GroupId
 		go func(gid uint32) {
 			if groups().ServesGroup(gid) {
@@ -116,7 +116,7 @@ func processSortFanOut(ctx context.Context, q *pb.SortMessage, subTablets []*pb.
 	}
 
 	var results []*pb.SortResult
-	for range subTablets {
+	for range labelTablets {
 		r := <-ch
 		if r.err != nil {
 			return &emptySortResult, r.err
@@ -135,7 +135,7 @@ func mergeSortResults(results []*pb.SortResult, q *pb.SortMessage) *pb.SortResul
 		return results[0]
 	}
 
-	// Merge UID matrices from all sub-tablets.
+	// Merge UID matrices from all label tablets.
 	merged := &pb.SortResult{}
 	if len(results[0].UidMatrix) > 0 {
 		merged.UidMatrix = make([]*pb.List, len(results[0].UidMatrix))
