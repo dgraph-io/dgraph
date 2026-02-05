@@ -726,7 +726,7 @@ func (s *Server) ShouldServe(
 	tab := s.ServingTablet(pb.TabletKey(tablet.Predicate, tablet.Label))
 	span.SetAttributes(attribute.String("tablet_predicate", tablet.Predicate))
 	span.SetAttributes(attribute.String("tablet_label", tablet.Label))
-	if tab == nil && tablet.Label == "" {
+	if tab == nil && !tablet.IsLabeled() {
 		// Unlabeled request: check if any labeled tablet exists for this predicate.
 		s.RLock()
 		tab = s.tabletIndex.GetAny(tablet.Predicate)
