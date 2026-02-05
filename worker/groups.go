@@ -422,7 +422,7 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	}
 	// We don't know about this tablet. Talk to dgraphzero to find out who is
 	// serving this tablet. We pass our own GroupId so Zero can check if this
-	// group serves a label tablet for the predicate (entity-level routing).
+	// group serves a tablet for the predicate (entity-level routing).
 	pl := g.connToZeroLeader()
 	zc := pb.NewZeroClient(pl.Get())
 
@@ -450,10 +450,10 @@ func (g *groupi) BelongsToReadOnly(key string, ts uint64) (uint32, error) {
 	return out.GetGroupId(), nil
 }
 
-// AllLabelTablets returns all cached label tablets for a predicate.
-// This is used for query fan-out when a predicate has multiple label tablets.
+// AllTablets returns all cached tablets for a predicate (across all labels).
+// This is used for query fan-out when a predicate has multiple tablets.
 // Returns nil if only a single tablet exists (fast path).
-func (g *groupi) AllLabelTablets(predicate string, ts uint64) ([]*pb.Tablet, error) {
+func (g *groupi) AllTablets(predicate string, ts uint64) ([]*pb.Tablet, error) {
 	g.RLock()
 	labels := g.tabletIndex.AllForPredicate(predicate)
 	if len(labels) <= 1 {

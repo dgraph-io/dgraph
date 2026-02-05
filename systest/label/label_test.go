@@ -161,7 +161,7 @@ func TestLabeledPredicateRouting(t *testing.T) {
 		"'name' predicate should be in group 1 (unlabeled)")
 
 	// Verify 'codename' is in the 'secret' labeled group.
-	// With composite label tablet keys, the tablet is stored as "0-codename@secret".
+	// With composite tablet keys, the tablet is stored as "0-codename@secret".
 	secretGroup := labelToGroup["secret"]
 	t.Logf("  'secret' label maps to group: %s", secretGroup)
 	require.NotEmpty(t, secretGroup, "should have a 'secret' labeled group")
@@ -170,7 +170,7 @@ func TestLabeledPredicateRouting(t *testing.T) {
 		"'codename' predicate should be in the 'secret' labeled group")
 
 	// Verify 'alias' is in the 'top_secret' labeled group.
-	// With composite label tablet keys, the tablet is stored as "0-alias@top_secret".
+	// With composite tablet keys, the tablet is stored as "0-alias@top_secret".
 	topSecretGroup := labelToGroup["top_secret"]
 	t.Logf("  'top_secret' label maps to group: %s", topSecretGroup)
 	require.NotEmpty(t, topSecretGroup, "should have a 'top_secret' labeled group")
@@ -397,9 +397,9 @@ func TestMissingLabelGroupError(t *testing.T) {
 }
 
 // TestEntityLevelRouting verifies that setting dgraph.label on a UID pins all its predicates
-// to the labeled group, creating composite label tablet keys like "predicate@label" in Zero's state.
+// to the labeled group, creating composite tablet keys like "predicate@label" in Zero's state.
 func TestEntityLevelRouting(t *testing.T) {
-	t.Log("=== TestEntityLevelRouting: Verifying entity-level label tablet routing ===")
+	t.Log("=== TestEntityLevelRouting: Verifying entity-level tablet routing ===")
 	dg := waitForCluster(t)
 	ctx := context.Background()
 
@@ -436,11 +436,11 @@ func TestEntityLevelRouting(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Entities inserted successfully")
 
-	// Step 3: Verify label tablet assignments in Zero's state.
-	t.Log("Waiting 5s for label tablet assignments to propagate...")
+	// Step 3: Verify tablet assignments in Zero's state.
+	t.Log("Waiting 5s for tablet assignments to propagate...")
 	time.Sleep(5 * time.Second)
 
-	t.Log("Fetching cluster state to verify label tablet assignments...")
+	t.Log("Fetching cluster state to verify tablet assignments...")
 	state, err := testutil.GetState()
 	require.NoError(t, err)
 
@@ -468,49 +468,49 @@ func TestEntityLevelRouting(t *testing.T) {
 		}
 	}
 
-	// Verify unlabeled label tablets exist (for doc3 which has no dgraph.label)
-	t.Log("Verifying unlabeled label tablets (for doc3)...")
+	// Verify unlabeled tablets exist (for doc3 which has no dgraph.label)
+	t.Log("Verifying unlabeled tablets (for doc3)...")
 	_, hasDocName := tabletToGroup["0-Document.name"]
-	require.True(t, hasDocName, "unlabeled label tablet '0-Document.name' should exist")
+	require.True(t, hasDocName, "unlabeled tablet '0-Document.name' should exist")
 
 	_, hasDocText := tabletToGroup["0-Document.text"]
-	require.True(t, hasDocText, "unlabeled label tablet '0-Document.text' should exist")
+	require.True(t, hasDocText, "unlabeled tablet '0-Document.text' should exist")
 
-	// Verify labeled label tablets for "secret" (for doc1)
-	t.Log("Verifying 'secret' label tablets (for doc1)...")
+	// Verify 'secret' tablets (for doc1)
+	t.Log("Verifying 'secret' tablets (for doc1)...")
 	secretNameGroup, hasSecretName := tabletToGroup["0-Document.name@secret"]
-	require.True(t, hasSecretName, "label tablet '0-Document.name@secret' should exist")
+	require.True(t, hasSecretName, "tablet '0-Document.name@secret' should exist")
 	require.Equal(t, secretGroup, secretNameGroup,
 		"'0-Document.name@secret' should be in the 'secret' group")
 
 	secretTextGroup, hasSecretText := tabletToGroup["0-Document.text@secret"]
-	require.True(t, hasSecretText, "label tablet '0-Document.text@secret' should exist")
+	require.True(t, hasSecretText, "tablet '0-Document.text@secret' should exist")
 	require.Equal(t, secretGroup, secretTextGroup,
 		"'0-Document.text@secret' should be in the 'secret' group")
 
-	// Verify labeled label tablets for "top_secret" (for doc2)
-	t.Log("Verifying 'top_secret' label tablets (for doc2)...")
+	// Verify 'top_secret' tablets (for doc2)
+	t.Log("Verifying 'top_secret' tablets (for doc2)...")
 	topSecretNameGroup, hasTopSecretName := tabletToGroup["0-Document.name@top_secret"]
-	require.True(t, hasTopSecretName, "label tablet '0-Document.name@top_secret' should exist")
+	require.True(t, hasTopSecretName, "tablet '0-Document.name@top_secret' should exist")
 	require.Equal(t, topSecretGroup, topSecretNameGroup,
 		"'0-Document.name@top_secret' should be in the 'top_secret' group")
 
 	topSecretTextGroup, hasTopSecretText := tabletToGroup["0-Document.text@top_secret"]
-	require.True(t, hasTopSecretText, "label tablet '0-Document.text@top_secret' should exist")
+	require.True(t, hasTopSecretText, "tablet '0-Document.text@top_secret' should exist")
 	require.Equal(t, topSecretGroup, topSecretTextGroup,
 		"'0-Document.text@top_secret' should be in the 'top_secret' group")
 
-	t.Log("All label tablet assignments verified!")
+	t.Log("All tablet assignments verified!")
 
 	// Step 4: Verify query fan-out — all 3 documents should be returned despite
 	// living on 3 different groups.
 	// NOTE: We avoid orderasc in the DQL query because the sort operation fans out
-	// to all label tablet groups and concatenates sorted runs instead of merging them,
+	// to all tablet groups and concatenates sorted runs instead of merging them,
 	// causing triplication. Sorting in Go is the correct approach for now.
 	//
-	// We poll with retries because AllLabelTablets (used for query fan-out) reads the
+	// We poll with retries because AllTablets (used for query fan-out) reads the
 	// alpha's local tablet cache, which is updated asynchronously via applyState from
-	// Zero. Until all label tablets propagate, the query may only reach a subset of groups.
+	// Zero. Until all tablets propagate, the query may only reach a subset of groups.
 	t.Log("Querying all documents via has(Document.name) to verify fan-out across groups...")
 	type docResult struct {
 		Name string `json:"Document.name"`

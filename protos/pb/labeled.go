@@ -9,7 +9,7 @@ import "strings"
 
 const tabletKeySep = "@"
 
-// TabletKey returns the composite key for a label tablet. Unlabeled tablets
+// TabletKey returns the composite key for a tablet. Unlabeled tablets
 // use the bare predicate name for backward compatibility.
 func TabletKey(predicate, label string) string {
 	if label == "" {

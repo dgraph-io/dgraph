@@ -340,7 +340,7 @@ func (n *node) handleTablet(tablet *pb.Tablet) error {
 
 	// Duplicate detection: check if this (predicate, label) pair is already served.
 	// Multiple groups CAN serve the same predicate as long as they have different labels.
-	if prev := n.server.servingLabelTablet(tablet.Predicate, tablet.Label); prev != nil {
+	if prev := n.server.servingTablet(tablet.Predicate, tablet.Label); prev != nil {
 		if tablet.Force {
 			originalGroup := state.Groups[prev.GroupId]
 			delete(originalGroup.Tablets, key)

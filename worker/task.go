@@ -118,8 +118,8 @@ func processWithBackupRequest(
 	}
 }
 
-// mergeResults combines results from multiple label tablet queries.
-// Each label tablet returns results only for UIDs it has postings for.
+// mergeResults combines results from multiple tablet queries.
+// Each tablet returns results only for UIDs it has postings for.
 func mergeResults(results []*pb.Result) *pb.Result {
 	if len(results) == 0 {
 		return &pb.Result{}
@@ -131,7 +131,7 @@ func mergeResults(results []*pb.Result) *pb.Result {
 	merged := &pb.Result{}
 	// Merge UID matrices: each result has one UidMatrix entry per query UID.
 	// For fan-out, all results have the same number of UidMatrix entries.
-	// Merge by appending UIDs from each label tablet's response.
+	// Merge by appending UIDs from each tablet's response.
 	if len(results[0].UidMatrix) > 0 {
 		merged.UidMatrix = make([]*pb.List, len(results[0].UidMatrix))
 		for i := range merged.UidMatrix {
@@ -191,18 +191,18 @@ func mergeResults(results []*pb.Result) *pb.Result {
 func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	attr := q.Attr
 
-	// Check for multi-label-tablet fan-out.
-	labelTablets, err := groups().AllLabelTablets(attr, q.ReadTs)
+	// Check for multi-tablet fan-out.
+	tablets, err := groups().AllTablets(attr, q.ReadTs)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(labelTablets) > 1 {
-		// Fan-out path: send query to all label tablet groups in parallel.
-		return processTaskFanOut(ctx, q, labelTablets)
+	if len(tablets) > 1 {
+		// Fan-out path: send query to all tablet groups in parallel.
+		return processTaskFanOut(ctx, q, tablets)
 	}
 
-	// Fast path: single label tablet (or none), use existing routing.
+	// Fast path: single tablet (or none), use existing routing.
 	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	switch {
 	case err != nil:
@@ -238,13 +238,13 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	return reply, nil
 }
 
-// processTaskFanOut sends the query to all label tablet groups in parallel
+// processTaskFanOut sends the query to all tablet groups in parallel
 // and merges the results.
-func processTaskFanOut(ctx context.Context, q *pb.Query, labelTablets []*pb.Tablet) (*pb.Result, error) {
+func processTaskFanOut(ctx context.Context, q *pb.Query, tablets []*pb.Tablet) (*pb.Result, error) {
 	span := trace.SpanFromContext(ctx)
 	span.AddEvent("ProcessTaskFanOut", trace.WithAttributes(
 		attribute.String("attr", q.Attr),
-		attribute.Int("label_tablets", len(labelTablets)),
+		attribute.Int("tablets", len(tablets)),
 		attribute.String("readTs", fmt.Sprintf("%d", q.ReadTs))))
 
 	type fanOutResult struct {
@@ -252,8 +252,8 @@ func processTaskFanOut(ctx context.Context, q *pb.Query, labelTablets []*pb.Tabl
 		err    error
 	}
 
-	ch := make(chan fanOutResult, len(labelTablets))
-	for _, tab := range labelTablets {
+	ch := make(chan fanOutResult, len(tablets))
+	for _, tab := range tablets {
 		gid := tab.GroupId
 		go func(gid uint32) {
 			if groups().ServesGroup(gid) {
@@ -274,10 +274,10 @@ func processTaskFanOut(ctx context.Context, q *pb.Query, labelTablets []*pb.Tabl
 	}
 
 	var results []*pb.Result
-	for range labelTablets {
+	for range tablets {
 		r := <-ch
 		if r.err != nil {
-			glog.Warningf("processTaskFanOut(%q): label tablet returned error: %v", q.Attr, r.err)
+			glog.Warningf("processTaskFanOut(%q): tablet returned error: %v", q.Attr, r.err)
 			return nil, r.err
 		}
 		results = append(results, r.result)

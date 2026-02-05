@@ -147,11 +147,11 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 
 	// checkTablet verifies that this group serves the given predicate.
 	// Uses BelongsToReadOnly instead of Tablet to avoid label-resolution issues
-	// with entity-level label tablets. GetForGroup in the tablet index prefers the
+	// with entity-level routing. GetForGroup in the tablet index prefers the
 	// tablet belonging to this group, so a direct cache lookup correctly validates
-	// that this group serves some label tablet for the predicate. This avoids
-	// depending on schema.State().GetLabel() which returns a single label and may
-	// not match the receiving group's label tablet.
+	// that this group serves some tablet for the predicate. This avoids depending
+	// on schema.State().GetLabel() which returns a single label and may not match
+	// the receiving group's tablet.
 	checkTablet := func(pred string) error {
 		gid, err := groups().BelongsToReadOnly(pred, 0)
 		switch {

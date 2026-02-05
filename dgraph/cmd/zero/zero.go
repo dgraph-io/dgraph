@@ -324,15 +324,8 @@ func (s *Server) ServingTablet(tablet string) *pb.Tablet {
 	return s.tabletIndex.Get(pred, label)
 }
 
-// ServingLabelTablet returns the tablet for the given (predicate, label) pair.
-func (s *Server) ServingLabelTablet(predicate, label string) *pb.Tablet {
-	s.RLock()
-	defer s.RUnlock()
-	return s.servingLabelTablet(predicate, label)
-}
-
-// ServingLabelTablets returns all label tablets for a given predicate across all groups.
-func (s *Server) ServingLabelTablets(predicate string) []*pb.Tablet {
+// ServingTablets returns all tablets for a given predicate across all groups.
+func (s *Server) ServingTablets(predicate string) []*pb.Tablet {
 	s.RLock()
 	defer s.RUnlock()
 	labels := s.tabletIndex.AllForPredicate(predicate)
@@ -358,9 +351,9 @@ func (s *Server) isBlocked(pred string) bool {
 	return blocked
 }
 
-// servingLabelTablet returns the tablet for the given (predicate, label) pair.
+// servingTablet returns the tablet for the given (predicate, label) pair.
 // Caller must hold at least a read lock.
-func (s *Server) servingLabelTablet(predicate, label string) *pb.Tablet {
+func (s *Server) servingTablet(predicate, label string) *pb.Tablet {
 	s.AssertRLock()
 	return s.tabletIndex.Get(predicate, label)
 }
@@ -748,7 +741,7 @@ func (s *Server) ShouldServe(
 		} else {
 			// Someone is serving this tablet. If the found tablet belongs to a
 			// different group than the requester, check if the requesting group
-			// serves a label tablet of this predicate.
+			// serves a tablet for this predicate under a different label.
 			if tablet.GroupId > 0 && tab.GroupId != tablet.GroupId {
 				s.RLock()
 				labels := s.tabletIndex.AllForPredicate(tablet.Predicate)

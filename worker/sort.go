@@ -48,17 +48,17 @@ type sortresult struct {
 func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, error) {
 	attr := q.Order[0].Attr
 
-	// Check for multi-label-tablet fan-out.
-	labelTablets, err := groups().AllLabelTablets(attr, q.ReadTs)
+	// Check for multi-tablet fan-out.
+	tablets, err := groups().AllTablets(attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
 	}
 
-	if len(labelTablets) > 1 {
-		return processSortFanOut(ctx, q, labelTablets)
+	if len(tablets) > 1 {
+		return processSortFanOut(ctx, q, tablets)
 	}
 
-	// Fast path: single label tablet.
+	// Fast path: single tablet.
 	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	if err != nil {
 		return &emptySortResult, err
@@ -88,14 +88,14 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	return result.(*pb.SortResult), nil
 }
 
-func processSortFanOut(ctx context.Context, q *pb.SortMessage, labelTablets []*pb.Tablet) (*pb.SortResult, error) {
+func processSortFanOut(ctx context.Context, q *pb.SortMessage, tablets []*pb.Tablet) (*pb.SortResult, error) {
 	type fanOutResult struct {
 		result *pb.SortResult
 		err    error
 	}
 
-	ch := make(chan fanOutResult, len(labelTablets))
-	for _, tab := range labelTablets {
+	ch := make(chan fanOutResult, len(tablets))
+	for _, tab := range tablets {
 		gid := tab.GroupId
 		go func(gid uint32) {
 			if groups().ServesGroup(gid) {
@@ -116,7 +116,7 @@ func processSortFanOut(ctx context.Context, q *pb.SortMessage, labelTablets []*p
 	}
 
 	var results []*pb.SortResult
-	for range labelTablets {
+	for range tablets {
 		r := <-ch
 		if r.err != nil {
 			return &emptySortResult, r.err
@@ -135,7 +135,7 @@ func mergeSortResults(results []*pb.SortResult, q *pb.SortMessage) *pb.SortResul
 		return results[0]
 	}
 
-	// Merge UID matrices from all label tablets.
+	// Merge UID matrices from all tablets.
 	merged := &pb.SortResult{}
 	if len(results[0].UidMatrix) > 0 {
 		merged.UidMatrix = make([]*pb.List, len(results[0].UidMatrix))
