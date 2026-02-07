@@ -16,7 +16,7 @@ services:
         read_only: true
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false; sentry=false;"
-      --my=zero1:5080 --replicas 3 --raft="idx=1" --logtostderr -v=2 --bindall --expose_trace
+      --my=zero1:5080 --replicas 3 --raft="idx=1" --logtostderr -v=2 --bindall
       --profile_mode block --block_rate 10
 
   zero2:
@@ -84,7 +84,7 @@ services:
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --telemetry "reports=false;" --encryption
       "key-file=/dgraph-enc/enc-key;" --my=alpha1:7080 --zero=zero1:5080,zero2:5080,zero3:5080
-      --expose_trace --profile_mode block --block_rate 10 --logtostderr -v=2 --security
+      --profile_mode block --block_rate 10 --logtostderr -v=2 --security
       "whitelist=0.0.0.0/0;" --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   alpha2:
@@ -113,7 +113,7 @@ services:
       service: alpha
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;"
-      --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block
+      --my=alpha2:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --profile_mode block
       --block_rate 10 --logtostderr -v=2 --security "whitelist=0.0.0.0/0;" --acl
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -143,7 +143,7 @@ services:
       service: alpha
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;"
-      --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block
+      --my=alpha3:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --profile_mode block
       --block_rate 10 --logtostderr -v=2 --security "whitelist=0.0.0.0/0;" --acl
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -173,7 +173,7 @@ services:
       service: alpha
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;"
-      --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block
+      --my=alpha4:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --profile_mode block
       --block_rate 10 --logtostderr -v=2 --security "whitelist=0.0.0.0/0;" --acl
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -203,7 +203,7 @@ services:
       service: alpha
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;"
-      --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block
+      --my=alpha5:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --profile_mode block
       --block_rate 10 --logtostderr -v=2 --security "whitelist=0.0.0.0/0;" --acl
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
@@ -233,7 +233,7 @@ services:
       service: alpha
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} alpha --encryption "key-file=/dgraph-enc/enc-key;"
-      --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --expose_trace --profile_mode block
+      --my=alpha6:7080 --zero=zero1:5080,zero2:5080,zero3:5080 --profile_mode block
       --block_rate 10 --logtostderr -v=2 --security "whitelist=0.0.0.0/0;" --acl
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
