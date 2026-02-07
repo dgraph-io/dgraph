@@ -96,8 +96,6 @@ func initCmds() {
 			"overridden to values set with environment variables and flags.")
 	RootCmd.PersistentFlags().Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	RootCmd.PersistentFlags().Bool("expose_trace", false,
-		"Allow trace endpoint to be accessible from remote")
 	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
@@ -107,6 +105,10 @@ func initCmds() {
 	x.Check(RootCmd.PersistentFlags().Set("stderrthreshold", "0"))
 	x.Check(RootCmd.PersistentFlags().MarkDeprecated("stderrthreshold",
 		"Dgraph always sets this flag to 0. It can't be overwritten."))
+	RootCmd.PersistentFlags().Bool("expose_trace", false,
+		"Dgraph always sets this flag to false. It can't be overwritten.")
+	x.Check(RootCmd.PersistentFlags().MarkDeprecated("expose_trace",
+		"This flag has been removed. In future releases using this flag will result in an error."))
 
 	for _, sc := range subcommands {
 		RootCmd.AddCommand(sc.Cmd)
