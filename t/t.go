@@ -169,10 +169,63 @@ func command(args ...string) *exec.Cmd {
 	return commandWithContext(ctxb, args...)
 }
 
+// ensureGoPathLinuxBinEnvVarSet sets LINUX_GOBIN environment variable if not already set.
+// On Linux, it defaults to $GOPATH/bin. On other systems (macOS, etc.), it defaults
+// to $GOPATH/linux_$GOARCH/bin to support cross-compiled Linux binaries for Docker tests.
+func ensureGoPathLinuxBinEnvVarSet() {
+	if os.Getenv("LINUX_GOBIN") != "" {
+		return // already set
+	}
+
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(os.Getenv("HOME"), "go")
+	}
+
+	var gopathLinuxBin string
+	if runtime.GOOS == "linux" {
+		gopathLinuxBin = filepath.Join(gopath, "bin")
+	} else {
+		gopathLinuxBin = filepath.Join(gopath, "linux_"+runtime.GOARCH)
+	}
+	os.Setenv("LINUX_GOBIN", gopathLinuxBin)
+}
+
+// ensureDgraphLinuxBinary checks if the dgraph binary exists under LINUX_GOBIN.
+// If not found, it runs make install to build it.
+func ensureDgraphLinuxBinary() error {
+	ensureGoPathLinuxBinEnvVarSet()
+	gopathLinuxBin := os.Getenv("LINUX_GOBIN")
+	dgraphBin := filepath.Join(gopathLinuxBin, "dgraph")
+
+	if _, err := os.Stat(dgraphBin); err == nil {
+		return nil // binary exists
+	}
+
+	fmt.Printf("Dgraph binary not found at %s, building...\n", dgraphBin)
+	var cmd *exec.Cmd
+	if *race {
+		cmd = command("make", "BUILD_RACE=y", "install")
+	} else {
+		cmd = command("make", "install")
+	}
+	cmd.Dir = *baseDir
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to build dgraph binary: %w", err)
+	}
+	fmt.Printf("Dgraph binary built successfully at %s\n", dgraphBin)
+	return nil
+}
+
 func startCluster(composeFile, prefix string) error {
+	ensureGoPathLinuxBinEnvVarSet()
 
 	if os.Getenv("GOPATH") == "" {
 		return fmt.Errorf("GOPATH environment variable is required but not set")
+	}
+
+	if err := ensureDgraphLinuxBinary(); err != nil {
+		return err
 	}
 	cmd := command(
 		"docker", "compose", "--compatibility", "-f", composeFile, "-p", prefix,
