@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	TraceDefaults     = `ratio=0.01; jaeger=; datadog=;`
+	TraceDefaults     = `ratio=0.01; jaeger=; datadog=; service=;`
 	TelemetryDefaults = `reports=true;sentry=false;`
 )
 
@@ -34,6 +34,8 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		Flag("datadog",
 			"URL of Datadog to send OpenCensus traces. As of now, the trace exporter does not "+
 				"support annotation logs and discards them.").
+		Flag("service",
+			"Custom service name for tracing. If set, overrides the default (dgraph.alpha/dgraph.zero).").
 		String())
 
 	flag.String("survive", "process",

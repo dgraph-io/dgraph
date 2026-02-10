@@ -609,6 +609,11 @@ func SinceMs(startTime time.Time) float64 {
 func RegisterExporters(conf *viper.Viper, service string) {
 	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
 		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
+		// Use custom service name if specified, otherwise use the default
+		if customService := t.GetString("service"); len(customService) > 0 {
+			service = customService
+		}
+
 		// Create resource with service information
 		res := resource.NewWithAttributes(
 			semconv.SchemaURL,
