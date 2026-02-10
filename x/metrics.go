@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	traceTel "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -609,6 +610,13 @@ func SinceMs(startTime time.Time) float64 {
 func RegisterExporters(conf *viper.Viper, service string) {
 	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
 		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
+
+		// Set up propagator for trace context propagation across services
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+
 		// Use custom service name if specified, otherwise use the default
 		if customService := t.GetString("service"); len(customService) > 0 {
 			service = customService
