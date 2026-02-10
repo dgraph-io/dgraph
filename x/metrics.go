@@ -617,6 +617,10 @@ func RegisterExporters(conf *viper.Viper, service string) {
 			propagation.Baggage{},
 		))
 
+		// Determine namespace from the default service type (dgraph.alpha or dgraph.zero)
+		// This allows filtering all alphas or zeros in Jaeger even with custom service names
+		namespace := service // e.g., "dgraph.alpha" or "dgraph.zero"
+
 		// Use custom service name if specified, otherwise use the default
 		if customService := t.GetString("service"); len(customService) > 0 {
 			service = customService
@@ -626,6 +630,7 @@ func RegisterExporters(conf *viper.Viper, service string) {
 		res := resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(service),
+			semconv.ServiceNamespaceKey.String(namespace),
 		)
 
 		// Configure the batch span processor options
