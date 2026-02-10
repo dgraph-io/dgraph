@@ -1694,6 +1694,7 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
+	repaired := make(map[string]bool)
 	for gmuIndex, gmu := range qc.gmuList {
 		var buildQuery strings.Builder
 		for rdfIndex, pred := range gmu.Set {
@@ -1706,7 +1707,25 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 				// [TODO] Don't check if it's dgraph.xid. It's a bug as this node might not be aware
 				// of the schema for the given predicate. This is a bug issue for dgraph.xid hence
 				// we are bypassing it manually until the bug is fixed.
-				predSchema, ok := schema.State().Get(ctx, x.NamespaceAttr(namespace, pred.Predicate))
+				fullPred := x.NamespaceAttr(namespace, pred.Predicate)
+				predSchema, ok := schema.State().Get(ctx, fullPred)
+
+				if !ok {
+					unique, predChecked := repaired[fullPred]
+					if !predChecked {
+						schReq := &pb.SchemaRequest{Predicates: []string{fullPred}}
+						remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
+						if err == nil && len(remoteNodes) > 0 {
+							predSchema.Unique = remoteNodes[0].Unique
+							ok = true
+						}
+						repaired[fullPred] = predSchema.Unique
+					} else {
+						predSchema.Unique = unique
+						ok = true
+					}
+				}
+
 				if !ok || !predSchema.Unique {
 					continue
 				}
