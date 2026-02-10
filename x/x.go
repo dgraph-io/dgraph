@@ -148,6 +148,11 @@ func init() {
 	GrootUid.Store(RootNamespace, 0)
 }
 
+// SafeUTF8 sanitizes a string for OTLP export by replacing invalid UTF-8 sequences.
+func SafeUTF8(s string) string {
+	return strings.ToValidUTF8(s, "?")
+}
+
 // ShouldCrash returns true if the error should cause the process to crash.
 func ShouldCrash(err error) bool {
 	if err == nil {

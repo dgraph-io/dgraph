@@ -116,7 +116,7 @@ var (
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger."+
-			" Otherwise set to http://jaeger:14268.")
+			" Otherwise set to http://jaeger:4318.")
 	jaegerSaveTraces = pflag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
 	deferDbTeardown  = pflag.Bool("defer-db-teardown", false,
 		"Wait until user input to tear down DB nodes")

@@ -55,9 +55,8 @@ func Init(ps *badger.DB) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
-		grpc.StatsHandler(otelgrpc.NewClientHandler()),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
-
 	if x.WorkerConfig.TLSServerConfig != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
 	}

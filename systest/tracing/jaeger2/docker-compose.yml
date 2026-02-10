@@ -1,0 +1,52 @@
+# Jaeger 2.x tracing integration test
+# Tests OTLP HTTP export to Jaeger 2.x (jaeger:latest)
+# Note: Jaeger 2.x requires JAEGER_LISTEN_HOST=0.0.0.0 to expose OTLP externally
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:local
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+      - "8080"
+      - "9080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    depends_on:
+      - zero1
+      - jaeger
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} alpha --trace "jaeger=http://jaeger:4318; ratio=1.0;
+      service=alpha1;" --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --security
+      "whitelist=0.0.0.0/0;"
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    environment:
+      - JAEGER_LISTEN_HOST=0.0.0.0
+    ports:
+      - "4318"
+      - "16686"
+  zero1:
+    image: dgraph/dgraph:local
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+      - "5080"
+      - "6080"
+    volumes:
+      - type: bind
+        source: $GOPATH/bin
+        target: /gobin
+        read_only: true
+    depends_on:
+      - jaeger
+    command:
+      /gobin/dgraph ${COVERAGE_OUTPUT} zero --telemetry "reports=false;" --trace
+      "jaeger=http://jaeger:4318; ratio=1.0; service=zero1;" --raft="idx=1" --my=zero1:5080
+      --logtostderr -v=2 --bindall
+volumes: {}

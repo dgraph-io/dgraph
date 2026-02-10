@@ -20,8 +20,10 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -142,10 +144,19 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		return processTask(ctx, q, gid)
 	}
 
+	// Add span for cross-alpha network call
+	ctx, networkSpan := otel.Tracer("worker").Start(ctx, "ProcessTaskOverNetwork.RemoteCall")
+	networkSpan.SetAttributes(
+		attribute.String("target_group", fmt.Sprintf("%d", gid)),
+		attribute.String("predicate", x.SafeUTF8(attr)),
+		attribute.Bool("is_remote", true),
+	)
+
 	result, err := processWithBackupRequest(ctx, gid,
 		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.ServeTask(ctx, q)
 		})
+	networkSpan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +350,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	defer stop()
 	span.AddEvent("Number of uids and args.srcFn", trace.WithAttributes(
 		attribute.Int64("uids_count", int64(srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", args.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 
 	switch srcFn.fnType {
 	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
@@ -786,7 +797,7 @@ func (qs *queryState) handleUidPostings(
 	defer stop()
 	span.AddEvent("Number of uids and args.srcFn", trace.WithAttributes(
 		attribute.Int64("uids_count", int64(srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", args.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 	if srcFn.n == 0 {
 		return nil
 	}
@@ -1003,10 +1014,11 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "processTask."+q.Attr)
+	safeAttr := x.SafeUTF8(q.Attr)
+	ctx, span := otel.Tracer("").Start(ctx, "processTask."+safeAttr)
 	defer span.End()
 
-	stop := x.SpanTimer(span, "processTask"+q.Attr)
+	stop := x.SpanTimer(span, "processTask"+safeAttr)
 	defer stop()
 
 	span.SetAttributes(
@@ -1236,7 +1248,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	if span != nil {
 		span.AddEvent("Processing UIDs", trace.WithAttributes(
 			attribute.Int64("uid_count", int64(arg.srcFn.n)),
-			attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+			attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 	}
 
 	attr := arg.q.Attr
@@ -1353,7 +1365,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	defer stop()
 	span.AddEvent("Processing UIDs", trace.WithAttributes(
 		attribute.Int64("uid_count", int64(arg.srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 
 	attr := arg.q.Attr
 	span.AddEvent("Function information", trace.WithAttributes(
@@ -1521,7 +1533,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	defer stop()
 	span.AddEvent("Processing UIDs", trace.WithAttributes(
 		attribute.Int64("uid_count", int64(arg.srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
@@ -2207,7 +2219,26 @@ func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "worker.ServeTask")
+	// Manually extract trace context from gRPC metadata using the propagator
+	// This ensures the trace context is properly extracted for cross-alpha tracing
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		propagator := propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		)
+		carrier := propagation.HeaderCarrier{}
+		for k, vals := range md {
+			for _, v := range vals {
+				carrier.Set(k, v)
+			}
+		}
+		ctx = propagator.Extract(ctx, carrier)
+	}
+
+	// Sanitize attr for span name to ensure valid UTF-8 for OTLP export
+	safeAttr := x.SafeUTF8(q.Attr)
+	ctx, span := otel.Tracer("worker").Start(ctx, "worker.ServeTask",
+		trace.WithAttributes(attribute.String("predicate", safeAttr)))
 	defer span.End()
 
 	if ctx.Err() != nil {
