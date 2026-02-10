@@ -80,6 +80,8 @@ type options struct {
 	TmpFS          bool
 	UserOwnership  bool
 	Jaeger         int
+	TraceRatio     string
+	TraceService   bool
 	Metrics        bool
 	PortOffset     int
 	Verbosity      int
@@ -203,7 +205,14 @@ func initService(basename string, idx, grpcPort int) service {
 	}
 	svc.Command += " " + basename
 	if opts.Jaeger > 0 {
-		svc.Command += ` --trace "jaeger=http://jaeger:4318;"`
+		traceFlag := "jaeger=http://jaeger:4318;"
+		if opts.TraceRatio != "" {
+			traceFlag += fmt.Sprintf(" ratio=%s;", opts.TraceRatio)
+		}
+		if opts.TraceService {
+			traceFlag += fmt.Sprintf(" service=%s;", svc.name)
+		}
+		svc.Command += fmt.Sprintf(` --trace "%s"`, traceFlag)
 	}
 	return svc
 }
@@ -442,12 +451,12 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
+		Image:         "dgraph/ratel:latest",
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
 		},
-		Command: "dgraph-ratel" + portFlag,
+		Command: portFlag,
 	}
 	return svc
 }
@@ -566,6 +575,11 @@ func main() {
 		"store w and zw directories on a tmpfs filesystem")
 	cmd.PersistentFlags().IntVarP(&opts.Jaeger, "jaeger", "j", 0,
 		"include jaeger service (1 for v1.60, 2 for v2.x)")
+	cmd.PersistentFlags().Lookup("jaeger").NoOptDefVal = "1"
+	cmd.PersistentFlags().StringVar(&opts.TraceRatio, "trace_ratio", "",
+		"ratio of queries to trace (e.g., 0.01 for 1%)")
+	cmd.PersistentFlags().BoolVar(&opts.TraceService, "trace_service", false,
+		"use compose service name as trace service name (e.g., alpha1, zero1)")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
