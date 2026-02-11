@@ -6,6 +6,7 @@
 package dgraphtest
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -395,7 +396,7 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 		return
 	}
 
-	if verbose {
+	if false {
 		if err := c.printAllLogs(); err != nil {
 			log.Printf("[WARNING] error printing container logs: %v", err)
 		}
@@ -1367,4 +1368,67 @@ func (c *LocalCluster) GetAlphaGrpcEndpoint(id int) (string, error) {
 		return "", err
 	}
 	return "0.0.0.0:" + pubPort, nil
+}
+
+// CopyExportToHost copies exported files from the container to a host directory.
+// It returns the paths to RDF/JSON files and schema files on the host.
+func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, schemaFiles []string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	// Copy the exported data from the container to host
+	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), exportDir)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error copying export dir from container [%v]", c.alphas[0].cname())
+	}
+	defer func() {
+		if err := ts.Close(); err != nil {
+			log.Printf("[WARNING] error closing tared stream from docker cp for [%v]", c.alphas[0].cname())
+		}
+	}()
+
+	// Extract files from tar stream
+	tr := tar.NewReader(ts)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, nil, errors.Wrapf(err, "error reading file in tared stream: [%+v]", header)
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		fileName := filepath.Base(header.Name)
+		hostFile := filepath.Join(hostDir, fileName)
+
+		switch {
+		case strings.HasSuffix(fileName, ".rdf.gz"):
+			dataFiles = append(dataFiles, hostFile)
+		case strings.HasSuffix(fileName, ".json.gz"):
+			dataFiles = append(dataFiles, hostFile)
+		case strings.HasSuffix(fileName, ".schema.gz"):
+			schemaFiles = append(schemaFiles, hostFile)
+		case strings.HasSuffix(fileName, ".gql_schema.gz"):
+			// Skip gql schema files for now
+			continue
+		default:
+			log.Printf("[WARNING] unexpected file in export: %v", fileName)
+			continue
+		}
+
+		fd, err := os.Create(hostFile)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "error creating file [%v]", hostFile)
+		}
+
+		if _, err := io.Copy(fd, tr); err != nil {
+			fd.Close()
+			return nil, nil, errors.Wrapf(err, "error writing to [%v] from: [%+v]", fd.Name(), header)
+		}
+		fd.Close()
+	}
+
+	return dataFiles, schemaFiles, nil
 }
