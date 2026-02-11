@@ -46,6 +46,12 @@ func (c *LocalCluster) setupBinary() error {
 		if os.Getenv("GOPATH") == "" {
 			return errors.New("GOPATH is not set")
 		}
+
+		if os.Getenv("DGRAPH_BINARY") != "" {
+			if err := copyBinary(os.Getenv("DGRAPH_BINARY"), filepath.Join(c.tempBinDir, "dgraph_osx"), c.conf.version); err != nil {
+				return err
+			}
+		}
 		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
 		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
 	}

@@ -89,6 +89,7 @@ type state struct {
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	vectorTmpDb   *badger.DB   // Shared temporary DB for vector data and HNSW index building.
 	writeTs       uint64       // All badger writes use this timestamp
 	namespaces    *sync.Map    // To store the encountered namespaces.
 }
@@ -529,6 +530,11 @@ func (ld *loader) cleanup() {
 	for _, db := range ld.tmpDbs {
 		opts := db.Opts()
 		x.Check(db.Close())
+		x.Check(os.RemoveAll(opts.Dir))
+	}
+	if ld.vectorTmpDb != nil {
+		opts := ld.vectorTmpDb.Opts()
+		x.Check(ld.vectorTmpDb.Close())
 		x.Check(os.RemoveAll(opts.Dir))
 	}
 	ld.prog.endSummary()
