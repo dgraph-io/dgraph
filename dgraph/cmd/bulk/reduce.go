@@ -34,6 +34,9 @@ import (
 	"github.com/dgraph-io/dgraph/v25/codec"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
@@ -49,6 +52,30 @@ func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
+
+	// Check if we have vector indexes - if so, create SHARED vectorTmpDb
+	// This avoids the global pstore race condition by calling posting.Init() ONCE
+	vectorIndexSpecs := r.schema.getVectorIndexSpecs()
+	var sharedVectorDb *badger.DB
+	var predToOutputShard map[string]int
+	var predToShardMu sync.Mutex
+
+	if len(vectorIndexSpecs) > 0 {
+		fmt.Printf("Creating shared vector database for %d vector predicate(s)\n", len(vectorIndexSpecs))
+
+		// Create single shared vectorTmpDb
+		sharedVectorDb = r.createVectorTmpBadger()
+
+		// Initialize posting and schema ONCE (avoids race condition!)
+		posting.Init(sharedVectorDb, 0, false)
+		schema.Init(sharedVectorDb)
+		for pred, sch := range r.schema.schemaMap {
+			schema.State().Set(pred, sch)
+		}
+
+		// Track which predicates belong to which output shard
+		predToOutputShard = make(map[string]int)
+	}
 
 	thr := y.NewThrottle(r.opt.NumReducers)
 	for i := range r.opt.ReduceShards {
@@ -88,6 +115,15 @@ func (r *reducer) run() error {
 				countBuf:    getBuf(r.opt.TmpDir),
 			}
 
+			// Create vector indexer using shared DB (if vectors exist)
+			var vi *vectorIndexer
+			if sharedVectorDb != nil && len(vectorIndexSpecs) > 0 {
+				fmt.Printf("Initializing vector indexer for shard %d with %d predicate(s)\n",
+					shardId, len(vectorIndexSpecs))
+				vi = newVectorIndexerShared(r, sharedVectorDb, vectorIndexSpecs,
+					shardId, &predToShardMu, predToOutputShard)
+			}
+
 			partitionKeys := make([][]byte, 0, len(partitions))
 			for k := range partitions {
 				partitionKeys = append(partitionKeys, []byte(k))
@@ -96,8 +132,11 @@ func (r *reducer) run() error {
 				return bytes.Compare(partitionKeys[i], partitionKeys[j]) < 0
 			})
 
-			r.reduce(partitionKeys, mapItrs, ci)
+			r.reduce(partitionKeys, mapItrs, ci, vi)
 			ci.wait()
+			if vi != nil {
+				vi.wait()
+			}
 
 			fmt.Println("Writing split lists back to the main DB now")
 			// Write split lists back to the main DB.
@@ -112,7 +151,17 @@ func (r *reducer) run() error {
 			}
 		}(i, r.createBadger(i), r.createTmpBadger())
 	}
-	return thr.Finish()
+	if err := thr.Finish(); err != nil {
+		return err
+	}
+
+	// After all shards complete, copy vector data to correct output DBs
+	if sharedVectorDb != nil && len(predToOutputShard) > 0 {
+		fmt.Println("Copying vector data to output shards...")
+		r.copyVectorDataToShards(sharedVectorDb, predToOutputShard)
+	}
+
+	return nil
 }
 
 func (r *reducer) createBadgerInternal(dir string, compression bool) *badger.DB {
@@ -154,6 +203,14 @@ func (r *reducer) createTmpBadger() *badger.DB {
 	// Do not enable compression in temporary badger to improve performance.
 	db := r.createBadgerInternal(tmpDir, false)
 	r.tmpDbs = append(r.tmpDbs, db)
+	return db
+}
+
+func (r *reducer) createVectorTmpBadger() *badger.DB {
+	tmpDir, err := os.MkdirTemp(r.opt.TmpDir, "vector")
+	x.Check(err)
+	db := r.createBadgerInternal(tmpDir, false)
+	r.vectorTmpDb = db
 	return db
 }
 
@@ -235,11 +292,13 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 }
 
 type encodeRequest struct {
-	cbuf     *z.Buffer
-	countBuf *z.Buffer
-	wg       *sync.WaitGroup
-	listCh   chan *z.Buffer
-	splitCh  chan *bpb.KVList
+	cbuf      *z.Buffer
+	countBuf  *z.Buffer
+	vectorBuf *z.Buffer      // Buffer for vector entries to be indexed
+	vi        *vectorIndexer // Vector indexer for routing vector predicates to tmpDb
+	wg        *sync.WaitGroup
+	listCh    chan *z.Buffer
+	splitCh   chan *bpb.KVList
 }
 
 func (r *reducer) streamIdFor(pred string) uint32 {
@@ -301,7 +360,7 @@ func (r *reducer) writeTmpSplits(ci *countIndexer, wg *sync.WaitGroup) {
 	x.Check(ci.splitWriter.Flush())
 }
 
-func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
+func (r *reducer) startWriting(ci *countIndexer, vi *vectorIndexer, writerCh chan *encodeRequest, closer *z.Closer) {
 	defer closer.Done()
 
 	// Concurrently write split lists to a temporary badger.
@@ -329,6 +388,36 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 			return nil
 		}); err != nil {
 			glog.Errorf("error while iterating over buf: %v", err)
+			x.Check(err)
+		}
+	}
+
+	// Process vector entries and insert into HNSW index
+	vector := func(req *encodeRequest) {
+		if req.vectorBuf == nil {
+			return
+		}
+		defer func() {
+			if err := req.vectorBuf.Release(); err != nil {
+				glog.Warningf("error releasing vector buffer: %v", err)
+			}
+		}()
+		if req.vectorBuf.IsEmpty() {
+			return
+		}
+
+		// Iterate through vector entries and insert into HNSW
+		if err := req.vectorBuf.SliceIterate(func(slice []byte) error {
+			ve := unmarshalVectorEntry(slice)
+			if ve == nil {
+				// Skip malformed entries (already logged in unmarshalVectorEntry)
+				return nil
+			}
+			// Insert vector into HNSW and generate entries
+			vi.addVectorEntry(ve)
+			return nil
+		}); err != nil {
+			glog.Errorf("error processing vectors: %v", err)
 			x.Check(err)
 		}
 	}
@@ -380,6 +469,9 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 		req.wg.Wait()
 
 		count(req)
+		if vi != nil {
+			vector(req)
+		}
 	}
 
 	// Wait for split lists to be written to the temporary badger.
@@ -405,6 +497,102 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 		return nil
 	}
 	x.Check(stream.Orchestrate(context.Background()))
+}
+
+// copyVectorDataToShards copies vector data from the shared vectorTmpDb to the correct output DBs.
+// It uses the predToOutputShard map to determine which predicate goes to which shard.
+func (r *reducer) copyVectorDataToShards(vectorDb *badger.DB, predToShard map[string]int) {
+	if len(predToShard) == 0 {
+		return
+	}
+
+	// Group predicates by output shard
+	shardPreds := make(map[int][]string)
+	for pred, shardId := range predToShard {
+		shardPreds[shardId] = append(shardPreds[shardId], pred)
+	}
+
+	// Copy each shard's predicates to its output DB
+	for shardId, preds := range shardPreds {
+		if shardId >= len(r.dbs) {
+			glog.Errorf("Invalid shard ID %d for predicates %v (only %d DBs)", shardId, preds, len(r.dbs))
+			continue
+		}
+
+		destDb := r.dbs[shardId]
+
+		// Collect all predicate keys (base + HNSW suffixes) and sort for efficient iteration
+		var allPreds []string
+		for _, pred := range preds {
+			allPreds = append(allPreds, pred)
+			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecKeyword)) // __vector_
+			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecEntry))   // __vector_entry
+			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecDead))    // __vector_dead
+		}
+		sort.Strings(allPreds)
+
+		fmt.Printf("Copying %d vector predicates to shard %d\n", len(preds), shardId)
+
+		// Copy each predicate
+		totalCount := 0
+		for _, pred := range allPreds {
+			count := r.copyPredicateWithBatchCount(destDb, vectorDb, pred)
+			totalCount += count
+		}
+
+		fmt.Printf("Copied %d total KV entries for %d predicates to shard %d\n",
+			totalCount, len(preds), shardId)
+	}
+}
+
+// copyPredicateWithBatchCount is like copyPredicateWithBatch but returns the count of entries copied.
+func (r *reducer) copyPredicateWithBatchCount(destDb *badger.DB, srcDb *badger.DB, pred string) int {
+	wb := destDb.NewManagedWriteBatch()
+	defer wb.Cancel()
+
+	stream := srcDb.NewStreamAt(math.MaxUint64)
+	stream.LogPrefix = fmt.Sprintf("copying predicate %s", pred)
+	stream.Prefix = x.PredicatePrefix(pred)
+	stream.NumGo = 1
+
+	var count int
+	stream.Send = func(buf *z.Buffer) error {
+		kvs, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
+
+		for _, kv := range kvs.Kv {
+			userMeta := byte(0)
+			if len(kv.UserMeta) > 0 {
+				userMeta = kv.UserMeta[0]
+			}
+
+			entry := &badger.Entry{
+				Key:      kv.Key,
+				Value:    kv.Value,
+				UserMeta: userMeta,
+			}
+
+			if err := wb.SetEntryAt(entry, kv.Version); err != nil {
+				return fmt.Errorf("error writing to batch: %w", err)
+			}
+			count++
+		}
+		return nil
+	}
+
+	if err := stream.Orchestrate(context.Background()); err != nil {
+		glog.Warningf("Error streaming predicate %s: %v", pred, err)
+		return 0
+	}
+
+	if err := wb.Flush(); err != nil {
+		glog.Errorf("Error flushing batch for predicate %s: %v", pred, err)
+		return 0
+	}
+
+	return count
 }
 
 const limit = 2 << 30
@@ -449,7 +637,7 @@ func getBuf(dir string) *z.Buffer {
 		WithMaxSize(0)
 }
 
-func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer, vi *vectorIndexer) {
 	cpu := r.opt.NumGoroutines
 	fmt.Printf("Num Encoders: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
@@ -462,7 +650,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	}
 	// Start listening to write the badger list.
 	writerCloser := z.NewCloser(1)
-	go r.startWriting(ci, writerCh, writerCloser)
+	go r.startWriting(ci, vi, writerCh, writerCloser)
 
 	sendReq := func(zbuf *z.Buffer) {
 		wg := new(sync.WaitGroup)
@@ -473,6 +661,11 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			listCh:   make(chan *z.Buffer, 3),
 			splitCh:  ci.splitCh,
 			countBuf: getBuf(r.opt.TmpDir),
+			vi:       vi,
+		}
+		// Only allocate vectorBuf when we have vector predicates to index
+		if vi != nil {
+			req.vectorBuf = getBuf(r.opt.TmpDir)
 		}
 		encoderCh <- req
 		writerCh <- req
@@ -585,6 +778,8 @@ func (r *reducer) toList(req *encodeRequest) {
 	}()
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
+	trackVectorIndex := make(map[string]bool) // Track predicates with vector indexes
+
 	appendToList := func() {
 		if num == 0 {
 			return
@@ -630,6 +825,32 @@ func (r *reducer) toList(req *encodeRequest) {
 				p := getPosting()
 				x.Check(proto.Unmarshal(pbuf, p))
 				pl.Postings = append(pl.Postings, p)
+
+				// Extract vectors for vector indexing
+				if pk.IsData() && req.vectorBuf != nil {
+					doVector, ok := trackVectorIndex[pk.Attr]
+					if !ok {
+						// Check if this predicate has a vector index
+						doVector = r.schema.hasVectorIndex(pk.Attr)
+						trackVectorIndex[pk.Attr] = doVector
+					}
+					if doVector {
+						// Check if this is a vector value (vfloat type)
+						if types.TypeID(p.ValType) == types.VFloatID && len(p.Value) > 0 {
+							vector := types.BytesAsFloatArray(p.Value)
+							if len(vector) > 0 {
+								ve := &vectorEntry{
+									pred:   pk.Attr,
+									uid:    pk.Uid,
+									vector: vector,
+								}
+								// Marshal to buffer
+								dst := req.vectorBuf.SliceAllocate(vectorEntrySize(ve))
+								marshalVectorEntry(dst, ve)
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -667,6 +888,9 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
+		// Check if this is a vector predicate that should be routed to tmpDb
+		isVectorPred := req.vi != nil && pk.IsData() && req.vi.isVectorPredicate(pk.Attr)
+
 		shouldSplit := proto.Size(pl) > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
 			// Give ownership of pl.Pack away to list. Rollup would deallocate the Pack.
@@ -680,12 +904,23 @@ func (r *reducer) toList(req *encodeRequest) {
 			// Assign a new allocator, so we don't reset the one we were using during Rollup.
 			alloc = z.NewAllocator(16<<20, "Reducer.AppendToList")
 
-			for _, kv := range kvs {
-				kv.StreamId = r.streamIdFor(pk.Attr)
-			}
-			badger.KVToBuffer(kvs[0], kvBuf)
-			if splits := kvs[1:]; len(splits) > 0 {
-				req.splitCh <- &bpb.KVList{Kv: splits}
+			if isVectorPred {
+				// Vector predicates go to vectorTmpDb
+				for _, kv := range kvs {
+					kv.Version = writeVersionTs
+					if err := req.vi.writeVectorKV(kv); err != nil {
+						glog.Errorf("Error writing vector posting to tmpDb: %v", err)
+					}
+				}
+			} else {
+				// Non-vector predicates go to main DB via kvBuf
+				for _, kv := range kvs {
+					kv.StreamId = r.streamIdFor(pk.Attr)
+				}
+				badger.KVToBuffer(kvs[0], kvBuf)
+				if splits := kvs[1:]; len(splits) > 0 {
+					req.splitCh <- &bpb.KVList{Kv: splits}
+				}
 			}
 		} else {
 			kv := posting.MarshalPostingList(pl, nil)
@@ -693,8 +928,17 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			kv.Key = y.Copy(currentKey)
 			kv.Version = writeVersionTs
-			kv.StreamId = r.streamIdFor(pk.Attr)
-			badger.KVToBuffer(kv, kvBuf)
+
+			if isVectorPred {
+				// Vector predicates go to vectorTmpDb
+				if err := req.vi.writeVectorKV(kv); err != nil {
+					glog.Errorf("Error writing vector posting to tmpDb: %v", err)
+				}
+			} else {
+				// Non-vector predicates go to main DB via kvBuf
+				kv.StreamId = r.streamIdFor(pk.Attr)
+				badger.KVToBuffer(kv, kvBuf)
+			}
 		}
 
 		for _, p := range pl.Postings {

@@ -479,6 +479,8 @@ type BulkOpts struct {
 	SchemaFiles    []string
 	GQLSchemaFiles []string
 	OutDir         string
+	MapShards      int // Number of map shards (0 = auto based on numAlphas/replicas)
+	ReduceShards   int // Number of reduce shards (0 = auto based on numAlphas/replicas)
 }
 
 func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
@@ -494,12 +496,21 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		outDir = c.conf.bulkOutDirForMount
 	}
 
-	shards := c.conf.numAlphas / c.conf.replicas
+	// Determine shard counts - use explicit values if provided, otherwise calculate from cluster config
+	mapShards := opts.MapShards
+	reduceShards := opts.ReduceShards
+	if mapShards == 0 {
+		mapShards = c.conf.numAlphas / c.conf.replicas
+	}
+	if reduceShards == 0 {
+		reduceShards = c.conf.numAlphas / c.conf.replicas
+	}
+
 	args := []string{"bulk",
 		"--store_xids=true",
 		"--zero", zeroURL,
-		"--reduce_shards", strconv.Itoa(shards),
-		"--map_shards", strconv.Itoa(shards),
+		"--reduce_shards", strconv.Itoa(reduceShards),
+		"--map_shards", strconv.Itoa(mapShards),
 		"--out", outDir,
 		// we had to create the dir for setting up docker, hence, replacing it here.
 		"--replace_out",
