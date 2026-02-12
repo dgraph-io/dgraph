@@ -270,6 +270,10 @@ they form a Raft group and provide synchronous replication.
 			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
 			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
 		Flag("enable-detailed-metrics", "Enable metrics about disk reads and cache per predicate").
+		Flag("log-slow-query-threshold", "Queries that take longer than this threshold will be logged "+
+			"with structured fields including trace ID for correlation with distributed traces. "+
+			"Disabled by default (0). Note: enabling this logs query text which may contain "+
+			"sensitive data; do not enable in deployments with strict data privacy requirements.").
 		String())
 }
 
@@ -790,6 +794,7 @@ func run() {
 		worker.FeatureFlagsDefaults)
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
+	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
