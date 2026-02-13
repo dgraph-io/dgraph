@@ -1693,8 +1693,44 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	}
 	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
-	qc.uniqueVars = map[uint64]uniquePredMeta{}
+	missingPreds := make(map[string]struct{})
+	for _, gmu := range qc.gmuList {
+		for _, pred := range gmu.Set {
+			currNs := namespace
+			if isGalaxyQuery {
+				currNs = pred.Namespace
+			}
+			if pred.Predicate == "dgraph.xid" {
+				continue
+			}
+			fullPred := x.NamespaceAttr(currNs, pred.Predicate)
+			if _, ok := schema.State().Get(ctx, fullPred); !ok {
+				missingPreds[fullPred] = struct{}{}
+			}
+		}
+	}
+
 	repaired := make(map[string]bool)
+	if len(missingPreds) > 0 {
+		predList := make([]string, 0, len(missingPreds))
+		for p := range missingPreds {
+			predList = append(predList, p)
+		}
+
+		schReq := &pb.SchemaRequest{Predicates: predList}
+		remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
+
+		if err != nil {
+			failedPreds := strings.Join(predList, ", ")
+            glog.Warningf("Unique validation failed to fetch schema for predicates [%s]: %v", failedPreds, err)
+		} else {
+			for _, node := range remoteNodes {
+				repaired[node.Predicate] = node.Unique
+			}
+		}
+	}
+
+	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	for gmuIndex, gmu := range qc.gmuList {
 		var buildQuery strings.Builder
 		for rdfIndex, pred := range gmu.Set {
@@ -1709,19 +1745,10 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 				// we are bypassing it manually until the bug is fixed.
 				fullPred := x.NamespaceAttr(namespace, pred.Predicate)
 				predSchema, ok := schema.State().Get(ctx, fullPred)
-
 				if !ok {
-					unique, predChecked := repaired[fullPred]
-					if !predChecked {
-						schReq := &pb.SchemaRequest{Predicates: []string{fullPred}}
-						remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
-						if err == nil && len(remoteNodes) > 0 {
-							predSchema.Unique = remoteNodes[0].Unique
-							ok = true
-						}
-						repaired[fullPred] = predSchema.Unique
-					} else {
-						predSchema.Unique = unique
+					u, found := repaired[fullPred]
+					if found {
+						predSchema.Unique = u
 						ok = true
 					}
 				}
