@@ -88,6 +88,21 @@ func (h *priorityQueue) Pop() interface{} {
 	return val
 }
 
+func (pq *priorityQueue) TrimToMax(max int64) {
+	if max <= 0 || int64(pq.Len()) <= max {
+		return
+	}
+	imax := 0
+	maxCost := (*pq)[0].cost
+	for i := 1; i < pq.Len(); i++ {
+		if (*pq)[i].cost > maxCost {
+			imax = i
+			maxCost = (*pq)[i].cost
+		}
+	}
+	heap.Remove(pq, imax)
+}
+
 type mapItem struct {
 	attr  string
 	cost  float64
@@ -405,10 +420,8 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				hop:  item.hop + 1,
 				path: route{route: curPath},
 			}
-			if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-				pq.Pop()
-			}
 			heap.Push(&pq, node)
+			pq.TrimToMax(sg.Params.MaxFrontierSize)
 		}
 		// Return the popped nodes path to pool.
 		pathPool.Put(item.path.route)
@@ -561,10 +574,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					cost: nodeCost,
 					hop:  item.hop + 1,
 				}
-				if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-					pq.Pop()
-				}
 				heap.Push(&pq, node)
+				pq.TrimToMax(sg.Params.MaxFrontierSize)
 			} else {
 				// We've already seen this node. So, just update the cost
 				// and fix the priority in the heap and map.
