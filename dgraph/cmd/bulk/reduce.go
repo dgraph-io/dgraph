@@ -62,19 +62,20 @@ func (r *reducer) run() error {
 
 	if len(vectorIndexSpecs) > 0 {
 		fmt.Printf("Creating shared vector database for %d vector predicate(s)\n", len(vectorIndexSpecs))
+		// Track which predicates belong to which output shard
+		predToOutputShard = make(map[string]int)
 
-		// Create single shared vectorTmpDb
 		sharedVectorDb = r.createVectorTmpBadger()
 
-		// Initialize posting and schema ONCE (avoids race condition!)
 		posting.Init(sharedVectorDb, 0, false)
 		schema.Init(sharedVectorDb)
 		for pred, sch := range r.schema.schemaMap {
+			_, ok := vectorIndexSpecs[pred]
+			if !ok {
+				continue
+			}
 			schema.State().Set(pred, sch)
 		}
-
-		// Track which predicates belong to which output shard
-		predToOutputShard = make(map[string]int)
 	}
 
 	thr := y.NewThrottle(r.opt.NumReducers)
@@ -82,7 +83,7 @@ func (r *reducer) run() error {
 		if err := thr.Do(); err != nil {
 			return err
 		}
-		go func(shardId int, db *badger.DB, tmpDb *badger.DB) {
+		go func(shardId int, db *badger.DB, tmpDb *badger.DB, vectorTmpDb *badger.DB) {
 			defer thr.Done(nil)
 
 			mapFiles := filenamesInTree(dirs[shardId])
@@ -117,10 +118,10 @@ func (r *reducer) run() error {
 
 			// Create vector indexer using shared DB (if vectors exist)
 			var vi *vectorIndexer
-			if sharedVectorDb != nil && len(vectorIndexSpecs) > 0 {
+			if vectorTmpDb != nil && len(vectorIndexSpecs) > 0 {
 				fmt.Printf("Initializing vector indexer for shard %d with %d predicate(s)\n",
 					shardId, len(vectorIndexSpecs))
-				vi = newVectorIndexerShared(r, sharedVectorDb, vectorIndexSpecs,
+				vi = newVectorIndexerShared(r, vectorTmpDb, vectorIndexSpecs,
 					shardId, &predToShardMu, predToOutputShard)
 			}
 
@@ -149,7 +150,7 @@ func (r *reducer) run() error {
 					fmt.Printf("Error while closing iterator: %v", err)
 				}
 			}
-		}(i, r.createBadger(i), r.createTmpBadger())
+		}(i, r.createBadger(i), r.createTmpBadger(), sharedVectorDb)
 	}
 	if err := thr.Finish(); err != nil {
 		return err
@@ -294,8 +295,7 @@ func newMapIterator(filename string) (*pb.MapHeader, *mapIterator) {
 type encodeRequest struct {
 	cbuf      *z.Buffer
 	countBuf  *z.Buffer
-	vectorBuf *z.Buffer      // Buffer for vector entries to be indexed
-	vi        *vectorIndexer // Vector indexer for routing vector predicates to tmpDb
+	vectorBuf *z.Buffer // Buffer for vector entries to be indexed
 	wg        *sync.WaitGroup
 	listCh    chan *z.Buffer
 	splitCh   chan *bpb.KVList
@@ -318,11 +318,11 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 	return streamId
 }
 
-func (r *reducer) encode(entryCh chan *encodeRequest, closer *z.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, vi *vectorIndexer, closer *z.Closer) {
 	defer closer.Done()
 
 	for req := range entryCh {
-		r.toList(req)
+		r.toList(req, vi)
 		req.wg.Done()
 	}
 }
@@ -470,6 +470,9 @@ func (r *reducer) startWriting(ci *countIndexer, vi *vectorIndexer, writerCh cha
 
 		count(req)
 		if vi != nil {
+			if err := vi.flushWriteBatch(); err != nil {
+				glog.Errorf("Error flushing vector write batch before HNSW insertion: %v", err)
+			}
 			vector(req)
 		}
 	}
@@ -646,7 +649,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	for range cpu {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
-		go r.encode(encoderCh, encoderCloser)
+		go r.encode(encoderCh, vi, encoderCloser)
 	}
 	// Start listening to write the badger list.
 	writerCloser := z.NewCloser(1)
@@ -661,7 +664,6 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 			listCh:   make(chan *z.Buffer, 3),
 			splitCh:  ci.splitCh,
 			countBuf: getBuf(r.opt.TmpDir),
-			vi:       vi,
 		}
 		// Only allocate vectorBuf when we have vector predicates to index
 		if vi != nil {
@@ -733,7 +735,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(req *encodeRequest) {
+func (r *reducer) toList(req *encodeRequest, vi *vectorIndexer) {
 	cbuf := req.cbuf
 	defer func() {
 		atomic.AddInt64(&r.prog.numEncoding, -int64(cbuf.LenNoPadding()))
@@ -888,8 +890,8 @@ func (r *reducer) toList(req *encodeRequest) {
 			}
 		}
 
-		// Check if this is a vector predicate that should be routed to tmpDb
-		isVectorPred := req.vi != nil && pk.IsData() && req.vi.isVectorPredicate(pk.Attr)
+		// Check if this is a vector predicate that should be routed to vectorTmpDb
+		isVectorPred := vi != nil && pk.IsData() && vi.isVectorPredicate(pk.Attr)
 
 		shouldSplit := proto.Size(pl) > (1<<20)/2 && len(pl.Pack.Blocks) > 1
 		if shouldSplit {
@@ -908,7 +910,7 @@ func (r *reducer) toList(req *encodeRequest) {
 				// Vector predicates go to vectorTmpDb
 				for _, kv := range kvs {
 					kv.Version = writeVersionTs
-					if err := req.vi.writeVectorKV(kv); err != nil {
+					if err := vi.writeVectorKV(kv); err != nil {
 						glog.Errorf("Error writing vector posting to tmpDb: %v", err)
 					}
 				}
@@ -931,7 +933,7 @@ func (r *reducer) toList(req *encodeRequest) {
 
 			if isVectorPred {
 				// Vector predicates go to vectorTmpDb
-				if err := req.vi.writeVectorKV(kv); err != nil {
+				if err := vi.writeVectorKV(kv); err != nil {
 					glog.Errorf("Error writing vector posting to tmpDb: %v", err)
 				}
 			} else {

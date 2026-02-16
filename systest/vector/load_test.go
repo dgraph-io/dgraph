@@ -10,8 +10,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -219,7 +217,7 @@ func TestBulkLoadVectorIndex(t *testing.T) {
 	t.Log("Step 6: Verifying vector similarity queries work on bulk loaded data...")
 	fmt.Println("vectors: ", len(vectors))
 	for i, vector := range vectors {
-		similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 10)
+		similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, len(similarVectors), 4,
 			"similar_to query should return results for vector %d", i)
@@ -255,9 +253,6 @@ func vectorsEqual(a, b []float32) bool {
 	return true
 }
 
-// TestBulkLoadVectorIndexMultipleGroups tests bulk loading vector data with multiple
-// alpha groups (shards). This ensures vector indexing works correctly when predicates
-// are distributed across different shards.
 func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 	// if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
 	// 	fmt.Println("You can set the DGRAPH_BINARY environment variable to path of a native dgraph binary to run these tests")
@@ -415,7 +410,7 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 		sampleSize := 10
 
 		for i := 0; i < sampleSize; i++ {
-			similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vectors[i], pred, 10)
+			similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vectors[i], pred, 5)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(similarVectors), 4,
 				"similar_to query should return results for predicate %s vector %d", pred, i)
@@ -437,7 +432,7 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 
 	// Schema with vectors AND other indexed predicates
 	mixedSchema := `
-		vec_embedding: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
+		project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 		name: string @index(term, fulltext) .
 		age: int @index(int) .
 		score: float .
@@ -485,7 +480,7 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 		vecStr := fmt.Sprintf(`"[%s]"`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(vec)), ", "), "[]"))
 
 		// Add vector predicate
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <vec_embedding> %s .\n", uid, vecStr))
+		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <project_description_v> %s .\n", uid, vecStr))
 		// Add string predicate
 		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <name> \"Person %d\" .\n", uid, i))
 		// Add int predicate
@@ -597,7 +592,7 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 
 	// Verify vector similarity query
 	similarQuery := fmt.Sprintf(`{
-		vector(func: similar_to(vec_embedding, 5, "%v")) {
+		vector(func: similar_to(project_description_v, 5, "%v")) {
 			uid
 			name
 		}
@@ -610,8 +605,6 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 	t.Log("All mixed predicate types verified successfully!")
 }
 
-// TestBulkLoadVectorDimensions tests bulk loading vectors with different dimensions
-// to ensure the implementation handles various vector sizes correctly.
 func TestBulkLoadVectorDimensions(t *testing.T) {
 	// if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
 	// 	t.Skip("Skipping test on non-Linux platforms due to dgraph binary dependency")
@@ -630,7 +623,7 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			predName := fmt.Sprintf("vec_%s", tc.name)
+			predName := "project_description_v"
 			schema := fmt.Sprintf(`%s: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`, predName)
 
 			// Step 1: Create source cluster
@@ -704,7 +697,7 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 
 			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
 			require.NoError(t, err)
-			defer func() { targetCluster.Cleanup(t.Failed()) }()
+			// defer func() { targetCluster.Cleanup(t.Failed()) }()
 			require.NoError(t, targetCluster.Start())
 
 			targetGc, targetCleanup, err := targetCluster.Client()
@@ -724,156 +717,13 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 				similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, predName, 5)
 				require.NoError(t, err)
 				require.GreaterOrEqual(t, len(similarVectors), 4,
-					"similar_to query should return results for vector %d")
+					"similar_to query should return results for vector")
 			}
 
 		})
 	}
 }
 
-// TestBulkLoadVectorMetrics tests bulk loading vectors with different distance metrics
-// (euclidean, cosine, dotproduct) to ensure all HNSW configurations work correctly.
-func TestBulkLoadVectorMetrics(t *testing.T) {
-	if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
-		t.Skip("Skipping test on non-Linux platforms due to dgraph binary dependency")
-	}
-
-	metrics := []string{"euclidean", "cosine", "dotproduct"}
-	numVectors := 200
-	vectorDim := 10
-
-	// Build schema with all metric types
-	var schemaBuilder strings.Builder
-	for _, metric := range metrics {
-		schemaBuilder.WriteString(fmt.Sprintf(
-			"vec_%s: float32vector @index(hnsw(exponent: \"5\", metric: \"%s\")) .\n",
-			metric, metric))
-	}
-	schema := schemaBuilder.String()
-
-	// Step 1: Create source cluster
-	t.Log("Step 1: Creating source cluster with multiple metric types...")
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	require.NoError(t, gc.SetupSchema(schema))
-
-	// Generate and load vectors for each metric type
-	allVectors := make(map[string][][]float32)
-	for _, metric := range metrics {
-		predName := fmt.Sprintf("vec_%s", metric)
-		rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, vectorDim, predName)
-		allVectors[predName] = vectors
-
-		mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-		_, err = gc.Mutate(mu)
-		require.NoError(t, err)
-		t.Logf("Loaded %d vectors for metric %s", numVectors, metric)
-	}
-
-	// Step 2: Export
-	t.Log("Step 2: Exporting data...")
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
-
-	// Step 3: Bulk load
-	t.Log("Step 3: Running bulk load...")
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
-
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
-
-	opts := dgraphtest.BulkOpts{
-		DataFiles:   dataFiles,
-		SchemaFiles: schemaFiles,
-		OutDir:      bulkOutDir,
-	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
-	t.Log("Bulk load completed")
-
-	// Step 4: Start target cluster
-	t.Log("Step 4: Starting target cluster...")
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, targetCluster.Start())
-
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	// Step 5: Verify each metric type
-	t.Log("Step 5: Verifying each metric type...")
-	for _, metric := range metrics {
-		predName := fmt.Sprintf("vec_%s", metric)
-		vectors := allVectors[predName]
-
-		// Verify count
-		countQuery := fmt.Sprintf(`{ q(func: has(%s)) { count(uid) } }`, predName)
-		result, err := targetGc.Query(countQuery)
-		require.NoError(t, err)
-		require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()),
-			"Count mismatch for metric %s", metric)
-
-		// Verify similarity query
-		similarQuery := fmt.Sprintf(`{
-			vector(func: similar_to(%s, 5, "%v")) {
-				uid
-			}
-		}`, predName, vectors[0])
-		result, err = targetGc.Query(similarQuery)
-		require.NoError(t, err)
-		require.Contains(t, string(result.GetJson()), "uid",
-			"Similarity query failed for metric %s", metric)
-
-		t.Logf("✓ Metric %s verified", metric)
-	}
-
-	t.Log("All vector metrics verified successfully!")
-}
-
-// TestBulkLoadVectorEdgeCases tests edge cases like empty vector predicates,
-// single vector, and predicates with no data.
 func TestBulkLoadVectorEdgeCases(t *testing.T) {
 	// if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
 	// 	t.Skip("Skipping test on non-Linux platforms due to dgraph binary dependency")

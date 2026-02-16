@@ -396,7 +396,7 @@ func (c *LocalCluster) Cleanup(verbose bool) {
 		return
 	}
 
-	if false {
+	if verbose {
 		if err := c.printAllLogs(); err != nil {
 			log.Printf("[WARNING] error printing container logs: %v", err)
 		}
@@ -1402,6 +1402,10 @@ func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, s
 
 		fileName := filepath.Base(header.Name)
 		hostFile := filepath.Join(hostDir, fileName)
+
+		if !strings.HasPrefix(filepath.Clean(hostFile), filepath.Clean(hostDir)+string(os.PathSeparator)) {
+			return nil, nil, errors.Errorf("illegal file path in archive: %v", header.Name)
+		}
 
 		switch {
 		case strings.HasSuffix(fileName, ".rdf.gz"):

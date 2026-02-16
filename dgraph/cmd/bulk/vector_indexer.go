@@ -41,7 +41,7 @@ type vectorIndexer struct {
 	predToShardMu     *sync.Mutex    // Mutex for predToOutputShard (shared across shards)
 	predToOutputShard map[string]int // Predicate → output shard mapping (shared across shards)
 
-	// For batched writes
+	// For batched writes of vector posting lists to shared DB
 	writeBatch *badger.WriteBatch
 	writeCount int
 
@@ -143,7 +143,6 @@ func unmarshalVectorEntry(data []byte) *vectorEntry {
 }
 
 // newVectorIndexerShared creates a new vectorIndexer for a shard using a shared vectorTmpDb.
-// This avoids the global pstore race condition by using a single shared DB with posting.Init()
 // called once before any shards start. Indexers are created lazily when vectors arrive.
 func newVectorIndexerShared(r *reducer, sharedVectorDb *badger.DB, indexSpecs map[string]*pb.VectorIndexSpec,
 	shardId int, predToShardMu *sync.Mutex, predToOutputShard map[string]int) *vectorIndexer {
@@ -161,13 +160,6 @@ func newVectorIndexerShared(r *reducer, sharedVectorDb *badger.DB, indexSpecs ma
 		predToShardMu:     predToShardMu,
 		predToOutputShard: predToOutputShard,
 	}
-
-	// NOTE: posting.Init() and schema.Init() are called ONCE in reduce.go
-	// before any shards start, so we don't call them here.
-
-	// NOTE: Indexers are created LAZILY when vectors arrive for a predicate.
-	// This avoids creating indexers for predicates that don't exist in this shard.
-
 	glog.Infof("Vector indexer created for shard %d (lazy initialization, %d potential predicates)",
 		shardId, len(indexSpecs))
 
@@ -180,7 +172,6 @@ func (vi *vectorIndexer) getOrCreateIndexer(pred string) (index.VectorIndex[floa
 	vi.mu.Lock()
 	defer vi.mu.Unlock()
 
-	// Already created?
 	if indexer, ok := vi.indexers[pred]; ok {
 		return indexer, vi.txnCaches[pred], nil
 	}
