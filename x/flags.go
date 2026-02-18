@@ -30,7 +30,7 @@ func FillCommonFlags(flag *pflag.FlagSet) {
 		Flag("ratio",
 			"The ratio of queries to trace.").
 		Flag("jaeger",
-			"URL of Jaeger to send OpenCensus traces.").
+			"URL of Jaeger/opentelemetry-collector to send OpenTelemetry traces.").
 		Flag("datadog",
 			"URL of Datadog to send OpenCensus traces. As of now, the trace exporter does not "+
 				"support annotation logs and discards them.").
