@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -28,9 +29,18 @@ func (c *LocalCluster) dgraphImage() string {
 	return "dgraph/dgraph:local"
 }
 
-// setupBinary sets up the dgraph binary. The binary is expected to be a version
-// compiled that is compatible with the host OS and architecture. Search this repo
-// for DGRAPH_BINARY to learn its use.
+// setupBinary sets up dgraph binaries in tempBinDir.
+//
+// On Linux a single "dgraph" binary from $GOPATH/bin serves both Docker
+// containers and local commands (bulk/live loader).
+//
+// On non-Linux (macOS) two binaries are placed in tempBinDir:
+//   - "dgraph"      – a Linux binary for Docker containers, from
+//     $GOPATH/linux_<arch> (or LINUX_GOBIN if set).
+//   - "dgraph_host" – the host-native binary for local commands,
+//     from $GOPATH/bin.
+//
+// Both are produced by "make install".
 func (c *LocalCluster) setupBinary() error {
 	if err := ensureDgraphClone(); err != nil {
 		panic(err)
@@ -43,11 +53,34 @@ func (c *LocalCluster) setupBinary() error {
 		}
 	}
 	if c.conf.version == localVersion {
-		if os.Getenv("GOPATH") == "" {
+		gopath := os.Getenv("GOPATH")
+		if gopath == "" {
 			return errors.New("GOPATH is not set")
 		}
-		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
-		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
+
+		if runtime.GOOS == "linux" {
+			// On Linux $GOPATH/bin/dgraph is both the native and Docker binary.
+			return copyBinary(filepath.Join(gopath, "bin"), c.tempBinDir, c.conf.version)
+		}
+
+		// Non-Linux (macOS): need separate Linux and host-native binaries.
+		// 1. Copy the Linux binary (for Docker containers) as "dgraph".
+		linuxDir := os.Getenv("LINUX_GOBIN")
+		if linuxDir == "" {
+			linuxDir = filepath.Join(gopath, "linux_"+runtime.GOARCH)
+		}
+		if err := copyBinary(linuxDir, c.tempBinDir, c.conf.version); err != nil {
+			return err
+		}
+
+		// 2. Copy the host-native binary (for local bulk/live commands) as "dgraph_host".
+		hostSrc := filepath.Join(gopath, "bin", "dgraph")
+
+		hostDst := filepath.Join(c.tempBinDir, "dgraph_host")
+		if err := copy(hostSrc, hostDst); err != nil {
+			return errors.Wrapf(err, "error copying host-native binary from [%v] to [%v]", hostSrc, hostDst)
+		}
+		return nil
 	}
 
 	binaryPath := filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version))
