@@ -16,9 +16,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgraph/v25/algo"
@@ -69,7 +67,7 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	}
 
 	// Add span for cross-alpha network call
-	ctx, networkSpan := otel.Tracer("worker").Start(ctx, "SortOverNetwork.RemoteCall")
+	ctx, networkSpan := otel.Tracer("").Start(ctx, "SortOverNetwork.RemoteCall")
 	networkSpan.SetAttributes(
 		attribute.String("target_group", fmt.Sprintf("%d", gid)),
 		attribute.String("attr", x.SafeUTF8(q.Order[0].Attr)),
@@ -94,21 +92,9 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	}
 
 	// Manually extract trace context from gRPC metadata for cross-alpha tracing
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		propagator := propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		)
-		carrier := propagation.HeaderCarrier{}
-		for k, vals := range md {
-			for _, v := range vals {
-				carrier.Set(k, v)
-			}
-		}
-		ctx = propagator.Extract(ctx, carrier)
-	}
+	ctx = x.ExtractTraceContext(ctx)
 
-	ctx, span := otel.Tracer("worker").Start(ctx, "worker.Sort")
+	ctx, span := otel.Tracer("").Start(ctx, "worker.Sort")
 	defer span.End()
 
 	gid, err := groups().BelongsToReadOnly(s.Order[0].Attr, s.ReadTs)

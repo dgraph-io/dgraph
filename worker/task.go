@@ -20,10 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -145,7 +143,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	}
 
 	// Add span for cross-alpha network call
-	ctx, networkSpan := otel.Tracer("worker").Start(ctx, "ProcessTaskOverNetwork.RemoteCall")
+	ctx, networkSpan := otel.Tracer("").Start(ctx, "ProcessTaskOverNetwork.RemoteCall")
 	networkSpan.SetAttributes(
 		attribute.String("target_group", fmt.Sprintf("%d", gid)),
 		attribute.String("predicate", x.SafeUTF8(attr)),
@@ -2221,23 +2219,11 @@ func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
 func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
 	// Manually extract trace context from gRPC metadata using the propagator
 	// This ensures the trace context is properly extracted for cross-alpha tracing
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		propagator := propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		)
-		carrier := propagation.HeaderCarrier{}
-		for k, vals := range md {
-			for _, v := range vals {
-				carrier.Set(k, v)
-			}
-		}
-		ctx = propagator.Extract(ctx, carrier)
-	}
+	ctx = x.ExtractTraceContext(ctx)
 
 	// Sanitize attr for span name to ensure valid UTF-8 for OTLP export
 	safeAttr := x.SafeUTF8(q.Attr)
-	ctx, span := otel.Tracer("worker").Start(ctx, "worker.ServeTask",
+	ctx, span := otel.Tracer("").Start(ctx, "worker.ServeTask",
 		trace.WithAttributes(attribute.String("predicate", safeAttr)))
 	defer span.End()
 
