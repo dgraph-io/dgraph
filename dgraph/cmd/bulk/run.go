@@ -91,6 +91,8 @@ func init() {
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080", "Address to serve http (pprof).")
 	flag.Bool("ignore_errors", false, "ignore line parsing errors in rdf files")
+	flag.Bool("log_errors", false, "log parsing errors to a file (requires --ignore_errors)")
+	flag.String("error_log", "bulk_errors.log", "path to error log file when --log_errors is set")
 	flag.Int("map_shards", 1,
 		"Number of map output shards. Must be greater than or equal to the number of reduce "+
 			"shards. Increasing allows more evenly sized reduce shards, at the expense of "+
@@ -155,6 +157,8 @@ func run() {
 		ZeroAddr:         Bulk.Conf.GetString("zero"),
 		HttpAddr:         Bulk.Conf.GetString("http"),
 		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
+		LogErrors:        Bulk.Conf.GetBool("log_errors"),
+		ErrorLogPath:     Bulk.Conf.GetString("error_log"),
 		MapShards:        Bulk.Conf.GetInt("map_shards"),
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),

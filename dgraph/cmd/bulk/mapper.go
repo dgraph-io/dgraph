@@ -221,9 +221,12 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunk := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunk.NQuads()
 	go func() {
-		for chunkBuf := range m.readerChunkCh {
-			if err := chunk.Parse(chunkBuf); err != nil {
+		for chunkMeta := range m.readerChunkCh {
+			if err := chunk.Parse(chunkMeta.buf); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
+				if m.errorLog != nil {
+					m.errorLog.Log(chunkMeta.filename, err, "")
+				}
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
@@ -250,6 +253,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		for _, nq := range nqs {
 			if err := facets.SortAndValidate(nq.Facets); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
+				if m.errorLog != nil {
+					m.errorLog.Log("<facet_validation>", err, fmt.Sprintf("subject=%s predicate=%s", nq.Subject, nq.Predicate))
+				}
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
