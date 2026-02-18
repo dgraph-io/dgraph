@@ -50,6 +50,8 @@ Commit timestamp : %v
 Branch           : %v
 Go version       : %v
 jemalloc enabled : %v
+GOMAXPROCS       : %v
+Num CPUs         : %v
 
 For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
@@ -59,7 +61,7 @@ For discussions about Dgraph     , visit https://discuss.dgraph.io.
 
 `,
 		dgraphVersion, dgraphCodename, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
-		runtime.Version(), jem, licenseInfo)
+		runtime.Version(), jem, runtime.GOMAXPROCS(0), runtime.NumCPU(), licenseInfo)
 }
 
 // PrintVersion prints version and other helpful information if --version.
