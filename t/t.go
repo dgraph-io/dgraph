@@ -92,7 +92,9 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
-	race = pflag.Bool("race", false, "Set true to build with race")
+	race        = pflag.Bool("race", false, "Set true to build with race")
+	testTimeout = pflag.String("timeout", "",
+		"Timeout for each test package (e.g. 60m, 2h). Defaults to 30m (180m with --race).")
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
@@ -423,12 +425,17 @@ func sanitizeFilename(pkg string) string {
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
 	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
 		"-v", "-failfast", "-tags=integration"}
-	if *race {
+	switch {
+	case *testTimeout != "":
+		args = append(args, "-timeout", *testTimeout)
+	case *race:
 		args = append(args, "-timeout", "180m")
+	default:
+		args = append(args, "-timeout", "30m")
+	}
+	if *race {
 		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
 		// args = append(args, "-race")
-	} else {
-		args = append(args, "-timeout", "30m")
 	}
 
 	if *count > 0 {

@@ -98,7 +98,7 @@ else
 endif
 else
 	@echo "Running test suite: $(or $(SUITE),all)"
-	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\")"
+	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
 endif
 
 .PHONY: test-all
@@ -205,6 +205,7 @@ help: ## Show available targets and variables
 	@echo "  TAGS      Go build tags - bypasses t/ runner (e.g., make test TAGS=integration2)"
 	@echo "  PKG       Limit to specific package (e.g., make test PKG=systest/export)"
 	@echo "  TEST      Run specific test function (e.g., make test TEST=TestGQLSchema)"
+	@echo "  TIMEOUT   Per-package test timeout (e.g., make test TIMEOUT=60m). Default: 30m"
 	@echo "  FUZZ      Enable fuzz testing (e.g., make test FUZZ=1)"
 	@echo "  FUZZTIME  Fuzz duration per package (e.g., make test FUZZ=1 FUZZTIME=60s)"
 	@echo ""
@@ -223,4 +224,5 @@ help: ## Show available targets and variables
 	@echo "  make test TAGS=upgrade PKG=acl TEST=TestACL           # specific upgrade test"
 	@echo "  make test FUZZ=1 PKG=dql FUZZTIME=30s                 # fuzz dql package for 30s"
 	@echo "  make test SUITE=systest PKG=systest/backup/filesystem # systest for backup pkg"
+	@echo "  make test TIMEOUT=90m                                  # all suites with 90m timeout"
 	@echo "  make test-benchmark PKG=posting                       # benchmark posting package"
