@@ -1693,6 +1693,41 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	}
 	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
+	missingPreds := make(map[string]struct{})
+	for _, gmu := range qc.gmuList {
+		for _, pred := range gmu.Set {
+			currNs := namespace
+			if isGalaxyQuery {
+				currNs = pred.Namespace
+			}
+			if pred.Predicate == "dgraph.xid" {
+				continue
+			}
+			fullPred := x.NamespaceAttr(currNs, pred.Predicate)
+			if _, ok := schema.State().Get(ctx, fullPred); !ok {
+				missingPreds[fullPred] = struct{}{}
+			}
+		}
+	}
+
+	repaired := make(map[string]bool)
+	if len(missingPreds) > 0 {
+		predList := make([]string, 0, len(missingPreds))
+		for p := range missingPreds {
+			predList = append(predList, p)
+		}
+
+		schReq := &pb.SchemaRequest{Predicates: predList}
+		remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
+		if err != nil {
+			return errors.Wrapf(err, "unique validation failed to fetch schema for predicates %v", predList)
+		}
+
+		for _, node := range remoteNodes {
+			repaired[node.Predicate] = node.Unique
+		}
+	}
+
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	for gmuIndex, gmu := range qc.gmuList {
 		var buildQuery strings.Builder
@@ -1706,7 +1741,16 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 				// [TODO] Don't check if it's dgraph.xid. It's a bug as this node might not be aware
 				// of the schema for the given predicate. This is a bug issue for dgraph.xid hence
 				// we are bypassing it manually until the bug is fixed.
-				predSchema, ok := schema.State().Get(ctx, x.NamespaceAttr(namespace, pred.Predicate))
+				fullPred := x.NamespaceAttr(namespace, pred.Predicate)
+				predSchema, ok := schema.State().Get(ctx, fullPred)
+				if !ok {
+					u, found := repaired[fullPred]
+					if found {
+						predSchema.Unique = u
+						ok = true
+					}
+				}
+
 				if !ok || !predSchema.Unique {
 					continue
 				}
