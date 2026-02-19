@@ -1719,14 +1719,12 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 
 		schReq := &pb.SchemaRequest{Predicates: predList}
 		remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
-
 		if err != nil {
-			failedPreds := strings.Join(predList, ", ")
-            glog.Warningf("Unique validation failed to fetch schema for predicates [%s]: %v", failedPreds, err)
-		} else {
-			for _, node := range remoteNodes {
-				repaired[node.Predicate] = node.Unique
-			}
+			return errors.Wrapf(err, "unique validation failed to fetch schema for predicates %v", predList)
+		}
+
+		for _, node := range remoteNodes {
+			repaired[node.Predicate] = node.Unique
 		}
 	}
 
