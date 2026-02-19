@@ -899,6 +899,15 @@ func testSuiteContains(suite string) bool {
 	return false
 }
 
+func testSuiteContainsAny(suites ...string) bool {
+	for _, suite := range suites {
+		if testSuiteContains(suite) {
+			return true
+		}
+	}
+	return false
+}
+
 func isValidPackageForSuite(pkg string) bool {
 	valid := false
 	if testSuiteContains("all") {
@@ -1211,19 +1220,18 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-
-		if testSuiteContains("load") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = os.TempDir()
-			}
+		// in "all" mode we can download both data files and
+		// ldbc files into the same directory, no duplicated
+		// filenames between the two
+		needsData := testSuiteContainsAny("load", "ldbc", "all")
+		if needsData && *tmp == "" {
+			*tmp = filepath.Join(os.TempDir(), "dgraph-test-data")
 			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+		}
+		if testSuiteContainsAny("load", "all") {
 			downloadDataFiles()
 		}
-		if testSuiteContains("ldbc") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = filepath.Join(os.TempDir(), "/ldbcdata")
-			}
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+		if testSuiteContainsAny("ldbc", "all") {
 			downloadLDBCFiles()
 		}
 		for i, task := range valid {
