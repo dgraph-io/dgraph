@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	traceTel "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -609,10 +610,27 @@ func SinceMs(startTime time.Time) float64 {
 func RegisterExporters(conf *viper.Viper, service string) {
 	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
 		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
+
+		// Set up propagator for trace context propagation across services
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+
+		// Determine namespace from the default service type (dgraph.alpha or dgraph.zero)
+		// This allows filtering all alphas or zeros in Jaeger even with custom service names
+		namespace := service // e.g., "dgraph.alpha" or "dgraph.zero"
+
+		// Use custom service name if specified, otherwise use the default
+		if customService := t.GetString("service"); len(customService) > 0 {
+			service = customService
+		}
+
 		// Create resource with service information
 		res := resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(service),
+			semconv.ServiceNamespaceKey.String(namespace),
 		)
 
 		// Configure the batch span processor options
@@ -632,11 +650,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 
 		// Set up Jaeger exporter if configured
 		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create Jaeger exporter using OpenTelemetry OTLP
 			jaegerExp, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)
@@ -659,11 +679,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 		// Set up OTLP exporter for Datadog if configured
 		// Note: In OpenTelemetry, typically Datadog integration uses the OTLP exporter
 		if collector := t.GetString("datadog"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create OTLP exporter for Datadog
 			ddExporter, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)

@@ -34,7 +34,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
@@ -146,6 +148,11 @@ var (
 func init() {
 	SuperAdminUid.Store(RootNamespace, 0)
 	GrootUid.Store(RootNamespace, 0)
+}
+
+// SafeUTF8 sanitizes a string for OTLP export by replacing invalid UTF-8 sequences.
+func SafeUTF8(s string) string {
+	return strings.ToValidUTF8(s, "?")
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -301,6 +308,19 @@ func ExtractJwt(ctx context.Context) (string, error) {
 	}
 
 	return accessJwt[0], nil
+}
+
+func ExtractTraceContext(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		carrier := propagation.HeaderCarrier{}
+		for k, vals := range md {
+			for _, v := range vals {
+				carrier.Set(k, v)
+			}
+		}
+		return otel.GetTextMapPropagator().Extract(ctx, carrier)
+	}
+	return ctx
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
