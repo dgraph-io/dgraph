@@ -25,8 +25,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/badger/v4"
@@ -142,12 +140,7 @@ func init() {
 		"Number of N-Quads to send as part of a mutation.")
 	flag.StringP("xidmap", "x", "", "Directory to store xid to uid mapping")
 	flag.StringP("auth_token", "t", "",
-		"The auth token passed to the server for Alter operation of the schema file. "+
-			"If used with --slash_grpc_endpoint, then this should be set to the API token issued"+
-			"by Slash GraphQL")
-	flag.String("slash_grpc_endpoint", "", "Path to Slash GraphQL GRPC endpoint. "+
-		"If --slash_grpc_endpoint is set, all other TLS options and connection options will be"+
-		"ignored")
+		"The auth token passed to the server for Alter operation of the schema file")
 	flag.BoolP("use_compression", "C", false,
 		"Enable compression on connection to alpha server")
 	flag.Bool("new_uids", false,
@@ -584,7 +577,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return <-errCh
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -597,11 +590,6 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, conf *viper.Viper) *loader
 			WithIndexCacheSize(100 * (1 << 20)).
 			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
-	}
-
-	dialOpts := []grpc.DialOption{}
-	if conf.GetString("slash_grpc_endpoint") != "" && conf.IsSet("auth_token") {
-		dialOpts = append(dialOpts, x.WithAuthorizationCredentials(conf.GetString("auth_token")))
 	}
 
 	xopts := xidmap.XidMapOptions{DB: db, DgClient: dc}
@@ -745,7 +733,7 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg, Live.Conf)
+	l := setup(bmOpts, dg)
 	if err := l.populateNamespaces(ctx, dg, singleNsOp); err != nil {
 		fmt.Printf("Error while populating namespaces %s\n", err)
 		return err
