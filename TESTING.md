@@ -579,16 +579,16 @@ cd t && go build .
 
 ### Key Flags
 
-| Flag            | Description                                                        |
-| --------------- | ------------------------------------------------------------------ |
-| `--suite=X`     | Select test suite(s): all, ldbc, load, unit, systest, vector, core |
-| `--pkg=X`       | Run specific package                                               |
-| `--test=X`      | Run specific test function                                         |
-| `--timeout=X`   | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race)|
-| `-j=N`          | Concurrency (default: 1)                                           |
-| `--keep`        | Keep cluster running after tests                                   |
-| `-r`            | Remove all test containers                                         |
-| `--skip-slow`   | Skip slow packages                                                 |
+| Flag          | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, systest, vector, core  |
+| `--pkg=X`     | Run specific package                                                |
+| `--test=X`    | Run specific test function                                          |
+| `--timeout=X` | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race) |
+| `-j=N`        | Concurrency (default: 1)                                            |
+| `--keep`      | Keep cluster running after tests                                    |
+| `-r`          | Remove all test containers                                          |
+| `--skip-slow` | Skip slow packages                                                  |
 
 ---
 

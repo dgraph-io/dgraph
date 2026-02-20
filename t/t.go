@@ -433,10 +433,7 @@ func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error 
 	default:
 		args = append(args, "-timeout", "30m")
 	}
-	if *race {
-		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
-		// args = append(args, "-race")
-	}
+	// Todo: There are few race errors in tests itself. Enable -race once that is fixed.
 
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
@@ -458,7 +455,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error 
 	if err != nil {
 		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v", *tmp, err)
 	}
-	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
+	dataDir := abs
+	if strings.Contains(pkg, "/ldbc") {
+		dataDir = filepath.Join(abs, "ldbc")
+	}
+	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+dataDir)
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -1036,7 +1037,7 @@ func downloadDataFiles() {
 	}
 }
 
-func downloadLDBCFiles() {
+func downloadLDBCFiles(dir string) {
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -1054,12 +1055,12 @@ func downloadLDBCFiles() {
 			defer wg.Done()
 			start := time.Now()
 			cmd := exec.Command("wget", "-O", fname, link)
-			cmd.Dir = *tmp
+			cmd.Dir = dir
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v\n", err)
 				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 			}
-			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(start))
 		}(fname, link, &wg)
 	}
 	wg.Wait()
@@ -1197,8 +1198,11 @@ func run() error {
 	closer := z.NewCloser(N)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
+	var runWg sync.WaitGroup
 	for range N {
+		runWg.Add(1)
 		go func() {
+			defer runWg.Done()
 			if err := runTests(testCh, closer); err != nil {
 				errCh <- err
 				closer.Signal()
@@ -1227,9 +1231,6 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-		// in "all" mode we can download both data files and
-		// ldbc files into the same directory, no duplicated
-		// filenames between the two
 		needsData := testSuiteContainsAny("load", "ldbc", "all")
 		if needsData && *tmp == "" {
 			*tmp = filepath.Join(os.TempDir(), "dgraph-test-data")
@@ -1239,7 +1240,12 @@ func run() error {
 			downloadDataFiles()
 		}
 		if testSuiteContainsAny("ldbc", "all") {
-			downloadLDBCFiles()
+			// LDBC files go into a subdirectory because the LDBC test bulk-loads
+			// the entire directory (-f <dir>). Mixing load data (1million, 21million)
+			// with LDBC data causes schema mismatches.
+			ldbcDir := filepath.Join(*tmp, "ldbc")
+			x.Check(os.MkdirAll(ldbcDir, 0755))
+			downloadLDBCFiles(ldbcDir)
 		}
 		for i, task := range valid {
 			select {
@@ -1252,6 +1258,7 @@ func run() error {
 	}()
 
 	closer.Wait()
+	runWg.Wait() // Ensure wrapper goroutines finish sending to errCh before closing it.
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
