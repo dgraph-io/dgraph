@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -24,10 +23,6 @@ import (
 )
 
 func TestCDC(t *testing.T) {
-	if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
-		fmt.Println("You can set the DGRAPH_BINARY environment variable to path of a native dgraph binary to run these tests")
-		t.Skip("Skipping test on non-Linux platforms due to dgraph binary dependency")
-	}
 	defer os.RemoveAll("./cdc_logs/sink.log")
 	path := testutil.DgraphBinaryPath()
 	cmd := exec.Command(path, "increment", "--num", "10",

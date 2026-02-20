@@ -154,6 +154,7 @@ make test-upgrade       # Upgrade tests
 
 # Use variables for more control
 make test TAGS=integration2 PKG=systest/vector
+make test TIMEOUT=90m          # Override per-package timeout (default: 30m)
 ```
 
 Run `make help` to see all available targets and variables.

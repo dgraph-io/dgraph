@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,17 @@ import (
 	"github.com/dgraph-io/dgraph/v25/enc"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
+
+// HostDgraphBinaryPath returns the path to the host-OS-native dgraph binary
+// in tempBinDir. On Linux this is simply "dgraph" (the same binary used by
+// Docker containers). On non-Linux (macOS) it is "dgraph_host", a separate
+// native binary copied by setupBinary().
+func (c *LocalCluster) HostDgraphBinaryPath() string {
+	if runtime.GOOS == "linux" {
+		return filepath.Join(c.tempBinDir, "dgraph")
+	}
+	return filepath.Join(c.tempBinDir, "dgraph_host")
+}
 
 var datafiles = map[string]string{
 	"1million.schema":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
@@ -245,7 +257,7 @@ func (c *LocalCluster) LiveLoad(opts LiveOpts) error {
 	}
 
 	log.Printf("[INFO] running live loader with args: [%v]", strings.Join(args, " "))
-	cmd := exec.Command(filepath.Join(c.tempBinDir, "dgraph"), args...)
+	cmd := exec.Command(c.HostDgraphBinaryPath(), args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error running live loader: %v", string(out))
 	} else {
@@ -505,17 +517,8 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		args = append(args, "-g", strings.Join(opts.GQLSchemaFiles, ","))
 	}
 
-	// dgraphCmdPath := os.Getenv("DGRAPH_CMD_PATH")
-	// if dgraphCmdPath == "" {
-	// 	dgraphCmdPath = filepath.Join(c.tempBinDir, "dgraph")
-	// }
-
 	log.Printf("[INFO] running bulk loader with args: [%v]", strings.Join(args, " "))
-	binaryName := "dgraph"
-	if os.Getenv("DGRAPH_BINARY") != "" {
-		binaryName = filepath.Base(os.Getenv("DGRAPH_BINARY"))
-	}
-	cmd := exec.Command(filepath.Join(c.tempBinDir, binaryName), args...)
+	cmd := exec.Command(c.HostDgraphBinaryPath(), args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error running bulk loader: %v", string(out))
 	} else {

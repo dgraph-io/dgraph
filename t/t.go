@@ -92,7 +92,9 @@ var (
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
-	race = pflag.Bool("race", false, "Set true to build with race")
+	race        = pflag.Bool("race", false, "Set true to build with race")
+	testTimeout = pflag.String("timeout", "",
+		"Timeout for each test package (e.g. 60m, 2h). Defaults to 30m (180m with --race).")
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
@@ -423,13 +425,15 @@ func sanitizeFilename(pkg string) string {
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
 	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
 		"-v", "-failfast", "-tags=integration"}
-	if *race {
+	switch {
+	case *testTimeout != "":
+		args = append(args, "-timeout", *testTimeout)
+	case *race:
 		args = append(args, "-timeout", "180m")
-		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
-		// args = append(args, "-race")
-	} else {
+	default:
 		args = append(args, "-timeout", "30m")
 	}
+	// Todo: There are few race errors in tests itself. Enable -race once that is fixed.
 
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
@@ -451,7 +455,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error 
 	if err != nil {
 		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v", *tmp, err)
 	}
-	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
+	dataDir := abs
+	if strings.Contains(pkg, "/ldbc") {
+		dataDir = filepath.Join(abs, "ldbc")
+	}
+	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+dataDir)
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -899,6 +907,15 @@ func testSuiteContains(suite string) bool {
 	return false
 }
 
+func testSuiteContainsAny(suites ...string) bool {
+	for _, suite := range suites {
+		if testSuiteContains(suite) {
+			return true
+		}
+	}
+	return false
+}
+
 func isValidPackageForSuite(pkg string) bool {
 	valid := false
 	if testSuiteContains("all") {
@@ -1020,7 +1037,7 @@ func downloadDataFiles() {
 	}
 }
 
-func downloadLDBCFiles() {
+func downloadLDBCFiles(dir string) {
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -1038,12 +1055,12 @@ func downloadLDBCFiles() {
 			defer wg.Done()
 			start := time.Now()
 			cmd := exec.Command("wget", "-O", fname, link)
-			cmd.Dir = *tmp
+			cmd.Dir = dir
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v\n", err)
 				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 			}
-			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(start))
 		}(fname, link, &wg)
 	}
 	wg.Wait()
@@ -1181,8 +1198,11 @@ func run() error {
 	closer := z.NewCloser(N)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
+	var runWg sync.WaitGroup
 	for range N {
+		runWg.Add(1)
 		go func() {
+			defer runWg.Done()
 			if err := runTests(testCh, closer); err != nil {
 				errCh <- err
 				closer.Signal()
@@ -1211,20 +1231,21 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-
-		if testSuiteContains("load") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = os.TempDir()
-			}
+		needsData := testSuiteContainsAny("load", "ldbc", "all")
+		if needsData && *tmp == "" {
+			*tmp = filepath.Join(os.TempDir(), "dgraph-test-data")
 			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+		}
+		if testSuiteContainsAny("load", "all") {
 			downloadDataFiles()
 		}
-		if testSuiteContains("ldbc") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = filepath.Join(os.TempDir(), "/ldbcdata")
-			}
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
-			downloadLDBCFiles()
+		if testSuiteContainsAny("ldbc", "all") {
+			// LDBC files go into a subdirectory because the LDBC test bulk-loads
+			// the entire directory (-f <dir>). Mixing load data (1million, 21million)
+			// with LDBC data causes schema mismatches.
+			ldbcDir := filepath.Join(*tmp, "ldbc")
+			x.Check(os.MkdirAll(ldbcDir, 0755))
+			downloadLDBCFiles(ldbcDir)
 		}
 		for i, task := range valid {
 			select {
@@ -1237,6 +1258,7 @@ func run() error {
 	}()
 
 	closer.Wait()
+	runWg.Wait() // Ensure wrapper goroutines finish sending to errCh before closing it.
 	close(errCh)
 	for err := range errCh {
 		if err != nil {

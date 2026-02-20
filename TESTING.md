@@ -335,6 +335,7 @@ For more control, pass variables to `make test`:
 | `TAGS`     | Go build tags - bypasses t/ runner | `make test TAGS=integration2`   |
 | `PKG`      | Limit to specific package          | `make test PKG=systest/export`  |
 | `TEST`     | Run specific test function         | `make test TEST=TestGQLSchema`  |
+| `TIMEOUT`  | Per-package test timeout           | `make test TIMEOUT=90m`         |
 | `FUZZ`     | Enable fuzz testing                | `make test FUZZ=1`              |
 | `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
@@ -578,15 +579,16 @@ cd t && go build .
 
 ### Key Flags
 
-| Flag          | Description                                                        |
-| ------------- | ------------------------------------------------------------------ |
-| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, systest, vector, core |
-| `--pkg=X`     | Run specific package                                               |
-| `--test=X`    | Run specific test function                                         |
-| `-j=N`        | Concurrency (default: 1)                                           |
-| `--keep`      | Keep cluster running after tests                                   |
-| `-r`          | Remove all test containers                                         |
-| `--skip-slow` | Skip slow packages                                                 |
+| Flag          | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, systest, vector, core  |
+| `--pkg=X`     | Run specific package                                                |
+| `--test=X`    | Run specific test function                                          |
+| `--timeout=X` | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race) |
+| `-j=N`        | Concurrency (default: 1)                                            |
+| `--keep`      | Keep cluster running after tests                                    |
+| `-r`          | Remove all test containers                                          |
+| `--skip-slow` | Skip slow packages                                                  |
 
 ---
 
