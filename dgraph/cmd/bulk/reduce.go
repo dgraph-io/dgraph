@@ -410,7 +410,7 @@ func (r *reducer) startWriting(ci *countIndexer, vi *vectorIndexer, writerCh cha
 		if err := req.vectorBuf.SliceIterate(func(slice []byte) error {
 			ve := unmarshalVectorEntry(slice)
 			if ve == nil {
-				// Skip malformed entries (already logged in unmarshalVectorEntry)
+				vi.handleUnmarshalError()
 				return nil
 			}
 			// Insert vector into HNSW and generate entries

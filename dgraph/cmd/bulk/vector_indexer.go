@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
@@ -19,6 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/tok"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/golang/glog"
 )
 
@@ -53,6 +55,32 @@ type vectorEntry struct {
 	pred   string
 	uid    uint64
 	vector []float32
+}
+
+// handleError handles errors consistently with the bulk loader's error handling mechanism.
+// It increments the error count, logs to the error log if enabled, and terminates
+// the process if --ignore_errors is false.
+func (vi *vectorIndexer) handleError(err error, context string, filename string) {
+	if vi.state == nil {
+		glog.Errorf("vector indexer error (no state): %v [%s]", err, context)
+		return
+	}
+	atomic.AddInt64(&vi.state.prog.errCount, 1)
+	if vi.state.errorLog != nil {
+		vi.state.errorLog.Log(filename, err, context)
+	}
+	glog.Errorf("vector indexer error: %v [%s]", err, context)
+	if !vi.state.opt.IgnoreErrors {
+		x.Check(err)
+	}
+}
+
+func (vi *vectorIndexer) handleUnmarshalError() {
+	vi.handleError(
+		fmt.Errorf("failed to unmarshal vector entry"),
+		"malformed_data",
+		"<vector_unmarshal>",
+	)
 }
 
 // vectorEntrySize calculates the size needed to marshal a vectorEntry.
@@ -304,7 +332,11 @@ func (vi *vectorIndexer) validateVectorDimension(pred string, vector []float32, 
 
 	// Empty vectors are invalid
 	if len(vector) == 0 {
-		glog.Warningf("Empty vector for predicate %s uid %d, skipping", pred, uid)
+		vi.handleError(
+			fmt.Errorf("empty vector for predicate %s uid %d", pred, uid),
+			fmt.Sprintf("predicate=%s uid=%d", pred, uid),
+			"<vector_validation>",
+		)
 		return false
 	}
 
@@ -317,9 +349,11 @@ func (vi *vectorIndexer) validateVectorDimension(pred string, vector []float32, 
 	}
 
 	if len(vector) != expectedDim {
-
-		glog.Errorf("Dimension mismatch for predicate %s uid %d: expected %d, got %d",
-			pred, uid, expectedDim, len(vector))
+		vi.handleError(
+			fmt.Errorf("dimension mismatch: expected %d, got %d", expectedDim, len(vector)),
+			fmt.Sprintf("predicate=%s uid=%d expected_dim=%d actual_dim=%d", pred, uid, expectedDim, len(vector)),
+			"<vector_validation>",
+		)
 		return false
 	}
 
@@ -331,16 +365,28 @@ func (vi *vectorIndexer) validateVectorDimension(pred string, vector []float32, 
 // It validates the vector dimension, creates indexer lazily, and handles errors gracefully.
 func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 	if ve == nil {
-		glog.Errorf("addVectorEntry: received nil vectorEntry, skipping")
+		vi.handleError(
+			fmt.Errorf("received nil vectorEntry"),
+			"nil_entry",
+			"<vector_indexer>",
+		)
 		return
 	}
 
 	if ve.uid == 0 {
-		glog.Errorf("addVectorEntry: INVALID UID=0 for pred=%s, skipping", ve.pred)
+		vi.handleError(
+			fmt.Errorf("invalid UID=0 for predicate %s", ve.pred),
+			fmt.Sprintf("predicate=%s uid=0", ve.pred),
+			"<vector_validation>",
+		)
 		return
 	}
 	if ve.uid == math.MaxUint64 {
-		glog.Errorf("addVectorEntry: INVALID UID=MaxUint64 for pred=%s, skipping", ve.pred)
+		vi.handleError(
+			fmt.Errorf("invalid UID=MaxUint64 for predicate %s", ve.pred),
+			fmt.Sprintf("predicate=%s uid=MaxUint64", ve.pred),
+			"<vector_validation>",
+		)
 		return
 	}
 
@@ -351,7 +397,10 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 
 	indexer, tc, err := vi.getOrCreateIndexer(ve.pred)
 	if err != nil {
-		glog.Errorf("Error getting indexer for %s: %v", ve.pred, err)
+		vi.handleError(err,
+			fmt.Sprintf("predicate=%s uid=%d", ve.pred, ve.uid),
+			"<vector_indexer>",
+		)
 		return
 	}
 
@@ -363,10 +412,13 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 			if existingShard != vi.shardId {
 				// This is a serious invariant violation - same predicate in multiple shards
 				// This could lead to data corruption as HNSW graph would be split
-				glog.Errorf("INVARIANT VIOLATION: predicate %s already assigned to shard %d, "+
-					"but shard %d also received vectors for it. Data may be corrupted!",
-					ve.pred, existingShard, vi.shardId)
 				vi.predToShardMu.Unlock()
+				vi.handleError(
+					fmt.Errorf("predicate %s already assigned to shard %d, but shard %d also received vectors",
+						ve.pred, existingShard, vi.shardId),
+					fmt.Sprintf("predicate=%s existing_shard=%d current_shard=%d", ve.pred, existingShard, vi.shardId),
+					"<vector_invariant>",
+				)
 				return // Skip this vector to prevent further corruption
 			}
 		} else {
@@ -379,7 +431,10 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 	// Insert into HNSW index
 	_, err = indexer.Insert(context.Background(), tc, ve.uid, ve.vector)
 	if err != nil {
-		glog.Errorf("Error inserting vector for %s uid %d: %v", ve.pred, ve.uid, err)
+		vi.handleError(err,
+			fmt.Sprintf("predicate=%s uid=%d", ve.pred, ve.uid),
+			"<vector_insert>",
+		)
 		return
 	}
 }
@@ -389,7 +444,7 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 func (vi *vectorIndexer) wait() {
 	// Flush any remaining vector posting list writes
 	if err := vi.flushWriteBatch(); err != nil {
-		glog.Errorf("Error flushing write batch: %v", err)
+		vi.handleError(err, fmt.Sprintf("shard=%d", vi.shardId), "<vector_flush>")
 	}
 
 	vi.mu.Lock()
@@ -410,13 +465,16 @@ func (vi *vectorIndexer) wait() {
 		// Update moves mutations from posting lists to delta cache
 		txn.Update()
 		if err := txn.CommitToDisk(writer, vi.state.writeTs); err != nil {
-			glog.Errorf("Error committing HNSW data for predicate %s: %v", pred, err)
+			vi.handleError(err,
+				fmt.Sprintf("predicate=%s shard=%d", pred, vi.shardId),
+				"<vector_commit>",
+			)
 		} else {
 			glog.Infof("Committed HNSW data for predicate %s to tmpDb (shard %d)", pred, vi.shardId)
 		}
 	}
 	if err := writer.Flush(); err != nil {
-		glog.Errorf("Error flushing HNSW data to tmpDb: %v", err)
+		vi.handleError(err, fmt.Sprintf("shard=%d", vi.shardId), "<vector_commit>")
 	}
 
 	glog.Infof("Vector indexer wait completed for shard %d with %d predicates", vi.shardId, len(vi.vectorPreds))
