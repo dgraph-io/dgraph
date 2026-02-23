@@ -79,7 +79,7 @@ dgraph-installed:
 	fi
 
 .PHONY: test
-test: dgraph-installed local-image ## Run tests (see 'make help' for options)
+test: dgraph-installed local-image ## Run tests (default: unit,systest,core + integration2)
 ifdef TAGS
 	@echo "Running tests with tags: $(TAGS)"
 	go test -v --tags="$(TAGS)" \
@@ -97,53 +97,81 @@ else
 		done
 endif
 else
-	@echo "Running test suite: $(or $(SUITE),all)"
-	$(MAKE) -C t test args="--suite=$(or $(SUITE),all) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
+ifdef SUITE
+	@echo "Running test suite: $(SUITE)"
+	$(MAKE) -C t test args="--suite=$(SUITE) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
+else
+	@echo "Running test suites: unit, systest, core"
+	$(MAKE) -C t test args="--suite=unit,systest,core $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
+	@echo "Running integration2 tests..."
+	go test -v --tags="integration2" \
+		$(if $(TEST),--run="$(TEST)") \
+		$(if $(PKG),./$(PKG)/...,./...)
+endif
 endif
 
-.PHONY: test-all
-test-all: ## All test suites via t/ runner (i.e. 'make test SUITE=all')
+.PHONY: test-suites
+test-suites: ## All test suites via t/ runner (i.e. 'make test SUITE=all')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-suites; use 'make test SUITE=...' instead))
 	@SUITE=all $(MAKE) test
 
 .PHONY: test-unit
-test-unit: ## Unit tests, no Docker (i.e. 'make test SUITE=unit')
+test-unit: ## Unit tests (i.e. 'make test SUITE=unit')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-unit; use 'make test SUITE=...' instead))
 	@SUITE=unit $(MAKE) test
 
 .PHONY: test-core
 test-core: ## Core tests (i.e. 'make test SUITE=core')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-core; use 'make test SUITE=...' instead))
 	@SUITE=core $(MAKE) test
 
 .PHONY: test-integration
 test-integration: ## Integration tests (i.e. 'make test TAGS=integration')
+	$(if $(filter command line,$(origin TAGS)),$(error TAGS= cannot be passed to test-integration; use 'make test TAGS=...' instead))
 	@TAGS=integration $(MAKE) test
 
 .PHONY: test-integration2
 test-integration2: ## Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
+	$(if $(filter command line,$(origin TAGS)),$(error TAGS= cannot be passed to test-integration2; use 'make test TAGS=...' instead))
 	@TAGS=integration2 $(MAKE) test
 
 .PHONY: test-upgrade
 test-upgrade: ## Upgrade tests (i.e. 'make test TAGS=upgrade')
+	$(if $(filter command line,$(origin TAGS)),$(error TAGS= cannot be passed to test-upgrade; use 'make test TAGS=...' instead))
 	@TAGS=upgrade $(MAKE) test
 
 .PHONY: test-systest
 test-systest: ## System integration tests (i.e. 'make test SUITE=systest')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-systest; use 'make test SUITE=...' instead))
 	@SUITE=systest $(MAKE) test
 
 .PHONY: test-vector
 test-vector: ## Vector search tests (i.e. 'make test SUITE=vector')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-vector; use 'make test SUITE=...' instead))
 	@SUITE=vector $(MAKE) test
 
 .PHONY: test-fuzz
-test-fuzz: ## Fuzz tests, auto-discovers packages (i.e. 'make test FUZZ=1')
+test-fuzz: ## Fuzz tests (i.e. 'make test FUZZ=1')
+	$(if $(filter command line,$(origin FUZZ)),$(error FUZZ= cannot be passed to test-fuzz; use 'make test FUZZ=...' instead))
 	@FUZZ=1 $(MAKE) test
 
 .PHONY: test-ldbc
 test-ldbc: ## LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-ldbc; use 'make test SUITE=...' instead))
 	@SUITE=ldbc $(MAKE) test
 
 .PHONY: test-load
 test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-load; use 'make test SUITE=...' instead))
 	@SUITE=load $(MAKE) test
+
+.PHONY: test-everything
+test-everything: ## Every test: all suites + integration + integration2 + upgrade + fuzz
+	$(MAKE) test-suites
+	$(MAKE) test-integration
+	$(MAKE) test-integration2
+	$(MAKE) test-upgrade
+	$(MAKE) test-fuzz
 
 .PHONY: test-benchmark
 test-benchmark: ## Go benchmarks (i.e. 'go test -bench')
@@ -201,7 +229,7 @@ help: ## Show available targets and variables
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Variables that can be passed to 'test':"
-	@echo "  SUITE     Select t/ runner suite (e.g., make test SUITE=systest)"
+	@echo "  SUITE     Select t/ runner suite (default: unit,systest,core + integration2)"
 	@echo "  TAGS      Go build tags - bypasses t/ runner (e.g., make test TAGS=integration2)"
 	@echo "  PKG       Limit to specific package (e.g., make test PKG=systest/export)"
 	@echo "  TEST      Run specific test function (e.g., make test TEST=TestGQLSchema)"

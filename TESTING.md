@@ -304,12 +304,15 @@ If both pass, you're ready to run all test types!
 The simplest way to run tests:
 
 ```bash
-# Run all tests (default)
+# Run default tests (~30 min): unit, systest, core suites + integration2
 make test
 
+# Run every test in the repo (all suites + all tag-based tests + fuzz)
+make test-everything
+
 # Common shortcuts (run 'make help' for full list)
-make test-all           # All test suites via t/ runner (i.e. 'make test SUITE=all')
-make test-unit          # Unit tests, no Docker (i.e. 'make test SUITE=unit')
+make test-suites        # All t/ runner suites (i.e. 'make test SUITE=all')
+make test-unit          # Unit tests (i.e. 'make test SUITE=unit')
 make test-core          # Core tests (i.e. 'make test SUITE=core')
 make test-systest       # System integration tests (i.e. 'make test SUITE=systest')
 make test-vector        # Vector search tests (i.e. 'make test SUITE=vector')
@@ -318,7 +321,7 @@ make test-load          # Heavy load tests (i.e. 'make test SUITE=load')
 make test-integration   # Integration tests (i.e. 'make test TAGS=integration')
 make test-integration2  # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
 make test-upgrade       # Upgrade tests (i.e. 'make test TAGS=upgrade')
-make test-fuzz          # Fuzz tests, auto-discovers packages (i.e. 'make test FUZZ=1')
+make test-fuzz          # Fuzz tests (i.e. 'make test FUZZ=1')
 make test-benchmark     # Go benchmarks (i.e. 'go test -bench')
 ```
 
@@ -339,7 +342,8 @@ For more control, pass variables to `make test`:
 | `FUZZ`     | Enable fuzz testing                | `make test FUZZ=1`              |
 | `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
-**Precedence:** `TAGS` > `FUZZ` > `SUITE` (first match wins)
+**Precedence:** `TAGS` > `FUZZ` > `SUITE` > default (first match wins). When no
+variable is set, `make test` runs suites `unit,systest,core` plus `integration2`.
 
 ### Examples
 
@@ -1288,6 +1292,8 @@ The following items from the original wishlist have been implemented:
 
 - **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
   test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
+  The default (`make test` with no args) runs `unit,systest,core` suites plus `integration2` for a
+  fast feedback loop (~30 min). Use `make test-everything` to run all tests.
 
 - **✅ Example commands that "just work":** The following now work as expected:
 

@@ -144,8 +144,11 @@ directory, providing control and flexibility beyond the standard Go testing fram
 The simplest way to run tests is via Make:
 
 ```bash
-# Run all tests
+# Run default tests (~30 min): unit, systest, core suites + integration2
 make test
+
+# Run every test in the repo
+make test-everything
 
 # Run specific test types
 make test-unit          # Unit tests only (no Docker)
@@ -154,6 +157,7 @@ make test-upgrade       # Upgrade tests
 
 # Use variables for more control
 make test TAGS=integration2 PKG=systest/vector
+make test SUITE=all            # All t/ runner suites
 make test TIMEOUT=90m          # Override per-package timeout (default: 30m)
 ```
 
