@@ -37,12 +37,12 @@ const (
 		`client_key=; sasl-mechanism=PLAIN; tls=false;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +
 		`mutations-nquad=1000000; disallow-drop=false; query-timeout=0ms; txn-abort-after=5m; ` +
-		` max-retries=10;max-pending-queries=10000;shared-instance=false;type-filter-uid-limit=10`
+		`max-retries=10; max-pending-queries=10000; shared-instance=false; type-filter-uid-limit=10`
 	ZeroLimitsDefaults = `uid-lease=0; refill-interval=30s; disable-admin-http=false;`
 	GraphQLDefaults    = `introspection=true; debug=false; extensions=true; poll-interval=1s; ` +
 		`lambda-url=;`
 	CacheDefaults        = `size-mb=4096; percentage=40,40,20; remove-on-update=false`
-	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false`
+	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false; log-slow-query-threshold=0`
 )
 
 // ServerState holds the state of the Dgraph server.

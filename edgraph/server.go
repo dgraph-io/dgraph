@@ -1247,11 +1247,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a query, DQL form: %+v %+v at %+v",
-			req.req.Query, req.req.Mutations, l.Start.Format(time.RFC3339))
-	}
-
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
@@ -1262,6 +1257,15 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	ctx, span := otel.Tracer("").Start(ctx, methodRequest)
 	if ns, err := x.ExtractNamespace(ctx); err == nil {
 		annotateNamespace(span, ns)
+	}
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		traceID := ""
+		if span.SpanContext().IsValid() {
+			traceID = fmt.Sprintf(" [trace_id=%s]", span.SpanContext().TraceID().String())
+		}
+		glog.Infof("Got a query, DQL form: %+v %+v at %+v%s",
+			req.req.Query, req.req.Mutations, l.Start.Format(time.RFC3339), traceID)
 	}
 
 	ctx = x.WithMethod(ctx, methodRequest)
@@ -1275,6 +1279,16 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		timeSpentMs := x.SinceMs(l.Start)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
+
+		// Log slow queries with structured fields for observability
+		if x.WorkerConfig.SlowQueryLogThreshold > 0 {
+			x.LogSlowOperation(ctx, "query", "dql", req.req.Query, &x.SlowOperationLatency{
+				Start:      l.Start,
+				Parsing:    l.Parsing,
+				Processing: l.Processing,
+				Encoding:   l.Json,
+			})
+		}
 	}()
 
 	if rerr = x.HealthCheck(); rerr != nil {
@@ -1381,6 +1395,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
+
 	return resp, gqlErrs
 }
 
