@@ -40,7 +40,8 @@
 ```bash
 git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
-make install
+make setup    # auto-install tool dependencies (gotestsum, ack, etc.)
+make install  # build and install the dgraph binary
 ```
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
@@ -144,6 +145,9 @@ directory, providing control and flexibility beyond the standard Go testing fram
 The simplest way to run tests is via Make:
 
 ```bash
+# First-time setup: install tool dependencies
+make setup
+
 # Run default tests (~30 min): unit, systest, core suites + integration2
 make test
 

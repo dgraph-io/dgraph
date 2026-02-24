@@ -128,8 +128,9 @@ The codebase is organized into several key packages:
 
 Before running tests, ensure you have the following installed and configured.
 
-> **TL;DR:** On a fresh checkout, just run `make install` followed by `make test`. The build system
-> automatically handles OS detection, builds the correct binaries, and validates dependencies.
+> **TL;DR:** On a fresh checkout, run `make setup` to auto-install tool dependencies, then
+> `make install` followed by `make test`. The build system automatically handles OS detection,
+> builds the correct binaries, and validates dependencies.
 
 ### Automatic Dependency Checking
 
@@ -137,11 +138,14 @@ The test framework includes scripts that check for required dependencies and can
 auto-install them:
 
 ```bash
-# Check all dependencies (run from t/ directory)
-cd t && make check
+# Auto-install all missing tool dependencies (recommended for first-time setup)
+make setup
 
-# Auto-install missing dependencies
-AUTO_INSTALL=true make check
+# Check dependencies without installing (reports what's missing)
+make deps
+
+# Same as 'make deps' but auto-installs anything missing
+make deps AUTO_INSTALL=true
 ```
 
 The check scripts validate:
@@ -154,9 +158,8 @@ The check scripts validate:
 
 ### Required Tools
 
-> **Note:** You don't need to install these manually. Running `AUTO_INSTALL=true make check` from
-> the `t/` directory (or `AUTO_INSTALL=true make test` from the repo root) automatically installs
-> missing dependencies. The commands below are listed for reference.
+> **Note:** You don't need to install these manually. Running `make setup` from the repo root
+> automatically installs missing dependencies. The commands below are listed for reference.
 
 #### 1. Go (1.21+)
 
@@ -222,8 +225,8 @@ dgraph version
 The build system now handles most setup automatically. On both Linux and macOS:
 
 ```bash
-# Install dependencies (optional - auto-installs if missing)
-cd t && AUTO_INSTALL=true make check && cd ..
+# Auto-install tool dependencies (gotestsum, ack, etc.)
+make setup
 
 # Build dgraph binary (automatically handles Linux binary on macOS)
 make install
@@ -318,7 +321,6 @@ make test-systest       # System integration tests (i.e. 'make test SUITE=systes
 make test-vector        # Vector search tests (i.e. 'make test SUITE=vector')
 make test-ldbc          # LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
 make test-load          # Heavy load tests (i.e. 'make test SUITE=load')
-make test-integration   # Integration tests (i.e. 'make test TAGS=integration')
 make test-integration2  # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
 make test-upgrade       # Upgrade tests (i.e. 'make test TAGS=upgrade')
 make test-fuzz          # Fuzz tests (i.e. 'make test FUZZ=1')
@@ -1301,7 +1303,7 @@ The following items from the original wishlist have been implemented:
   make test SUITE=systest
   make test FUZZ=1 PKG=dql
   make test TAGS=upgrade PKG=acl
-  make test TAGS=integration PKG=systest/plugin
+  make test-suite SUITE=systest PKG=systest/plugin
   ```
 
 ### Remaining Ideas

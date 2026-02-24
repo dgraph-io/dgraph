@@ -78,6 +78,14 @@ dgraph-installed:
 		$(MAKE) install; \
 	fi
 
+.PHONY: deps
+deps: ## Check test dependencies (pass AUTO_INSTALL=true to auto-install missing ones)
+	$(MAKE) -C t check
+
+.PHONY: setup
+setup: ## Install all test dependencies automatically
+	$(MAKE) deps AUTO_INSTALL=true
+
 .PHONY: test
 test: dgraph-installed local-image ## Run tests (default: unit,systest,core + integration2)
 ifdef TAGS
@@ -124,11 +132,6 @@ test-core: ## Core tests (i.e. 'make test SUITE=core')
 	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-core; use 'make test SUITE=...' instead))
 	@SUITE=core $(MAKE) test
 
-.PHONY: test-integration
-test-integration: ## Integration tests (i.e. 'make test TAGS=integration')
-	$(if $(filter command line,$(origin TAGS)),$(error TAGS= cannot be passed to test-integration; use 'make test TAGS=...' instead))
-	@TAGS=integration $(MAKE) test
-
 .PHONY: test-integration2
 test-integration2: ## Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
 	$(if $(filter command line,$(origin TAGS)),$(error TAGS= cannot be passed to test-integration2; use 'make test TAGS=...' instead))
@@ -165,9 +168,8 @@ test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
 	@SUITE=load $(MAKE) test
 
 .PHONY: test-full
-test-full: ## Every test: all suites + integration + integration2 + upgrade + fuzz
+test-full: ## Every test: all suites + integration2 + upgrade + fuzz
 	$(MAKE) test-suite
-	$(MAKE) test-integration
 	$(MAKE) test-integration2
 	$(MAKE) test-upgrade
 	$(MAKE) test-fuzz
@@ -187,6 +189,13 @@ local-image: ## Build local Docker image (dgraph/dgraph:local)
 
 .PHONY: image-local
 image-local: local-image ## Alias for local-image
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	$(MAKE) -C dgraph clean
+	$(MAKE) -C compose clean
+	@rm -rf linux
+	@go clean -testcache
 
 .PHONY: docker-image
 docker-image: dgraph ## Build Docker image (dgraph/dgraph:$VERSION)
@@ -243,8 +252,9 @@ help: ## Show available targets and variables
 	@printf "  Available TAGS values:  "
 	@grep -roh "//go:build [a-z0-9]*" --include="*_test.go" . 2>/dev/null | \
 		awk '{print $$2}' | \
-		grep -E '^(integration|integration2|upgrade)$$' | \
+		grep -E '^(integration2|upgrade)$$' | \
 		sort -u | tr '\n' ' ' && echo ""
+	@echo "  Note: 'integration' tests require the t/ runner (use SUITE=, not TAGS=)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make test TAGS=integration2 PKG=systest/vector        # integration2 tests for vector"

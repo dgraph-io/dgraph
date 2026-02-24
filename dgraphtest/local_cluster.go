@@ -1322,11 +1322,19 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 		if raceEnabled {
 			opts = append(opts, "-race")
 		}
-		opts = append(opts, "-buildmode=plugin", "-o", so, src)
-		os.Setenv("GOOS", "linux")
-		os.Setenv("GOARCH", "amd64")
+		opts = append(opts, "-buildmode=plugin")
+		if runtime.GOOS != "linux" {
+			// Use the BFD linker; the default gold linker is not shipped
+			// with most cross-compiler toolchains.
+			opts = append(opts, "-ldflags", "-extldflags -fuse-ld=bfd")
+		}
+		opts = append(opts, "-o", so, src)
 		cmd := exec.Command("go", opts...)
 		cmd.Dir = filepath.Dir(curr)
+		cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH)
+		if runtime.GOOS != "linux" {
+			cmd.Env = append(cmd.Env, "CGO_ENABLED=1", "CC="+linuxCrossCC())
+		}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: %v\n", err)
 			log.Printf("Output: %v\n", string(out))
@@ -1345,6 +1353,22 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 	log.Printf("plugin build completed. Files are: %s\n", sofiles)
 
 	return nil
+}
+
+// linuxCrossCC returns the C cross-compiler for targeting Linux from the current host.
+// Respects the LINUX_CC environment variable if set.
+func linuxCrossCC() string {
+	if cc := os.Getenv("LINUX_CC"); cc != "" {
+		return cc
+	}
+	switch runtime.GOARCH {
+	case "arm64":
+		return "aarch64-unknown-linux-gnu-gcc"
+	case "amd64":
+		return "x86_64-unknown-linux-gnu-gcc"
+	default:
+		return "gcc"
+	}
 }
 
 func (c *LocalCluster) GetAlphaGrpcPublicPort(id int) (string, error) {

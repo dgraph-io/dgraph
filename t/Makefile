@@ -19,7 +19,7 @@ endif
 all: test
 
 .PHONY: check
-check: check-go check-docker check-gotestsum check-ack
+check: check-go check-docker check-gotestsum check-ack check-cross-compiler
 	@if [ "$(GOOS)" = "linux" ]; then \
 		which protoc > /dev/null 2>&1 || (echo "Error: protoc is not installed or not in PATH" && exit 1); \
 	fi
@@ -43,6 +43,10 @@ check-gotestsum:
 .PHONY: check-ack
 check-ack:
 	@./scripts/check-ack.sh
+
+.PHONY: check-cross-compiler
+check-cross-compiler:
+	@./scripts/check-cross-compiler.sh
 
 .PHONY: check-protoc
 check-protoc:

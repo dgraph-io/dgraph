@@ -422,8 +422,19 @@ func sanitizeFilename(pkg string) string {
 	return strings.ReplaceAll(pkg, "/", "_")
 }
 
+// gotestsumBin returns the absolute path to gotestsum inside $GOPATH/bin.
+// This avoids relying on $PATH, which may not include $GOPATH/bin on all machines
+// (the check-gotestsum.sh script validates at this same path).
+func gotestsumBin() string {
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(os.Getenv("HOME"), "go")
+	}
+	return filepath.Join(gopath, "bin", "gotestsum")
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
-	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
+	args := []string{gotestsumBin(), "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
 		"-v", "-failfast", "-tags=integration"}
 	switch {
 	case *testTimeout != "":
