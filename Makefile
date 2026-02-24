@@ -165,8 +165,8 @@ test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
 	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-load; use 'make test SUITE=...' instead))
 	@SUITE=load $(MAKE) test
 
-.PHONY: test-everything
-test-everything: ## Every test: all suites + integration + integration2 + upgrade + fuzz
+.PHONY: test-full
+test-full: ## Every test: all suites + integration + integration2 + upgrade + fuzz
 	$(MAKE) test-suites
 	$(MAKE) test-integration
 	$(MAKE) test-integration2

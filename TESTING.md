@@ -308,7 +308,7 @@ The simplest way to run tests:
 make test
 
 # Run every test in the repo (all suites + all tag-based tests + fuzz)
-make test-everything
+make test-full
 
 # Common shortcuts (run 'make help' for full list)
 make test-suites        # All t/ runner suites (i.e. 'make test SUITE=all')
@@ -342,8 +342,8 @@ For more control, pass variables to `make test`:
 | `FUZZ`     | Enable fuzz testing                | `make test FUZZ=1`              |
 | `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
-**Precedence:** `TAGS` > `FUZZ` > `SUITE` > default (first match wins). When no
-variable is set, `make test` runs suites `unit,systest,core` plus `integration2`.
+**Precedence:** `TAGS` > `FUZZ` > `SUITE` > default (first match wins). When no variable is set,
+`make test` runs suites `unit,systest,core` plus `integration2`.
 
 ### Examples
 
@@ -1293,7 +1293,7 @@ The following items from the original wishlist have been implemented:
 - **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
   test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
   The default (`make test` with no args) runs `unit,systest,core` suites plus `integration2` for a
-  fast feedback loop (~30 min). Use `make test-everything` to run all tests.
+  fast feedback loop (~30 min). Use `make test-full` to run all tests.
 
 - **✅ Example commands that "just work":** The following now work as expected:
 

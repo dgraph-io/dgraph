@@ -148,7 +148,7 @@ The simplest way to run tests is via Make:
 make test
 
 # Run every test in the repo
-make test-everything
+make test-full
 
 # Run specific test types
 make test-unit          # Unit tests only (no Docker)
