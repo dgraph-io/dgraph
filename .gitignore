@@ -49,3 +49,4 @@ x/log_test/*.enc
 .osgrep
 .worktrees/
 AGENTS.md
+CLAUDE.md
