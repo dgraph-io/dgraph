@@ -311,7 +311,7 @@ make test
 make test-full
 
 # Common shortcuts (run 'make help' for full list)
-make test-suites        # All t/ runner suites (i.e. 'make test SUITE=all')
+make test-suite          # All t/ runner suites (default), or: make test-suite SUITE=unit
 make test-unit          # Unit tests (i.e. 'make test SUITE=unit')
 make test-core          # Core tests (i.e. 'make test SUITE=core')
 make test-systest       # System integration tests (i.e. 'make test SUITE=systest')

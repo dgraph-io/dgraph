@@ -110,10 +110,9 @@ else
 endif
 endif
 
-.PHONY: test-suites
-test-suites: ## All test suites via t/ runner (i.e. 'make test SUITE=all')
-	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-suites; use 'make test SUITE=...' instead))
-	@SUITE=all $(MAKE) test
+.PHONY: test-suite
+test-suite: ## Run t/ runner suite (default: all). Ex: make test-suite SUITE=unit
+	@SUITE=$(or $(SUITE),all) $(MAKE) test
 
 .PHONY: test-unit
 test-unit: ## Unit tests (i.e. 'make test SUITE=unit')
@@ -167,7 +166,7 @@ test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
 
 .PHONY: test-full
 test-full: ## Every test: all suites + integration + integration2 + upgrade + fuzz
-	$(MAKE) test-suites
+	$(MAKE) test-suite
 	$(MAKE) test-integration
 	$(MAKE) test-integration2
 	$(MAKE) test-upgrade
