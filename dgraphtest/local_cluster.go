@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"log"
@@ -1391,7 +1392,7 @@ func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, s
 	tr := tar.NewReader(ts)
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if stderrors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, nil, errors.Wrapf(err, "error reading file in tared stream: [%+v]", header)
@@ -1426,12 +1427,11 @@ func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, s
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "error creating file [%v]", hostFile)
 		}
+		defer fd.Close()
 
 		if _, err := io.Copy(fd, tr); err != nil {
-			fd.Close()
 			return nil, nil, errors.Wrapf(err, "error writing to [%v] from: [%+v]", fd.Name(), header)
 		}
-		fd.Close()
 	}
 
 	return dataFiles, schemaFiles, nil
