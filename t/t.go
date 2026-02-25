@@ -592,6 +592,76 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		}
 	}()
 
+	// defaultPaused tracks whether the default cluster has been stopped to
+	// free memory for custom-cluster tests.
+	var defaultPaused bool
+
+	// pauseDefault stops the default cluster containers (without removing
+	// them) so that custom-cluster tests have the full Docker memory
+	// budget.  On macOS/Docker-Desktop the VM is memory-constrained and
+	// running 16+ Dgraph processes simultaneously causes OOM kills.
+	pauseDefault := func() {
+		if !started || stopped {
+			return
+		}
+		cmd := command("docker", "compose", "--compatibility",
+			"-f", defaultCompose, "-p", prefix, "stop")
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to pause default cluster %s: %v\n", prefix, err)
+		} else {
+			defaultPaused = true
+			fmt.Printf("DEFAULT CLUSTER PAUSED: %s\n", prefix)
+		}
+	}
+
+	// resumeDefault restarts the stopped default cluster containers and
+	// waits for them to become healthy.
+	resumeDefault := func() error {
+		if !started || stopped {
+			return start()
+		}
+		if !defaultPaused {
+			return nil // already running
+		}
+		cmd := command("docker", "compose", "--compatibility",
+			"-f", defaultCompose, "-p", prefix, "start")
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to resume default cluster %s: %v\n", prefix, err)
+			// If resume fails, recreate the cluster from scratch.
+			started = false
+			return start()
+		}
+		fmt.Printf("DEFAULT CLUSTER RESUMED: %s\n", prefix)
+
+		// Wait for health after resume.
+		var resumeWg sync.WaitGroup
+		for i := 1; i <= NumZeroNodes; i++ {
+			resumeWg.Add(1)
+			go func(n int) {
+				defer resumeWg.Done()
+				in := testutil.GetContainerInstance(prefix, "zero"+strconv.Itoa(n))
+				if err := in.BestEffortWaitForHealthy(ZeroPort); err != nil {
+					fmt.Printf("Warning: zero%d health check after resume: %v\n", n, err)
+				}
+			}(i)
+		}
+		for i := 1; i <= NumAlphaNodes; i++ {
+			resumeWg.Add(1)
+			go func(n int) {
+				defer resumeWg.Done()
+				in := testutil.GetContainerInstance(prefix, "alpha"+strconv.Itoa(n))
+				if err := in.BestEffortWaitForHealthy(AlphaPort); err != nil {
+					fmt.Printf("Warning: alpha%d health check after resume: %v\n", n, err)
+				}
+			}(i)
+		}
+		resumeWg.Wait()
+		defaultPaused = false
+		return nil
+	}
+
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -608,7 +678,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			if err := start(); err != nil {
+			if err := resumeDefault(); err != nil {
 				return err
 			}
 			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
@@ -616,6 +686,8 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				return err
 			}
 		} else {
+			// Pause the default cluster to free memory for the custom cluster.
+			pauseDefault()
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
 			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
@@ -1178,6 +1250,18 @@ func run() error {
 	}
 	fmt.Printf("Proc ID is %d\n", procId)
 	fmt.Printf("Detected architecture: %s", runtime.GOARCH)
+
+	// Ensure $GOPATH/bin is in PATH so that tools installed via `go install`
+	// (e.g. protoc-gen-go) are found by subprocesses like protoc.
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(os.Getenv("HOME"), "go")
+	}
+	gopathBin := filepath.Join(gopath, "bin")
+	currentPath := os.Getenv("PATH")
+	if !strings.Contains(currentPath, gopathBin) {
+		os.Setenv("PATH", gopathBin+string(os.PathListSeparator)+currentPath)
+	}
 
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)

@@ -8,6 +8,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -31,8 +35,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=1;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=1;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha1.crt; client-key=/dgraph-tls/client.alpha1.key;"
   alpha2:
@@ -45,6 +49,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -68,8 +76,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha2:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=2;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=2;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha2.crt; client-key=/dgraph-tls/client.alpha2.key;"
   alpha3:
@@ -82,6 +90,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -105,8 +117,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=3;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=3;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha3.crt; client-key=/dgraph-tls/client.alpha3.key;"
   alpha4:
@@ -119,6 +131,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -142,8 +158,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha4:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=4;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=4;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha4.crt; client-key=/dgraph-tls/client.alpha4.key;"
   alpha5:
@@ -156,6 +172,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -179,8 +199,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha5:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=5;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=5;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha5.crt; client-key=/dgraph-tls/client.alpha5.key;"
   alpha6:
@@ -193,6 +213,10 @@ services:
     ports:
       - 8080
       - 9080
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}
@@ -216,8 +240,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha6:7080 --zero=zero1:5080 --logtostderr -v=2
-      --raft "idx=6;" --encryption "key-file=/data/keys/enc_key;" --security "whitelist=0.0.0.0/0;"
-      --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
+      --cache "size-mb=1024;" --raft "idx=6;" --encryption "key-file=/data/keys/enc_key;" --security
+      "whitelist=0.0.0.0/0;" --tls "ca-cert=/dgraph-tls/ca.crt; server-cert=/dgraph-tls/node.crt;
       server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.alpha6.crt; client-key=/dgraph-tls/client.alpha6.key;"
   zero1:
@@ -228,6 +252,10 @@ services:
     ports:
       - 5080
       - 6080
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
     volumes:
       - type: bind
         source: ${LINUX_GOBIN:-$GOPATH/bin}

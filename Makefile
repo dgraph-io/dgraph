@@ -82,10 +82,7 @@ uninstall: ## Uninstall dgraph binary
 
 .PHONY: dgraph-installed
 dgraph-installed:
-	@if [ ! -f "$(GOPATH)/bin/dgraph" ] || [ ! -f "$(LINUX_GOBIN)/dgraph" ]; then \
-		echo "Dgraph binary missing, running make install..."; \
-		$(MAKE) install; \
-	fi
+	$(MAKE) install
 
 .PHONY: deps
 deps: ## Check test dependencies (pass AUTO_INSTALL=true to auto-install missing ones)
