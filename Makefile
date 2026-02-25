@@ -18,11 +18,20 @@ ifeq ($(GOPATH),)
     $(error GOPATH is not set. Please set it explicitly, e.g. export GOPATH=$$HOME/go)
 endif
 
-# On non-Linux systems, use a separate directory for Linux binaries
+# On non-Linux systems, use a separate directory for Linux binaries and
+# a cross-compiler so that CGO is available (required for plugin support).
 ifeq ($(GOHOSTOS),linux)
     export LINUX_GOBIN ?= $(GOPATH)/bin
+    LINUX_CC          ?= gcc
 else
     export LINUX_GOBIN ?= $(GOPATH)/linux_$(GOHOSTARCH)
+    ifeq ($(GOHOSTARCH),arm64)
+        LINUX_CC ?= aarch64-unknown-linux-gnu-gcc
+    else ifeq ($(GOHOSTARCH),amd64)
+        LINUX_CC ?= x86_64-unknown-linux-gnu-gcc
+    else
+        LINUX_CC ?= gcc
+    endif
 endif
 
 ######################
@@ -60,7 +69,7 @@ install: ## Install dgraph binary
 ifneq ($(GOHOSTOS),linux)
 	@mkdir -p $(LINUX_GOBIN)
 	@echo "Installing dgraph (linux/$(GOHOSTARCH))..."
-	@GOOS=linux GOARCH=$(GOHOSTARCH) $(MAKE) -C dgraph dgraph
+	@GOOS=linux GOARCH=$(GOHOSTARCH) CGO_ENABLED=1 CC=$(LINUX_CC) $(MAKE) -C dgraph BUILD_TAGS= EXTLDFLAGS=-fuse-ld=bfd dgraph
 	@mv dgraph/dgraph $(LINUX_GOBIN)/dgraph
 	@echo "Installed dgraph (linux/$(GOHOSTARCH)) to $(LINUX_GOBIN)/dgraph"
 endif
@@ -80,7 +89,7 @@ dgraph-installed:
 
 .PHONY: deps
 deps: ## Check test dependencies (pass AUTO_INSTALL=true to auto-install missing ones)
-	$(MAKE) -C t check
+	$(MAKE) -C t deps
 
 .PHONY: setup
 setup: ## Install all test dependencies automatically
@@ -181,7 +190,11 @@ test-benchmark: ## Go benchmarks (i.e. 'go test -bench')
 .PHONY: local-image
 local-image: ## Build local Docker image (dgraph/dgraph:local)
 	@echo building local docker image
-	@GOOS=linux GOARCH=amd64 $(MAKE) dgraph
+ifneq ($(GOHOSTOS),linux)
+	@GOOS=linux GOARCH=$(GOHOSTARCH) CGO_ENABLED=1 CC=$(LINUX_CC) $(MAKE) BUILD_TAGS= EXTLDFLAGS=-fuse-ld=bfd dgraph
+else
+	@GOOS=linux GOARCH=$(GOHOSTARCH) $(MAKE) dgraph
+endif
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
 	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
