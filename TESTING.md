@@ -310,28 +310,27 @@ If both pass, you're ready to run all test types!
 
 ### Using Make Targets
 
-The simplest way to run tests:
+The simplest way to run tests is `make test` (default: `integration` suite + `integration2`). Each
+`test-*` target is a shortcut for `make test` with specific arguments. The table below shows all
+three ways to run each test type.
 
-```bash
-# Run default tests (~30 min): integration suite + integration2
-make test
+| Target                        | `make test` equivalent                    | Without make                                                                  |
+| ----------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `make test`                   | _(default)_                               | `cd t && ./t --suite=integration` then `go test -v --tags=integration2 ./...` |
+| `make test-unit`              | `make test SUITE=unit`                    | `cd t && ./t --suite=unit`                                                    |
+| `make test-integration`       | `make test SUITE=integration`             | `cd t && ./t --suite=integration`                                             |
+| `make test-core`              | `make test SUITE=core`                    | `cd t && ./t --suite=core`                                                    |
+| `make test-systest`           | `make test SUITE=systest`                 | `cd t && ./t --suite=systest`                                                 |
+| `make test-vector`            | `make test SUITE=vector`                  | `cd t && ./t --suite=vector`                                                  |
+| `make test-integration-heavy` | `make test SUITE=systest-heavy,ldbc,load` | `cd t && ./t --suite=systest-heavy,ldbc,load`                                 |
+| `make test-integration2`      | `make test TAGS=integration2`             | `go test -v --tags=integration2 ./...`                                        |
+| `make test-upgrade`           | `make test TAGS=upgrade`                  | `go test -v --tags=upgrade ./...`                                             |
+| `make test-fuzz`              | `make test FUZZ=1`                        | `go test -v -fuzz=Fuzz -fuzztime=300s ./dql/...`                              |
+| `make test-benchmark`         | _(no equivalent)_                         | `go test -bench=. -benchmem ./...`                                            |
+| `make test-all`               | _(no equivalent)_                         | Runs `SUITE=all` + `integration2` + `upgrade` + fuzz sequentially             |
 
-# Run every test in the repo (all suites + all tag-based tests + fuzz)
-make test-all
-
-# Common shortcuts (run 'make help' for full list)
-make test-unit               # True unit tests only — no Docker, no build tags
-make test-integration        # Integration tests via t/ runner with Docker (SUITE=integration)
-make test-integration-heavy  # All heavy tests: systest-heavy + ldbc + load
-make test-core               # Core tests (i.e. 'make test SUITE=core')
-make test-systest            # All systest packages: systest-baseline + systest-heavy
-make test-vector             # Vector search tests (i.e. 'make test SUITE=vector')
-make test-integration2       # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
-make test-upgrade            # Upgrade tests (i.e. 'make test TAGS=upgrade')
-make test-fuzz               # Fuzz tests (i.e. 'make test FUZZ=1')
-make test-all                # Every test: all t/ suites + integration2 + upgrade + fuzz
-make test-benchmark          # Go benchmarks (i.e. 'go test -bench')
-```
+> **Tip:** All targets accept `PKG=`, `TEST=`, and `TIMEOUT=` variables. For example:
+> `make test-systest PKG=systest/plugin TEST=TestPasswordReturn TIMEOUT=60m`
 
 Run `make help` to see all available targets, variables, and dynamically discovered SUITE/TAGS
 values.
