@@ -84,16 +84,16 @@ uninstall: ## Uninstall dgraph binary
 dgraph-installed:
 	$(MAKE) install
 
-.PHONY: deps
-deps: ## Check test dependencies (pass AUTO_INSTALL=true to auto-install missing ones)
-	$(MAKE) -C t deps
+.PHONY: check-deps
+check-deps: ## Check test dependencies (pass AUTO_INSTALL=true to auto-install missing ones)
+	$(MAKE) -C t check-deps
 
 .PHONY: setup
 setup: ## Install all test dependencies automatically
-	$(MAKE) deps AUTO_INSTALL=true
+	$(MAKE) check-deps AUTO_INSTALL=true
 
 .PHONY: test
-test: dgraph-installed local-image ## Run tests (default: integration + integration2)
+test: check-deps dgraph-installed local-image ## Run tests (default: integration + integration2)
 ifdef TAGS
 	@echo "Running tests with tags: $(TAGS)"
 	go test -v --tags="$(TAGS)" \
@@ -177,7 +177,7 @@ test-all: ## Every test: all t/ suites + integration2 + upgrade + fuzz
 	$(MAKE) test-fuzz
 
 .PHONY: test-benchmark
-test-benchmark: ## Go benchmarks (i.e. 'go test -bench')
+test-benchmark: check-deps ## Go benchmarks (i.e. 'go test -bench')
 	go test -bench=. -benchmem $(if $(PKG),./$(PKG)/...,./...)
 
 .PHONY: local-image

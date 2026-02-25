@@ -142,24 +142,28 @@ auto-install them:
 make setup
 
 # Check dependencies without installing (reports what's missing)
-make deps
+make check-deps
 
-# Same as 'make deps' but auto-installs anything missing
-make deps AUTO_INSTALL=true
+# Same as 'make check-deps' but auto-installs anything missing
+make check-deps AUTO_INSTALL=true
 ```
 
 The check scripts validate:
 
-- Go version (1.21+)
-- Docker and Docker Compose versions and memory allocation
+- Go version (matches go.mod requirement)
+- Docker and Docker Compose versions
+- Docker available memory (warns if < 8GB, with auto-fix on macOS)
 - gotestsum installation
 - ack installation
+- Cross-compiler for non-Linux hosts (macOS)
+- protoc installation (Linux only)
 - Dgraph binary existence and correct architecture
 
 ### Required Tools
 
-> **Note:** You don't need to install these manually. Running `make setup` from the repo root
-> automatically installs missing dependencies. The commands below are listed for reference.
+> **Note:** You do **not** need to install these manually. Running `make setup` or
+> `make check-deps AUTO_INSTALL=true` from the repo root automatically checks and installs all
+> missing dependencies. The commands below are listed only as reference for what gets installed.
 
 #### 1. Go (1.21+)
 
