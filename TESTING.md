@@ -307,24 +307,24 @@ If both pass, you're ready to run all test types!
 The simplest way to run tests:
 
 ```bash
-# Run default tests (~30 min): unit, systest, core suites + integration2
+# Run default tests (~30 min): integration suite + integration2
 make test
 
 # Run every test in the repo (all suites + all tag-based tests + fuzz)
-make test-full
+make test-all
 
 # Common shortcuts (run 'make help' for full list)
-make test-suite          # All t/ runner suites (default), or: make test-suite SUITE=unit
-make test-unit          # Unit tests (i.e. 'make test SUITE=unit')
-make test-core          # Core tests (i.e. 'make test SUITE=core')
-make test-systest       # System integration tests (i.e. 'make test SUITE=systest')
-make test-vector        # Vector search tests (i.e. 'make test SUITE=vector')
-make test-ldbc          # LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
-make test-load          # Heavy load tests (i.e. 'make test SUITE=load')
-make test-integration2  # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
-make test-upgrade       # Upgrade tests (i.e. 'make test TAGS=upgrade')
-make test-fuzz          # Fuzz tests (i.e. 'make test FUZZ=1')
-make test-benchmark     # Go benchmarks (i.e. 'go test -bench')
+make test-unit               # True unit tests only — no Docker, no build tags
+make test-integration        # Integration tests via t/ runner with Docker (SUITE=integration)
+make test-integration-heavy  # All heavy tests: systest-heavy + ldbc + load
+make test-core               # Core tests (i.e. 'make test SUITE=core')
+make test-systest            # All systest packages: systest-baseline + systest-heavy
+make test-vector             # Vector search tests (i.e. 'make test SUITE=vector')
+make test-integration2       # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
+make test-upgrade            # Upgrade tests (i.e. 'make test TAGS=upgrade')
+make test-fuzz               # Fuzz tests (i.e. 'make test FUZZ=1')
+make test-all                # Every test: all t/ suites + integration2 + upgrade + fuzz
+make test-benchmark          # Go benchmarks (i.e. 'go test -bench')
 ```
 
 Run `make help` to see all available targets, variables, and dynamically discovered SUITE/TAGS
@@ -336,7 +336,7 @@ For more control, pass variables to `make test`:
 
 | Variable   | Purpose                            | Example                         |
 | ---------- | ---------------------------------- | ------------------------------- |
-| `SUITE`    | Select t/ runner suite             | `make test SUITE=systest`       |
+| `SUITE`    | Select t/ runner suite             | `make test SUITE=integration`   |
 | `TAGS`     | Go build tags - bypasses t/ runner | `make test TAGS=integration2`   |
 | `PKG`      | Limit to specific package          | `make test PKG=systest/export`  |
 | `TEST`     | Run specific test function         | `make test TEST=TestGQLSchema`  |
@@ -345,7 +345,7 @@ For more control, pass variables to `make test`:
 | `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
 **Precedence:** `TAGS` > `FUZZ` > `SUITE` > default (first match wins). When no variable is set,
-`make test` runs suites `unit,systest,core` plus `integration2`.
+`make test` runs `integration` suite (via t/ runner) plus `integration2`.
 
 ### Examples
 
@@ -542,15 +542,18 @@ Docker Compose and runs tests tagged with `integration`.
 
 A suite is a named group of test packages that can be run together with the `--suite` flag.
 
-| Suite     | Purpose                               | Packages/Tests Included                                                                       |
-| --------- | ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `unit`    | Default suite for regular development | All packages except ldbc and load (includes query, mutation, schema, GraphQL, ACL, worker)    |
-| `core`    | Core Dgraph functionality             | Query, mutation, schema, GraphQL e2e, ACL, TLS, worker (excludes systest, ldbc, vector, load) |
-| `systest` | Real workflows and system-level tests | Backup/restore, export, multi-tenancy, online-restore, audit, CDC, group-delete               |
-| `vector`  | Vector search functionality           | Vector index, similarity search, HNSW, vector backup/restore (`systest/vector/`)              |
-| `ldbc`    | Benchmark queries                     | LDBC benchmark suite (`systest/ldbc/`)                                                        |
-| `load`    | Heavy data loading scenarios          | 21million, 1million, bulk_live, bgindex, bulkloader                                           |
-| `all`     | Everything                            | Runs all test suites                                                                          |
+| Suite              | Purpose                                            | Packages/Tests Included                                                               |
+| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `unit`             | True unit tests only                               | All packages except ldbc/load — no Docker, no `--tags=integration`                    |
+| `integration`      | Default suite — all integration tests except heavy | Everything except ldbc, load, and systest-heavy (replaces old `unit`)                 |
+| `core`             | Core Dgraph functionality                          | Query, mutation, schema, GraphQL e2e, ACL, TLS, worker                                |
+| `systest`          | All system integration tests                       | Both systest-baseline + systest-heavy (backward compatible)                           |
+| `systest-baseline` | Lean systest for daily dev                         | backup/filesystem, export, multi-tenancy, audit, CDC, group-delete, plugin, ...       |
+| `systest-heavy`    | Resource-intensive systests                        | backup/minio\*, backup/encryption, backup/advanced-scenarios, tracing, online-restore |
+| `vector`           | Vector search functionality                        | Vector index, similarity search, HNSW                                                 |
+| `ldbc`             | Benchmark queries                                  | LDBC benchmark suite                                                                  |
+| `load`             | Heavy data loading scenarios                       | 21million, 1million, bulk_live, bgindex, bulkloader                                   |
+| `all`              | Everything in t/ runner                            | All packages                                                                          |
 
 ### Docker Compose Discovery
 
@@ -585,16 +588,16 @@ cd t && go build .
 
 ### Key Flags
 
-| Flag          | Description                                                         |
-| ------------- | ------------------------------------------------------------------- |
-| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, systest, vector, core  |
-| `--pkg=X`     | Run specific package                                                |
-| `--test=X`    | Run specific test function                                          |
-| `--timeout=X` | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race) |
-| `-j=N`        | Concurrency (default: 1)                                            |
-| `--keep`      | Keep cluster running after tests                                    |
-| `-r`          | Remove all test containers                                          |
-| `--skip-slow` | Skip slow packages                                                  |
+| Flag          | Description                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, integration, systest, systest-baseline, systest-heavy, vector, core |
+| `--pkg=X`     | Run specific package                                                                                             |
+| `--test=X`    | Run specific test function                                                                                       |
+| `--timeout=X` | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race)                                              |
+| `-j=N`        | Concurrency (default: 1)                                                                                         |
+| `--keep`      | Keep cluster running after tests                                                                                 |
+| `-r`          | Remove all test containers                                                                                       |
+| `--skip-slow` | Skip slow packages                                                                                               |
 
 ---
 
@@ -1294,8 +1297,8 @@ The following items from the original wishlist have been implemented:
 
 - **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
   test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
-  The default (`make test` with no args) runs `unit,systest,core` suites plus `integration2` for a
-  fast feedback loop (~30 min). Use `make test-full` to run all tests.
+  The default (`make test` with no args) runs `integration` suite plus `integration2` for a fast
+  feedback loop (~30 min). Use `make test-all` to run every test.
 
 - **✅ Example commands that "just work":** The following now work as expected:
 
@@ -1303,7 +1306,7 @@ The following items from the original wishlist have been implemented:
   make test SUITE=systest
   make test FUZZ=1 PKG=dql
   make test TAGS=upgrade PKG=acl
-  make test-suite SUITE=systest PKG=systest/plugin
+  make test SUITE=systest PKG=systest/plugin
   ```
 
 ### Remaining Ideas

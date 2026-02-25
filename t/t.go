@@ -86,9 +86,13 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
-	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, ldbc, load, unit, systest, vector, core. Multiple suites can be "+
-		"selected like --suite=ldbc,load")
+	suite = pflag.String("suite", "integration", "This flag is used to specify which "+
+		"test suites to run. Possible values are all, ldbc, load, unit, integration, systest, "+
+		"systest-baseline, systest-heavy, vector, core. Multiple suites can be "+
+		"selected like --suite=ldbc,load. "+
+		"unit = true unit tests only (no Docker, no integration tag). "+
+		"integration = everything except ldbc, load, and systest-heavy (with Docker). "+
+		"systest = systest-baseline + systest-heavy.")
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
@@ -435,7 +439,10 @@ func gotestsumBin() string {
 
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
 	args := []string{gotestsumBin(), "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
-		"-v", "-failfast", "-tags=integration"}
+		"-v", "-failfast"}
+	if !isUnitOnly() {
+		args = append(args, "-tags=integration")
+	}
 	switch {
 	case *testTimeout != "":
 		args = append(args, "-timeout", *testTimeout)
@@ -546,7 +553,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	var started, stopped bool
 	start := func() error {
-		if len(*useExisting) > 0 || started {
+		if isUnitOnly() || len(*useExisting) > 0 || started {
 			return nil
 		}
 		err := startCluster(defaultCompose, prefix)
@@ -559,7 +566,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	}
 
 	stop := func() {
-		if *keepCluster || stopped {
+		if isUnitOnly() || *keepCluster || stopped {
 			return
 		}
 		wg.Add(1)
@@ -678,14 +685,21 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			if err := resumeDefault(); err != nil {
-				return err
+			if !isUnitOnly() {
+				if err := resumeDefault(); err != nil {
+					return err
+				}
 			}
 			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
 			}
 		} else {
+			if isUnitOnly() {
+				// Skip custom-cluster packages entirely in unit mode —
+				// they only contain integration tests.
+				continue
+			}
 			// Pause the default cluster to free memory for the custom cluster.
 			pauseDefault()
 			// we are not using err variable here because we dont want to
@@ -861,7 +875,13 @@ func getPackages() []task {
 		}
 		return out
 	}
-	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
+	// When running unit-only, don't add --tags=integration so that only true
+	// unit tests (without //go:build integration) are discovered and compiled.
+	var buildFlags []string
+	if !isUnitOnly() {
+		buildFlags = []string{"-tags=integration"}
+	}
+	cfg := &packages.Config{BuildFlags: buildFlags}
 
 	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
@@ -981,6 +1001,22 @@ var loadPackages = []string{
 	"/dgraph/cmd/bulk/systest",
 }
 
+// heavyPackages lists resource-intensive systest packages separated into
+// the systest-heavy suite. These spin up large Docker clusters (20-112
+// services) and can cause OOM on macOS Docker Desktop.
+// Use --suite=systest-heavy to run them, or --suite=systest for both.
+var heavyPackages = []string{
+	"/systest/backup/minio",
+	"/systest/backup/minio-large",
+	"/systest/backup/nfs-backup",
+	"/systest/backup/advanced-scenarios/",
+	"/systest/backup/encryption",
+	"/systest/backup/multi-tenancy",
+	"/systest/tracing/jaeger1",
+	"/systest/tracing/jaeger2",
+	"/systest/online-restore",
+}
+
 func testSuiteContains(suite string) bool {
 	for _, str := range testsuite {
 		if suite == str {
@@ -999,6 +1035,13 @@ func testSuiteContainsAny(suites ...string) bool {
 	return false
 }
 
+// isUnitOnly returns true when the suite is exactly "unit" with nothing else.
+// In unit-only mode, the runner skips Docker clusters and --tags=integration,
+// running only tests that don't require the integration build tag.
+func isUnitOnly() bool {
+	return len(testsuite) == 1 && testsuite[0] == "unit"
+}
+
 func isValidPackageForSuite(pkg string) bool {
 	valid := false
 	if testSuiteContains("all") {
@@ -1010,22 +1053,28 @@ func isValidPackageForSuite(pkg string) bool {
 	if testSuiteContains("load") {
 		valid = valid || isLoadPackage(pkg)
 	}
+	// "unit" = true unit tests (no --tags=integration, same package scope as integration)
 	if testSuiteContains("unit") {
-		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg) && !isHeavyPackage(pkg))
+	}
+	// "integration" replaces old "unit" — everything except ldbc, load, and systest-heavy
+	if testSuiteContains("integration") {
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg) && !isHeavyPackage(pkg))
 	}
 	if testSuiteContains("vector") {
 		valid = valid || isVectorPackage(pkg)
 	}
-	if testSuiteContains("systest") {
-		valid = valid || isSystestPackage(pkg)
+	// "systest" = both systest-baseline and systest-heavy (backward compatible)
+	if testSuiteContainsAny("systest", "systest-baseline") {
+		valid = valid || (isSystestPackage(pkg) && !isHeavyPackage(pkg))
+	}
+	if testSuiteContainsAny("systest", "systest-heavy") {
+		valid = valid || isHeavyPackage(pkg)
 	}
 	if testSuiteContains("core") {
 		valid = valid || isCorePackage(pkg)
 	}
-	if valid {
-		return valid
-	}
-	return false
+	return valid
 }
 
 func isLoadPackage(pkg string) bool {
@@ -1061,6 +1110,15 @@ func isCorePackage(pkg string) bool {
 
 func isVectorPackage(pkg string) bool {
 	return strings.HasSuffix(pkg, "/vector")
+}
+
+func isHeavyPackage(pkg string) bool {
+	for _, p := range heavyPackages {
+		if strings.HasSuffix(pkg, p) || strings.Contains(pkg, p) {
+			return true
+		}
+	}
+	return false
 }
 
 var datafiles = map[string]string{
@@ -1370,7 +1428,7 @@ func run() error {
 
 func validateAllowed(testSuite []string) {
 
-	allowed := []string{"all", "ldbc", "load", "unit", "systest", "vector", "core"}
+	allowed := []string{"all", "ldbc", "load", "unit", "integration", "systest", "systest-baseline", "systest-heavy", "vector", "core"}
 	for _, str := range testSuite {
 		onlyAllowed := false
 		for _, allowedStr := range allowed {
@@ -1379,7 +1437,7 @@ func validateAllowed(testSuite []string) {
 			}
 		}
 		if !onlyAllowed {
-			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
+			log.Fatalf("Allowed options for suite are: %s; passed in %+v", strings.Join(allowed, ", "), testSuite)
 		}
 	}
 }

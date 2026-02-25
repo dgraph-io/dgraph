@@ -93,7 +93,7 @@ setup: ## Install all test dependencies automatically
 	$(MAKE) deps AUTO_INSTALL=true
 
 .PHONY: test
-test: dgraph-installed local-image ## Run tests (default: unit,systest,core + integration2)
+test: dgraph-installed local-image ## Run tests (default: integration + integration2)
 ifdef TAGS
 	@echo "Running tests with tags: $(TAGS)"
 	go test -v --tags="$(TAGS)" \
@@ -115,8 +115,8 @@ ifdef SUITE
 	@echo "Running test suite: $(SUITE)"
 	$(MAKE) -C t test args="--suite=$(SUITE) $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
 else
-	@echo "Running test suites: unit, systest, core"
-	$(MAKE) -C t test args="--suite=unit,systest,core $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
+	@echo "Running test suite: integration"
+	$(MAKE) -C t test args="--suite=integration $(if $(PKG),--pkg=\"$(PKG)\") $(if $(TEST),--test=\"$(TEST)\") $(if $(TIMEOUT),--timeout=$(TIMEOUT))"
 	@echo "Running integration2 tests..."
 	go test -v --tags="integration2" \
 		$(if $(TEST),--run="$(TEST)") \
@@ -124,14 +124,15 @@ else
 endif
 endif
 
-.PHONY: test-suite
-test-suite: ## Run t/ runner suite (default: all). Ex: make test-suite SUITE=unit
-	@SUITE=$(or $(SUITE),all) $(MAKE) test
-
 .PHONY: test-unit
-test-unit: ## Unit tests (i.e. 'make test SUITE=unit')
+test-unit: ## True unit tests only — no Docker, no integration build tag (i.e. 'make test SUITE=unit')
 	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-unit; use 'make test SUITE=...' instead))
 	@SUITE=unit $(MAKE) test
+
+.PHONY: test-integration
+test-integration: ## Integration tests via t/ runner with Docker (i.e. 'make test SUITE=integration')
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-integration; use 'make test SUITE=...' instead))
+	@SUITE=integration $(MAKE) test
 
 .PHONY: test-core
 test-core: ## Core tests (i.e. 'make test SUITE=core')
@@ -149,9 +150,14 @@ test-upgrade: ## Upgrade tests (i.e. 'make test TAGS=upgrade')
 	@TAGS=upgrade $(MAKE) test
 
 .PHONY: test-systest
-test-systest: ## System integration tests (i.e. 'make test SUITE=systest')
+test-systest: ## All systest packages: systest-baseline + systest-heavy (i.e. 'make test SUITE=systest')
 	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-systest; use 'make test SUITE=...' instead))
 	@SUITE=systest $(MAKE) test
+
+.PHONY: test-integration-heavy
+test-integration-heavy: ## All heavy tests: systest-heavy + ldbc + load
+	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-integration-heavy; use 'make test SUITE=...' instead))
+	@SUITE=systest-heavy,ldbc,load $(MAKE) test
 
 .PHONY: test-vector
 test-vector: ## Vector search tests (i.e. 'make test SUITE=vector')
@@ -163,19 +169,9 @@ test-fuzz: ## Fuzz tests (i.e. 'make test FUZZ=1')
 	$(if $(filter command line,$(origin FUZZ)),$(error FUZZ= cannot be passed to test-fuzz; use 'make test FUZZ=...' instead))
 	@FUZZ=1 $(MAKE) test
 
-.PHONY: test-ldbc
-test-ldbc: ## LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
-	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-ldbc; use 'make test SUITE=...' instead))
-	@SUITE=ldbc $(MAKE) test
-
-.PHONY: test-load
-test-load: ## Heavy load tests (i.e. 'make test SUITE=load')
-	$(if $(filter command line,$(origin SUITE)),$(error SUITE= cannot be passed to test-load; use 'make test SUITE=...' instead))
-	@SUITE=load $(MAKE) test
-
-.PHONY: test-full
-test-full: ## Every test: all suites + integration2 + upgrade + fuzz
-	$(MAKE) test-suite
+.PHONY: test-all
+test-all: ## Every test: all t/ suites + integration2 + upgrade + fuzz
+	$(MAKE) test SUITE=all
 	$(MAKE) test-integration2
 	$(MAKE) test-upgrade
 	$(MAKE) test-fuzz
@@ -247,7 +243,7 @@ help: ## Show available targets and variables
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Variables that can be passed to 'test':"
-	@echo "  SUITE     Select t/ runner suite (default: unit,systest,core + integration2)"
+	@echo "  SUITE     Select t/ runner suite (default: integration + integration2)"
 	@echo "  TAGS      Go build tags - bypasses t/ runner (e.g., make test TAGS=integration2)"
 	@echo "  PKG       Limit to specific package (e.g., make test PKG=systest/export)"
 	@echo "  TEST      Run specific test function (e.g., make test TEST=TestGQLSchema)"

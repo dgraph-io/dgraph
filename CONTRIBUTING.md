@@ -148,16 +148,18 @@ The simplest way to run tests is via Make:
 # First-time setup: install tool dependencies
 make setup
 
-# Run default tests (~30 min): unit, systest, core suites + integration2
+# Run default tests (~30 min): integration suite + integration2
 make test
 
 # Run every test in the repo
-make test-full
+make test-all
 
 # Run specific test types
-make test-unit          # Unit tests only (no Docker)
-make test-integration2  # Integration2 tests via dgraphtest
-make test-upgrade       # Upgrade tests
+make test-unit               # True unit tests only — no Docker, no build tags
+make test-integration        # Integration tests via t/ runner with Docker
+make test-integration-heavy  # All heavy tests: systest-heavy + ldbc + load
+make test-integration2       # Integration2 tests via dgraphtest
+make test-upgrade            # Upgrade tests
 
 # Use variables for more control
 make test TAGS=integration2 PKG=systest/vector
