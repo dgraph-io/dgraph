@@ -273,6 +273,9 @@ Use `go test` to run one easy test on types package:
 
 ```bash
 go test -v ./types/... -run TestConvert
+
+# Or with make (runs all unit tests, not just one)
+make test-unit
 ```
 
 **Expected output:**
@@ -294,6 +297,9 @@ ok      github.com/dgraph-io/dgraph/v25/types   (cached)
 
 ```bash
 cd t && go build . && ./t --test=TestGQLSchema
+
+# Or with make
+make test TEST=TestGQLSchema
 ```
 
 If both pass, you're ready to run all test types!
@@ -501,6 +507,19 @@ go test ./types/...
 go test -v ./types/... -run TestConvert
 ```
 
+**With make:**
+
+```bash
+# Run all unit tests (no Docker, no build tags)
+make test-unit
+
+# Run unit tests for a specific package
+make test-unit PKG=types
+
+# Run a specific unit test
+make test-unit PKG=types TEST=TestConvert
+```
+
 ### Identifying a unit test
 
 - No `//go:build` tag at the top of the file = unit test
@@ -586,6 +605,19 @@ cd t && go build .
 ./t -r
 ```
 
+**With make:**
+
+```bash
+# Run a suite
+make test SUITE=core
+
+# Run specific package
+make test SUITE=integration PKG=systest/export
+
+# Run single test
+make test TEST=TestExportAndLoadJson
+```
+
 ### Key Flags
 
 | Flag          | Description                                                                                                      |
@@ -619,6 +651,16 @@ cd t && go build .
 
 # Keep cluster running after tests (for debugging)
 ./t --pkg=systest/export --keep
+```
+
+**With make:**
+
+```bash
+# Run all tests in a package (make builds the runner automatically)
+make test SUITE=integration PKG=systest/export
+
+# Run single test
+make test TEST=TestExportAndLoadJson
 ```
 
 ### Method 2: Manual Cluster + go test
@@ -693,6 +735,19 @@ Using `t/` runner:
 ./t --suite=systest
 ```
 
+**With make:**
+
+```bash
+# Run all systest packages
+make test-systest
+
+# Run specific systest package
+make test SUITE=systest PKG=systest/export
+
+# Run specific test by name
+make test TEST=TestExportAndLoadJson
+```
+
 ### Key Environment Variables
 
 | Variable              | Purpose                            | Set by              |
@@ -736,6 +791,19 @@ make install
 # Run tests
 go test -v --tags=integration2 ./systest/integration2/
 go test -v --tags=integration2 --run '^TestName$' ./pkg/
+```
+
+**With make:**
+
+```bash
+# Run all integration2 tests
+make test-integration2
+
+# Run integration2 tests for a specific package
+make test TAGS=integration2 PKG=systest/vector
+
+# Run a specific integration2 test
+make test TAGS=integration2 PKG=systest/vector TEST=TestVectorSearch
 ```
 
 ### Version & Binary Management
@@ -946,6 +1014,19 @@ go test -v --tags=upgrade ./worker/
 
 ```bash
 go test -v --tags=upgrade -run '^TestUpgradeName$' ./pkg/
+```
+
+**With make:**
+
+```bash
+# Run all upgrade tests
+make test-upgrade
+
+# Run upgrade tests for a specific package
+make test TAGS=upgrade PKG=acl
+
+# Run a specific upgrade test
+make test TAGS=upgrade PKG=acl TEST=TestACL
 ```
 
 ### Where Upgrade Tests Live
@@ -1222,6 +1303,19 @@ go test -v --tags=integration --run 'TestPluginTestSuite/TestPasswordReturn/subt
 go test -v --tags=upgrade --run 'TestPluginTestSuite/TestPasswordReturn' ./systest/plugin/
 ```
 
+**With make:**
+
+```bash
+# Run the plugin systest package via t/ runner
+make test SUITE=systest PKG=systest/plugin
+
+# Run a specific test
+make test SUITE=systest PKG=systest/plugin TEST=TestPluginTestSuite/TestPasswordReturn
+
+# Run in upgrade mode
+make test TAGS=upgrade PKG=systest/plugin TEST=TestPluginTestSuite/TestPasswordReturn
+```
+
 **When NOT to use:**
 
 - Simple one-off tests → use regular `func TestX(t *testing.T)`
@@ -1258,6 +1352,16 @@ go test -v ./dql -fuzz=Fuzz -fuzztime=5m
 go test -v ./dql -fuzz=Fuzz -fuzztime=300s -fuzzminimizetime=120s
 ```
 
+**With make:**
+
+```bash
+# Run all fuzz tests (default 300s per package)
+make test-fuzz
+
+# Fuzz a specific package with custom duration
+make test FUZZ=1 PKG=dql FUZZTIME=5m
+```
+
 ### CI Workflow
 
 - `ci-dgraph-fuzz.yml` (runs on PRs)
@@ -1275,41 +1379,6 @@ go test -v ./dql -fuzz=Fuzz -fuzztime=300s -fuzzminimizetime=120s
 ---
 
 ## Future Improvement Ideas
-
-### ✅ Completed Improvements
-
-The following items from the original wishlist have been implemented:
-
-- **✅ OS detection and automatic binary handling:** The Makefile now detects the host OS at runtime
-  and automatically builds the correct binaries. On macOS, `make install` builds both native and
-  Linux binaries without manual intervention.
-
-- **✅ Automatic binary path management:** The `LINUX_GOBIN` environment variable is automatically
-  set based on OS. Docker Compose files use `${LINUX_GOBIN:-$GOPATH/bin}` to mount the correct
-  binary.
-
-- **✅ No manual setup scripts required:** The `make test` target now depends on `dgraph-installed`
-  which automatically builds binaries if missing. Dependency checking scripts in `t/scripts/` can
-  auto-install missing tools with `AUTO_INSTALL=true`.
-
-- **✅ Prerequisites handled automatically:** Running `make test` validates dependencies and builds
-  required binaries before running tests.
-
-- **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
-  test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
-  The default (`make test` with no args) runs `integration` suite plus `integration2` for a fast
-  feedback loop (~30 min). Use `make test-all` to run every test.
-
-- **✅ Example commands that "just work":** The following now work as expected:
-
-  ```bash
-  make test SUITE=systest
-  make test FUZZ=1 PKG=dql
-  make test TAGS=upgrade PKG=acl
-  make test SUITE=systest PKG=systest/plugin
-  ```
-
-### Remaining Ideas
 
 The following improvements could still enhance the developer experience:
 
