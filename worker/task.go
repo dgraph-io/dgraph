@@ -804,15 +804,10 @@ func (qs *queryState) handleUidPostings(
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
-			select {
-			case <-egCtx.Done():
-				return egCtx.Err()
-			default:
-			}
 			if i%100 == 0 {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-egCtx.Done():
+					return egCtx.Err()
 				default:
 				}
 			}
@@ -1605,12 +1600,15 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 	filter := func(idx, start, end int) error {
 		filtered[idx] = &pb.List{}
 		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
-			select {
-			case <-egCtx.Done():
-				return egCtx.Err()
-			default:
-			}
+		for i := start; i < end; i++ {
+            uid := uids.Uids[i]
+            if i%100 == 0 {
+                select {
+                case <-egCtx.Done():
+                    return egCtx.Err()
+                default:
+                }
+            }
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
