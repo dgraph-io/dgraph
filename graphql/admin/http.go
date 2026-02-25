@@ -183,7 +183,7 @@ func (gs *graphqlSubscription) Subscribe(
 
 	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
-	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
+	glog.V(2).Infof("namespace: %d. Got GraphQL request over HTTP.", ns)
 	// first load the schema, then do anything else
 	if err := LazyLoadSchema(namespace); err != nil {
 		return nil, err
