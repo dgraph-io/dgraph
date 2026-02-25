@@ -40,7 +40,8 @@
 ```bash
 git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
-make install
+make setup    # auto-install tool dependencies (gotestsum, ack, etc.)
+make install  # build and install the dgraph binary
 ```
 
 This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
@@ -144,16 +145,25 @@ directory, providing control and flexibility beyond the standard Go testing fram
 The simplest way to run tests is via Make:
 
 ```bash
-# Run all tests
+# First-time setup: install tool dependencies
+make setup
+
+# Run default tests (~30 min): integration suite + integration2
 make test
 
+# Run every test in the repo
+make test-all
+
 # Run specific test types
-make test-unit          # Unit tests only (no Docker)
-make test-integration2  # Integration2 tests via dgraphtest
-make test-upgrade       # Upgrade tests
+make test-unit               # True unit tests only — no Docker, no build tags
+make test-integration        # Integration tests via t/ runner with Docker
+make test-integration-heavy  # All heavy tests: systest-heavy + ldbc + load
+make test-integration2       # Integration2 tests via dgraphtest
+make test-upgrade            # Upgrade tests
 
 # Use variables for more control
 make test TAGS=integration2 PKG=systest/vector
+make test SUITE=all            # All t/ runner suites
 make test TIMEOUT=90m          # Override per-package timeout (default: 30m)
 ```
 
