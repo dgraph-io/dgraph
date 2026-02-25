@@ -57,7 +57,9 @@ install_cross_compiler_macos() {
 
 main() {
 	# Cross-compiler is only needed on non-Linux systems
-	if [[ "$(get_os)" == "Linux" ]]; then
+	local os
+	os="$(get_os)"
+	if [[ ${os} == "Linux" ]]; then
 		exit 0
 	fi
 
@@ -85,7 +87,7 @@ main() {
 	echo ""
 	err "Please install manually:"
 
-	case "$(get_os)" in
+	case "${os}" in
 	Darwin)
 		local formula
 		formula="$(get_brew_formula)"
