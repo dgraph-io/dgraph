@@ -13,6 +13,7 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/stargazers)
 [![GitHub commit activity](https://img.shields.io/github/commit-activity/m/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/commits/main/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
+[![Docker Pulls](https://img.shields.io/docker/pulls/dgraph/dgraph)](https://hub.docker.com/r/dgraph/dgraph)
 
 Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides
 ACID transactions, consistent replication, and linearizable reads. It's built from the ground up to
@@ -84,6 +85,7 @@ the GOPATH environment variable is not set.
 ```bash
 git clone https://github.com/dgraph-io/dgraph.git
 cd dgraph
+make setup
 make install
 ```
 
