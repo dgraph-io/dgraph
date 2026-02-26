@@ -30,9 +30,7 @@ and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over
 ## Status
 
 Dgraph is at [version v25][rel] and is production-ready. Apart from the vast open source community,
-it is being used in production at multiple Fortune 500 companies, and by
-[Intuit Katlas](https://github.com/intuit/katlas) and
-[VMware Purser](https://github.com/vmware/purser).
+it is being used in production at multiple Fortune 500 companies.
 
 [rel]: https://github.com/dgraph-io/dgraph/releases/tag/v25.0.0
 
