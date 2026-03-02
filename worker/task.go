@@ -1639,14 +1639,14 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		filtered[idx] = &pb.List{}
 		out := filtered[idx]
 		for i := start; i < end; i++ {
-            uid := uids.Uids[i]
-            if i%100 == 0 {
-                select {
-                case <-egCtx.Done():
-                    return egCtx.Err()
-                default:
-                }
-            }
+			uid := uids.Uids[i]
+			if i%100 == 0 {
+				select {
+				case <-egCtx.Done():
+					return egCtx.Err()
+				default:
+				}
+			}
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
