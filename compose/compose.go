@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v3"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type stringMap map[string]string
@@ -79,7 +79,9 @@ type options struct {
 	DataVol        bool
 	TmpFS          bool
 	UserOwnership  bool
-	Jaeger         bool
+	Jaeger         int
+	TraceRatio     string
+	TraceService   bool
 	Metrics        bool
 	PortOffset     int
 	Verbosity      int
@@ -202,8 +204,15 @@ func initService(basename string, idx, grpcPort int) service {
 		svc.Command += fmt.Sprintf(" --cwd=/data/%s", svc.name)
 	}
 	svc.Command += " " + basename
-	if opts.Jaeger {
-		svc.Command += ` --trace "jaeger=http://jaeger:14268;"`
+	if opts.Jaeger > 0 {
+		traceFlag := "jaeger=http://jaeger:4318;"
+		if opts.TraceRatio != "" {
+			traceFlag += fmt.Sprintf(" ratio=%s;", opts.TraceRatio)
+		}
+		if opts.TraceService {
+			traceFlag += fmt.Sprintf(" service=%s;", svc.name)
+		}
+		svc.Command += fmt.Sprintf(` --trace "%s"`, traceFlag)
 	}
 	return svc
 }
@@ -235,7 +244,8 @@ func getZero(idx int, raft string) service {
 	if idx == 1 {
 		svc.Command += " --bindall"
 	} else {
-		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), basePort)
+		peerPort := zeroBasePort + opts.PortOffset
+		svc.Command += fmt.Sprintf(" --peer=%s:%d", name(basename, 1), peerPort)
 	}
 	if len(opts.MemLimit) > 0 {
 		svc.Deploy.Resources = res{
@@ -258,7 +268,9 @@ func getZero(idx int, raft string) service {
 
 func getAlpha(idx int, raft string) service {
 	basename := "alpha"
+	// internalPort is used for Raft communication between nodes.
 	internalPort := alphaBasePort + opts.PortOffset + getOffset(idx)
+	// grpcPort is the public-facing port for clients. It is offset from the internal port.
 	grpcPort := internalPort + 1000
 	svc := initService(basename, idx, grpcPort)
 
@@ -307,7 +319,7 @@ func getAlpha(idx int, raft string) service {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
 	}
 	if opts.WhiteList {
-		svc.Command += ` --security "whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16;"`
+		svc.Command += ` --security "whitelist=0.0.0.0/0;"`
 	}
 	if opts.Acl {
 		svc.Command += ` --acl "secret-file=/secret/hmac;"`
@@ -372,23 +384,44 @@ func getVolume(vol string) volume {
 
 }
 
-func getJaeger() service {
-	svc := service{
-		Image:         "jaegertracing/all-in-one:1.18",
+func getJaeger(version int) service {
+	if version == 2 {
+		// Jaeger v2.x uses OpenTelemetry Collector architecture with YAML config.
+		// OTLP receivers bind to localhost by default, so we need JAEGER_LISTEN_HOST=0.0.0.0
+		// for container environments.
+		return service{
+			Image:         "jaegertracing/jaeger:latest",
+			ContainerName: containerName("jaeger"),
+			Ports: []string{
+				toPort(4318),
+				toPort(16686),
+			},
+			Environment: []string{
+				"JAEGER_LISTEN_HOST=0.0.0.0",
+			},
+		}
+	}
+	// Jaeger v1.60 with badger storage
+	return service{
+		Image:         "jaegertracing/all-in-one:1.60",
 		ContainerName: containerName("jaeger"),
-		WorkingDir:    "/working/jaeger",
+		User:          "0",
 		Ports: []string{
-			toPort(14268),
+			toPort(4318),
 			toPort(16686),
 		},
+		Volumes: []volume{{
+			Type:   "volume",
+			Source: "jaeger-volume",
+			Target: "/jaeger",
+		}},
 		Environment: []string{
 			"SPAN_STORAGE_TYPE=badger",
 		},
 		Command: "--badger.ephemeral=false" +
-			" --badger.directory-key /working/jaeger" +
-			" --badger.directory-value /working/jaeger",
+			" --badger.directory-key /jaeger" +
+			" --badger.directory-value /jaeger",
 	}
-	return svc
 }
 
 func getMinio(minioDataDir string) service {
@@ -418,12 +451,12 @@ func getRatel() service {
 		portFlag = fmt.Sprintf(" -port=%d", opts.RatelPort)
 	}
 	svc := service{
-		Image:         opts.Image + ":" + opts.Tag,
+		Image:         "dgraph/ratel:latest",
 		ContainerName: containerName("ratel"),
 		Ports: []string{
 			toPort(opts.RatelPort),
 		},
-		Command: "dgraph-ratel" + portFlag,
+		Command: portFlag,
 	}
 	return svc
 }
@@ -460,7 +493,7 @@ func addMetrics(cfg *composeConfig) {
 			},
 			{
 				Type:     "bind",
-				Source:   "$GOPATH/src/github.com/hypermodeinc/dgraph/compose/prometheus.yml",
+				Source:   "$GOPATH/src/github.com/dgraph-io/dgraph/compose/prometheus.yml",
 				Target:   "/etc/prometheus/prometheus.yml",
 				ReadOnly: true,
 			},
@@ -540,8 +573,13 @@ func main() {
 		"run as the current user rather than root")
 	cmd.PersistentFlags().BoolVar(&opts.TmpFS, "tmpfs", false,
 		"store w and zw directories on a tmpfs filesystem")
-	cmd.PersistentFlags().BoolVarP(&opts.Jaeger, "jaeger", "j", false,
-		"include jaeger service")
+	cmd.PersistentFlags().IntVarP(&opts.Jaeger, "jaeger", "j", 0,
+		"include jaeger service (1 for v1.60, 2 for v2.x)")
+	cmd.PersistentFlags().Lookup("jaeger").NoOptDefVal = "1"
+	cmd.PersistentFlags().StringVar(&opts.TraceRatio, "trace_ratio", "",
+		"ratio of queries to trace (e.g., 0.01 for 1%)")
+	cmd.PersistentFlags().BoolVar(&opts.TraceService, "trace_service", false,
+		"use compose service name as trace service name (e.g., alpha1, zero1)")
 	cmd.PersistentFlags().BoolVarP(&opts.Metrics, "metrics", "m", false,
 		"include metrics (prometheus, grafana) services")
 	cmd.PersistentFlags().IntVarP(&opts.PortOffset, "port_offset", "o", 100,
@@ -686,8 +724,11 @@ func main() {
 		cfg.Volumes["data"] = stringMap{}
 	}
 
-	if opts.Jaeger {
-		services["jaeger"] = getJaeger()
+	if opts.Jaeger > 0 {
+		services["jaeger"] = getJaeger(opts.Jaeger)
+		if opts.Jaeger == 1 {
+			cfg.Volumes["jaeger-volume"] = stringMap{}
+		}
 	}
 
 	if opts.Ratel {

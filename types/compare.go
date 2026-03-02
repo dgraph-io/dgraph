@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package types
 
-import "github.com/hypermodeinc/dgraph/v25/x"
+import "github.com/dgraph-io/dgraph/v25/x"
 
 // CompareVals compares two values using the given comparison type.
 // Should be used only in filtering arg1 by comparing with arg2.

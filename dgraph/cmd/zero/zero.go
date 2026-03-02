@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,10 +22,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (
@@ -99,15 +99,17 @@ func (s *Server) Init() {
 }
 
 func (s *Server) periodicallyPostTelemetry() {
-	const scarfBaseUrlFmt = "https://events.hypermode.com/dgraph-deployments/%v/%v/%v/%v/%v"
+	const scarfBaseUrlFmt = "https://events.dgraph.io/dgraph-deployments/%v/%v/%v/%v/%v"
 
 	// sleep so that a leader is elected by this time
 	time.Sleep(time.Minute)
 
 	glog.Infof("Starting telemetry data collection for zero...")
 
+	ticker := time.Tick(6 * time.Hour)
+
 	var lastPostedAt time.Time
-	for ; true; <-time.Tick(time.Hour * 6) {
+	for range ticker {
 		if !s.Node.AmLeader() {
 			continue
 		}
@@ -829,11 +831,11 @@ func (s *Server) StreamMembership(_ *api.Payload, stream pb.Zero_StreamMembershi
 		return err
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
+
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			// Send an update every second.
 			ms, err := s.latestMembershipState(ctx)
 			if err != nil {

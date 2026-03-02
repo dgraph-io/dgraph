@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,15 +12,11 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 
+	"github.com/dgraph-io/dgraph/v25/dgraph/cmd"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd"
 )
 
 func main() {
-	// Setting a higher number here allows more disk I/O calls to be scheduled, hence considerably
-	// improving throughput. The extra CPU overhead is almost negligible in comparison. The
-	// benchmark notes are located in badger-bench/randread.
-	runtime.GOMAXPROCS(128)
 
 	absDiff := func(a, b uint64) uint64 {
 		if a > b {
@@ -29,7 +25,7 @@ func main() {
 		return b - a
 	}
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.Tick(10 * time.Second)
 
 	// Make sure the garbage collector is run periodically.
 	go func() {
@@ -42,7 +38,7 @@ func main() {
 		var js z.MemStats
 		var lastAlloc uint64
 
-		for range ticker.C {
+		for range ticker {
 			// Read Jemalloc stats first. Print if there's a big difference.
 			z.ReadMemStats(&js)
 			if diff := absDiff(uint64(z.NumAllocBytes()), lastAlloc); diff > 1<<30 {
@@ -83,7 +79,6 @@ func main() {
 
 	// Run the program.
 	cmd.Execute()
-	ticker.Stop()
 
 	glog.V(2).Infof("Num Allocated Bytes at program end: %d", z.NumAllocBytes())
 	if z.NumAllocBytes() > 0 {

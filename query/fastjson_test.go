@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,10 +12,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/task"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/task"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/types"
 )
 
 func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
@@ -59,7 +59,7 @@ func TestSubgraphToFastJSON(t *testing.T) {
 
 	t.Run("With a valid float result", func(t *testing.T) {
 		sg := subgraphWithSingleResultAndSingleValue(task.FromFloat(42.0))
-		assertJSON(t, `{"query":[{"val":42.000000}]}`, sg)
+		assertJSON(t, `{"query":[{"val":42}]}`, sg)
 	})
 
 	t.Run("With invalid floating points", func(t *testing.T) {

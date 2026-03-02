@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,9 +18,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
+
+func TestMain(m *testing.M) {
+	m.Run()
+}
 
 // TestLoaderXidmap checks that live loader re-uses xidmap on loading data from two different files
 func TestLoaderXidmap(t *testing.T) {
@@ -39,7 +43,7 @@ func TestLoaderXidmap(t *testing.T) {
 		// internal-port
 		true))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.GetSockAddrLocalhost(), conf)
 	require.NoError(t, err)
 	ctx := context.Background()
 	testutil.DropAll(t, dg)
@@ -67,8 +71,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddrLocalhost,
-		"--zero", testutil.SockAddrZeroLocalhost,
+		"--alpha", testutil.GetSockAddrLocalhost(),
+		"--zero", testutil.GetSockAddrZeroLocalhost(),
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 
@@ -78,8 +82,8 @@ func TestLoaderXidmap(t *testing.T) {
 	err = testutil.ExecWithOpts([]string{testutil.DgraphBinaryPath(), "live",
 		"--tls", tlsFlag,
 		"--files", data,
-		"--alpha", testutil.SockAddrLocalhost,
-		"--zero", testutil.SockAddrZeroLocalhost,
+		"--alpha", testutil.GetSockAddrLocalhost(),
+		"--zero", testutil.GetSockAddrZeroLocalhost(),
 		"-x", "x"}, testutil.CmdOpts{Dir: tmpDir})
 	require.NoError(t, err)
 

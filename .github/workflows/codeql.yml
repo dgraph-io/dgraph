@@ -18,7 +18,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: warp-ubuntu-latest-x64-16x
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 360
     permissions:
       security-events: write
@@ -33,7 +33,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3

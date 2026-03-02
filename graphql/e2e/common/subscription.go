@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
 )
 
 // Reference: https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md

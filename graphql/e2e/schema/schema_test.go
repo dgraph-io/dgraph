@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,17 +24,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/graphql/e2e/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var (
 	groupOneHTTP   = testutil.ContainerAddr("alpha1", 8080)
 	groupTwoHTTP   = testutil.ContainerAddr("alpha2", 8080)
 	groupThreeHTTP = testutil.ContainerAddr("alpha3", 8080)
-	groupOnegRPC   = testutil.SockAddr
+	groupOnegRPC   = testutil.GetSockAddr()
 
 	groupOneGraphQLServer   = "http://" + groupOneHTTP + "/graphql"
 	groupTwoGraphQLServer   = "http://" + groupTwoHTTP + "/graphql"
@@ -681,7 +681,7 @@ func TestDeleteSchemaAndExport(t *testing.T) {
 
 	require.Equal(t, "Success", testutil.JsonGet(data, "export", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false, testutil.GetSockAddrHttp())
 
 	// applying a new schema should still work
 	newSchemaResp := common.AssertUpdateGQLSchemaSuccess(t, groupOneHTTP, schema, nil)

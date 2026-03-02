@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,7 +28,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/zpages"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -39,18 +39,17 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
+	"github.com/dgraph-io/dgraph/v25/audit"
+	"github.com/dgraph-io/dgraph/v25/dgraph/cmd/mcp"
+	"github.com/dgraph-io/dgraph/v25/edgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/admin"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 	_ "github.com/dgraph-io/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/audit"
-	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/mcp"
-	"github.com/hypermodeinc/dgraph/v25/edgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/admin"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (
@@ -269,8 +268,12 @@ they form a Raft group and provide synchronous replication.
 		Head("Feature flags to enable various experimental features").
 		Flag("normalize-compatibility-mode", "configure @normalize response formatting."+
 			" 'v20': returns values with repeated key for fields with same alias (same as v20.11)."+
-			" For more details, see https://github.com/hypermodeinc/dgraph/pull/7639").
+			" For more details, see https://github.com/dgraph-io/dgraph/pull/7639").
 		Flag("enable-detailed-metrics", "Enable metrics about disk reads and cache per predicate").
+		Flag("log-slow-query-threshold", "Queries that take longer than this threshold will be logged "+
+			"with structured fields including trace ID for correlation with distributed traces. "+
+			"Disabled by default (0). Note: enabling this logs query text which may contain "+
+			"sensitive data; do not enable in deployments with strict data privacy requirements.").
 		String())
 }
 
@@ -457,7 +460,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
-		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
 	}
 	if tlsCfg != nil {
@@ -467,7 +470,6 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
-	apiv2.RegisterDgraphServer(s, &edgraph.ServerV25{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	worker.RegisterZeroProxyServer(s)
 
@@ -792,6 +794,7 @@ func run() {
 		worker.FeatureFlagsDefaults)
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
+	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
@@ -814,6 +817,7 @@ func run() {
 	posting.Init(worker.State.Pstore, postingListCacheSize, removeOnUpdate)
 	posting.SetEnabledDetailedMetrics(enableDetailedMetrics)
 	defer posting.Cleanup()
+
 	worker.Init(worker.State.Pstore)
 
 	// setup shutdown os signal handler

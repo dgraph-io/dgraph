@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,10 +23,10 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	badgerpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var (
@@ -55,9 +55,8 @@ func Init(ps *badger.DB) {
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(math.MaxInt32),
-		grpc.StatsHandler(otelgrpc.NewClientHandler()),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	}
-
 	if x.WorkerConfig.TLSServerConfig != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(x.WorkerConfig.TLSServerConfig)))
 	}
@@ -150,7 +149,9 @@ func UpdateCacheMb(memoryMB int64) error {
 	blockCacheSize := (cachePercent[1] * (memoryMB << 20)) / 100
 	indexCacheSize := (cachePercent[2] * (memoryMB << 20)) / 100
 
-	posting.UpdateMaxCost(plCacheSize)
+	if posting.MemLayerInstance != nil {
+		posting.MemLayerInstance.UpdateMaxCost(plCacheSize)
+	}
 	if _, err := pstore.CacheMaxCost(badger.BlockCache, blockCacheSize); err != nil {
 		return errors.Wrapf(err, "cannot update block cache size")
 	}

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"unsafe"
 
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/golang/glog"
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
 )
 
 // BytesAsFloatArray[T c.Float](encoded) converts encoded into a []T,

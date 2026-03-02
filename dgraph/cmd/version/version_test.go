@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,10 +12,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 // Test `dgraph version` with an empty config file.
+func TestMain(m *testing.M) {
+	m.Run()
+}
+
 func TestDgraphVersion(t *testing.T) {
 	tmpPath := t.TempDir()
 	configPath := filepath.Join(tmpPath, "config.yml")

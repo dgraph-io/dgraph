@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/systest/1million/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/systest/1million/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func Test1Million(t *testing.T) {
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if err := testutil.BulkLoad(testutil.BulkOpts{
-		Zero:       testutil.SockAddrZero,
+		Zero:       testutil.GetSockAddrZero(),
 		Shards:     1,
 		RdfFile:    rdfFile,
 		SchemaFile: noschemaFile,

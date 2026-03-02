@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,6 +57,14 @@ func GetTokens(id byte, funcArgs ...string) ([]string, error) {
 // GetTermTokens returns the term tokens for the given value.
 func GetTermTokens(funcArgs []string) ([]string, error) {
 	return GetTokens(IdentTerm, funcArgs...)
+}
+
+func GetNGramTokens(funcArgs []string, lang string) ([]string, error) {
+	return BuildTokens(funcArgs[0], NGramTokenizer{lang: lang})
+}
+
+func GetNGramQueryTokens(funcArgs []string, lang string) ([]string, error) {
+	return BuildNGramQueryTokens(funcArgs[0], NGramTokenizer{lang: lang})
 }
 
 // GetFullTextTokens returns the full-text tokens for the given value.

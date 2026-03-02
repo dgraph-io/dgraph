@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,16 +27,16 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/lex"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/lex"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (
@@ -390,7 +390,7 @@ const exportRequest = `mutation export($format: String!) {
 }`
 
 func TestExportFormat(t *testing.T) {
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	adminUrl := "http://" + testutil.GetSockAddrHttp() + "/admin"
 	require.NoError(t, testutil.CheckForGraphQLEndpointToReady(t))
 
 	params := testutil.GraphQLParams{
@@ -407,7 +407,7 @@ func TestExportFormat(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false, testutil.GetSockAddrHttp())
 
 	params.Variables["format"] = "rdf"
 	b, err = json.Marshal(params)

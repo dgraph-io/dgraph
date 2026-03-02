@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,8 +12,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type phase int32
@@ -56,13 +56,12 @@ func (p *progress) setPhase(ph phase) {
 }
 
 func (p *progress) report() {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
+	t := time.Tick(time.Second)
 
 	z.StatsPrint() // Just print once.
 	for {
 		select {
-		case <-t.C:
+		case <-t:
 			p.reportOnce()
 		case <-p.shutdown:
 			p.shutdown <- struct{}{}

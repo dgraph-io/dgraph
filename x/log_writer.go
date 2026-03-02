@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,7 +28,7 @@ const (
 	backupTimeFormat = "2006-01-02T15-04-05.000"
 	bufferSize       = 256 * 1024
 	flushInterval    = 10 * time.Second
-	//  old logs before https://github.com/hypermodeinc/dgraph/pull/8323 contain deprecated verification text in header
+	//  old logs before https://github.com/dgraph-io/dgraph/pull/8323 contain deprecated verification text in header
 	VerificationTextDeprecated = "Hello World"
 	VerificationText           = "dlroW olloH"
 )
@@ -43,12 +43,11 @@ type LogWriter struct {
 	Compress      bool
 	EncryptionKey []byte
 
-	mu          sync.Mutex
-	size        int64
-	file        *os.File
-	writer      *bufio.Writer
-	flushTicker *time.Ticker
-	closer      *z.Closer
+	mu     sync.Mutex
+	size   int64
+	file   *os.File
+	writer *bufio.Writer
+	closer *z.Closer
 	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
@@ -76,7 +75,6 @@ func (l *LogWriter) Init() (*LogWriter, error) {
 		}
 	}()
 
-	l.flushTicker = time.NewTicker(flushInterval)
 	go l.flushPeriodic()
 	return l, nil
 }
@@ -138,7 +136,6 @@ func (l *LogWriter) Close() error {
 		return nil
 	}
 	l.flush()
-	l.flushTicker.Stop()
 	close(l.manageChannel)
 	_ = l.file.Close()
 	l.writer = nil
@@ -151,10 +148,11 @@ func (l *LogWriter) flushPeriodic() {
 	if l == nil {
 		return
 	}
+	ticker := time.Tick(flushInterval)
 	defer l.closer.Done()
 	for {
 		select {
-		case <-l.flushTicker.C:
+		case <-ticker:
 			l.mu.Lock()
 			l.flush()
 			l.mu.Unlock()

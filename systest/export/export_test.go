@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,8 +26,12 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
+
+func TestMain(m *testing.M) {
+	m.Run()
+}
 
 var (
 	bucketName    = "dgraph-backup"
@@ -120,7 +124,7 @@ func TestExportAndLoadJson(t *testing.T) {
 	require.JSONEq(t, `{"data":{"q":[{"count": 5}]}}`, res)
 
 	// Drop all data
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.GetSockAddr())
 	require.NoError(t, err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
@@ -201,7 +205,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 	checkRes()
 
 	// Drop all data
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.GetSockAddr())
 	require.NoError(t, err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 
@@ -222,7 +226,7 @@ func TestExportAndLoadJsonFacets(t *testing.T) {
 }
 
 func runQuery(t *testing.T, q string) string {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.GetSockAddr())
 	require.NoError(t, err)
 
 	resp, err := testutil.RetryQuery(dg, q)
@@ -248,7 +252,7 @@ func loadData(t *testing.T, dir, format string) {
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live",
 			"-s", schemaFile, "-f", dataFile, "--alpha",
-			testutil.SockAddr, "--zero", testutil.SockAddrZero,
+			testutil.GetSockAddr(), "--zero", testutil.GetSockAddrZero(),
 		},
 	}
 	_, err := testutil.Pipeline(pipeline)
@@ -266,7 +270,7 @@ func dirCleanup(t *testing.T) {
 
 func setupDgraph(t *testing.T, nquads, schema string) {
 	require.NoError(t, os.MkdirAll("./data", os.ModePerm))
-	conn, err := grpc.NewClient(testutil.SockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(testutil.GetSockAddr(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
@@ -295,7 +299,7 @@ func requestExport(t *testing.T, dest string, format string) {
 		}
 	}`
 
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	adminUrl := "http://" + testutil.GetSockAddrHttp() + "/admin"
 	params := testutil.GraphQLParams{
 		Query: exportRequest,
 		Variables: map[string]interface{}{
@@ -313,5 +317,5 @@ func requestExport(t *testing.T, dest string, format string) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "data", "export", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "data", "export", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false, testutil.GetSockAddrHttp())
 }

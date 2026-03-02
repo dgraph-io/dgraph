@@ -1,7 +1,7 @@
 //go:build integration2
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -20,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/dgraphtest"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func TestCheckUpgrade(t *testing.T) {
@@ -81,7 +80,7 @@ func TestCheckUpgrade(t *testing.T) {
 		"--namespace", "1",
 	}
 
-	cmd := exec.Command(filepath.Join(c1.GetTempDir(), "dgraph"), args...)
+	cmd := exec.Command(c1.HostDgraphBinaryPath(), args...)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err)
 	actualOutput := string(out)
@@ -101,7 +100,7 @@ func TestQueryDuplicateNodes(t *testing.T) {
 		WithACL(time.Hour).WithVersion("57aa5c4ac").WithAclAlg(jwt.GetSigningMethod("HS256"))
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
-	// defer func() { c.Cleanup(t.Failed()) }()
+	defer func() { c.Cleanup(t.Failed()) }()
 	require.NoError(t, c.Start())
 	gc, cleanup, err := c.Client()
 	require.NoError(t, err)

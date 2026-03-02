@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,7 +22,7 @@ var (
 )
 
 const (
-	dgraphRepoUrl = "https://github.com/hypermodeinc/dgraph.git"
+	dgraphRepoUrl = "https://github.com/dgraph-io/dgraph.git"
 	cloneTimeout  = 10 * time.Minute
 )
 

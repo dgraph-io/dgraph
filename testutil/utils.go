@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func RootNsSchemaKey(attr string) []byte {
@@ -129,10 +129,9 @@ func JsonGet(j interface{}, components ...string) interface{} {
 }
 
 func PollTillPassOrTimeout(t *testing.T, dc *dgo.Dgraph, query, want string, timeout time.Duration) {
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Millisecond)
 	to := time.NewTimer(timeout)
-	defer to.Stop()
+
 	for {
 		select {
 		case <-to.C:
@@ -140,7 +139,7 @@ func PollTillPassOrTimeout(t *testing.T, dc *dgo.Dgraph, query, want string, tim
 			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
 			DiffJSONMaps(t, wantMap, gotMap, "", false)
 			return // timeout
-		case <-ticker.C:
+		case <-ticker:
 			wantMap := UnmarshalJSON(t, want)
 			gotMap := UnmarshalJSON(t, string(QueryData(t, dc, query)))
 			if DiffJSONMaps(t, wantMap, gotMap, "", true) {

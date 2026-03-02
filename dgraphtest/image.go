@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -21,12 +22,25 @@ import (
 
 var (
 	cloneOnce sync.Once
+	gitMutex  sync.Mutex // Protects git operations on shared repoDir
 )
 
 func (c *LocalCluster) dgraphImage() string {
 	return "dgraph/dgraph:local"
 }
 
+// setupBinary sets up dgraph binaries in tempBinDir.
+//
+// On Linux a single "dgraph" binary from $GOPATH/bin serves both Docker
+// containers and local commands (bulk/live loader).
+//
+// On non-Linux (macOS) two binaries are placed in tempBinDir:
+//   - "dgraph"      – a Linux binary for Docker containers, from
+//     $GOPATH/linux_<arch> (or LINUX_GOBIN if set).
+//   - "dgraph_host" – the host-native binary for local commands,
+//     from $GOPATH/bin.
+//
+// Both are produced by "make install".
 func (c *LocalCluster) setupBinary() error {
 	if err := ensureDgraphClone(); err != nil {
 		panic(err)
@@ -39,11 +53,53 @@ func (c *LocalCluster) setupBinary() error {
 		}
 	}
 	if c.conf.version == localVersion {
-		fromDir := filepath.Join(os.Getenv("GOPATH"), "bin")
-		return copyBinary(fromDir, c.tempBinDir, c.conf.version)
+		gopath := os.Getenv("GOPATH")
+		if gopath == "" {
+			return errors.New("GOPATH is not set")
+		}
+
+		if runtime.GOOS == "linux" {
+			// On Linux $GOPATH/bin/dgraph is both the native and Docker binary.
+			return copyBinary(filepath.Join(gopath, "bin"), c.tempBinDir, c.conf.version)
+		}
+
+		// Non-Linux (macOS): need separate Linux and host-native binaries.
+		// 1. Copy the Linux binary (for Docker containers) as "dgraph".
+		linuxDir := os.Getenv("LINUX_GOBIN")
+		if linuxDir == "" {
+			linuxDir = filepath.Join(gopath, "linux_"+runtime.GOARCH)
+		}
+		if err := copyBinary(linuxDir, c.tempBinDir, c.conf.version); err != nil {
+			return err
+		}
+
+		// 2. Copy the host-native binary (for local bulk/live commands) as "dgraph_host".
+		hostSrc := filepath.Join(gopath, "bin", "dgraph")
+
+		hostDst := filepath.Join(c.tempBinDir, "dgraph_host")
+		if err := copy(hostSrc, hostDst); err != nil {
+			return errors.Wrapf(err, "error copying host-native binary from [%v] to [%v]", hostSrc, hostDst)
+		}
+		return nil
 	}
 
-	isFileThere, err := fileExists(filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version)))
+	binaryPath := filepath.Join(binariesPath, fmt.Sprintf(binaryNameFmt, c.conf.version))
+
+	// First check without lock (fast path)
+	isFileThere, err := fileExists(binaryPath)
+	if err != nil {
+		return err
+	}
+	if isFileThere {
+		return copyBinary(binariesPath, c.tempBinDir, c.conf.version)
+	}
+
+	// Lock git operations to prevent parallel tests from conflicting
+	gitMutex.Lock()
+	defer gitMutex.Unlock()
+
+	// Double-check after acquiring lock - another parallel test may have built it
+	isFileThere, err = fileExists(binaryPath)
 	if err != nil {
 		return err
 	}
@@ -87,7 +143,7 @@ func runGitClone() error {
 	// a copy of this folder by running git clone using this already cloned dgraph
 	// repo. After the quick clone, we update the original URL to point to the
 	// GitHub dgraph repo and perform a "git fetch".
-	log.Printf("[INFO] cloning dgraph repo from [%v]", baseRepoDir)
+	log.Printf("[INFO] cloning dgraph repo from [%v] to [%v]", baseRepoDir, repoDir)
 	cmd := exec.Command("git", "clone", baseRepoDir, repoDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error cloning dgraph repo\noutput:%v", string(out))
@@ -154,6 +210,7 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 
 	cmd := exec.Command("make", "dgraph")
 	cmd.Dir = filepath.Join(dir, "dgraph")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error while building dgraph binary\noutput:%v", string(out))
 	}
@@ -190,6 +247,16 @@ func copy(src, dst string) error {
 	}
 	if !sourceFileStat.Mode().IsRegular() {
 		return errors.Errorf("%s is not a regular file", src)
+	}
+
+	// Check if destination already exists and matches source size
+	if destStat, err := os.Stat(dst); err == nil {
+		if destStat.Size() == sourceFileStat.Size() {
+			log.Printf("[INFO] destination file %s already exists with matching size, skipping copy", dst)
+			return nil
+		}
+		log.Printf("[WARNING] destination file %s exists but size mismatch (source=%d, dest=%d), will overwrite",
+			dst, sourceFileStat.Size(), destStat.Size())
 	}
 
 	// Open source file

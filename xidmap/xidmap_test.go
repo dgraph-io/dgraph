@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,9 +21,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // Opens a badger db and runs a a test on it.
@@ -46,7 +46,7 @@ func getTestXidmapOpts(conn *grpc.ClientConn, db *badger.DB) XidMapOptions {
 }
 
 func TestXidmap(t *testing.T) {
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
@@ -100,15 +100,15 @@ func TestXidmapMemory(t *testing.T) {
 		fmt.Printf(" Loop = %.2fM", float64(atomic.LoadUint32(&loop))/1e6)
 		fmt.Printf(" NumGC = %v\n", m.NumGC)
 	}
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
+
 	go func() {
-		for range ticker.C {
+		for range ticker {
 			printMemory()
 		}
 	}()
 
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
@@ -154,7 +154,7 @@ func TestXidmapMemory(t *testing.T) {
 // BenchmarkXidmapReadsRandom-16		428ns ± 2%
 
 func BenchmarkXidmapWrites(b *testing.B) {
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	if err != nil {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
@@ -173,7 +173,7 @@ func BenchmarkXidmapWrites(b *testing.B) {
 }
 
 func BenchmarkXidmapWritesRandom(b *testing.B) {
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	if err != nil {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
@@ -194,7 +194,7 @@ func BenchmarkXidmapWritesRandom(b *testing.B) {
 }
 
 func BenchmarkXidmapReads(b *testing.B) {
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	if err != nil {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}
@@ -216,7 +216,7 @@ func BenchmarkXidmapReads(b *testing.B) {
 }
 
 func BenchmarkXidmapReadsRandom(b *testing.B) {
-	conn, err := x.SetupConnection(testutil.SockAddrZero, nil, false)
+	conn, err := x.SetupConnection(testutil.GetSockAddrZero(), nil, false)
 	if err != nil {
 		b.Fatalf("Error setting up connection: %s", err.Error())
 	}

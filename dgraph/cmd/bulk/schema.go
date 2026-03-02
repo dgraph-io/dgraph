@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,11 +14,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	wk "github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	wk "github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type schemaStore struct {
@@ -72,6 +72,32 @@ func (s *schemaStore) setSchemaAsList(pred string) {
 		return
 	}
 	sch.List = true
+}
+
+// hasVectorIndex returns the vector index specs for a predicate if it has any.
+// Returns nil if the predicate doesn't have vector indexes.
+func (s *schemaStore) hasVectorIndex(pred string) bool {
+	s.RLock()
+	defer s.RUnlock()
+	sch, ok := s.schemaMap[pred]
+	if !ok || sch == nil {
+		return false
+	}
+	return len(sch.IndexSpecs) > 0
+}
+
+// getVectorIndexSpecs returns a map of predicate to VectorIndexSpec for all predicates
+// that have vector indexes. This is used to initialize vector indexers during reduce.
+func (s *schemaStore) getVectorIndexSpecs() map[string]*pb.VectorIndexSpec {
+	s.RLock()
+	defer s.RUnlock()
+	result := make(map[string]*pb.VectorIndexSpec)
+	for pred, sch := range s.schemaMap {
+		if sch != nil && len(sch.IndexSpecs) > 0 {
+			result[pred] = sch.IndexSpecs[0]
+		}
+	}
+	return result
 }
 
 // checkAndSetInitialSchema initializes the schema for namespace if it does not already exist.

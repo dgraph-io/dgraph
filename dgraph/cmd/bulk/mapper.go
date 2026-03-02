@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,16 +24,16 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/acl"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/acl"
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 var (
@@ -221,9 +221,12 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 	chunk := chunker.NewChunker(inputFormat, 1000)
 	nquads := chunk.NQuads()
 	go func() {
-		for chunkBuf := range m.readerChunkCh {
-			if err := chunk.Parse(chunkBuf); err != nil {
+		for chunkMeta := range m.readerChunkCh {
+			if err := chunk.Parse(chunkMeta.buf); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
+				if m.errorLog != nil {
+					m.errorLog.Log(chunkMeta.filename, err, "")
+				}
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}
@@ -250,6 +253,9 @@ func (m *mapper) run(inputFormat chunker.InputFormat) {
 		for _, nq := range nqs {
 			if err := facets.SortAndValidate(nq.Facets); err != nil {
 				atomic.AddInt64(&m.prog.errCount, 1)
+				if m.errorLog != nil {
+					m.errorLog.Log("<facet_validation>", err, fmt.Sprintf("subject=%s predicate=%s", nq.Subject, nq.Predicate))
+				}
 				if !m.opt.IgnoreErrors {
 					x.Check(err)
 				}

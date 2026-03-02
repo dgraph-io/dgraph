@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,11 +18,11 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/raftwal"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/raftwal"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // TaskStatusOverNetwork fetches the status of a task over the network. Alphas only know about the
@@ -210,8 +210,8 @@ func (t *tasks) get(id uint64) (TaskMeta, error) {
 
 // worker loops forever, running queued tasks one at a time. Any returned errors are logged.
 func (t *tasks) worker() {
-	shouldCleanup := time.NewTicker(time.Hour)
-	defer shouldCleanup.Stop()
+	shouldCleanup := time.Tick(time.Hour)
+
 	for {
 		// If the server is shutting down, return immediately. Else, fetch a task from the queue.
 		var task taskRequest
@@ -221,7 +221,7 @@ func (t *tasks) worker() {
 				glog.Warningf("error closing log file: %v", err)
 			}
 			return
-		case <-shouldCleanup.C:
+		case <-shouldCleanup:
 			t.cleanup()
 		case task = <-t.queue:
 			if err := t.run(task); err != nil {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,11 +16,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
@@ -121,12 +121,11 @@ func verifyUid(ctx context.Context, uid uint64) error {
 		return nil
 	}
 	deadline := time.Now().Add(3 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.Tick(100 * time.Millisecond)
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			lease := worker.MaxLeaseId()
 			if uid <= lease {
 				return nil

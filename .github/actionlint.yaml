@@ -1,0 +1,27 @@
+self-hosted-runner:
+  # Define custom labels for Blacksmith runners
+  # Ubuntu 24.04 x64 runners
+  labels:
+    - blacksmith-2vcpu-ubuntu-2404
+    - blacksmith-4vcpu-ubuntu-2404
+    - blacksmith-8vcpu-ubuntu-2404
+    - blacksmith-16vcpu-ubuntu-2404
+    - blacksmith-32vcpu-ubuntu-2404
+    # Ubuntu 24.04 ARM runners
+    - blacksmith-2vcpu-ubuntu-2404-arm
+    - blacksmith-4vcpu-ubuntu-2404-arm
+    - blacksmith-8vcpu-ubuntu-2404-arm
+    - blacksmith-16vcpu-ubuntu-2404-arm
+    - blacksmith-32vcpu-ubuntu-2404-arm
+    # Ubuntu 22.04 x64 runners
+    - blacksmith-2vcpu-ubuntu-2204
+    - blacksmith-4vcpu-ubuntu-2204
+    - blacksmith-8vcpu-ubuntu-2204
+    - blacksmith-16vcpu-ubuntu-2204
+    - blacksmith-32vcpu-ubuntu-2204
+    # Ubuntu 22.04 ARM runners
+    - blacksmith-2vcpu-ubuntu-2204-arm
+    - blacksmith-4vcpu-ubuntu-2204-arm
+    - blacksmith-8vcpu-ubuntu-2204-arm
+    - blacksmith-16vcpu-ubuntu-2204-arm
+    - blacksmith-32vcpu-ubuntu-2204-arm

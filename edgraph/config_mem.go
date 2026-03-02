@@ -3,7 +3,7 @@
 // +build cgo
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 package edgraph
 
 import (
-	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/worker"
 )
 
 // #include <unistd.h>

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,9 +17,9 @@ import (
 	"github.com/pkg/errors"
 
 	dgoapi "github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (
@@ -1321,7 +1321,7 @@ func asIDReference(
 //
 // Currently adds enforce the schema ! restrictions, but updates don't.
 // e.g. a Post might have `title: String!“ in the schema, but,  a Post update could
-// set that to to null. ATM we allow this and it'll just triggers GraphQL error propagation
+// set that to null. ATM we allow this and it'll just triggers GraphQL error propagation
 // when that is in a query result.  This is the same case as deletes: e.g. deleting
 // an author might make the `author: Author!` field of a bunch of Posts invalid.
 // (That might actually be helpful if you want to run one mutation to remove something

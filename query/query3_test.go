@@ -1,7 +1,7 @@
 //go:build integration || cloud || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestRecurseError(t *testing.T) {
@@ -348,7 +348,7 @@ func TestKShortestPathWeighted(t *testing.T) {
 		          "path|weight": 0.1
 		        },
 		        "uid": "0x1",
-		        "_weight_": 0.3
+		        "_weight_": 0.30000000000000004
 		      }
 		    ]
 		  }
@@ -385,7 +385,7 @@ func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
 		          "path|weight": 0.1
 		        },
 		        "uid": "0x1",
-		        "_weight_": 0.3
+		        "_weight_": 0.30000000000000004
 		      }
 		    ]
 		  }
@@ -946,7 +946,7 @@ func TestShortestPathRev(t *testing.T) {
 		js)
 }
 
-// Regression test for https://github.com/hypermodeinc/dgraph/issues/3657.
+// Regression test for https://github.com/dgraph-io/dgraph/issues/3657.
 func TestShortestPathPassword(t *testing.T) {
 	query := `
 		{
@@ -1572,7 +1572,7 @@ func TestFacetVarRetrieval(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"val(f)":0.200000}]}}`,
+		`{"data": {"me":[{"val(f)":0.2}]}}`,
 		js)
 }
 
@@ -1592,7 +1592,7 @@ func TestFacetVarRetrieveOrder(t *testing.T) {
 		}`
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Andrea","val(f)":0.100000},{"name":"Glenn Rhee","val(f)":0.200000}]}}`,
+		`{"data": {"me":[{"name":"Andrea","val(f)":0.1},{"name":"Glenn Rhee","val(f)":0.2}]}}`,
 		js)
 }
 
@@ -2257,7 +2257,7 @@ func TestMinSchema(t *testing.T) {
         `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000},{"survival_rate":1.600000}],"min(val(x))":1.600000}]}}`,
+		`{"data": {"me":[{"name":"Michonne","gender":"female","alive":true,"friend":[{"survival_rate":1.6},{"survival_rate":1.6},{"survival_rate":1.6},{"survival_rate":1.6}],"min(val(x))":1.6}]}}`,
 		js)
 
 	setSchema(`survival_rate: int .`)
@@ -2286,7 +2286,7 @@ func TestAvg(t *testing.T) {
 `
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t,
-		`{"data": {"me":[{"alive":true,"avg(val(x))":9.000000,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}}`,
+		`{"data": {"me":[{"alive":true,"avg(val(x))":9,"friend":[{"shadow_deep":4},{"shadow_deep":14}],"gender":"female","name":"Michonne"}]}}`,
 		js)
 }
 
@@ -3221,7 +3221,7 @@ func TestMultiRegexInFilter2(t *testing.T) {
 	`
 
 	// run 20 times ensure that there is no data race
-	// https://github.com/hypermodeinc/dgraph/issues/4030
+	// https://github.com/dgraph-io/dgraph/issues/4030
 	for i := 0; i < 20; i++ {
 		res := processQueryNoErr(t, query)
 		require.JSONEq(t, `{"data": {"q": [{"firstName": "Han", "lastName":"Solo"}]}}`, res)

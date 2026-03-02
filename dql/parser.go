@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,10 +15,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/lex"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/lex"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (
@@ -1232,7 +1232,7 @@ func getSchema(it *lex.ItemIterator) (*pb.SchemaRequest, error) {
 	return nil, it.Errorf("Invalid schema block.")
 }
 
-// parseDqlVariables parses the the DQL variable declaration.
+// parseDqlVariables parses the DQL variable declaration.
 func parseDqlVariables(it *lex.ItemIterator, vmap varMap) error {
 	expectArg := true
 	if item, ok := it.PeekOne(); ok && item.Typ == itemRightRound {
@@ -1700,7 +1700,7 @@ func validFuncName(name string) bool {
 	}
 
 	switch name {
-	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext",
+	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext", "ngram",
 		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to":
 		return true
 	}
@@ -1745,6 +1745,10 @@ L:
 
 		name := collectName(it, item.Val)
 		function.Name = strings.ToLower(name)
+		var similarToOptSeen map[string]struct{}
+		if function.Name == similarToFn {
+			similarToOptSeen = make(map[string]struct{})
+		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
@@ -1820,7 +1824,7 @@ L:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
 				case uidFunc:
-					// TODO (Anurag): See if is is possible to support uid(1,2,3) when
+					// TODO (Anurag): See if it is possible to support uid(1,2,3) when
 					// uid is nested inside a function like @filter(uid_in(predicate, uid()))
 					if len(nestedFunc.NeedsVar) != 1 {
 						return nil,
@@ -1874,7 +1878,10 @@ L:
 				case IsInequalityFn(function.Name):
 					err = parseFuncArgs(it, function)
 
-				case function.Name == "uid_in" || function.Name == "similar_to":
+				case function.Name == "uid_in":
+					err = parseFuncArgs(it, function)
+
+				case function.Name == "similar_to":
 					err = parseFuncArgs(it, function)
 
 				default:
@@ -1892,7 +1899,87 @@ L:
 				}
 				expectArg = false
 				continue
+			case itemLeftCurl:
+				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007B '{'")
+			case itemRightCurl:
+				// Right curly braces are never valid in function arguments outside of
+				// the (unsupported) object literal syntax. Always error on stray '}'.
+				return nil, itemInFunc.Errorf("Unrecognized character inside a func: U+007D '}'")
 			default:
+				// similar_to supports named optional parameters after the 3rd positional argument:
+				// similar_to(pred, k, vec, ef: 64, distance_threshold: 0.5)
+				//
+				// Internally we represent each option as two args appended after k and vec:
+				// ["ef", "64", "distance_threshold", "0.5", ...]
+				if itemInFunc.Typ == itemName && function.Name == similarToFn &&
+					function.Attr != "" && len(function.Args) >= 2 {
+					next, ok := it.PeekOne()
+					if ok && next.Typ == itemColon {
+						key := strings.ToLower(collectName(it, itemInFunc.Val))
+						switch key {
+						case "ef", "distance_threshold":
+						default:
+							return nil, itemInFunc.Errorf("Unknown option %q in similar_to", key)
+						}
+						if _, exists := similarToOptSeen[key]; exists {
+							return nil, itemInFunc.Errorf("Duplicate key %q in similar_to options", key)
+						}
+						similarToOptSeen[key] = struct{}{}
+
+						if ok := trySkipItemTyp(it, itemColon); !ok {
+							return nil, it.Errorf("Expected colon(:) after %s", key)
+						}
+						if !it.Next() {
+							return nil, it.Errorf("Expected value for %s", key)
+						}
+						valItem := it.Item()
+						switch valItem.Typ {
+						case itemDollar:
+							varName, err := parseVarName(it)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: varName, IsDQLVar: true})
+						case itemMathOp:
+							// Allow signed numeric literals, e.g. distance_threshold: -0.5
+							prefix := valItem.Val
+							if !it.Next() {
+								return nil, it.Errorf("Expected value after %s for %s", prefix, key)
+							}
+							valItem = it.Item()
+							if valItem.Typ != itemName {
+								return nil, valItem.Errorf("Expected value for %s", key)
+							}
+							v := collectName(it, valItem.Val)
+							v = strings.Trim(v, " \t")
+							uq, err := unquoteIfQuoted(v)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: prefix + uq})
+						default:
+							if valItem.Typ != itemName {
+								return nil, valItem.Errorf("Expected value for %s", key)
+							}
+							v := collectName(it, valItem.Val)
+							v = strings.Trim(v, " \t")
+							uq, err := unquoteIfQuoted(v)
+							if err != nil {
+								return nil, err
+							}
+							function.Args = append(function.Args, Arg{Value: key})
+							function.Args = append(function.Args, Arg{Value: uq})
+						}
+
+						expectArg = false
+						continue
+					}
+
+					// Disallow extra positional args after (k, vec). Options must be named.
+					return nil, itemInFunc.Errorf("Expected named parameter in similar_to options (e.g. ef: 64)")
+				}
 				if itemInFunc.Typ != itemName {
 					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
 						function.Name, itemInFunc)
@@ -2408,6 +2495,10 @@ loop:
 				// The parentheses are balanced out. Let's break.
 				break loop
 			}
+		case item.Typ == itemLeftCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007B '{'")
+		case item.Typ == itemRightCurl:
+			return nil, item.Errorf("Unrecognized character inside a func: U+007D '}'")
 		default:
 			return nil, item.Errorf("Unexpected item while parsing @filter: %v", item)
 		}

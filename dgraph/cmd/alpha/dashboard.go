@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type keyword struct {
@@ -85,6 +85,7 @@ func keywordHandler(w http.ResponseWriter, r *http.Request) {
 		"min",
 		"mutation",
 		"near",
+		"ngram",
 		"not",
 		"offset",
 		"or",

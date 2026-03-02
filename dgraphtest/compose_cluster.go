@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 type ComposeCluster struct{}
@@ -21,7 +21,7 @@ func NewComposeCluster() *ComposeCluster {
 }
 
 func (c *ComposeCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
-	dg, err := dgo.NewClient(testutil.SockAddr,
+	dg, err := dgo.NewClient(testutil.GetSockAddr(),
 		dgo.WithGrpcOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
 	if err != nil {
 		return nil, nil, err
@@ -31,7 +31,7 @@ func (c *ComposeCluster) Client() (*dgraphapi.GrpcClient, func(), error) {
 
 // HTTPClient creates an HTTP client
 func (c *ComposeCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
-	httpClient, err := dgraphapi.GetHttpClient(testutil.SockAddrHttp, testutil.SockAddrZeroHttp)
+	httpClient, err := dgraphapi.GetHttpClient(testutil.GetSockAddrHttp(), testutil.GetSockAddrZeroHttp())
 	if err != nil {
 		return nil, err
 	}

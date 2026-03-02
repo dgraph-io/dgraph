@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,14 +20,14 @@ import (
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 
+	"github.com/dgraph-io/dgraph/v25/audit"
+	"github.com/dgraph-io/dgraph/v25/edgraph"
+	"github.com/dgraph-io/dgraph/v25/graphql/api"
+	"github.com/dgraph-io/dgraph/v25/graphql/resolve"
+	"github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/graphql/subscription"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
-	"github.com/hypermodeinc/dgraph/v25/audit"
-	"github.com/hypermodeinc/dgraph/v25/edgraph"
-	"github.com/hypermodeinc/dgraph/v25/graphql/api"
-	"github.com/hypermodeinc/dgraph/v25/graphql/resolve"
-	"github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/graphql/subscription"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type Headerkey string
@@ -183,7 +183,7 @@ func (gs *graphqlSubscription) Subscribe(
 
 	audit.AuditWebSockets(ctx, req)
 	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
-	glog.Infof("namespace: %d. Got GraphQL request over websocket.", namespace)
+	glog.V(2).Infof("namespace: %d. Got GraphQL request over HTTP.", namespace)
 	// first load the schema, then do anything else
 	if err := LazyLoadSchema(namespace); err != nil {
 		return nil, err
@@ -225,7 +225,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	ns, _ := strconv.ParseUint(r.Header.Get("resolver"), 10, 64)
-	glog.Infof("namespace: %d. Got GraphQL request over HTTP.", ns)
+	glog.V(2).Infof("namespace: %d. Got GraphQL request over HTTP.", ns)
 	if err := gh.isValid(ns); err != nil {
 		glog.Errorf("namespace: %d. graphqlHandler not initialised: %s", ns, err)
 		WriteErrorResponse(w, r, errors.New(resolve.ErrInternal))

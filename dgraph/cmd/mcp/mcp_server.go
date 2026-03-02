@@ -12,8 +12,8 @@ import (
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
 
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/x"
 
 	"github.com/golang/glog"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -182,7 +182,7 @@ func NewMCPServer(connectionString string, readOnly bool) (*server.MCPServer, er
 			if err != nil {
 				return mcp.NewToolResultErrorFromErr("Error opening connection with Dgraph Alpha", err), nil
 			}
-			if err = conn.SetSchema(ctx, dgo.RootNamespace, schema); err != nil {
+			if err = conn.SetSchema(ctx, schema); err != nil {
 				return mcp.NewToolResultErrorFromErr("Schema alteration failed", err), nil
 			}
 

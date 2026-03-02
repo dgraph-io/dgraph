@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,8 +24,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var (
@@ -251,7 +251,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			  }
 			}`,
 	}
-	token := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
+	token := testutil.GrootHttpLogin("http://" + testutil.GetSockAddrHttp() + "/admin")
 	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, token.AccessJwt)
 	require.Nilf(t, resp.Errors, resp.Errors.Error())
 
@@ -351,8 +351,8 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	alphaService = testutil.GetSockAddr()
 	alphaName = testutil.Instance
-	alphaService = testutil.SockAddr
 
 	x.AssertTrue(strings.Count(alphaName, "_") == 2)
 	left := strings.Index(alphaName, "_")
@@ -365,7 +365,7 @@ func TestMain(m *testing.M) {
 	fmt.Printf("Using test data dir: %s\n", testDataDir)
 
 	var err error
-	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err = testutil.DgraphClientWithGroot(testutil.GetSockAddr())
 	if err != nil {
 		log.Fatalf("Error while getting a dgraph client: %v", err)
 	}

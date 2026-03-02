@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,14 +17,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/client"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
 )
 
 func TestRemoveNode(t *testing.T) {
@@ -41,7 +42,7 @@ func TestRemoveNode(t *testing.T) {
 
 func TestIdLeaseOverflow(t *testing.T) {
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	con, err := grpc.NewClient(testutil.SockAddrZero, dialOpts...)
+	con, err := grpc.NewClient(testutil.GetSockAddrZero(), dialOpts...)
 	require.NoError(t, err)
 	zc := pb.NewZeroClient(con)
 
@@ -55,7 +56,7 @@ func TestIdLeaseOverflow(t *testing.T) {
 
 func TestIdBump(t *testing.T) {
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	con, err := grpc.NewClient(testutil.SockAddrZero, dialOpts...)
+	con, err := grpc.NewClient(testutil.GetSockAddrZero(), dialOpts...)
 	require.NoError(t, err)
 	zc := pb.NewZeroClient(con)
 
@@ -153,4 +154,39 @@ func TestZeroHealth(t *testing.T) {
 	body, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, string(body), "OK")
+}
+
+func TestZeroGracefulShutdown(t *testing.T) {
+	// This test verifies that Zero shuts down cleanly without hanging.
+	// It catches issues like closer miscount bugs where SignalAndWait() would block indefinitely.
+
+	instance := testutil.GetContainerInstance(testutil.DockerPrefix, "zero1")
+	c := instance.GetContainer()
+	require.NotNil(t, c, "zero1 container not found")
+
+	containerID := c.ID
+
+	startTime := time.Now()
+	err := testutil.DockerRun("zero1", testutil.Stop)
+	shutdownDuration := time.Since(startTime)
+
+	require.NoError(t, err, "Failed to stop zero1 container")
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+
+	inspect, err := cli.ContainerInspect(context.Background(), containerID)
+	require.NoError(t, err)
+	require.False(t, inspect.State.Running, "Container should not be running after stop")
+
+	if inspect.State.ExitCode == 137 {
+		t.Errorf("Zero was killed (exit code 137) instead of shutting down gracefully. "+
+			"This may indicate a hanging goroutine or closer miscount. Shutdown took %v", shutdownDuration)
+	}
+
+	// Restart the container so other tests can continue
+	err = testutil.DockerRun("zero1", testutil.Start)
+	require.NoError(t, err, "Failed to restart zero1 container")
+
+	err = instance.BestEffortWaitForHealthy(6080)
+	require.NoError(t, err, "Zero did not become healthy after restart")
 }

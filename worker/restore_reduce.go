@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,9 +24,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4/y"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (
@@ -143,8 +143,7 @@ func RunReducer(w Writer, mapDir string) error {
 func (r *reducer) Progress(closer *z.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	start := time.Now()
 	update := func() {
@@ -163,7 +162,7 @@ func (r *reducer) Progress(closer *z.Closer) {
 			update()
 			glog.Infof("Restore REDUCE Done in %s.\n", x.FixedDuration(time.Since(start)))
 			return
-		case <-ticker.C:
+		case <-ticker:
 			update()
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -843,4 +843,23 @@ func TestConvertToString(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, Val{Tid: StringID, Value: tc.out}, out)
 	}
+}
+
+// TestObjectValuePasswordErrorDoesNotLeakValue ensures that when ObjectValue receives
+// an invalid type for a password field, the error message doesn't contain the actual value.
+func TestObjectValuePasswordErrorDoesNotLeakValue(t *testing.T) {
+	// Create a test value that would be sensitive if logged
+	sensitivePassword := int64(123456789)
+
+	// Call ObjectValue with wrong type (int64 instead of string) for password
+	_, err := ObjectValue(PasswordID, sensitivePassword)
+
+	// Verify error occurred
+	require.Error(t, err)
+
+	// Verify the error message contains type info but NOT the actual value
+	errMsg := err.Error()
+	require.Contains(t, errMsg, "Expected value of type password")
+	require.Contains(t, errMsg, "int64")        // type should be present
+	require.NotContains(t, errMsg, "123456789") // actual value should NOT be present
 }

@@ -1,0 +1,41 @@
+name: ci-dgraph-nightly-cves
+
+on:
+  schedule:
+    - cron: 0 0 * * * # Run daily at midnight UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  cve-scan:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build Dgraph
+        run: make dgraph
+
+      - name: Build Docker image
+        run: |
+          mkdir -p linux
+          cp ./dgraph/dgraph ./linux/dgraph
+          docker build -f contrib/Dockerfile -t dgraph/dgraph:nightly-scan .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: dgraph/dgraph:nightly-scan
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH

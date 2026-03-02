@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestAccessOverPlaintext(t *testing.T) {
-	dg, err := testutil.DgraphClient(testutil.SockAddr)
+	dg, err := testutil.DgraphClient(testutil.GetSockAddr())
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestAccessWithCaCert(t *testing.T) {
 		// server-name
 		"node"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddr, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.GetSockAddr(), conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	for i := 0; i < 20; i++ {
 		err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
@@ -56,7 +56,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 	// curl over plaintext should fail
 	curlPlainTextArgs := []string{
 		"--ipv4",
-		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
+		"https://" + testutil.GetSockAddrHttpLocalhost() + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlPlainTextArgs, &testutil.CurlFailureConfig{
@@ -66,7 +66,7 @@ func TestCurlAccessWithCaCert(t *testing.T) {
 
 	curlArgs := []string{
 		"--cacert", "../tls/ca.crt", "--ipv4",
-		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
+		"https://" + testutil.GetSockAddrHttpLocalhost() + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

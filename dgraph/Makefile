@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+# SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -26,13 +26,14 @@ endif
 GOPATH        ?= $(shell go env GOPATH)
 
 # Build-time Go variables
-dgraphVersion   = github.com/hypermodeinc/dgraph/v25/x.dgraphVersion
-dgraphCodename  = github.com/hypermodeinc/dgraph/v25/x.dgraphCodename
-gitBranch       = github.com/hypermodeinc/dgraph/v25/x.gitBranch
-lastCommitSHA   = github.com/hypermodeinc/dgraph/v25/x.lastCommitSHA
-lastCommitTime  = github.com/hypermodeinc/dgraph/v25/x.lastCommitTime
+dgraphVersion   = github.com/dgraph-io/dgraph/v25/x.dgraphVersion
+dgraphCodename  = github.com/dgraph-io/dgraph/v25/x.dgraphCodename
+gitBranch       = github.com/dgraph-io/dgraph/v25/x.gitBranch
+lastCommitSHA   = github.com/dgraph-io/dgraph/v25/x.lastCommitSHA
+lastCommitTime  = github.com/dgraph-io/dgraph/v25/x.lastCommitTime
 
-BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}'
+EXTLDFLAGS    ?=
+BUILD_FLAGS   ?= -ldflags '-X ${lastCommitSHA}=${BUILD} -X "${lastCommitTime}=${BUILD_DATE}" -X "${dgraphVersion}=${BUILD_VERSION}" -X "${dgraphCodename}=${BUILD_CODENAME}" -X ${gitBranch}=${BUILD_BRANCH}$(if $(EXTLDFLAGS), -extldflags "$(EXTLDFLAGS)")'
 
 # Insert build tags if specified
 ifneq ($(strip $(BUILD_TAGS)),)
@@ -86,7 +87,7 @@ install: jemalloc
 	fi
 	@go mod tidy
 	@go install $(BUILD_FLAGS)
-	@echo "Installed $(BIN) to $(INSTALL_TARGET)"
+	@echo "Installed $(BIN) ($(GOOS)/$(GOARCH)) to $(INSTALL_TARGET)"
 	@if [ "$(HAS_SHA256SUM)" ] ; then \
 		echo "New SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
 	fi

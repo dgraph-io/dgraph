@@ -646,7 +646,7 @@ invalid_schemas:
           "message":
             "Type X; Field y: has the @search directive but the argument day doesn't apply to field
             type String.  Search by day applies to fields of type DateTime. Fields of type String
-            can have @search by exact, fulltext, hash, regexp, term and trigram.",
+            can have @search by exact, fulltext, hash, ngram, regexp, term and trigram.",
           "locations": [{ "line": 2, "column": 14 }],
         },
       ]
@@ -662,7 +662,7 @@ invalid_schemas:
           "message":
             "Type X; Field y: has the @search directive but the argument hour doesn't apply to field
             type String.  Search by hour applies to fields of type DateTime. Fields of type String
-            can have @search by exact, fulltext, hash, regexp, term and trigram.",
+            can have @search by exact, fulltext, hash, ngram, regexp, term and trigram.",
           "locations": [{ "line": 2, "column": 14 }],
         },
       ]
@@ -737,7 +737,7 @@ invalid_schemas:
         {
           "message":
             "Type X; Field y: the argument to @search bogus isn't valid.Fields of type String can
-            have @search by exact, fulltext, hash, regexp, term and trigram.",
+            have @search by exact, fulltext, hash, ngram, regexp, term and trigram.",
           "locations": [{ "line": 2, "column": 14 }],
         },
       ]

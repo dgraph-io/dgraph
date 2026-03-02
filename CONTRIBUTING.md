@@ -4,7 +4,7 @@
 - [Setting Up the Development Environment](#setting-up-the-development-environment)
   - [Prerequisites](#prerequisites)
   - [Setup Dgraph from source repo](#setup-dgraph-from-source-repo)
-  - [Setup Badger from source repo](#setup-badger-from-source-repo)
+  - [Setup Badger from source repo](#setup-badger-from-source-repo-optional)
   - [Protocol buffers](#protocol-buffers)
   - [Build Dgraph](#build-dgraph)
   - [Build Docker Image](#build-docker-image)
@@ -30,24 +30,24 @@
   available through your OS package manager)
 - Install [Docker](https://docs.docker.com/install/) and
   [Docker Compose](https://docs.docker.com/compose/install/).
-- [Install Go 1.22.12 or above](https://golang.org/doc/install).
+- [Install Go 1.24.3 or above](https://golang.org/doc/install).
+- Install
+  [trunk](https://docs.trunk.io/code-quality/overview/getting-started/install#install-the-launcher).
+  Our CI uses trunk to lint and check code, having it installed locally will save you time.
 
 ### Setup Dgraph from source repo
 
-It's best to put the Dgraph repo somewhere in `$GOPATH`.
-
 ```bash
-mkdir -p "$(go env GOPATH)/src/github.com/hypermodeinc"
-cd "$(go env GOPATH)/src/github.com/hypermodeinc"
-git clone https://github.com/hypermodeinc/dgraph.git
+git clone https://github.com/dgraph-io/dgraph.git
 cd ./dgraph
-make install
+make setup    # auto-install tool dependencies (gotestsum, ack, etc.)
+make install  # build and install the dgraph binary
 ```
 
-This will put the source code in a Git repo under `$GOPATH/src/github.com/hypermodeinc/dgraph` and
+This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph-io/dgraph` and
 compile the binaries to `$GOPATH/bin`.
 
-### Setup Badger from source repo
+### Setup Badger from source repo (optional)
 
 Dgraph source repo vendors its own version of Badger. If you are just working on Dgraph, you do not
 necessarily need to check out Badger from its own repo. However, if you want to contribute to Badger
@@ -62,7 +62,7 @@ This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph
 ### Protocol buffers
 
 We use [protocol buffers](https://developers.google.com/protocol-buffers/) to serialize data between
-our server and the Go client and also for inter-worker communication. If you make any changes to the
+our server and our clients and also for inter-worker communication. If you make any changes to the
 `.proto` files, you would have to recompile them.
 
 Install the `protoc` compiler which is required for compiling proto files used for gRPC
@@ -90,8 +90,8 @@ This should generate the required `.pb.go` file.
 
 ### Build Dgraph
 
-You can build Dgraph using `make dgraph` or `make install` which add the version information to the
-binary.
+You can build Dgraph using `make dgraph` or `make install` which will add the version information to
+the binary.
 
 - `make dgraph`: Creates a `dgraph` binary at `./dgraph/dgraph`
 - `make install`: Creates a `dgraph` binary at `$GOPATH/bin/dgraph`. You should add `$GOPATH/bin` to
@@ -116,11 +116,15 @@ jemalloc enabled : true
 
 For Dgraph official documentation, visit https://dgraph.io/docs.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-For fully-managed Dgraph Cloud   , visit https://dgraph.io/cloud.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
-© Hypermode Inc.
+© Istari Digital, Inc.
 ```
+
+#### Building Dgraph on non-Linux machines
+
+See the [README](t/README.md) in the [_t_](t) folder for instructions on building Dgraph on
+non-Linux machines.
 
 ### Build Docker Image
 
@@ -134,23 +138,38 @@ then use this local image to test Dgraph in your local Docker setup.
 
 ### Testing
 
-Dgraph employs a ~~complex~~ sophisticated testing framework that includes extensive test coverage.
-Due to the comprehensive nature of these tests, a complete test run can take several hours,
-depending on your hardware. To manage this complex testing process efficiently, we've developed a
-custom test framework implemented in Go, which resides in the [./t](/t) directory. This specialized
-framework provides enhanced control and flexibility beyond what's available through standard Go
-testing framework.
+Dgraph employs a ~~complex~~ sophisticated testing framework with extensive test coverage. A full
+test run can take several hours. We've developed a custom test runner in Go in the [t/](t)
+directory, providing control and flexibility beyond the standard Go testing framework.
 
-For dependencies, runner flags and instructions for running tests on non-Linux machines, see the
-[README](t/README.md) in the [_t_](t) folder.
+The simplest way to run tests is via Make:
 
-Other integration tests do not use the testing framework located in the `t` folder. Consult the
-[github actions definitions](.github) folder to discover the tests we run as part of our continuous
-delivery process.
+```bash
+# First-time setup: install tool dependencies
+make setup
 
-Non-integration unit tests exist for many core packages that can be exercised without invoking the
-testing framework. For instance, to unit test the core DQL parsing package:
-`go test github.com/hypermodeinc/dgraph/v25/dql`.
+# Run default tests (~30 min): integration suite + integration2
+make test
+
+# Run every test in the repo
+make test-all
+
+# Run specific test types
+make test-unit               # True unit tests only — no Docker, no build tags
+make test-integration        # Integration tests via t/ runner with Docker
+make test-integration-heavy  # All heavy tests: systest-heavy + ldbc + load
+make test-integration2       # Integration2 tests via dgraphtest
+make test-upgrade            # Upgrade tests
+
+# Use variables for more control
+make test TAGS=integration2 PKG=systest/vector
+make test SUITE=all            # All t/ runner suites
+make test TIMEOUT=90m          # Override per-package timeout (default: 30m)
+```
+
+Run `make help` to see all available targets and variables.
+
+For a comprehensive testing guide, see [TESTING.md](TESTING.md).
 
 ## Contributing
 
@@ -162,7 +181,9 @@ coding, or could be achieved by rewriting an entire module, that you may have pa
 yesterday.
 
 - **Pull requests are welcome**, as long as you're willing to put in the effort to meet the
-  guidelines. After you fork dgraph, create your pull request against our `main` branch
+  guidelines. After you fork Dgraph, create your pull request against our `main` branch. Please
+  follow the instructions in the PR template carefully.
+- Be prepared to document your additions/changes in our public documentation (if applicable)
 - Aim for clear, well written, maintainable code
 - Simple and minimal approach to features, like Go
 - New features must include passing unit tests, and integration tests when appropriate
@@ -177,7 +198,8 @@ yesterday.
 ### Code style
 
 - We're following [Go Code Review](https://github.com/golang/go/wiki/CodeReviewComments)
-- Use `go fmt` to format your code before committing
+- At a minimum, use `go fmt` to format your code before committing. Ideally you should use `trunk`
+  as our CI will run `trunk` on your code
 - If you see _any code_ which clearly violates the style guide, please fix it and send a pull
   request. No need to ask for permission
 - Avoid unnecessary vertical spaces. Use your judgment or follow the code review comments
@@ -192,7 +214,7 @@ under the Apache 2.0 license:
 
 ```sh
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 ```

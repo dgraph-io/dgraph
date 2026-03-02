@@ -10,9 +10,8 @@
       <img alt="Dgraph Logo" src="/logo.png">
 </picture>
 
-[![chat](https://img.shields.io/discord/1267579648657850441)](https://discord.hypermode.com)
-[![GitHub Repo stars](https://img.shields.io/github/stars/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/stargazers)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/hypermodeinc/dgraph)](https://github.com/hypermodeinc/dgraph/commits/main/)
+[![GitHub Repo stars](https://img.shields.io/github/stars/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/stargazers)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/dgraph-io/dgraph)](https://github.com/dgraph-io/dgraph/commits/main/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 
 Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides
@@ -23,28 +22,27 @@ calls in a cluster.
 
 Dgraph's goal is to provide Google production-level scale and throughput, with low enough latency to
 serve real-time user queries over terabytes of structured data. Dgraph supports
-[GraphQL query syntax](https://docs.hypermode.com/dgraph/graphql/overview), and responds in
-[JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/)
-over [GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
+[GraphQL query syntax](https://docs.dgraph.io/graphql), and responds in [JSON](http://www.json.org/)
+and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over
+[GRPC](http://www.grpc.io/) and HTTP. Dgraph is written using the Go Programming Language.
 
 ## Status
 
-Dgraph is at [version v24.1.3][rel] and is production-ready. Apart from the vast open source
-community, it is being used in production at multiple Fortune 500 companies, and by
+Dgraph is at [version v25][rel] and is production-ready. Apart from the vast open source community,
+it is being used in production at multiple Fortune 500 companies, and by
 [Intuit Katlas](https://github.com/intuit/katlas) and
-[VMware Purser](https://github.com/vmware/purser). A hosted version of Dgraph is available at
-[https://cloud.dgraph.io](https://cloud.dgraph.io).
+[VMware Purser](https://github.com/vmware/purser).
 
-[rel]: https://github.com/hypermodeinc/dgraph/releases/tag/v24.1.3
+[rel]: https://github.com/dgraph-io/dgraph/releases/tag/v25.0.0
 
 ## Supported Platforms
 
-Dgraph officially supports the Linux/amd64 architecture. Support for Linux/arm64 is in development.
-In order to take advantage of memory performance gains and other architecture-specific advancements
-in Linux, we dropped official support Mac and Windows in 2021, see
-[this blog post](https://discuss.hypermode.com/t/dropping-support-for-windows-and-mac/12913) for more
+Dgraph officially supports the Linux/amd64 and Linux/arm64 architectures. In order to take advantage
+of memory performance gains and other architecture-specific advancements in Linux, we dropped
+official support for Mac and Windows in 2021, see
+[this blog post](https://discuss.dgraph.io/t/dropping-support-for-windows-and-mac/12913) for more
 information. You can still build and use Dgraph on other platforms (for live or bulk loading for
-instance), but support for platforms other than Linux/amd64 is not available.
+instance), but support for platforms other than Linux/amd64 and Linux/arm64 is not available.
 
 Running Dgraph in a Docker environment is the recommended testing and deployment method.
 
@@ -58,7 +56,7 @@ docker pull dgraph/dgraph:latest
 ```
 
 For more information on a variety Docker deployment methods including Docker Compose and Kubernetes,
-see the [docs](https://docs.hypermode.com/dgraph/self-managed/overview).
+see the [docs](https://docs.dgraph.io/installation/).
 
 ## Run a Quick Standalone Cluster
 
@@ -68,7 +66,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph dgraph/standalone:l
 
 ## Install from Source
 
-If you want to install from source, install Go 1.19+ or later and the following dependencies:
+If you want to install from source, install Go 1.24+ or later and the following dependencies:
 
 ### Ubuntu
 
@@ -84,7 +82,7 @@ directory named by the GOBIN environment variable, which defaults to $GOPATH/bin
 the GOPATH environment variable is not set.
 
 ```bash
-git clone https://github.com/hypermodeinc/dgraph.git
+git clone https://github.com/dgraph-io/dgraph.git
 cd dgraph
 make install
 ```
@@ -93,9 +91,9 @@ make install
 
 **To get started with Dgraph, follow:**
 
-- [Installation to queries in 3 steps](https://docs.hypermode.com/dgraph/quickstart).
+- [Installation to queries in 4 quick steps](https://docs.dgraph.io/quick-start).
 - Tutorial and presentation videos on
-  [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
+  [YouTube channel](https://www.youtube.com/playlist?list=PLzOEKEHv-5e3u2Tgv52O2rs5u3md58JON).
 
 ## Is Dgraph the right choice for me?
 
@@ -126,33 +124,29 @@ operations, which makes it easy to build applications with it.
 
 ## Users
 
-- **Dgraph official documentation is present at [docs.hypermode.com/dgraph](https://docs.hypermode.com/dgraph).**
-- For feature requests or questions, visit [https://discuss.hypermode.com](https://discuss.hypermode.com).
-- Please see [releases tab](https://github.com/hypermodeinc/dgraph/releases) to find the latest
-  release and corresponding release notes.
-- Read about the latest updates from the Dgraph team [on our blog](https://hypermode.com/blog).
-- Watch tech talks on our
-  [YouTube channel](https://www.youtube.com/channel/UCghE41LR8nkKFlR3IFTRO4w/featured).
+- **Dgraph official documentation is present at [docs.dgraph.io](https://docs.dgraph.io).**
+- For general information and questions, visit
+  [Github discussions](https://github.com/dgraph-io/dgraph/discussions).
+- Please see [releases tab](https://github.com/dgraph-io/dgraph/releases) to find the latest release
+  and corresponding release notes.
 
 ## Developers
 
-Please see
-  [Contributing to Dgraph](https://github.com/hypermodeinc/dgraph/blob/main/CONTRIBUTING.md) for
-  guidelines on contributions.
+Please see [Contributing to Dgraph](https://github.com/dgraph-io/dgraph/blob/main/CONTRIBUTING.md)
+for guidelines on contributions.
 
 ## Client Libraries
 
 The Dgraph team maintains several
-[officially supported client libraries](https://docs.hypermode.com/dgraph/sdks/overview). There are also libraries
+[officially supported client libraries](https://docs.dgraph.io/clients/). There are also libraries
 contributed by the community
-[unofficial client libraries](https://docs.hypermode.com/dgraph/sdks/unofficial-clients#unofficial-dgraph-clients).
+[unofficial client libraries](https://docs.dgraph.io/clients/unofficial-clients).
 
 ##
 
 ## Contact
 
-- Please use [discuss.hypermode.com](https://discuss.hypermode.com) for documentation, questions, feature
-  requests and discussions.
-- Please use [GitHub Issues](https://github.com/hypermodeinc/dgraph/issues) for filing bugs or
-  feature requests.
-- Follow us on Twitter [@dgraphlabs](https://twitter.com/dgraphlabs).
+- Please use [Github discussions](https://github.com/dgraph-io/dgraph/discussions) for questions,
+  feature requests and discussions.
+- Please use [GitHub Issues](https://github.com/dgraph-io/dgraph/issues) for filing bugs or feature
+  requests.

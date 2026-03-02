@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,8 +11,8 @@ import (
 	"os"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/hypermodeinc/dgraph/v25/dgraph/cmd/bulk"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraph/cmd/bulk"
+	"github.com/dgraph-io/dgraph/v25/x"
 
 	"github.com/spf13/cobra"
 )
@@ -34,13 +34,13 @@ func init() {
 
 	flag := ImportCmd.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
+	flag.StringP("snapshot-dir", "p", "", "Location of p directory")
 	flag.StringP("schema", "s", "", "Location of DQL schema file.")
-	flag.StringP("graphql_schema", "g", "", "Location of the GraphQL schema file.")
-	flag.StringP("graphql-schema", "", "", "Location of the GraphQL schema file.")
+	flag.StringP("graphql-schema", "g", "", "Location of the GraphQL schema file.")
 	flag.String("format", "", "Specify file format (rdf or json)")
 	flag.Bool("drop-all", false, "Drops all the existing data in the cluster before importing data into Dgraph.")
 	flag.Bool("drop-all-confirm", false, "Confirm drop-all operation.")
-	flag.StringP("conn-str", "c", "", "Dgraph connection string.")
+	flag.StringP("conn-str", "c", "dgraph://localhost:9080", "Dgraph connection string.")
 }
 
 func run() {
@@ -70,6 +70,17 @@ func run() {
 	if !bulkLoad {
 		fmt.Println("Live Loader is not supported right now!")
 		os.Exit(1)
+	}
+
+	// if snapshot p directory is already provided, there is no need to run bulk loader
+	if ImportCmd.Conf.GetString("snapshot-dir") != "" {
+		connStr := ImportCmd.Conf.GetString("conn-str")
+		snapshotDir := ImportCmd.Conf.GetString("snapshot-dir")
+		if err := Import(context.Background(), connStr, snapshotDir); err != nil {
+			fmt.Println("Failed to import data:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	cacheSize := 64 << 20 // These are the default values. User can overwrite them using --badger.

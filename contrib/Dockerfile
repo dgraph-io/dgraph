@@ -1,11 +1,9 @@
-# This file is used to add the nightly Dgraph binaries and assets to Dgraph base
-# image.
-
-# This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
-# already built and placed there.
+# This file is used to add the Dgraph binaries and assets to Dgraph images.
+# Ensure that the Dgraph binaries are built and placed in the linux
+# directory before building this image.
 
 FROM ubuntu:24.04
-LABEL maintainer="Hypermode Inc. <hello@hypermode.com>"
+LABEL maintainer="Istari Digital, Inc. <dgraph-admin@istaridigital.com>"
 
 # need to remove the cache of sources lists
 # apt-get Error Code 100
@@ -23,8 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     iputils-ping \
     jq \
+    libjemalloc-dev \
     less \
     sysstat \
+    gnupg \
+    gnupg2 \
+    tar \
+    libpam0g \
     && rm -rf /var/lib/apt/lists/*
 
 ADD linux /usr/local/bin

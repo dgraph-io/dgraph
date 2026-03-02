@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,8 @@ type StateResponse struct {
 
 // GetState queries the /state endpoint in zero and returns the response.
 func GetState() (*StateResponse, error) {
-	resp, err := http.Get("http://" + SockAddrZeroHttp + "/state")
+	ensureAddressesInitialized()
+	resp, err := http.Get("http://" + GetSockAddrZeroHttp() + "/state")
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,8 @@ func GetStateHttps(tlsConfig *tls.Config) (*StateResponse, error) {
 			TLSClientConfig: tlsConfig,
 		},
 	}
-	resp, err := client.Get("https://" + SockAddrZeroHttp + "/state")
+	ensureAddressesInitialized()
+	resp, err := client.Get("https://" + GetSockAddrZeroHttp() + "/state")
 	if err != nil {
 		return nil, err
 	}

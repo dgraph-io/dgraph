@@ -1,26 +1,27 @@
 name: ci-dgraph-jepsen-tests
 
 on:
+  workflow_dispatch: # allows manual trigger from GitHub UI
   schedule:
     - cron: 0 4 * * 3,6 # run twice weekly
 
 env:
-  GOPATH: /home/ubuntu/go
+  GOPATH: /home/runner/go
 
 permissions:
   contents: read
 
 jobs:
   dgraph-jepsen-tests:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
       - name: Checkout dgraph repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Checkout jepsen repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          repository: hypermodeinc/jepsen
+          repository: dgraph-io/jepsen
           path: jepsen
           ref: master
       - name: Set jepsen root
@@ -30,7 +31,7 @@ jobs:
           JEPSEN_ROOT=$(pwd)
           echo "JEPSEN_ROOT=$JEPSEN_ROOT" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - name: Make dgraph linux build

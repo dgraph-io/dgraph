@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v4/options"
-	"github.com/hypermodeinc/dgraph/v25/graphql/e2e/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/worker"
 )
 
 var (
@@ -278,5 +278,8 @@ func CopyToLocalFsFromNFS(t *testing.T, backupDst string, copyBackupDirectory st
 	// "docker cp" to create a copy that is not owned by the root user.
 	require.NoError(t, os.RemoveAll(copyBackupDirectory))
 	srcPath := testutil.DockerPrefix + "_nfs_1:/data" + backupDst
-	require.NoError(t, testutil.DockerCp(srcPath, copyBackupDirectory))
+	if err := testutil.DockerCp(srcPath, copyBackupDirectory); err != nil {
+		t.Logf("DockerCp failed: src=%s dst=%s error=%v", srcPath, copyBackupDirectory, err)
+		require.NoError(t, err)
+	}
 }

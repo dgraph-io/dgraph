@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type Rule struct {
@@ -339,7 +339,8 @@ func AddRulesToGroup(t *testing.T, token *HttpToken, group string, rules []Rule,
 }
 
 func DgClientWithLogin(t *testing.T, id, password string, ns uint64) *dgo.Dgraph {
-	userClient, err := DgraphClient(SockAddr)
+	ensureAddressesInitialized()
+	userClient, err := DgraphClient(GetSockAddr())
 	require.NoError(t, err)
 
 	require.NoError(t, x.RetryUntilSuccess(10, 100*time.Millisecond, func() error {

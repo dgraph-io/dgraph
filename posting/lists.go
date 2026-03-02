@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,9 +18,9 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 const (
@@ -44,9 +44,6 @@ func Init(ps *badger.DB, cacheSize int64, removeOnUpdate bool) {
 
 func SetEnabledDetailedMetrics(enableMetrics bool) {
 	EnableDetailedMetrics = enableMetrics
-}
-
-func UpdateMaxCost(maxCost int64) {
 }
 
 // Cleanup waits until the closer has finished processing.

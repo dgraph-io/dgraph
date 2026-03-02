@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 )
 
 func TestAccessWithoutClientCert(t *testing.T) {
@@ -27,7 +27,7 @@ func TestAccessWithoutClientCert(t *testing.T) {
 		// server-name
 		"node"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.GetSockAddrLocalhost(), conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
@@ -44,14 +44,14 @@ func TestAccessWithClientCert(t *testing.T) {
 		// client-key
 		"../tls/client.acl.key"))
 
-	dg, err := testutil.DgraphClientWithCerts(testutil.SockAddrLocalhost, conf)
+	dg, err := testutil.DgraphClientWithCerts(testutil.GetSockAddrLocalhost(), conf)
 	require.NoError(t, err, "Unable to get dgraph client: %v", err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropAll: true}))
 }
 
 func TestCurlAccessWithoutClientCert(t *testing.T) {
 	curlArgs := []string{
-		"--cacert", "../tls/ca.crt", "https://" + testutil.SockAddrHttpLocalhost + "/alter",
+		"--cacert", "../tls/ca.crt", "https://" + testutil.GetSockAddrHttpLocalhost() + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
@@ -64,7 +64,7 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 		"--cacert", "../tls/ca.crt",
 		"--cert", "../tls/client.acl.crt",
 		"--key", "../tls/client.acl.key",
-		"https://" + testutil.SockAddrHttpLocalhost + "/alter",
+		"https://" + testutil.GetSockAddrHttpLocalhost() + "/alter",
 		"-d", "name: string @index(exact) .",
 	}
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{

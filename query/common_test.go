@@ -1,7 +1,7 @@
 //go:build integration || cloud || upgrade
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dgraphapi"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/dgraphapi"
+	"github.com/dgraph-io/dgraph/v25/dgraphtest"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func setSchema(schema string) {
@@ -203,7 +204,7 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 	return addTriplesToCluster(triple)
 }
 
-const testSchema = `
+var testSchema = `
 type Person {
 	name
 	pet
@@ -349,6 +350,8 @@ type DispatchBoardCard {
 
 `
 
+const ngramVersionHash = "d7dfe3b4282fa3543e811c5538f86d39268961ba"
+
 func populateCluster(dc dgraphapi.Cluster) {
 	x.Panic(client.Alter(context.Background(), &api.Operation{DropAll: true}))
 
@@ -379,8 +382,17 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// 		alive
 	// 	}`
 	// }
+
+	// Ngram indexing handling
+	ngramSupport, err := dgraphtest.IsHigherVersion(dc.GetVersion(), ngramVersionHash)
+	x.Panic(err)
+	if ngramSupport {
+		testSchema += "\ndescription: string @index(ngram) ."
+	}
+
 	setSchema(testSchema)
-	err := addTriplesToCluster(`
+
+	err = addTriplesToCluster(`
 		<1> <name> "Michonne" .
 		<2> <name> "King Lear" .
 		<3> <name> "Margaret" .
@@ -973,6 +985,26 @@ func populateCluster(dc dgraphapi.Cluster) {
 		<305> <updated_at> "2019-03-28T06:41:57+23:00" (modified_at=2019-03-28T08:41:57+23:00) .
 		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T06:41:57+23:00) .
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
+	`)
+	x.Panic(err)
+
+	// Add data for ngram tests
+	err = addTriplesToCluster(`
+		<401> <description> "The quick brown fox jumps over the lazy dog" .
+		<402> <description> "A quick brown fox leaps over a sleeping dog" .
+		<403> <description> "The lazy dog sleeps under the warm sun" .
+		<404> <description> "Brown foxes are quick and agile animals" .
+		<405> <description> "Dogs are loyal companions to humans" .
+		<406> <description> "The sun shines brightly in the clear sky" .
+		<407> <description> "Quick movements help foxes catch their prey" .
+		<408> <description> "Lazy afternoons are perfect for sleeping dogs" .
+		<409> <description> "Jumping over obstacles requires agility and speed" .
+		<410> <description> "The brown animal moved quickly through the forest" .
+		<411> <description> "Machine learning algorithms process natural language text" .
+		<412> <description> "Natural language processing uses advanced algorithms" .
+		<413> <description> "Text processing algorithms analyze linguistic patterns" .
+		<414> <description> "Advanced machine learning techniques improve accuracy" .
+		<415> <description> "Linguistic analysis helps understand text meaning" .
 	`)
 	x.Panic(err)
 }

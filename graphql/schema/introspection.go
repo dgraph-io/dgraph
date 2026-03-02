@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,10 +11,10 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/gqlgen/graphql"
 	"github.com/dgraph-io/gqlgen/graphql/introspection"
 	"github.com/dgraph-io/gqlparser/v2/ast"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 // Introspection works by walking through the selection set which are part of ast.Operation

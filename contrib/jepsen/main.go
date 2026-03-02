@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,7 +35,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
-	"github.com/hypermodeinc/dgraph/v25/contrib/jepsen/browser"
+	"github.com/dgraph-io/dgraph/v25/contrib/jepsen/browser"
 )
 
 type jepsenTest struct {
@@ -116,7 +116,7 @@ var (
 	testCount = pflag.IntP("test-count", "c", 1, "Test count per Jepsen test.")
 	jaeger    = pflag.StringP("jaeger", "j", "",
 		"Run with Jaeger collector. Set to empty string to disable collection to Jaeger."+
-			" Otherwise set to http://jaeger:14268.")
+			" Otherwise set to http://jaeger:4318.")
 	jaegerSaveTraces = pflag.Bool("jaeger-save-traces", true, "Save Jaeger traces on test error.")
 	deferDbTeardown  = pflag.Bool("defer-db-teardown", false,
 		"Wait until user input to tear down DB nodes")
@@ -237,16 +237,16 @@ func jepsenServe() error {
 		// lein run serve runs indefinitely, so there's no need to wait for the
 		// command to finish.
 		_ = cmd.Start()
-		ticker := time.NewTicker(time.Second)
+		ticker := time.Tick(time.Second)
+		timeout := time.NewTimer(5 * time.Minute)
 		for {
 			select {
-			case <-time.After(5 * time.Minute):
+			case <-timeout.C:
 				wg.Done()
 				errCh <- errors.New("lein run serve couldn't run after 5 minutes")
 				return
-			case <-ticker.C:
+			case <-ticker:
 				if err := checkServing(); err == nil {
-					ticker.Stop()
 					wg.Done()
 					errCh <- nil
 					return

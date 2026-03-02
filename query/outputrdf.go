@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,14 +8,15 @@ package query
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/algo"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // rdfBuilder is used to generate RDF from subgraph.
@@ -192,7 +193,18 @@ func getObjectVal(v types.Val) ([]byte, error) {
 }
 
 func buildTriple(val []byte) []byte {
-	buf := make([]byte, 0, 2+len(val))
+	// Check for potential overflow in capacity calculation
+	const overhead = 2 // '<' and '>'
+	if len(val) > math.MaxInt-overhead {
+		// Extremely unlikely, but handle overflow case
+		// Fall back to append without pre-allocation
+		buf := make([]byte, 0)
+		buf = append(buf, '<')
+		buf = append(buf, val...)
+		buf = append(buf, '>')
+		return buf
+	}
+	buf := make([]byte, 0, overhead+len(val))
 	buf = append(buf, '<')
 	buf = append(buf, val...)
 	buf = append(buf, '>')
@@ -223,7 +235,16 @@ func validateSubGraphForRDF(sg *SubGraph) error {
 }
 
 func quotedNumber(val []byte) []byte {
-	tmpVal := make([]byte, 0, len(val)+2)
+	const overhead = 2 // opening and closing quotes
+	if len(val) > math.MaxInt-overhead {
+		// Extremely unlikely, but handle overflow case
+		tmpVal := make([]byte, 0)
+		tmpVal = append(tmpVal, '"')
+		tmpVal = append(tmpVal, val...)
+		tmpVal = append(tmpVal, '"')
+		return tmpVal
+	}
+	tmpVal := make([]byte, 0, overhead+len(val))
 	tmpVal = append(tmpVal, '"')
 	tmpVal = append(tmpVal, val...)
 	tmpVal = append(tmpVal, '"')

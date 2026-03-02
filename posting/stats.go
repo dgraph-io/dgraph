@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/hypermodeinc/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/algo"
 )
 
 type StatsHolder struct {

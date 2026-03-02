@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,10 +21,10 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // KeyFile is set to the path of the file containing the key. Used for testing purposes only.
@@ -53,13 +53,28 @@ func openDgraph(pdir string) (*badger.DB, error) {
 }
 
 func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
+	// Use a 10-minute overall deadline so the test fails quickly if the
+	// cluster is in a permanently degraded state (e.g. OOM-killed containers)
+	// rather than hanging until the Go test timeout.
+	deadline := time.Now().Add(10 * time.Minute)
+
 	restoreDone := false
-	for {
+	for time.Now().Before(deadline) {
 		resp, err := http.Get("http://" + HttpSocket + "/health")
-		require.NoError(t, err)
+		if err != nil {
+			// The health endpoint may be transiently unreachable while the
+			// server restarts during a restore.  Keep retrying.
+			t.Logf("WaitForRestore: health check error (will retry): %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		buf, err := io.ReadAll(resp.Body)
-		require.NoError(t, resp.Body.Close())
-		require.NoError(t, err)
+		_ = resp.Body.Close()
+		if err != nil {
+			t.Logf("WaitForRestore: error reading health body (will retry): %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 		sbuf := string(buf)
 		if !strings.Contains(sbuf, "opRestore") {
 			restoreDone = true
@@ -67,7 +82,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.True(t, restoreDone)
+	require.True(t, restoreDone, "timed out waiting for restore operation to complete")
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
@@ -75,7 +90,7 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 	// which the query succeeds at the first attempt because the follower is behind and
 	// has not started to apply the restore proposal.
 	numSuccess := 0
-	for {
+	for time.Now().Before(deadline) {
 		// This is a dummy query that returns no results.
 		_, err := dg.NewTxn().Query(context.Background(), `{
 	   q(func: has(invalid_pred)) {
@@ -85,18 +100,36 @@ func WaitForRestore(t *testing.T, dg *dgo.Dgraph, HttpSocket string) {
 		if err == nil {
 			numSuccess++
 		} else {
-			require.Contains(t, err.Error(), "the server is in draining mode")
+			// During restore the server may be in draining mode, or it may be
+			// transiently unreachable (connection reset, TLS handshake failure,
+			// gRPC Unavailable, etc.).  All of these are expected and retriable.
+			errMsg := err.Error()
+			transient := strings.Contains(errMsg, "the server is in draining mode") ||
+				strings.Contains(errMsg, "Unavailable") ||
+				strings.Contains(errMsg, "connection reset") ||
+				strings.Contains(errMsg, "connection refused") ||
+				strings.Contains(errMsg, "transport") ||
+				strings.Contains(errMsg, "EOF") ||
+				strings.Contains(errMsg, "overloaded") ||
+				strings.Contains(errMsg, "context canceled") ||
+				strings.Contains(errMsg, "Please retry")
+			if !transient {
+				require.Fail(t, "unexpected error while waiting for restore",
+					"error: %v", err)
+			}
 			numSuccess = 0
 		}
 
 		// Apply restore works differently with race enabled.
 		// We are seeing delays in apply proposals hence failure of queries.
 		if numSuccess == 10 {
-			// The server has been responsive three times in a row.
+			// The server has been responsive ten times in a row.
 			break
 		}
 		time.Sleep(1 * time.Second)
 	}
+	require.GreaterOrEqual(t, numSuccess, 10,
+		"timed out waiting for server to exit draining mode after restore")
 }
 
 // GetPredicateValues reads the specified p directory and returns the values for the given

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,13 +19,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/hypermodeinc/dgraph/v25/algo"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/algo"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -66,10 +66,19 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return processSort(ctx, q)
 	}
 
+	// Add span for cross-alpha network call
+	ctx, networkSpan := otel.Tracer("").Start(ctx, "SortOverNetwork.RemoteCall")
+	networkSpan.SetAttributes(
+		attribute.String("target_group", fmt.Sprintf("%d", gid)),
+		attribute.String("attr", x.SafeUTF8(q.Order[0].Attr)),
+		attribute.Bool("is_remote", true),
+	)
+
 	result, err := processWithBackupRequest(
 		ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.Sort(ctx, q)
 		})
+	networkSpan.End()
 	if err != nil {
 		return &emptySortResult, err
 	}
@@ -81,6 +90,10 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
+
+	// Manually extract trace context from gRPC metadata for cross-alpha tracing
+	ctx = x.ExtractTraceContext(ctx)
+
 	ctx, span := otel.Tracer("").Start(ctx, "worker.Sort")
 	defer span.End()
 
@@ -647,7 +660,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 		// We are within the page. We need to apply sorting.
 		// Sort results by value before applying offset.
-		// TODO (pawan) - Why do we do this? Looks like it it is only useful for language.
+		// TODO (pawan) - Why do we do this? Looks like it is only useful for language.
 		if vals, err = sortByValue(ctx, ts, result, scalar); err != nil {
 			return err
 		}

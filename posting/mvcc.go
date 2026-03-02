@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,10 +24,10 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/dgraph-io/ristretto/v2/z"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/x"
 )
 
 type pooledKeys struct {
@@ -165,12 +165,9 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 	defer writer.Flush()
 
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
-	limiter := time.NewTicker(time.Millisecond)
-	defer limiter.Stop()
-	cleanupTick := time.NewTicker(5 * time.Minute)
-	defer cleanupTick.Stop()
-	forceRollupTick := time.NewTicker(500 * time.Millisecond)
-	defer forceRollupTick.Stop()
+	limiter := time.Tick(time.Millisecond)
+	cleanupTick := time.Tick(5 * time.Minute)
+	forceRollupTick := time.Tick(500 * time.Millisecond)
 
 	doRollup := func(batch *[][]byte, priority int) {
 		currTs := time.Now().Unix()
@@ -193,7 +190,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-cleanupTick.C:
+		case <-cleanupTick:
 			currTs := time.Now().Unix()
 			for hash, ts := range m {
 				// Remove entries from map which have been there for there more than 10 seconds.
@@ -201,7 +198,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 					delete(m, hash)
 				}
 			}
-		case <-forceRollupTick.C:
+		case <-forceRollupTick:
 			batch := ir.priorityKeys[0].keysPool.Get().(*[][]byte)
 			if len(*batch) > 0 {
 				doRollup(batch, 0)
@@ -214,7 +211,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 		case batch := <-ir.priorityKeys[1].keysCh:
 			doRollup(batch, 1)
 			// throttle to 1 batch = 16 rollups per 1 ms.
-			<-limiter.C
+			<-limiter
 		}
 	}
 }
@@ -370,7 +367,7 @@ func (c *Cache) set(key []byte, i *CachePL) {
 		return
 	}
 	c.numCacheSave.Add(1)
-	c.data.Set(key, i, 1)
+	c.data.Set(key, i, 0)
 }
 
 func (c *Cache) del(key []byte) {
@@ -403,6 +400,13 @@ func (ml *MemoryLayer) clear() {
 }
 func (ml *MemoryLayer) del(key []byte) {
 	ml.cache.del(key)
+}
+
+func (ml *MemoryLayer) UpdateMaxCost(maxCost int64) {
+	if ml.cache == nil || ml.cache.data == nil {
+		return
+	}
+	ml.cache.data.UpdateMaxCost(maxCost)
 }
 
 type IterateDiskArgs struct {
@@ -508,14 +512,18 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 	ml.removeOnUpdate = removeOnUpdate
 	ml.statsHolder = NewStatsHolder()
 	if cacheSize > 0 {
-		cache, err := ristretto.NewCache[[]byte, *CachePL](&ristretto.Config[[]byte, *CachePL]{
+		cache, err := ristretto.NewCache(&ristretto.Config[[]byte, *CachePL]{
 			// Use 5% of cache memory for storing counters.
 			NumCounters: int64(float64(cacheSize) * 0.05 * 2),
 			MaxCost:     int64(float64(cacheSize) * 0.95),
 			BufferItems: 16,
 			Metrics:     true,
 			Cost: func(val *CachePL) int64 {
-				return 1
+				itemSize := int64(8)
+				if val.list != nil {
+					itemSize += int64(val.list.ApproximateSize())
+				}
+				return itemSize
 			},
 			ShouldUpdate: func(cur, prev *CachePL) bool {
 				return !(cur.list != nil && prev.list != nil && prev.list.maxTs > cur.list.maxTs)
@@ -524,9 +532,9 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 		x.Check(err)
 		go func() {
 			m := cache.Metrics
-			ticker := time.NewTicker(10 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
+			ticker := time.Tick(10 * time.Second)
+
+			for range ticker {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 
@@ -756,7 +764,9 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	cacheItem, ok := ml.cache.get(key)
 
-	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs {
+	// Issue #9597 fix: Cache is only valid if minTs <= readTs AND maxTs >= readTs.
+	// If maxTs < readTs, the cache is missing mutations committed after maxTs.
+	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs && cacheItem.list.maxTs >= readTs {
 		cacheItem.list.RLock()
 		lCopy := copyList(cacheItem.list)
 		cacheItem.list.RUnlock()

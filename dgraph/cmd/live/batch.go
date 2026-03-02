@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,12 +25,12 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/x"
-	"github.com/hypermodeinc/dgraph/v25/xidmap"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/xidmap"
 )
 
 // batchMutationOptions sets the clients batch mode to Pending number of buffers each of Size.
@@ -54,7 +54,6 @@ type loader struct {
 
 	dc         *dgo.Dgraph
 	alloc      *xidmap.XidMap
-	ticker     *time.Ticker
 	db         *badger.DB
 	requestsWg sync.WaitGroup
 	// If we retry a request, we add one to retryRequestsWg.
@@ -414,8 +413,7 @@ func (l *loader) makeRequests() {
 		buffer = buffer[:i]
 	}
 
-	t := time.NewTicker(5 * time.Second)
-	defer t.Stop()
+	t := time.Tick(5 * time.Second)
 
 loop:
 	for {
@@ -431,7 +429,7 @@ loop:
 				buffer = append(buffer, req)
 			}
 
-		case <-t.C:
+		case <-t:
 			for {
 				drain()
 				if len(buffer) < l.opts.bufferSize {
@@ -462,11 +460,11 @@ loop:
 
 func (l *loader) printCounters() {
 	period := 5 * time.Second
-	l.ticker = time.NewTicker(period)
+	ticker := time.Tick(period)
 	start := time.Now()
 
 	var last Counter
-	for range l.ticker.C {
+	for range ticker {
 		counter := l.Counter()
 		rate := float64(counter.Nquads-last.Nquads) / period.Seconds()
 		elapsed := time.Since(start).Round(time.Second)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,7 +34,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.opencensus.io/plugin/ocgrpc"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
@@ -146,6 +148,11 @@ var (
 func init() {
 	SuperAdminUid.Store(RootNamespace, 0)
 	GrootUid.Store(RootNamespace, 0)
+}
+
+// SafeUTF8 sanitizes a string for OTLP export by replacing invalid UTF-8 sequences.
+func SafeUTF8(s string) string {
+	return strings.ToValidUTF8(s, "?")
 }
 
 // ShouldCrash returns true if the error should cause the process to crash.
@@ -301,6 +308,19 @@ func ExtractJwt(ctx context.Context) (string, error) {
 	}
 
 	return accessJwt[0], nil
+}
+
+func ExtractTraceContext(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		carrier := propagation.HeaderCarrier{}
+		for k, vals := range md {
+			for _, v := range vals {
+				carrier.Set(k, v)
+			}
+		}
+		return otel.GetTextMapPropagator().Extract(ctx, carrier)
+	}
+	return ctx
 }
 
 // WithLocations adds a list of locations to a GqlError and returns the same
@@ -1183,9 +1203,7 @@ func IsSuperAdmin(groups []string) bool {
 func RunVlogGC(store *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	// Runs every 1m
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	ticker := time.Tick(1 * time.Minute)
 
 	abs := func(a, b int64) int64 {
 		if a > b {
@@ -1212,7 +1230,7 @@ func RunVlogGC(store *badger.DB, closer *z.Closer) {
 		select {
 		case <-closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			runGC()
 		}
 	}
@@ -1226,10 +1244,11 @@ func StoreSync(db DB, closer *z.Closer) {
 	defer closer.Done()
 	// We technically don't need to call this due to mmap being able to survive process crashes.
 	// But, once a minute is infrequent enough that we won't lose any performance due to this.
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.Tick(time.Minute)
+
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			if err := db.Sync(); err != nil {
 				glog.Errorf("Error while calling db sync: %+v", err)
 			}
@@ -1513,13 +1532,13 @@ func (r *RateLimiter) RefillPeriodically() {
 		})
 	}
 
-	ticker := time.NewTicker(r.refillAfter)
-	defer ticker.Stop()
+	ticker := time.Tick(r.refillAfter)
+
 	for {
 		select {
 		case <-r.closer.HasBeenClosed():
 			return
-		case <-ticker.C:
+		case <-ticker:
 			refill()
 		}
 	}

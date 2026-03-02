@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8962,7 +8962,7 @@ var OneMillionTCs = []struct {
 			"avs": [
 				{
 					"name": "Steven Spielberg",
-					"average_actors": 51.733333,
+					"average_actors": 51.733333333333334,
 					"num_films": 30
 				},
 				{

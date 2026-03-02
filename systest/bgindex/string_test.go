@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,8 +26,8 @@ import (
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func TestStringIndex(t *testing.T) {
@@ -39,7 +39,7 @@ func TestStringIndex(t *testing.T) {
 	var dg *dgo.Dgraph
 	err := x.RetryUntilSuccess(10, time.Second, func() error {
 		var err error
-		dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+		dg, err = testutil.DgraphClientWithGroot(testutil.GetSockAddr())
 		return err
 	})
 	require.NoError(t, err)

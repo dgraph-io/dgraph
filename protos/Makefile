@@ -1,7 +1,9 @@
 #
-# SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+# SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
+
+UNAME_S := $(shell uname -s)
 
 # Update BADGER_PB_VERSION when upgrading Badger major versions
 BADGER_PB_VERSION = 4
@@ -41,25 +43,34 @@ copy-protos:
 	 ${TMPDIR}/src/${BADGER_PATH}/pb/pb.proto
 	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.proto \
 	 ${TMPDIR}/src/${DGO_PATH}/protos/api.proto
-	@cp $(shell go list -m -f "{{.Dir}}" ${DGO_PATH})/protos/api.v2.proto \
-	 ${TMPDIR}/src/${DGO_PATH}/protos/api.v2.proto
 
 .PHONY: patch-pb
 patch-pb:
 	./patch_pb.sh
 
+ifneq ($(UNAME_S),Linux)
+.PHONY: regenerate
+regenerate:
+	@echo "Running in Docker..."
+	@docker run --rm -v $(shell pwd)/..:/go/src/github.com/dgraph-io/dgraph \
+		-w /go/src/github.com/dgraph-io/dgraph/protos \
+		golang:1.25.0 \
+		/bin/bash -c "apt-get update && apt-get install -y protobuf-compiler && make regenerate"
+else
 .PHONY: regenerate
 regenerate: tidy-deps copy-protos check clean
+	echo ${DGO_PATH}
 	@protoc \
 		--proto_path=/usr/local/include \
 		--proto_path=/usr/include \
+		--proto_path=/opt/homebrew/include/google/protobuf \
 		--proto_path=${PROTO_PATH} \
 		--go_out=pb --go-grpc_out=pb \
 		--go_opt=paths=source_relative \
 		--go-grpc_opt=paths=source_relative \
 		--go_opt=M{DGO_PATH}/protos/api.proto={DGO_PATH}/protos/api \
-		--go_opt=M{DGO_PATH}/protos/api.v2.proto={DGO_PATH}/protos/api.v2 \
 		pb.proto
 	@$(MAKE) patch-pb
 	@rm -rf ${TMPDIR}
 	@echo Done.
+endif

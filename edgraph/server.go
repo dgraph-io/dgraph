@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,20 +35,19 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	apiv2 "github.com/dgraph-io/dgo/v250/protos/api.v2"
-	"github.com/hypermodeinc/dgraph/v25/chunker"
-	"github.com/hypermodeinc/dgraph/v25/conn"
-	"github.com/hypermodeinc/dgraph/v25/dql"
-	gqlSchema "github.com/hypermodeinc/dgraph/v25/graphql/schema"
-	"github.com/hypermodeinc/dgraph/v25/posting"
-	"github.com/hypermodeinc/dgraph/v25/protos/pb"
-	"github.com/hypermodeinc/dgraph/v25/query"
-	"github.com/hypermodeinc/dgraph/v25/schema"
-	"github.com/hypermodeinc/dgraph/v25/tok"
-	"github.com/hypermodeinc/dgraph/v25/types"
-	"github.com/hypermodeinc/dgraph/v25/types/facets"
-	"github.com/hypermodeinc/dgraph/v25/worker"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/chunker"
+	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/dql"
+	gqlSchema "github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/query"
+	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
+	"github.com/dgraph-io/dgraph/v25/worker"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (
@@ -1248,11 +1247,6 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	l := &query.Latency{}
 	l.Start = time.Now()
 
-	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
-		glog.Infof("Got a query, DQL form: %+v %+v at %+v",
-			req.req.Query, req.req.Mutations, l.Start.Format(time.RFC3339))
-	}
-
 	isMutation := len(req.req.Mutations) > 0
 	methodRequest := methodQuery
 	if isMutation {
@@ -1263,6 +1257,15 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	ctx, span := otel.Tracer("").Start(ctx, methodRequest)
 	if ns, err := x.ExtractNamespace(ctx); err == nil {
 		annotateNamespace(span, ns)
+	}
+
+	if bool(glog.V(3)) || worker.LogDQLRequestEnabled() {
+		traceID := ""
+		if span.SpanContext().IsValid() {
+			traceID = fmt.Sprintf(" [trace_id=%s]", span.SpanContext().TraceID().String())
+		}
+		glog.Infof("Got a query, DQL form: %+v %+v at %+v%s",
+			req.req.Query, req.req.Mutations, l.Start.Format(time.RFC3339), traceID)
 	}
 
 	ctx = x.WithMethod(ctx, methodRequest)
@@ -1276,6 +1279,16 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		timeSpentMs := x.SinceMs(l.Start)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
+
+		// Log slow queries with structured fields for observability
+		if x.WorkerConfig.SlowQueryLogThreshold > 0 {
+			x.LogSlowOperation(ctx, "query", "dql", req.req.Query, &x.SlowOperationLatency{
+				Start:      l.Start,
+				Parsing:    l.Parsing,
+				Processing: l.Processing,
+				Encoding:   l.Json,
+			})
+		}
 	}()
 
 	if rerr = x.HealthCheck(); rerr != nil {
@@ -1382,6 +1395,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		EncodingNs:        uint64(l.Json.Nanoseconds()),
 		TotalNs:           uint64((time.Since(l.Start)).Nanoseconds()),
 	}
+
 	return resp, gqlErrs
 }
 
@@ -1694,6 +1708,41 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 	}
 	isGalaxyQuery := x.IsRootNsOperation(ctx)
 
+	missingPreds := make(map[string]struct{})
+	for _, gmu := range qc.gmuList {
+		for _, pred := range gmu.Set {
+			currNs := namespace
+			if isGalaxyQuery {
+				currNs = pred.Namespace
+			}
+			if pred.Predicate == "dgraph.xid" {
+				continue
+			}
+			fullPred := x.NamespaceAttr(currNs, pred.Predicate)
+			if _, ok := schema.State().Get(ctx, fullPred); !ok {
+				missingPreds[fullPred] = struct{}{}
+			}
+		}
+	}
+
+	repaired := make(map[string]bool)
+	if len(missingPreds) > 0 {
+		predList := make([]string, 0, len(missingPreds))
+		for p := range missingPreds {
+			predList = append(predList, p)
+		}
+
+		schReq := &pb.SchemaRequest{Predicates: predList}
+		remoteNodes, err := worker.GetSchemaOverNetwork(ctx, schReq)
+		if err != nil {
+			return errors.Wrapf(err, "unique validation failed to fetch schema for predicates %v", predList)
+		}
+
+		for _, node := range remoteNodes {
+			repaired[node.Predicate] = node.Unique
+		}
+	}
+
 	qc.uniqueVars = map[uint64]uniquePredMeta{}
 	for gmuIndex, gmu := range qc.gmuList {
 		var buildQuery strings.Builder
@@ -1707,7 +1756,16 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 				// [TODO] Don't check if it's dgraph.xid. It's a bug as this node might not be aware
 				// of the schema for the given predicate. This is a bug issue for dgraph.xid hence
 				// we are bypassing it manually until the bug is fixed.
-				predSchema, ok := schema.State().Get(ctx, x.NamespaceAttr(namespace, pred.Predicate))
+				fullPred := x.NamespaceAttr(namespace, pred.Predicate)
+				predSchema, ok := schema.State().Get(ctx, fullPred)
+				if !ok {
+					u, found := repaired[fullPred]
+					if found {
+						predSchema.Unique = u
+						ok = true
+					}
+				}
+
 				if !ok || !predSchema.Unique {
 					continue
 				}
@@ -1816,8 +1874,8 @@ func validateNamespace(ctx context.Context, tc *api.TxnContext) error {
 	return nil
 }
 
-func (s *ServerV25) UpdateExtSnapshotStreamingState(ctx context.Context,
-	req *apiv2.UpdateExtSnapshotStreamingStateRequest) (v *apiv2.UpdateExtSnapshotStreamingStateResponse, err error) {
+func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
+	req *api.UpdateExtSnapshotStreamingStateRequest) (v *api.UpdateExtSnapshotStreamingStateResponse, err error) {
 
 	if req == nil {
 		return nil, errors.New("UpdateExtSnapshotStreamingStateRequest must not be nil")
@@ -1829,18 +1887,22 @@ func (s *ServerV25) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 	groups, err := worker.ProposeDrain(ctx, req)
 	if err != nil {
+		glog.Errorf("[import] failed to propose drain mode: %v", err)
 		return nil, err
 	}
 
-	resp := &apiv2.UpdateExtSnapshotStreamingStateResponse{Groups: groups}
+	resp := &api.UpdateExtSnapshotStreamingStateResponse{Groups: groups}
 
 	return resp, nil
 }
 
-func (s *ServerV25) StreamExtSnapshot(stream apiv2.Dgraph_StreamExtSnapshotServer) error {
+func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) error {
 	defer x.ExtSnapshotStreamingState(false)
-
-	return worker.InStream(stream)
+	if err := worker.InStream(stream); err != nil {
+		glog.Errorf("[import] failed to stream external snapshot: %v", err)
+		return err
+	}
+	return nil
 }
 
 // CommitOrAbort commits or aborts a transaction.

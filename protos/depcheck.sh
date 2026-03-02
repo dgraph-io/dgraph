@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #
-# SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+# SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -37,7 +37,7 @@ function CompareSemVer() {
 
 function CheckProtobufIncludes() {
 	echo -n "Checking for directory /usr/include/google/protobuf or /usr/local/include/google/protobuf... "
-	if !([[ -d /usr/include/google/protobuf ]] || [[ -d /usr/local/include/google/protobuf ]]); then
+	if ! { [[ -d /usr/include/google/protobuf ]] || [[ -d /usr/local/include/google/protobuf ]] || [[ -d /opt/homebrew/include/google/protobuf ]]; }; then
 		echo "FAIL" >&2
 		echo "Missing protobuf headers in /usr/include/google/protobuf or /usr/local/include/google/protobuf:" \
 			"directory not found." >&2

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // EOF indicates the end of the an input.
@@ -99,7 +99,7 @@ func (p *ItemIterator) Prev() bool {
 	return false
 }
 
-// Restore restores the the iterator to position specified.
+// Restore restores the iterator to position specified.
 func (p *ItemIterator) Restore(pos int) {
 	x.AssertTrue(pos <= len(p.l.items) && pos >= -1)
 	p.idx = pos

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,8 +8,8 @@ package index
 import (
 	"context"
 
-	c "github.com/hypermodeinc/dgraph/v25/tok/constraints"
-	opts "github.com/hypermodeinc/dgraph/v25/tok/options"
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
+	opts "github.com/dgraph-io/dgraph/v25/tok/options"
 )
 
 // IndexFactory is responsible for being able to create, find, and remove
@@ -116,6 +116,35 @@ type VectorIndex[T c.Float] interface {
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
 	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) ([]*KeyValue, error)
+}
+
+// VectorIndexOptions carries optional, per-call search tuning parameters.
+// Zero values mean "no override".
+type VectorIndexOptions[T c.Float] struct {
+	// EfOverride, when > 0, overrides the search breadth (ef) for this call.
+	// Implementations should apply this to upper layers and use max(k, ef) for
+	// the bottom layer candidate size, then return the best k.
+	EfOverride int
+
+	// DistanceThreshold, when non-nil, filters out neighbors whose metric-domain
+	// distance exceeds the given threshold. Semantics depend on the index metric:
+	// - Euclidean: direct Euclidean distance (not squared)
+	// - Cosine: cosine distance in [0,2] (1 - cosine_similarity)
+	// - Dot product: undefined; implementations may ignore
+	DistanceThreshold *float64
+
+	// Filter allows callers to pass a SearchFilter; if nil, AcceptAll should be used.
+	Filter SearchFilter[T]
+}
+
+// OptionalSearchOptions adds per-call search controls without breaking existing APIs.
+// Implementations that support these may choose to ignore unsupported fields.
+type OptionalSearchOptions[T c.Float] interface {
+	SearchWithOptions(ctx context.Context, c CacheType, query []T,
+		maxResults int, opts VectorIndexOptions[T]) ([]uint64, error)
+
+	SearchWithUidAndOptions(ctx context.Context, c CacheType, queryUid uint64,
+		maxResults int, opts VectorIndexOptions[T]) ([]uint64, error)
 }
 
 // A Txn is an interface representation of a persistent storage transaction,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	dnOrganization     = "Hypermode Inc."
+	dnOrganization     = "Istari Digital, Inc."
 	dnCommonNamePrefix = "Dgraph"
 )
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,7 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 type certInfo struct {
@@ -85,10 +85,10 @@ func getFileInfo(file string) *certInfo {
 				info.err = errors.Wrapf(err, "could not read parent cert")
 				return &info
 			}
-			if err := cert.CheckSignatureFrom(parent); err != nil {
-				info.verifiedCA = "FAILED"
+			info.verifiedCA = "FAILED"
+			if err := cert.CheckSignatureFrom(parent); err == nil {
+				info.verifiedCA = "PASSED"
 			}
-			info.verifiedCA = "PASSED"
 		}
 
 	case strings.HasSuffix(file, ".key"):

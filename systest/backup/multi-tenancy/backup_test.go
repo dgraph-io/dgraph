@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,9 +18,9 @@ import (
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/hypermodeinc/dgraph/v25/systest/backup/common"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/systest/backup/common"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 var (
@@ -95,7 +95,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	_ = runBackup(t, galaxyToken, 3, 1)
 	testutil.DropAll(t, dg)
 	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
-	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	testutil.WaitForRestore(t, dg, testutil.GetSockAddrHttp())
 
 	query := `{ q(func: has(movie)) { count(uid) } }`
 	expectedResponse := `{ "q": [{ "count": 5 }]}`
@@ -109,7 +109,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	_ = runBackup(t, galaxyToken, 6, 2)
 	testutil.DropAll(t, dg)
 	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
-	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	testutil.WaitForRestore(t, dg, testutil.GetSockAddrHttp())
 	testutil.VerifyQueryResponse(t, dg, query, expectedResponse)
 	testutil.VerifyQueryResponse(t, dg1, query, expectedResponse)
 	testutil.VerifyQueryResponse(t, dg2, query, `{ "q": [{ "count": 0 }]}`)
@@ -120,7 +120,7 @@ func TestBackupMultiTenancy(t *testing.T) {
 	_ = runBackup(t, galaxyToken, 9, 3)
 	testutil.DropAll(t, dg)
 	sendRestoreRequest(t, alphaBackupDir, galaxyToken.AccessJwt)
-	testutil.WaitForRestore(t, dg, testutil.SockAddrHttp)
+	testutil.WaitForRestore(t, dg, testutil.GetSockAddrHttp())
 	query = `{ q(func: has(movie)) { count(uid) } }`
 	expectedResponse = `{ "q": [{ "count": 5 }]}`
 	testutil.VerifyQueryResponse(t, dg, query, expectedResponse)
@@ -158,7 +158,7 @@ func runBackupInternal(t *testing.T, token *testutil.HttpToken, forceFull bool, 
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
 	require.Equal(t, "Success", testutil.JsonGet(data, "backup", "response", "code").(string))
 	taskId := testutil.JsonGet(data, "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.SockAddrHttp)
+	testutil.WaitForTask(t, taskId, false, testutil.GetSockAddrHttp())
 
 	// Verify that the right amount of files and directories were created.
 	common.CopyToLocalFs(t)

@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250"
-	"github.com/hypermodeinc/dgraph/v25/testutil"
-	"github.com/hypermodeinc/dgraph/v25/x"
+	"github.com/dgraph-io/dgraph/v25/testutil"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
-var alphaService = testutil.SockAddr
+var alphaService = testutil.GetSockAddr()
 
 var (
 	testDataDir string
@@ -165,7 +165,7 @@ func TestMain(m *testing.M) {
 	testDataDir = filepath.Dir(thisFile)
 
 	var err error
-	dg, err = testutil.DgraphClientWithGroot(testutil.SockAddr)
+	dg, err = testutil.DgraphClientWithGroot(testutil.GetSockAddr())
 	x.Panic(err)
 
 	// Try to create any files in a dedicated temp directory that gets cleaned up

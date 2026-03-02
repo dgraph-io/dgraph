@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © Hypermode Inc. <hello@hypermode.com>
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,6 +31,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	traceTel "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -446,9 +447,9 @@ func init() {
 	ctx := MetricsContext()
 	go func() {
 		var v string
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
+		ticker := time.Tick(5 * time.Second)
+
+		for range ticker {
 			v = TagValueStatusOK
 			if err := HealthCheck(); err != nil {
 				v = TagValueStatusError
@@ -609,10 +610,27 @@ func SinceMs(startTime time.Time) float64 {
 func RegisterExporters(conf *viper.Viper, service string) {
 	if traceFlag := conf.GetString("trace"); len(traceFlag) > 0 {
 		t := z.NewSuperFlag(traceFlag).MergeAndCheckDefault(TraceDefaults)
+
+		// Set up propagator for trace context propagation across services
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+
+		// Determine namespace from the default service type (dgraph.alpha or dgraph.zero)
+		// This allows filtering all alphas or zeros in Jaeger even with custom service names
+		namespace := service // e.g., "dgraph.alpha" or "dgraph.zero"
+
+		// Use custom service name if specified, otherwise use the default
+		if customService := t.GetString("service"); len(customService) > 0 {
+			service = customService
+		}
+
 		// Create resource with service information
 		res := resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(service),
+			semconv.ServiceNamespaceKey.String(namespace),
 		)
 
 		// Configure the batch span processor options
@@ -632,11 +650,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 
 		// Set up Jaeger exporter if configured
 		if collector := t.GetString("jaeger"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create Jaeger exporter using OpenTelemetry OTLP
 			jaegerExp, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)
@@ -659,11 +679,13 @@ func RegisterExporters(conf *viper.Viper, service string) {
 		// Set up OTLP exporter for Datadog if configured
 		// Note: In OpenTelemetry, typically Datadog integration uses the OTLP exporter
 		if collector := t.GetString("datadog"); len(collector) > 0 {
+			// WithEndpoint expects host:port, not a full URL. Strip any scheme prefix.
+			endpoint := strings.TrimPrefix(strings.TrimPrefix(collector, "http://"), "https://")
 			// Create OTLP exporter for Datadog
 			ddExporter, err := otlptrace.New(
 				context.Background(),
 				otlptracehttp.NewClient(
-					otlptracehttp.WithEndpoint(collector),
+					otlptracehttp.WithEndpoint(endpoint),
 					otlptracehttp.WithInsecure(),
 				),
 			)
@@ -696,13 +718,12 @@ func RegisterExporters(conf *viper.Viper, service string) {
 func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 	defer closer.Done()
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(10 * time.Second)
 	backgroundContext := context.Background()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ticker:
 			ostats.Record(backgroundContext, PBlockHitRatio.M(db.BlockCacheMetrics().Ratio()))
 			ostats.Record(backgroundContext, PIndexHitRatio.M(db.IndexCacheMetrics().Ratio()))
 		case <-closer.HasBeenClosed():
@@ -713,10 +734,8 @@ func MonitorCacheHealth(db *badger.DB, closer *z.Closer) {
 
 func MonitorMemoryMetrics(lc *z.Closer) {
 	defer lc.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	fastTicker := time.NewTicker(time.Second)
-	defer fastTicker.Stop()
+	ticker := time.Tick(time.Minute)
+	fastTicker := time.Tick(time.Second)
 
 	update := func() {
 		// ReadMemStats stops the world which is expensive especially when the
@@ -752,9 +771,9 @@ func MonitorMemoryMetrics(lc *z.Closer) {
 		select {
 		case <-lc.HasBeenClosed():
 			return
-		case <-fastTicker.C:
+		case <-fastTicker:
 			updateAlloc()
-		case <-ticker.C:
+		case <-ticker:
 			update()
 		}
 	}
