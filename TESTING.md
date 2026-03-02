@@ -128,8 +128,9 @@ The codebase is organized into several key packages:
 
 Before running tests, ensure you have the following installed and configured.
 
-> **TL;DR:** On a fresh checkout, just run `make install` followed by `make test`. The build system
-> automatically handles OS detection, builds the correct binaries, and validates dependencies.
+> **TL;DR:** On a fresh checkout, run `make setup` to auto-install tool dependencies, then
+> `make install` followed by `make test`. The build system automatically handles OS detection,
+> builds the correct binaries, and validates dependencies.
 
 ### Automatic Dependency Checking
 
@@ -137,26 +138,32 @@ The test framework includes scripts that check for required dependencies and can
 auto-install them:
 
 ```bash
-# Check all dependencies (run from t/ directory)
-cd t && make check
+# Auto-install all missing tool dependencies (recommended for first-time setup)
+make setup
 
-# Auto-install missing dependencies
-AUTO_INSTALL=true make check
+# Check dependencies without installing (reports what's missing)
+make check-deps
+
+# Same as 'make check-deps' but auto-installs anything missing
+make check-deps AUTO_INSTALL=true
 ```
 
 The check scripts validate:
 
-- Go version (1.21+)
-- Docker and Docker Compose versions and memory allocation
+- Go version (matches go.mod requirement)
+- Docker and Docker Compose versions
+- Docker available memory (warns if < 8GB, with auto-fix on macOS)
 - gotestsum installation
 - ack installation
+- Cross-compiler for non-Linux hosts (macOS)
+- protoc installation (Linux only)
 - Dgraph binary existence and correct architecture
 
 ### Required Tools
 
-> **Note:** You don't need to install these manually. Running `AUTO_INSTALL=true make check` from
-> the `t/` directory (or `AUTO_INSTALL=true make test` from the repo root) automatically installs
-> missing dependencies. The commands below are listed for reference.
+> **Note:** You do **not** need to install these manually. Running `make setup` or
+> `make check-deps AUTO_INSTALL=true` from the repo root automatically checks and installs all
+> missing dependencies. The commands below are listed only as reference for what gets installed.
 
 #### 1. Go (1.21+)
 
@@ -222,8 +229,8 @@ dgraph version
 The build system now handles most setup automatically. On both Linux and macOS:
 
 ```bash
-# Install dependencies (optional - auto-installs if missing)
-cd t && AUTO_INSTALL=true make check && cd ..
+# Auto-install tool dependencies (gotestsum, ack, etc.)
+make setup
 
 # Build dgraph binary (automatically handles Linux binary on macOS)
 make install
@@ -270,6 +277,9 @@ Use `go test` to run one easy test on types package:
 
 ```bash
 go test -v ./types/... -run TestConvert
+
+# Or with make (runs all unit tests, not just one)
+make test-unit
 ```
 
 **Expected output:**
@@ -291,6 +301,9 @@ ok      github.com/dgraph-io/dgraph/v25/types   (cached)
 
 ```bash
 cd t && go build . && ./t --test=TestGQLSchema
+
+# Or with make
+make test TEST=TestGQLSchema
 ```
 
 If both pass, you're ready to run all test types!
@@ -301,26 +314,27 @@ If both pass, you're ready to run all test types!
 
 ### Using Make Targets
 
-The simplest way to run tests:
+The simplest way to run tests is `make test` (default: `integration` suite + `integration2`). Each
+`test-*` target is a shortcut for `make test` with specific arguments. The table below shows all
+three ways to run each test type.
 
-```bash
-# Run all tests (default)
-make test
+| Target                        | `make test` equivalent                    | Without make                                                                  |
+| ----------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `make test`                   | _(default)_                               | `cd t && ./t --suite=integration` then `go test -v --tags=integration2 ./...` |
+| `make test-unit`              | `make test SUITE=unit`                    | `cd t && ./t --suite=unit`                                                    |
+| `make test-integration`       | `make test SUITE=integration`             | `cd t && ./t --suite=integration`                                             |
+| `make test-core`              | `make test SUITE=core`                    | `cd t && ./t --suite=core`                                                    |
+| `make test-systest`           | `make test SUITE=systest`                 | `cd t && ./t --suite=systest`                                                 |
+| `make test-vector`            | `make test SUITE=vector`                  | `cd t && ./t --suite=vector`                                                  |
+| `make test-integration-heavy` | `make test SUITE=systest-heavy,ldbc,load` | `cd t && ./t --suite=systest-heavy,ldbc,load`                                 |
+| `make test-integration2`      | `make test TAGS=integration2`             | `go test -v --tags=integration2 ./...`                                        |
+| `make test-upgrade`           | `make test TAGS=upgrade`                  | `go test -v --tags=upgrade ./...`                                             |
+| `make test-fuzz`              | `make test FUZZ=1`                        | `go test -v -fuzz=Fuzz -fuzztime=300s ./dql/...`                              |
+| `make test-benchmark`         | _(no equivalent)_                         | `go test -bench=. -benchmem ./...`                                            |
+| `make test-all`               | _(no equivalent)_                         | Runs `SUITE=all` + `integration2` + `upgrade` + fuzz sequentially             |
 
-# Common shortcuts (run 'make help' for full list)
-make test-all           # All test suites via t/ runner (i.e. 'make test SUITE=all')
-make test-unit          # Unit tests, no Docker (i.e. 'make test SUITE=unit')
-make test-core          # Core tests (i.e. 'make test SUITE=core')
-make test-systest       # System integration tests (i.e. 'make test SUITE=systest')
-make test-vector        # Vector search tests (i.e. 'make test SUITE=vector')
-make test-ldbc          # LDBC benchmark tests (i.e. 'make test SUITE=ldbc')
-make test-load          # Heavy load tests (i.e. 'make test SUITE=load')
-make test-integration   # Integration tests (i.e. 'make test TAGS=integration')
-make test-integration2  # Integration2 tests via dgraphtest (i.e. 'make test TAGS=integration2')
-make test-upgrade       # Upgrade tests (i.e. 'make test TAGS=upgrade')
-make test-fuzz          # Fuzz tests, auto-discovers packages (i.e. 'make test FUZZ=1')
-make test-benchmark     # Go benchmarks (i.e. 'go test -bench')
-```
+> **Tip:** All targets accept `PKG=`, `TEST=`, and `TIMEOUT=` variables. For example:
+> `make test-systest PKG=systest/plugin TEST=TestPasswordReturn TIMEOUT=60m`
 
 Run `make help` to see all available targets, variables, and dynamically discovered SUITE/TAGS
 values.
@@ -331,14 +345,16 @@ For more control, pass variables to `make test`:
 
 | Variable   | Purpose                            | Example                         |
 | ---------- | ---------------------------------- | ------------------------------- |
-| `SUITE`    | Select t/ runner suite             | `make test SUITE=systest`       |
+| `SUITE`    | Select t/ runner suite             | `make test SUITE=integration`   |
 | `TAGS`     | Go build tags - bypasses t/ runner | `make test TAGS=integration2`   |
 | `PKG`      | Limit to specific package          | `make test PKG=systest/export`  |
 | `TEST`     | Run specific test function         | `make test TEST=TestGQLSchema`  |
+| `TIMEOUT`  | Per-package test timeout           | `make test TIMEOUT=90m`         |
 | `FUZZ`     | Enable fuzz testing                | `make test FUZZ=1`              |
 | `FUZZTIME` | Fuzz duration per package          | `make test FUZZ=1 FUZZTIME=60s` |
 
-**Precedence:** `TAGS` > `FUZZ` > `SUITE` (first match wins)
+**Precedence:** `TAGS` > `FUZZ` > `SUITE` > default (first match wins). When no variable is set,
+`make test` runs `integration` suite (via t/ runner) plus `integration2`.
 
 ### Examples
 
@@ -494,6 +510,19 @@ go test ./types/...
 go test -v ./types/... -run TestConvert
 ```
 
+**With make:**
+
+```bash
+# Run all unit tests (no Docker, no build tags)
+make test-unit
+
+# Run unit tests for a specific package
+make test-unit PKG=types
+
+# Run a specific unit test
+make test-unit PKG=types TEST=TestConvert
+```
+
 ### Identifying a unit test
 
 - No `//go:build` tag at the top of the file = unit test
@@ -535,15 +564,18 @@ Docker Compose and runs tests tagged with `integration`.
 
 A suite is a named group of test packages that can be run together with the `--suite` flag.
 
-| Suite     | Purpose                               | Packages/Tests Included                                                                       |
-| --------- | ------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `unit`    | Default suite for regular development | All packages except ldbc and load (includes query, mutation, schema, GraphQL, ACL, worker)    |
-| `core`    | Core Dgraph functionality             | Query, mutation, schema, GraphQL e2e, ACL, TLS, worker (excludes systest, ldbc, vector, load) |
-| `systest` | Real workflows and system-level tests | Backup/restore, export, multi-tenancy, online-restore, audit, CDC, group-delete               |
-| `vector`  | Vector search functionality           | Vector index, similarity search, HNSW, vector backup/restore (`systest/vector/`)              |
-| `ldbc`    | Benchmark queries                     | LDBC benchmark suite (`systest/ldbc/`)                                                        |
-| `load`    | Heavy data loading scenarios          | 21million, 1million, bulk_live, bgindex, bulkloader                                           |
-| `all`     | Everything                            | Runs all test suites                                                                          |
+| Suite              | Purpose                                            | Packages/Tests Included                                                               |
+| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `unit`             | True unit tests only                               | All packages except ldbc/load — no Docker, no `--tags=integration`                    |
+| `integration`      | Default suite — all integration tests except heavy | Everything except ldbc, load, and systest-heavy (replaces old `unit`)                 |
+| `core`             | Core Dgraph functionality                          | Query, mutation, schema, GraphQL e2e, ACL, TLS, worker                                |
+| `systest`          | All system integration tests                       | Both systest-baseline + systest-heavy (backward compatible)                           |
+| `systest-baseline` | Lean systest for daily dev                         | backup/filesystem, export, multi-tenancy, audit, CDC, group-delete, plugin, ...       |
+| `systest-heavy`    | Resource-intensive systests                        | backup/minio\*, backup/encryption, backup/advanced-scenarios, tracing, online-restore |
+| `vector`           | Vector search functionality                        | Vector index, similarity search, HNSW                                                 |
+| `ldbc`             | Benchmark queries                                  | LDBC benchmark suite                                                                  |
+| `load`             | Heavy data loading scenarios                       | 21million, 1million, bulk_live, bgindex, bulkloader                                   |
+| `all`              | Everything in t/ runner                            | All packages                                                                          |
 
 ### Docker Compose Discovery
 
@@ -576,17 +608,31 @@ cd t && go build .
 ./t -r
 ```
 
+**With make:**
+
+```bash
+# Run a suite
+make test SUITE=core
+
+# Run specific package
+make test SUITE=integration PKG=systest/export
+
+# Run single test
+make test TEST=TestExportAndLoadJson
+```
+
 ### Key Flags
 
-| Flag          | Description                                                        |
-| ------------- | ------------------------------------------------------------------ |
-| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, systest, vector, core |
-| `--pkg=X`     | Run specific package                                               |
-| `--test=X`    | Run specific test function                                         |
-| `-j=N`        | Concurrency (default: 1)                                           |
-| `--keep`      | Keep cluster running after tests                                   |
-| `-r`          | Remove all test containers                                         |
-| `--skip-slow` | Skip slow packages                                                 |
+| Flag          | Description                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--suite=X`   | Select test suite(s): all, ldbc, load, unit, integration, systest, systest-baseline, systest-heavy, vector, core |
+| `--pkg=X`     | Run specific package                                                                                             |
+| `--test=X`    | Run specific test function                                                                                       |
+| `--timeout=X` | Per-package timeout (e.g. 60m, 2h). Default: 30m (180m with --race)                                              |
+| `-j=N`        | Concurrency (default: 1)                                                                                         |
+| `--keep`      | Keep cluster running after tests                                                                                 |
+| `-r`          | Remove all test containers                                                                                       |
+| `--skip-slow` | Skip slow packages                                                                                               |
 
 ---
 
@@ -608,6 +654,16 @@ cd t && go build .
 
 # Keep cluster running after tests (for debugging)
 ./t --pkg=systest/export --keep
+```
+
+**With make:**
+
+```bash
+# Run all tests in a package (make builds the runner automatically)
+make test SUITE=integration PKG=systest/export
+
+# Run single test
+make test TEST=TestExportAndLoadJson
 ```
 
 ### Method 2: Manual Cluster + go test
@@ -682,6 +738,19 @@ Using `t/` runner:
 ./t --suite=systest
 ```
 
+**With make:**
+
+```bash
+# Run all systest packages
+make test-systest
+
+# Run specific systest package
+make test SUITE=systest PKG=systest/export
+
+# Run specific test by name
+make test TEST=TestExportAndLoadJson
+```
+
 ### Key Environment Variables
 
 | Variable              | Purpose                            | Set by              |
@@ -725,6 +794,19 @@ make install
 # Run tests
 go test -v --tags=integration2 ./systest/integration2/
 go test -v --tags=integration2 --run '^TestName$' ./pkg/
+```
+
+**With make:**
+
+```bash
+# Run all integration2 tests
+make test-integration2
+
+# Run integration2 tests for a specific package
+make test TAGS=integration2 PKG=systest/vector
+
+# Run a specific integration2 test
+make test TAGS=integration2 PKG=systest/vector TEST=TestVectorSearch
 ```
 
 ### Version & Binary Management
@@ -935,6 +1017,19 @@ go test -v --tags=upgrade ./worker/
 
 ```bash
 go test -v --tags=upgrade -run '^TestUpgradeName$' ./pkg/
+```
+
+**With make:**
+
+```bash
+# Run all upgrade tests
+make test-upgrade
+
+# Run upgrade tests for a specific package
+make test TAGS=upgrade PKG=acl
+
+# Run a specific upgrade test
+make test TAGS=upgrade PKG=acl TEST=TestACL
 ```
 
 ### Where Upgrade Tests Live
@@ -1211,6 +1306,19 @@ go test -v --tags=integration --run 'TestPluginTestSuite/TestPasswordReturn/subt
 go test -v --tags=upgrade --run 'TestPluginTestSuite/TestPasswordReturn' ./systest/plugin/
 ```
 
+**With make:**
+
+```bash
+# Run the plugin systest package via t/ runner
+make test SUITE=systest PKG=systest/plugin
+
+# Run a specific test
+make test SUITE=systest PKG=systest/plugin TEST=TestPluginTestSuite/TestPasswordReturn
+
+# Run in upgrade mode
+make test TAGS=upgrade PKG=systest/plugin TEST=TestPluginTestSuite/TestPasswordReturn
+```
+
 **When NOT to use:**
 
 - Simple one-off tests → use regular `func TestX(t *testing.T)`
@@ -1247,6 +1355,16 @@ go test -v ./dql -fuzz=Fuzz -fuzztime=5m
 go test -v ./dql -fuzz=Fuzz -fuzztime=300s -fuzzminimizetime=120s
 ```
 
+**With make:**
+
+```bash
+# Run all fuzz tests (default 300s per package)
+make test-fuzz
+
+# Fuzz a specific package with custom duration
+make test FUZZ=1 PKG=dql FUZZTIME=5m
+```
+
 ### CI Workflow
 
 - `ci-dgraph-fuzz.yml` (runs on PRs)
@@ -1264,39 +1382,6 @@ go test -v ./dql -fuzz=Fuzz -fuzztime=300s -fuzzminimizetime=120s
 ---
 
 ## Future Improvement Ideas
-
-### ✅ Completed Improvements
-
-The following items from the original wishlist have been implemented:
-
-- **✅ OS detection and automatic binary handling:** The Makefile now detects the host OS at runtime
-  and automatically builds the correct binaries. On macOS, `make install` builds both native and
-  Linux binaries without manual intervention.
-
-- **✅ Automatic binary path management:** The `LINUX_GOBIN` environment variable is automatically
-  set based on OS. Docker Compose files use `${LINUX_GOBIN:-$GOPATH/bin}` to mount the correct
-  binary.
-
-- **✅ No manual setup scripts required:** The `make test` target now depends on `dgraph-installed`
-  which automatically builds binaries if missing. Dependency checking scripts in `t/scripts/` can
-  auto-install missing tools with `AUTO_INSTALL=true`.
-
-- **✅ Prerequisites handled automatically:** Running `make test` validates dependencies and builds
-  required binaries before running tests.
-
-- **✅ Unified test interface:** A single `make test` entry point that accepts arguments to run any
-  test type (unit, integration, integration2, upgrade, fuzz) with environment variables for control.
-
-- **✅ Example commands that "just work":** The following now work as expected:
-
-  ```bash
-  make test SUITE=systest
-  make test FUZZ=1 PKG=dql
-  make test TAGS=upgrade PKG=acl
-  make test TAGS=integration PKG=systest/plugin
-  ```
-
-### Remaining Ideas
 
 The following improvements could still enhance the developer experience:
 

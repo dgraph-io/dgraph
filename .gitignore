@@ -48,3 +48,5 @@ x/log_test/*.enc
 *.buf
 .osgrep
 .worktrees/
+AGENTS.md
+CLAUDE.md

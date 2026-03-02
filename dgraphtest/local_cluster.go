@@ -6,9 +6,11 @@
 package dgraphtest
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"log"
@@ -1320,11 +1322,19 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 		if raceEnabled {
 			opts = append(opts, "-race")
 		}
-		opts = append(opts, "-buildmode=plugin", "-o", so, src)
-		os.Setenv("GOOS", "linux")
-		os.Setenv("GOARCH", "amd64")
+		opts = append(opts, "-buildmode=plugin")
+		if runtime.GOOS != "linux" {
+			// Use the BFD linker; the default gold linker is not shipped
+			// with most cross-compiler toolchains.
+			opts = append(opts, "-ldflags", "-extldflags -fuse-ld=bfd")
+		}
+		opts = append(opts, "-o", so, src)
 		cmd := exec.Command("go", opts...)
 		cmd.Dir = filepath.Dir(curr)
+		cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH)
+		if runtime.GOOS != "linux" {
+			cmd.Env = append(cmd.Env, "CGO_ENABLED=1", "CC="+linuxCrossCC())
+		}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error: %v\n", err)
 			log.Printf("Output: %v\n", string(out))
@@ -1343,6 +1353,22 @@ func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
 	log.Printf("plugin build completed. Files are: %s\n", sofiles)
 
 	return nil
+}
+
+// linuxCrossCC returns the C cross-compiler for targeting Linux from the current host.
+// Respects the LINUX_CC environment variable if set.
+func linuxCrossCC() string {
+	if cc := os.Getenv("LINUX_CC"); cc != "" {
+		return cc
+	}
+	switch runtime.GOARCH {
+	case "arm64":
+		return "aarch64-unknown-linux-gnu-gcc"
+	case "amd64":
+		return "x86_64-unknown-linux-gnu-gcc"
+	default:
+		return "gcc"
+	}
 }
 
 func (c *LocalCluster) GetAlphaGrpcPublicPort(id int) (string, error) {
@@ -1367,4 +1393,70 @@ func (c *LocalCluster) GetAlphaGrpcEndpoint(id int) (string, error) {
 		return "", err
 	}
 	return "0.0.0.0:" + pubPort, nil
+}
+
+// CopyExportToHost copies exported files from the container to a host directory.
+// It returns the paths to RDF/JSON files and schema files on the host.
+func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, schemaFiles []string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	// Copy the exported data from the container to host
+	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), exportDir)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error copying export dir from container [%v]", c.alphas[0].cname())
+	}
+	defer func() {
+		if err := ts.Close(); err != nil {
+			log.Printf("[WARNING] error closing tared stream from docker cp for [%v]", c.alphas[0].cname())
+		}
+	}()
+
+	// Extract files from tar stream
+	tr := tar.NewReader(ts)
+	for {
+		header, err := tr.Next()
+		if stderrors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return nil, nil, errors.Wrapf(err, "error reading file in tared stream: [%+v]", header)
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		fileName := filepath.Base(header.Name)
+		hostFile := filepath.Join(hostDir, fileName)
+
+		if !strings.HasPrefix(filepath.Clean(hostFile), filepath.Clean(hostDir)+string(os.PathSeparator)) {
+			return nil, nil, errors.Errorf("illegal file path in archive: %v", header.Name)
+		}
+
+		switch {
+		case strings.HasSuffix(fileName, ".rdf.gz"):
+			dataFiles = append(dataFiles, hostFile)
+		case strings.HasSuffix(fileName, ".json.gz"):
+			dataFiles = append(dataFiles, hostFile)
+		case strings.HasSuffix(fileName, ".schema.gz"):
+			schemaFiles = append(schemaFiles, hostFile)
+		case strings.HasSuffix(fileName, ".gql_schema.gz"):
+			// Skip gql schema files for now
+			continue
+		default:
+			log.Printf("[WARNING] unexpected file in export: %v", fileName)
+			continue
+		}
+
+		fd, err := os.Create(hostFile)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "error creating file [%v]", hostFile)
+		}
+		defer fd.Close()
+
+		if _, err := io.Copy(fd, tr); err != nil {
+			return nil, nil, errors.Wrapf(err, "error writing to [%v] from: [%+v]", fd.Name(), header)
+		}
+	}
+
+	return dataFiles, schemaFiles, nil
 }

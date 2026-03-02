@@ -351,12 +351,6 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
-		fmt.Println("Skipping live load-uids tests on non-Linux platforms due to dgraph binary dependency")
-		fmt.Println("You can set the DGRAPH_BINARY environment variable to path of a native dgraph binary to run these tests")
-		os.Exit(0)
-	}
-
 	alphaService = testutil.GetSockAddr()
 	alphaName = testutil.Instance
 

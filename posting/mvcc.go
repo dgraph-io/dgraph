@@ -764,7 +764,9 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	cacheItem, ok := ml.cache.get(key)
 
-	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs {
+	// Issue #9597 fix: Cache is only valid if minTs <= readTs AND maxTs >= readTs.
+	// If maxTs < readTs, the cache is missing mutations committed after maxTs.
+	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs && cacheItem.list.maxTs >= readTs {
 		cacheItem.list.RLock()
 		lCopy := copyList(cacheItem.list)
 		cacheItem.list.RUnlock()
