@@ -428,7 +428,7 @@ func sanitizeFilename(pkg string) string {
 
 // gotestsumBin returns the absolute path to gotestsum inside $GOPATH/bin.
 // This avoids relying on $PATH, which may not include $GOPATH/bin on all machines
-// (the check-gotestsum.sh script validates at this same path).
+// (the check-deps-gotestsum.sh script validates at this same path).
 func gotestsumBin() string {
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
