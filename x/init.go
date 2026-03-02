@@ -53,8 +53,8 @@ jemalloc enabled : %v
 GOMAXPROCS       : %v
 Num CPUs         : %v
 
-For Dgraph official documentation, visit https://dgraph.io/docs.
-For discussions about Dgraph     , visit https://discuss.dgraph.io.
+For Dgraph official documentation, visit https://docs.dgraph.io
+For discussions about Dgraph     , visit https://github.com/orgs/dgraph-io/discussions
 
 %s.
 © Istari Digital, Inc.
