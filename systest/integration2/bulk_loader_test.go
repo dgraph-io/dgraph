@@ -89,12 +89,11 @@ func TestBulkLoaderSkipReducePhase(t *testing.T) {
 	}
 	require.NoError(t, c.BulkLoad(mapOpts))
 
-	// Second run: reduce phase only, using the same tmp dir
+	// Second run: reduce phase only, using the same tmp dir.
+	// Data and schema files are not needed; all input was processed in the map phase.
 	reduceOpts := dgraphtest.BulkOpts{
-		DataFiles:      []string{dataFile},
-		GQLSchemaFiles: []string{gqlSchemaFile},
-		TmpDir:         tmpDir,
-		SkipMapPhase:   true,
+		TmpDir:       tmpDir,
+		SkipMapPhase: true,
 	}
 	require.NoError(t, c.BulkLoad(reduceOpts))
 

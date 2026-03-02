@@ -208,27 +208,29 @@ func RunBulkLoader(opt BulkOptions) {
 	}
 	fmt.Printf("Encrypted input: %v; Encrypted output: %v\n", opt.Encrypted, opt.EncryptedOut)
 
-	if opt.SchemaFile == "" {
-		// if only graphql schema is provided, we can generate DQL schema from it.
-		if opt.GqlSchemaFile == "" {
-			fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
-			os.Exit(1)
-		}
-	} else {
-		if !filestore.Exists(opt.SchemaFile) {
-			fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
-			os.Exit(1)
-		}
-	}
-	if opt.DataFiles == "" {
-		fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
-		os.Exit(1)
-	} else {
-		fileList := strings.SplitSeq(opt.DataFiles, ",")
-		for file := range fileList {
-			if !filestore.Exists(file) {
-				fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
+	if !opt.SkipMapPhase {
+		if opt.SchemaFile == "" {
+			// if only graphql schema is provided, we can generate DQL schema from it.
+			if opt.GqlSchemaFile == "" {
+				fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 				os.Exit(1)
+			}
+		} else {
+			if !filestore.Exists(opt.SchemaFile) {
+				fmt.Fprintf(os.Stderr, "Schema path(%v) does not exist.\n", opt.SchemaFile)
+				os.Exit(1)
+			}
+		}
+		if opt.DataFiles == "" {
+			fmt.Fprint(os.Stderr, "RDF or JSON file(s) location must be specified.\n")
+			os.Exit(1)
+		} else {
+			fileList := strings.SplitSeq(opt.DataFiles, ",")
+			for file := range fileList {
+				if !filestore.Exists(file) {
+					fmt.Fprintf(os.Stderr, "Data path(%v) does not exist.\n", file)
+					os.Exit(1)
+				}
 			}
 		}
 	}
@@ -323,10 +325,26 @@ func RunBulkLoader(opt BulkOptions) {
 	x.Check(os.MkdirAll(bufDir, 0700))
 	defer os.RemoveAll(bufDir)
 
-	loader := newLoader(&opt)
-
 	const bulkMetaFilename = "bulk.meta"
 	bulkMetaPath := filepath.Join(opt.TmpDir, bulkMetaFilename)
+	const writeTsFilename = "write.ts"
+	writeTsPath := filepath.Join(opt.TmpDir, writeTsFilename)
+
+	var precomputedWriteTs uint64
+	if opt.SkipMapPhase {
+		writeTsData, err := os.ReadFile(writeTsPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading write timestamp file; was --skip_reduce_phase used in the map run?")
+			os.Exit(1)
+		}
+		precomputedWriteTs, err = strconv.ParseUint(strings.TrimSpace(string(writeTsData)), 10, 64)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error parsing write timestamp file")
+			os.Exit(1)
+		}
+	}
+
+	loader := newLoader(&opt, precomputedWriteTs)
 
 	if opt.SkipMapPhase {
 		bulkMetaData, err := os.ReadFile(bulkMetaPath)
@@ -361,6 +379,10 @@ func RunBulkLoader(opt BulkOptions) {
 		}
 		if err = os.WriteFile(bulkMetaPath, bulkMetaData, 0600); err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing to bulk meta file")
+			os.Exit(1)
+		}
+		if err = os.WriteFile(writeTsPath, []byte(strconv.FormatUint(loader.writeTs, 10)), 0600); err != nil {
+			fmt.Fprintln(os.Stderr, "Error writing write timestamp file")
 			os.Exit(1)
 		}
 	}

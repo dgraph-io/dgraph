@@ -145,7 +145,7 @@ type loader struct {
 	dg      *dgo.Dgraph
 }
 
-func newLoader(opt *BulkOptions) *loader {
+func newLoader(opt *BulkOptions, precomputedWriteTs uint64) *loader {
 	if opt == nil {
 		log.Fatalf("Cannot create loader with nil options.")
 	}
@@ -186,17 +186,27 @@ func newLoader(opt *BulkOptions) *loader {
 		fmt.Printf("Error logging enabled, writing to: %s\n", opt.ErrorLogPath)
 	}
 
+	writeTs := precomputedWriteTs
+	if writeTs == 0 {
+		writeTs = getWriteTimestamp(zero, dg)
+	}
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *chunkWithMeta, opt.NumGoroutines),
-		writeTs:       getWriteTimestamp(zero, dg),
+		writeTs:       writeTs,
 		namespaces:    &sync.Map{},
 		errorLog:      errLog,
 	}
-	st.schema = newSchemaStore(readSchema(opt), opt, st)
+	var parsedSchema *schema.ParsedSchema
+	if !opt.SkipMapPhase {
+		parsedSchema = readSchema(opt)
+	} else {
+		parsedSchema = &schema.ParsedSchema{}
+	}
+	st.schema = newSchemaStore(parsedSchema, opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
