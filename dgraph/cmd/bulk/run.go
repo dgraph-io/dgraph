@@ -78,6 +78,8 @@ func init() {
 	flag.Int64("partition_mb", 4, "Pick a partition key every N megabytes of data.")
 	flag.Bool("skip_map_phase", false,
 		"Skip the map phase (assumes that map output files already exist).")
+	flag.Bool("skip_reduce_phase", false,
+		"Skip the reduce phase (stops after map phase completion).")
 	flag.Bool("cleanup_tmp", true,
 		"Clean up the tmp directory after the loader finishes. Setting this to false allows the"+
 			" bulk loader can be re-run while skipping the map phase.")
@@ -150,6 +152,7 @@ func run() {
 		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
 		PartitionBufSize: int64(Bulk.Conf.GetInt("partition_mb")),
 		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
+		SkipReducePhase:  Bulk.Conf.GetBool("skip_reduce_phase"),
 		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
 		NumReducers:      Bulk.Conf.GetInt("reducers"),
 		Version:          Bulk.Conf.GetBool("version"),
@@ -240,6 +243,20 @@ func RunBulkLoader(opt BulkOptions) {
 			opt.NumReducers, opt.ReduceShards)
 		os.Exit(1)
 	}
+
+	// Validate skip phase flags
+	if opt.SkipMapPhase && opt.SkipReducePhase {
+		fmt.Fprint(os.Stderr, "Cannot skip both map and reduce phases.\n")
+		os.Exit(1)
+	}
+	if opt.SkipReducePhase {
+		if Bulk.Cmd.Flags().Changed("cleanup_tmp") && opt.CleanupTmp {
+			fmt.Fprint(os.Stderr, "Cannot use --skip_reduce_phase with --cleanup_tmp=true. "+
+				"Temp files must be preserved for the later reduce phase.\n")
+			os.Exit(1)
+		}
+		opt.CleanupTmp = false
+	}
 	if opt.CustomTokenizers != "" {
 		for _, soFile := range strings.Split(opt.CustomTokenizers, ",") {
 			tok.LoadCustomTokenizer(soFile)
@@ -267,25 +284,28 @@ func RunBulkLoader(opt BulkOptions) {
 
 	// Make sure it's OK to create or replace the directory specified with the --out option.
 	// It is always OK to create or replace the default output directory.
-	if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
-		err := x.IsMissingOrEmptyDir(opt.OutDir)
-		if err == nil {
-			fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
-				" Use --replace_out to overwrite it.\n")
-			os.Exit(1)
-		} else if err != x.ErrMissingDir {
-			x.CheckfNoTrace(err)
+	// Skip output directory validation if we're only doing map phase
+	if !opt.SkipReducePhase {
+		if opt.OutDir != defaultOutDir && !opt.ReplaceOutDir {
+			err := x.IsMissingOrEmptyDir(opt.OutDir)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "Output directory exists and is not empty."+
+					" Use --replace_out to overwrite it.\n")
+				os.Exit(1)
+			} else if err != x.ErrMissingDir {
+				x.CheckfNoTrace(err)
+			}
 		}
-	}
 
-	// Delete and recreate the output dirs to ensure they are empty.
-	x.Check(os.RemoveAll(opt.OutDir))
-	for i := range opt.ReduceShards {
-		dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
-		x.Check(os.MkdirAll(dir, 0700))
-		opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
+		// Delete and recreate the output dirs to ensure they are empty.
+		x.Check(os.RemoveAll(opt.OutDir))
+		for i := range opt.ReduceShards {
+			dir := filepath.Join(opt.OutDir, strconv.Itoa(i), "p")
+			x.Check(os.MkdirAll(dir, 0700))
+			opt.shardOutputDirs = append(opt.shardOutputDirs, dir)
 
-		x.Check(x.WriteGroupIdFile(dir, uint32(i+1)))
+			x.Check(x.WriteGroupIdFile(dir, uint32(i+1)))
+		}
 	}
 
 	// Create a directory just for bulk loader's usage.
@@ -344,6 +364,15 @@ func RunBulkLoader(opt BulkOptions) {
 			os.Exit(1)
 		}
 	}
+
+	if opt.SkipReducePhase {
+		fmt.Println("Skipping reduce phase. Map phase completed successfully.")
+		fmt.Println("Temp files preserved for later reduce phase processing.")
+		// Don't call cleanup() to preserve temp files
+		loader.prog.endSummary()
+		return
+	}
+
 	loader.reduceStage()
 	loader.writeSchema()
 	loader.cleanup()

@@ -475,12 +475,15 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 }
 
 type BulkOpts struct {
-	DataFiles      []string
-	SchemaFiles    []string
-	GQLSchemaFiles []string
-	OutDir         string
-	MapShards      int // Number of map shards (0 = auto based on numAlphas/replicas)
-	ReduceShards   int // Number of reduce shards (0 = auto based on numAlphas/replicas)
+	DataFiles       []string
+	SchemaFiles     []string
+	GQLSchemaFiles  []string
+	OutDir          string
+	MapShards       int    // Number of map shards (0 = auto based on numAlphas/replicas)
+	ReduceShards    int    // Number of reduce shards (0 = auto based on numAlphas/replicas)
+	SkipReducePhase bool   // Stop after map phase; preserve tmp dir for later reduce
+	SkipMapPhase    bool   // Skip map phase; assumes map output files already exist
+	TmpDir          string // Custom tmp directory (required when splitting map/reduce runs)
 }
 
 func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
@@ -516,6 +519,16 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 		"--replace_out",
 		// Use :0 to let OS assign random available port for pprof, avoids conflicts in tests
 		"--http", ":0",
+	}
+
+	if opts.TmpDir != "" {
+		args = append(args, "--tmp", opts.TmpDir)
+	}
+	if opts.SkipReducePhase {
+		args = append(args, "--skip_reduce_phase")
+	}
+	if opts.SkipMapPhase {
+		args = append(args, "--skip_map_phase")
 	}
 
 	if len(opts.DataFiles) > 0 {

@@ -51,6 +51,7 @@ type BulkOptions struct {
 	MapBufSize       uint64
 	PartitionBufSize int64
 	SkipMapPhase     bool
+	SkipReducePhase  bool
 	CleanupTmp       bool
 	NumReducers      int
 	Version          bool
