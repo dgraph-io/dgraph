@@ -114,12 +114,12 @@ func TestBulkLoaderSkipReducePhase(t *testing.T) {
 	}
 	data, err := hc.RunGraphqlQuery(params, false)
 	require.NoError(t, err)
-	dgraphapi.CompareJSON(`{
+	require.NoError(t, dgraphapi.CompareJSON(`{
 		"getMessage": {
 		  "content": "DVTCTXCVYI",
 		  "author": "USYMVFJYXA"
 		}
-	  }`, string(data))
+	  }`, string(data)))
 }
 
 func TestBulkLoaderNoDqlSchema(t *testing.T) {
