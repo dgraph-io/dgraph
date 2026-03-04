@@ -1761,9 +1761,8 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
+		l.RLock()
 		if l.canUseCalculatedUids() {
-			l.RLock()
-
 			afterIdx := 0
 
 			if opt.AfterUid != 0 {
@@ -1785,8 +1784,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 
 			return out, nil, opt.Intersect != nil
 		}
-		// Pre-assign length to make it faster.
-		l.RLock()
+		// canUseCalculatedUids returned false; continue holding the RLock from above.
 		defer l.RUnlock()
 		// Use approximate length for initial capacity.
 		res := make([]uint64, 0, l.ApproxLen())
