@@ -134,8 +134,14 @@ func (mm *MutableLayer) clone() *MutableLayer {
 	if mm == nil {
 		return nil
 	}
+	// Deep copy committedEntries to prevent races when setMutationAfterCommit
+	// writes into the map with refresh=false.
+	entries := make(map[uint64]*pb.PostingList, len(mm.committedEntries))
+	for k, v := range mm.committedEntries {
+		entries[k] = v
+	}
 	return &MutableLayer{
-		committedEntries:  mm.committedEntries,
+		committedEntries:  entries,
 		readTs:            0,
 		deleteAllMarker:   mm.deleteAllMarker,
 		committedUids:     mm.committedUids,
