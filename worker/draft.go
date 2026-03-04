@@ -274,7 +274,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
 		applyCh:    make(chan []raftpb.Entry, 1000),
-		closer:     z.NewCloser(4), // Matches CLOSER:1
+		closer:     z.NewCloser(5), // Matches CLOSER:1
 		ops:        make(map[op]operation),
 		cdcTracker: newCDC(),
 	}
@@ -2033,11 +2033,18 @@ func (n *node) AmLeader() bool {
 }
 
 func (n *node) monitorRaftMetrics() {
-	ticker := time.Tick(5 * time.Second)
+	defer n.closer.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
-	for range ticker {
-		curPendingSize := atomic.LoadInt64(&n.pendingSize)
-		ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
-		ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
+	for {
+		select {
+		case <-ticker.C:
+			curPendingSize := atomic.LoadInt64(&n.pendingSize)
+			ostats.Record(n.ctx, x.RaftPendingSize.M(curPendingSize))
+			ostats.Record(n.ctx, x.RaftApplyCh.M(int64(len(n.applyCh))))
+		case <-n.closer.HasBeenClosed():
+			return
+		}
 	}
 }
