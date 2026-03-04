@@ -435,25 +435,27 @@ func upsertGuardianAndGroot(closer *z.Closer, ns uint64) {
 	}
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
 		ctx = x.AttachNamespace(ctx, ns)
 		if err := upsertGuardian(ctx); err != nil {
 			glog.Infof("Unable to upsert the guardian group. Error: %v", err)
+			cancel()
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		cancel()
 		break
 	}
 
 	for closer.Ctx().Err() == nil {
 		ctx, cancel := context.WithTimeout(closer.Ctx(), time.Minute)
-		defer cancel()
 		ctx = x.AttachNamespace(ctx, ns)
 		if err := upsertGroot(ctx, "password"); err != nil {
 			glog.Infof("Unable to upsert the groot account. Error: %v", err)
+			cancel()
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+		cancel()
 		break
 	}
 }
