@@ -324,7 +324,13 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	for _, status := range delta.Txns {
 		txn := o.pendingTxns[status.StartTs]
 		if txn != nil && status.CommitTs > 0 {
+			txn.cache.RLock()
+			keys := make([]string, 0, len(txn.cache.deltas))
 			for k := range txn.cache.deltas {
+				keys = append(keys, k)
+			}
+			txn.cache.RUnlock()
+			for _, k := range keys {
 				IncrRollup.addKeyToBatch([]byte(k), 0)
 			}
 		}
