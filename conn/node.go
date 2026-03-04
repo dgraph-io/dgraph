@@ -388,6 +388,7 @@ func (n *Node) BatchAndSendMessages() {
 			select {
 			case s.msgCh <- data:
 			default:
+				glog.Warningf("Dropping Raft message to peer %#x, channel full", to)
 			}
 		}
 	}
