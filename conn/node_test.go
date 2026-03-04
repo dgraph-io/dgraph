@@ -48,6 +48,67 @@ func (n *Node) run(wg *sync.WaitGroup) {
 	}
 }
 
+func TestConfChangeStoreAndCleanup(t *testing.T) {
+	dir := t.TempDir()
+	store := raftwal.Init(dir)
+	rc := &pb.RaftContext{Id: 1}
+	n := NewNode(rc, store, nil)
+
+	// Store a conf change entry.
+	ch := make(chan error, 1)
+	id := n.storeConfChange(ch)
+
+	// Verify it was stored.
+	n.RLock()
+	_, exists := n.confChanges[id]
+	n.RUnlock()
+	require.True(t, exists, "conf change should be stored")
+
+	// Simulate cleanup (as done in proposeConfChange on timeout).
+	n.Lock()
+	delete(n.confChanges, id)
+	n.Unlock()
+
+	// Verify it was cleaned up.
+	n.RLock()
+	_, exists = n.confChanges[id]
+	n.RUnlock()
+	require.False(t, exists, "conf change should be cleaned up")
+}
+
+func TestDoneConfChangeTolerantOfMissing(t *testing.T) {
+	dir := t.TempDir()
+	store := raftwal.Init(dir)
+	rc := &pb.RaftContext{Id: 1}
+	n := NewNode(rc, store, nil)
+
+	// DoneConfChange with a non-existent ID should not panic.
+	n.DoneConfChange(12345, nil)
+
+	// Store and then clean up, then DoneConfChange should be tolerant.
+	ch := make(chan error, 1)
+	id := n.storeConfChange(ch)
+	n.Lock()
+	delete(n.confChanges, id)
+	n.Unlock()
+	n.DoneConfChange(id, nil) // Should not panic.
+}
+
+func TestConfChangeStoreUniqueness(t *testing.T) {
+	dir := t.TempDir()
+	store := raftwal.Init(dir)
+	rc := &pb.RaftContext{Id: 1}
+	n := NewNode(rc, store, nil)
+
+	ids := make(map[uint64]bool)
+	for i := 0; i < 100; i++ {
+		ch := make(chan error, 1)
+		id := n.storeConfChange(ch)
+		require.False(t, ids[id], "storeConfChange should produce unique IDs")
+		ids[id] = true
+	}
+}
+
 func TestProposal(t *testing.T) {
 	dir := t.TempDir()
 	store := raftwal.Init(dir)
