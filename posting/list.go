@@ -306,7 +306,7 @@ func (mm *MutableLayer) insertCommittedPostings(pl *pb.PostingList) {
 	if mm.committedUidsTime == math.MaxUint64 {
 		mm.committedUidsTime = 0
 	}
-	if mm.length == math.MaxInt64 {
+	if mm.length == math.MaxInt {
 		mm.length = 0
 	}
 	if mm.deleteAllMarker == math.MaxUint64 {
