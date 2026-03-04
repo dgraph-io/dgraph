@@ -532,9 +532,10 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 		x.Check(err)
 		go func() {
 			m := cache.Metrics
-			ticker := time.Tick(10 * time.Second)
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
 
-			for range ticker {
+			for range ticker.C {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 
