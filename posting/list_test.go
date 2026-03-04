@@ -1792,6 +1792,18 @@ func TestRecursiveSplits(t *testing.T) {
 	}
 }
 
+func TestLengthSentinelConsistency(t *testing.T) {
+	// Verify that the sentinel value used in newMutableLayer (math.MaxInt)
+	// matches the check in len() (also math.MaxInt). Previously there was
+	// a mismatch with math.MaxInt64 which would fail on 32-bit systems.
+	mm := newMutableLayer()
+	require.Equal(t, math.MaxInt, mm.length, "sentinel should be math.MaxInt")
+
+	// The len() method should recognize the sentinel and compute fresh length.
+	// We can't easily test the full len() here without a List, but we verify
+	// the sentinel is set consistently.
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
