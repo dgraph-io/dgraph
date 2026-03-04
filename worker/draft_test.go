@@ -12,6 +12,7 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/dgraph-io/dgraph/v25/conn"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/raftwal"
@@ -36,6 +37,35 @@ func getEntryForCommit(index, startTs, commitTs uint64) raftpb.Entry {
 	x.Check2(x.MarshalToSizedBuffer(data[8:], proposal))
 	data = data[:8+sz]
 	return raftpb.Entry{Index: index, Term: 1, Type: raftpb.EntryNormal, Data: data}
+}
+
+func TestErrProposalDroppedIsDefined(t *testing.T) {
+	// Verify that errProposalDropped is a non-nil error.
+	// Previously, drainApplyChan used nil instead of an error sentinel,
+	// telling callers their proposal succeeded when it was never applied.
+	require.NotNil(t, errProposalDropped)
+	require.Contains(t, errProposalDropped.Error(), "dropped")
+}
+
+func TestProposalDoneWithError(t *testing.T) {
+	dir := t.TempDir()
+	ds := raftwal.Init(dir)
+	defer ds.Close()
+
+	n := newNode(ds, 1, 1, "")
+
+	// Store a proposal and verify Done sends the error through.
+	errCh := make(chan error, 1)
+	pctx := &conn.ProposalCtx{ErrCh: errCh}
+	key := uint64(42)
+	n.Proposals.Store(key, pctx)
+
+	// Simulate drainApplyChan behavior: Done with errProposalDropped.
+	n.Proposals.Done(key, errProposalDropped)
+
+	// Verify the caller receives the error.
+	err := <-errCh
+	require.Equal(t, errProposalDropped, err)
 }
 
 func TestCalculateSnapshot(t *testing.T) {
