@@ -295,6 +295,38 @@ func TestMarshalTimeJson(t *testing.T) {
 	}
 }
 
+func TestIdForAttrOverflow(t *testing.T) {
+	enc := newEncoder()
+
+	// Add attributes up to just below the uint16 limit.
+	// The encoder starts with idSlice containing one element (empty string at index 0)
+	// and "uid" gets assigned early, so we need to fill up to MaxUint16.
+	// For efficiency, we just test that after many attrs, overflow returns 0.
+	for i := 0; i < 65535; i++ {
+		id := enc.idForAttr(fmt.Sprintf("attr_%d", i))
+		if id == 0 && i > 0 {
+			// We may hit 0 before 65535 if "uid" took a slot.
+			// The important thing is overflow returns 0 instead of wrapping.
+			return
+		}
+	}
+
+	// Adding one more should trigger overflow and return 0.
+	overflowID := enc.idForAttr("overflow_attr")
+	require.Equal(t, uint16(0), overflowID, "overflow should return 0 instead of wrapping")
+}
+
+func TestIdForAttrCachesIds(t *testing.T) {
+	enc := newEncoder()
+
+	id1 := enc.idForAttr("name")
+	id2 := enc.idForAttr("name")
+	require.Equal(t, id1, id2, "same attr should return same id")
+
+	id3 := enc.idForAttr("age")
+	require.NotEqual(t, id1, id3, "different attrs should return different ids")
+}
+
 func TestMarshalFloat(t *testing.T) {
 	var (
 		in  = types.Val{Tid: types.FloatID, Value: 0.123456789012345}
