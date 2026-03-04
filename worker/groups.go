@@ -1058,18 +1058,33 @@ func (g *groupi) processOracleDeltaStream() {
 					}
 				}
 			}
-			for {
-				// Block forever trying to propose this. Also this proposal should not be counted
-				// towards num pending proposals and be proposed right away.
-				err := g.Node.proposeAndWait(g.Ctx(), &pb.Proposal{Delta: delta})
-				if err == nil {
-					break
+			{
+				// Retry with exponential backoff. Oracle deltas are critical for
+				// transaction resolution, so we retry aggressively but not unboundedly
+				// to avoid blocking shutdown or burning CPU on persistent failures.
+				backoff := 100 * time.Millisecond
+				const maxBackoff = 30 * time.Second
+				for {
+					err := g.Node.proposeAndWait(g.Ctx(), &pb.Proposal{Delta: delta})
+					if err == nil {
+						break
+					}
+					if g.Ctx().Err() != nil {
+						break
+					}
+					glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+						" Error=%v. Retrying in %v...\n", delta.MaxAssigned, len(delta.Txns),
+						err, backoff)
+					select {
+					case <-time.After(backoff):
+					case <-g.closer.HasBeenClosed():
+						return
+					}
+					backoff *= 2
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
 				}
-				if g.Ctx().Err() != nil {
-					break
-				}
-				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
-					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
 		}
 	}
