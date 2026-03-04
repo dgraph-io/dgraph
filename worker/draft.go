@@ -388,6 +388,11 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
+		// Note: These operations are not atomic, but this runs on the Raft apply path.
+		// If the node crashes mid-operation, Raft will re-apply this entry on restart.
+		// Each sub-step (ResetTxns, DeleteAll, ResetCache, applySchema, updateType)
+		// is idempotent, so re-application is safe.
+
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
