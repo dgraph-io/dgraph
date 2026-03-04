@@ -1337,8 +1337,11 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 				}
 			}
 			tf := uint32(1)
-			if len(p.Value) >= 4 {
-				tf = binary.BigEndian.Uint32(p.Value[:4])
+			for _, f := range p.Facets {
+				if f.Key == "tf" && len(f.Value) >= 4 {
+					tf = binary.BigEndian.Uint32(f.Value[:4])
+					break
+				}
 			}
 			ti.uidTFs[p.Uid] = tf
 			return nil
@@ -1369,8 +1372,11 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 			}
 			if _, needed := allUids[p.Uid]; needed {
 				dl := uint32(1)
-				if len(p.Value) >= 4 {
-					dl = binary.BigEndian.Uint32(p.Value[:4])
+				for _, f := range p.Facets {
+					if f.Key == "dl" && len(f.Value) >= 4 {
+						dl = binary.BigEndian.Uint32(f.Value[:4])
+						break
+					}
 				}
 				docLens[p.Uid] = dl
 				remaining--
@@ -1402,6 +1408,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	for uid, score := range scores {
 		results = append(results, uidScore{uid: uid, score: score})
 	}
+	// Sort by score descending for ordering, then collect UIDs.
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].score != results[j].score {
 			return results[i].score > results[j].score
@@ -1409,11 +1416,24 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return results[i].uid < results[j].uid
 	})
 
-	// Build output UIDs.
+	// Apply first/offset pagination on score-sorted results before returning UIDs.
+	if q.First > 0 || q.Offset > 0 {
+		offset := int(q.Offset)
+		if offset > len(results) {
+			offset = len(results)
+		}
+		results = results[offset:]
+		if q.First > 0 && int(q.First) < len(results) {
+			results = results[:int(q.First)]
+		}
+	}
+
+	// Build output UIDs sorted by UID (ascending) as required by the query pipeline.
 	uids := make([]uint64, len(results))
 	for i, r := range results {
 		uids[i] = r.uid
 	}
+	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
 
 	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
 	return nil

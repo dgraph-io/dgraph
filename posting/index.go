@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok"
@@ -304,15 +305,15 @@ func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationIn
 		if err != nil {
 			return err
 		}
-		// Store uid in the posting list. The TF is encoded in the Value field.
+		// Store uid in the posting list. TF is stored as a facet so it survives
+		// the rollup cycle (REF postings without facets lose their Value field).
 		tfBuf := make([]byte, 4)
 		binary.BigEndian.PutUint32(tfBuf, tf)
 		edge := &pb.DirectedEdge{
-			ValueId:   uid,
-			Attr:      attr,
-			Value:     tfBuf,
-			ValueType: pb.Posting_INT,
-			Op:        pb.DirectedEdge_SET,
+			ValueId: uid,
+			Attr:    attr,
+			Op:      pb.DirectedEdge_SET,
+			Facets:  []*api.Facet{{Key: "tf", Value: tfBuf, ValType: api.Facet_INT}},
 		}
 		if err := plist.addMutation(ctx, txn, edge); err != nil {
 			return err
@@ -328,11 +329,10 @@ func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationIn
 	dlBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(dlBuf, docLen)
 	dlEdge := &pb.DirectedEdge{
-		ValueId:   uid,
-		Attr:      attr,
-		Value:     dlBuf,
-		ValueType: pb.Posting_INT,
-		Op:        pb.DirectedEdge_SET,
+		ValueId: uid,
+		Attr:    attr,
+		Op:      pb.DirectedEdge_SET,
+		Facets:  []*api.Facet{{Key: "dl", Value: dlBuf, ValType: api.Facet_INT}},
 	}
 	if err := dlPlist.addMutation(ctx, txn, dlEdge); err != nil {
 		return err

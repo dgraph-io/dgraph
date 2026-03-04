@@ -10,7 +10,6 @@ package query
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,6 +31,8 @@ func TestBM25Basic(t *testing.T) {
 }
 
 func TestBM25Ordering(t *testing.T) {
+	// BM25 returns all matching documents. Use first:1 to verify the highest-scored
+	// document is "fox fox fox" (tf=3, short doc).
 	query := `
 	{
 		me(func: bm25(description_bm25, "fox")) {
@@ -41,14 +42,22 @@ func TestBM25Ordering(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
-	// Document 503 has "fox fox fox" (tf=3, short doc) so should rank highest.
-	// Verify it appears before other fox-containing documents in the output.
-	foxFoxFoxIdx := strings.Index(js, "fox fox fox")
-	quickBrownIdx := strings.Index(js, "quick brown fox jumps")
-	require.Greater(t, foxFoxFoxIdx, -1, "should contain 'fox fox fox'")
-	require.Greater(t, quickBrownIdx, -1, "should contain 'quick brown fox jumps'")
-	require.Less(t, foxFoxFoxIdx, quickBrownIdx,
-		"'fox fox fox' (higher tf, shorter doc) should rank before 'quick brown fox jumps'")
+	// Should contain all fox-mentioning documents.
+	require.Contains(t, js, "fox fox fox")
+	require.Contains(t, js, "quick brown fox jumps")
+
+	// first:1 should return the top-ranked document.
+	topQuery := `
+	{
+		me(func: bm25(description_bm25, "fox"), first: 1) {
+			uid
+			description_bm25
+		}
+	}
+	`
+	topJs := processQueryNoErr(t, topQuery)
+	require.Contains(t, topJs, "fox fox fox",
+		"top-1 BM25 result for 'fox' should be 'fox fox fox' (highest tf, shortest doc)")
 }
 
 func TestBM25WithParams(t *testing.T) {
