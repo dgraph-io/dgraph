@@ -1721,9 +1721,12 @@ func (l *List) calculateUids() error {
 		l.RUnlock()
 		return nil
 	}
+
+	// Capture the version so we can detect stale results after re-acquiring the lock.
+	ver := l.mutationMap.committedUidsTime
 	res := make([]uint64, 0, l.ApproxLen())
 
-	err := l.iterate(l.mutationMap.committedUidsTime, 0, func(p *pb.Posting) error {
+	err := l.iterate(ver, 0, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
 		}
@@ -1738,6 +1741,14 @@ func (l *List) calculateUids() error {
 
 	l.Lock()
 	defer l.Unlock()
+
+	// Re-check after acquiring write lock: another goroutine may have already
+	// computed UIDs, or new entries may have been committed (changing the version),
+	// making our result stale.
+	if l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
+		l.mutationMap.committedUidsTime != ver {
+		return nil
+	}
 
 	l.mutationMap.calculatedUids = res
 	l.mutationMap.isUidsCalculated = true
