@@ -308,6 +308,7 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 }
 
 var errHasPendingTxns = errors.New("Pending transactions found. Please retry operation")
+var errProposalDropped = errors.New("Proposal not applied: dropped during snapshot")
 
 // We must not wait here. Previously, we used to block until we have aborted the
 // transactions. We're now applying all updates serially, so blocking for one
@@ -1288,7 +1289,7 @@ func (n *node) drainApplyChan() {
 			numDrained += len(entries)
 			for _, entry := range entries {
 				key := binary.BigEndian.Uint64(entry.Data[:8])
-				n.Proposals.Done(key, nil)
+				n.Proposals.Done(key, errProposalDropped)
 				n.Applied.Done(entry.Index)
 			}
 		default:
