@@ -886,7 +886,13 @@ func (n *node) processApplyCh() {
 
 			var proposal pb.Proposal
 			key := binary.BigEndian.Uint64(entry.Data[:8])
-			x.Check(proto.Unmarshal(entry.Data[8:], &proposal))
+			if err := proto.Unmarshal(entry.Data[8:], &proposal); err != nil {
+				glog.Errorf("Unable to unmarshal proposal at index=%d key=%d len=%d: %v",
+					entry.Index, key, len(entry.Data), err)
+				n.Proposals.Done(key, err)
+				n.Applied.Done(entry.Index)
+				continue
+			}
 			proposal.Index = entry.Index
 			updateStartTs(&proposal)
 
