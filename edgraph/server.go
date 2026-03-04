@@ -989,9 +989,9 @@ func updateUIDInMutations(gmu *dql.Mutation, qc *queryContext) error {
 		newObs := getNewVals(nq.ObjectId)
 
 		qc.nquadsCount += len(newSubs) * len(newObs)
-		if qc.nquadsCount > int(x.Config.LimitQueryEdge) {
+		if qc.nquadsCount > x.Config.LimitMutationsNquad {
 			return errors.Errorf("NQuad count in the request: %d, is more that threshold: %d",
-				qc.nquadsCount, int(x.Config.LimitQueryEdge))
+				qc.nquadsCount, x.Config.LimitMutationsNquad)
 		}
 
 		for _, s := range newSubs {
