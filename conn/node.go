@@ -561,9 +561,19 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 
 	ch := make(chan error, 1)
 	id := n.storeConfChange(ch)
-	// TODO: Delete id from the map.
 	conf.ID = id
+
+	// cleanupConfChange removes the entry from the map on error/timeout paths
+	// to prevent leaking entries. DoneConfChange is tolerant of missing entries,
+	// so a late-arriving apply is handled gracefully.
+	cleanupConfChange := func() {
+		n.Lock()
+		defer n.Unlock()
+		delete(n.confChanges, id)
+	}
+
 	if err := n.Raft().ProposeConfChange(cctx, conf); err != nil {
+		cleanupConfChange()
 		if cctx.Err() != nil {
 			return errInternalRetry
 		}
@@ -574,8 +584,10 @@ func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) er
 	case err := <-ch:
 		return err
 	case <-ctx.Done():
+		cleanupConfChange()
 		return ctx.Err()
 	case <-cctx.Done():
+		cleanupConfChange()
 		return errInternalRetry
 	}
 }
