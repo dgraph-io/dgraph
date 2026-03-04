@@ -596,10 +596,23 @@ func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
 	}
 
 	err = errInternalRetry
+	backoff := 100 * time.Millisecond
+	const maxBackoff = 10 * time.Second
 	for err == errInternalRetry {
 		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, rc.Addr)
 		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
 		err = n.proposeConfChange(ctx, cc)
+		if err == errInternalRetry {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
 	return err
 }
