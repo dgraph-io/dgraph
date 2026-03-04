@@ -591,7 +591,7 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 		return
 	}
 
-	val.lastUpdate = commitTs
+	atomic.StoreUint64(&val.lastUpdate, commitTs)
 
 	if val.list != nil {
 		p := new(pb.PostingList)
@@ -756,7 +756,7 @@ func copyList(l *List) *List {
 }
 
 func (c *CachePL) Set(l *List, readTs uint64) {
-	if c.lastUpdate < readTs && (c.list == nil || c.list.maxTs < l.maxTs) {
+	if atomic.LoadUint64(&c.lastUpdate) < readTs && (c.list == nil || c.list.maxTs < l.maxTs) {
 		c.list = l
 	}
 }
@@ -806,7 +806,7 @@ func (ml *MemoryLayer) saveInCache(key []byte, l *List) {
 	defer l.RUnlock()
 	cacheItem := NewCachePL()
 	cacheItem.list = copyList(l)
-	cacheItem.lastUpdate = l.maxTs
+	atomic.StoreUint64(&cacheItem.lastUpdate, l.maxTs)
 	ml.cache.set(key, cacheItem)
 }
 
