@@ -896,6 +896,8 @@ func GetConflictKey(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 // SetTs allows us to set the transaction timestamp in mutation map. Should be used before the posting list is passed
 // on to the functions that would read the data.
 func (l *List) SetTs(readTs uint64) {
+	l.Lock()
+	defer l.Unlock()
 	l.mutationMap.setTs(readTs)
 }
 
