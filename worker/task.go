@@ -7,6 +7,7 @@ package worker
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -224,6 +225,7 @@ const (
 	customIndexFn
 	matchFn
 	similarToFn
+	bm25SearchFn
 	standardFn = 100
 )
 
@@ -266,6 +268,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return uidInFn, f
 	case "similar_to":
 		return similarToFn, f
+	case "bm25":
+		return bm25SearchFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -292,6 +296,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		return true
 	case similarToFn:
 		return true
+	case bm25SearchFn:
+		return true
 	}
 	return false
 }
@@ -314,7 +320,7 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case aggregatorFn, passwordFn, similarToFn:
+	case aggregatorFn, passwordFn, similarToFn, bm25SearchFn:
 		return true, nil
 	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
@@ -351,9 +357,13 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, bm25SearchFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == bm25SearchFn {
+		return qs.handleBM25Search(ctx, args)
 	}
 
 	if srcFn.fnType == similarToFn {
@@ -1217,6 +1227,196 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
 			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
 			srcFn.fnType == customIndexFn || srcFn.fnType == ngramFn)
+}
+
+func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error {
+	q := args.q
+	attr := q.Attr
+
+	// 1. Parse args: query text, optional k (default 1.2), b (default 0.75).
+	if len(q.SrcFunc.Args) < 1 {
+		return errors.Errorf("bm25 requires at least 1 argument (query text)")
+	}
+	queryText := q.SrcFunc.Args[0]
+	k := 1.2
+	b := 0.75
+	if len(q.SrcFunc.Args) >= 2 {
+		var err error
+		k, err = strconv.ParseFloat(q.SrcFunc.Args[1], 64)
+		if err != nil {
+			return errors.Errorf("bm25: invalid k parameter: %s", q.SrcFunc.Args[1])
+		}
+	}
+	if len(q.SrcFunc.Args) >= 3 {
+		var err error
+		b, err = strconv.ParseFloat(q.SrcFunc.Args[2], 64)
+		if err != nil {
+			return errors.Errorf("bm25: invalid b parameter: %s", q.SrcFunc.Args[2])
+		}
+	}
+	if math.IsNaN(k) || math.IsInf(k, 0) || k <= 0 {
+		return errors.Errorf("bm25: k must be a positive finite number, got %v", k)
+	}
+	if math.IsNaN(b) || math.IsInf(b, 0) || b < 0 || b > 1 {
+		return errors.Errorf("bm25: b must be between 0 and 1, got %v", b)
+	}
+
+	// 2. Tokenize query (deduplicated) using fulltext pipeline.
+	lang := langForFunc(q.Langs)
+	queryTokens, err := tok.GetBM25QueryTokens([]string{queryText}, lang)
+	if err != nil {
+		return err
+	}
+	if len(queryTokens) == 0 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+
+	// 3. Read corpus stats.
+	statsKey := x.BM25StatsKey(attr)
+	statsPl, err := qs.cache.Get(statsKey)
+	if err != nil {
+		// No stats means no documents indexed yet.
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	statsVal, err := statsPl.Value(q.ReadTs)
+	if err != nil || statsVal.Value == nil {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	statsData, ok := statsVal.Value.([]byte)
+	if !ok || len(statsData) != 16 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	docCount := binary.BigEndian.Uint64(statsData[0:8])
+	totalTerms := binary.BigEndian.Uint64(statsData[8:16])
+	if docCount == 0 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	if totalTerms == 0 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	avgDL := float64(totalTerms) / float64(docCount)
+	N := float64(docCount)
+
+	// Build filter set early if used as a filter, for efficient intersection during iteration.
+	var filterSet map[uint64]struct{}
+	if q.UidList != nil && len(q.UidList.Uids) > 0 {
+		filterSet = make(map[uint64]struct{}, len(q.UidList.Uids))
+		for _, uid := range q.UidList.Uids {
+			filterSet[uid] = struct{}{}
+		}
+	}
+
+	// 4. For each query token, read the posting list and collect term info.
+	type termInfo struct {
+		idf    float64
+		uidTFs map[uint64]uint32
+	}
+	termInfos := make(map[string]*termInfo)
+
+	for _, token := range queryTokens {
+		key := x.BM25IndexKey(attr, token)
+		pl, err := qs.cache.Get(key)
+		if err != nil {
+			continue
+		}
+
+		ti := &termInfo{uidTFs: make(map[uint64]uint32)}
+		var df float64
+		err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+			df++
+			// When used as filter, only collect TF for UIDs in the filter set.
+			if filterSet != nil {
+				if _, ok := filterSet[p.Uid]; !ok {
+					return nil
+				}
+			}
+			tf := uint32(1)
+			if len(p.Value) >= 4 {
+				tf = binary.BigEndian.Uint32(p.Value[:4])
+			}
+			ti.uidTFs[p.Uid] = tf
+			return nil
+		})
+		if err != nil {
+			continue
+		}
+		ti.idf = math.Log1p((N - df + 0.5) / (df + 0.5))
+		termInfos[token] = ti
+	}
+
+	// 5. Read doc lengths for all UIDs seen.
+	allUids := make(map[uint64]struct{})
+	for _, ti := range termInfos {
+		for uid := range ti.uidTFs {
+			allUids[uid] = struct{}{}
+		}
+	}
+
+	docLens := make(map[uint64]uint32)
+	dlKey := x.BM25DocLenKey(attr)
+	dlPl, err := qs.cache.Get(dlKey)
+	if err == nil {
+		remaining := len(allUids)
+		_ = dlPl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
+			if remaining == 0 {
+				return posting.ErrStopIteration
+			}
+			if _, needed := allUids[p.Uid]; needed {
+				dl := uint32(1)
+				if len(p.Value) >= 4 {
+					dl = binary.BigEndian.Uint32(p.Value[:4])
+				}
+				docLens[p.Uid] = dl
+				remaining--
+			}
+			return nil
+		})
+	}
+
+	// 6. Compute final BM25 scores.
+	scores := make(map[uint64]float64)
+	for _, ti := range termInfos {
+		for uid, tf := range ti.uidTFs {
+			dl := float64(1)
+			if v, ok := docLens[uid]; ok {
+				dl = float64(v)
+			}
+			tfFloat := float64(tf)
+			score := ti.idf * (k + 1) * tfFloat / (k*(1-b+b*dl/avgDL) + tfFloat)
+			scores[uid] += score
+		}
+	}
+
+	// 7. Sort by score descending.
+	type uidScore struct {
+		uid   uint64
+		score float64
+	}
+	results := make([]uidScore, 0, len(scores))
+	for uid, score := range scores {
+		results = append(results, uidScore{uid: uid, score: score})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].score != results[j].score {
+			return results[i].score > results[j].score
+		}
+		return results[i].uid < results[j].uid
+	})
+
+	// Build output UIDs.
+	uids := make([]uint64, len(results))
+	for i, r := range results {
+		uids[i] = r.uid
+	}
+
+	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
+	return nil
 }
 
 func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcArgs) error {
@@ -2165,6 +2365,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	case hasFn:
 		if err = ensureArgsCount(q.SrcFunc, 0); err != nil {
 			return nil, err
+		}
+		checkRoot(q, fc)
+	case bm25SearchFn:
+		// bm25(pred, "query text") or bm25(pred, "query text", "k", "b")
+		if len(q.SrcFunc.Args) < 1 || len(q.SrcFunc.Args) > 3 {
+			return nil, errors.Errorf("Function 'bm25' requires 1-3 arguments (query [, k, b]), but got %d",
+				len(q.SrcFunc.Args))
+		}
+		required, found := verifyStringIndex(ctx, attr, fnType)
+		if !found {
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		checkRoot(q, fc)
 	case similarToFn:

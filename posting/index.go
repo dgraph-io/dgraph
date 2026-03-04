@@ -68,6 +68,10 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 
 	var tokens []string
 	for _, it := range info.tokenizers {
+		// BM25 tokenizer is handled separately in addBM25IndexMutations.
+		if it.Identifier() == tok.IdentBM25 {
+			continue
+		}
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
@@ -179,6 +183,17 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		}
 	}
 
+	// Check if any tokenizer is BM25 and handle separately.
+	for _, it := range info.tokenizers {
+		if _, ok := tok.GetTokenizerForLang(it, info.edge.GetLang()).(tok.BM25Tokenizer); ok {
+			if err := txn.addBM25IndexMutations(ctx, info); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// Continue to process remaining non-BM25 tokenizers below.
+			continue
+		}
+	}
+
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
@@ -213,6 +228,174 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
+}
+
+// addBM25IndexMutations handles index mutations for the BM25 tokenizer.
+// It stores term frequencies, document lengths, and corpus statistics.
+func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationInfo) error {
+	attr := info.edge.Attr
+	uid := info.edge.Entity
+	lang := info.edge.GetLang()
+
+	schemaType, err := schema.State().TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
+		return errors.Errorf("Cannot BM25 index attribute %s of type object.", attr)
+	}
+
+	sv, err := types.Convert(info.val, schemaType)
+	if err != nil {
+		return err
+	}
+
+	bm25Tok := tok.BM25Tokenizer{}
+	termFreqs, docLen, err := bm25Tok.TokensWithFrequency(sv.Value, lang)
+	if err != nil {
+		return err
+	}
+
+	// Skip documents that tokenize to zero terms (e.g., all stopwords).
+	if docLen == 0 {
+		return nil
+	}
+
+	if info.op == pb.DirectedEdge_DEL {
+		// For DELETE: remove uid from all BM25 term posting lists, doc length list,
+		// and decrement corpus stats.
+		for term := range termFreqs {
+			encodedTerm := string([]byte{tok.IdentBM25}) + term
+			key := x.BM25IndexKey(attr, encodedTerm)
+			plist, err := txn.cache.GetFromDelta(key)
+			if err != nil {
+				return err
+			}
+			edge := &pb.DirectedEdge{
+				ValueId: uid,
+				Attr:    attr,
+				Op:      pb.DirectedEdge_DEL,
+			}
+			if err := plist.addMutation(ctx, txn, edge); err != nil {
+				return err
+			}
+		}
+		// Remove doc length entry.
+		dlKey := x.BM25DocLenKey(attr)
+		dlPlist, err := txn.cache.GetFromDelta(dlKey)
+		if err != nil {
+			return err
+		}
+		dlEdge := &pb.DirectedEdge{
+			ValueId: uid,
+			Attr:    attr,
+			Op:      pb.DirectedEdge_DEL,
+		}
+		if err := dlPlist.addMutation(ctx, txn, dlEdge); err != nil {
+			return err
+		}
+
+		// Update corpus stats: decrement doc count and total terms.
+		return txn.updateBM25Stats(ctx, attr, -1, -int64(docLen))
+	}
+
+	// For SET: store term frequencies, doc length, and update corpus stats.
+	for term, tf := range termFreqs {
+		encodedTerm := string([]byte{tok.IdentBM25}) + term
+		key := x.BM25IndexKey(attr, encodedTerm)
+		plist, err := txn.cache.GetFromDelta(key)
+		if err != nil {
+			return err
+		}
+		// Store uid in the posting list. The TF is encoded in the Value field.
+		tfBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(tfBuf, tf)
+		edge := &pb.DirectedEdge{
+			ValueId:   uid,
+			Attr:      attr,
+			Value:     tfBuf,
+			ValueType: pb.Posting_INT,
+			Op:        pb.DirectedEdge_SET,
+		}
+		if err := plist.addMutation(ctx, txn, edge); err != nil {
+			return err
+		}
+	}
+
+	// Store document length.
+	dlKey := x.BM25DocLenKey(attr)
+	dlPlist, err := txn.cache.GetFromDelta(dlKey)
+	if err != nil {
+		return err
+	}
+	dlBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(dlBuf, docLen)
+	dlEdge := &pb.DirectedEdge{
+		ValueId:   uid,
+		Attr:      attr,
+		Value:     dlBuf,
+		ValueType: pb.Posting_INT,
+		Op:        pb.DirectedEdge_SET,
+	}
+	if err := dlPlist.addMutation(ctx, txn, dlEdge); err != nil {
+		return err
+	}
+
+	// Update corpus stats: increment doc count by 1 and total terms by docLen.
+	return txn.updateBM25Stats(ctx, attr, 1, int64(docLen))
+}
+
+// updateBM25Stats reads the current corpus statistics for a BM25-indexed attribute,
+// applies the given deltas, and writes back.
+func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, docCountDelta int64, totalTermsDelta int64) error {
+	statsKey := x.BM25StatsKey(attr)
+	plist, err := txn.cache.GetFromDelta(statsKey)
+	if err != nil {
+		return err
+	}
+
+	// Read existing stats from posting with uid=1.
+	var docCount, totalTerms uint64
+	val, err := plist.Value(txn.StartTs)
+	if err == nil && val.Value != nil {
+		data, ok := val.Value.([]byte)
+		if ok && len(data) == 16 {
+			docCount = binary.BigEndian.Uint64(data[0:8])
+			totalTerms = binary.BigEndian.Uint64(data[8:16])
+		}
+	}
+
+	// Apply deltas.
+	if docCountDelta >= 0 {
+		docCount += uint64(docCountDelta)
+	} else {
+		dec := uint64(-docCountDelta)
+		if dec > docCount {
+			docCount = 0
+		} else {
+			docCount -= dec
+		}
+	}
+	if totalTermsDelta >= 0 {
+		totalTerms += uint64(totalTermsDelta)
+	} else {
+		dec := uint64(-totalTermsDelta)
+		if dec > totalTerms {
+			totalTerms = 0
+		} else {
+			totalTerms -= dec
+		}
+	}
+
+	// Write back stats.
+	statsBuf := make([]byte, 16)
+	binary.BigEndian.PutUint64(statsBuf[0:8], docCount)
+	binary.BigEndian.PutUint64(statsBuf[8:16], totalTerms)
+	edge := &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      attr,
+		Value:     statsBuf,
+		ValueType: pb.Posting_ValType(0),
+		Op:        pb.DirectedEdge_SET,
+	}
+	return plist.addMutation(ctx, txn, edge)
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.

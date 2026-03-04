@@ -291,6 +291,25 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	return buf
 }
 
+// BM25Prefix is the prefix used for BM25 index keys to prevent collision
+// with regular fulltext index tokens.
+const BM25Prefix = "\x00_bm25_"
+
+// BM25IndexKey generates an index key for a BM25 term posting list.
+func BM25IndexKey(attr string, token string) []byte {
+	return IndexKey(attr, BM25Prefix+token)
+}
+
+// BM25DocLenKey generates the key for the BM25 document length posting list.
+func BM25DocLenKey(attr string) []byte {
+	return IndexKey(attr, BM25Prefix+"__doclen__")
+}
+
+// BM25StatsKey generates the key for BM25 corpus statistics.
+func BM25StatsKey(attr string) []byte {
+	return IndexKey(attr, BM25Prefix+"__stats__")
+}
+
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
 	Attr        string
