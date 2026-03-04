@@ -139,6 +139,15 @@ func (cdc *CDC) addToPending(ts uint64, events []CDCEvent) {
 	cdc.pendingTxnEvents[ts] = append(cdc.pendingTxnEvents[ts], events...)
 }
 
+func (cdc *CDC) getFromPending(ts uint64) []CDCEvent {
+	if cdc == nil {
+		return nil
+	}
+	cdc.Lock()
+	defer cdc.Unlock()
+	return cdc.pendingTxnEvents[ts]
+}
+
 func (cdc *CDC) removeFromPending(ts uint64) {
 	if cdc == nil {
 		return
@@ -279,7 +288,7 @@ func (cdc *CDC) processCDCEvents() {
 			for _, ts := range proposal.Delta.Txns {
 				// This ensures we dont send events again in case of membership changes.
 				if ts.CommitTs > 0 && atomic.LoadUint64(&cdc.sentTs) < ts.CommitTs {
-					events := cdc.pendingTxnEvents[ts.StartTs]
+					events := cdc.getFromPending(ts.StartTs)
 					if err := sendToSink(events, ts.CommitTs); err != nil {
 						rerr = errors.Wrapf(err, "unable to send messages to sink")
 						return
