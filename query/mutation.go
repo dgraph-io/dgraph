@@ -58,7 +58,7 @@ func ExpandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 
 	// Reset the namespace to the original.
 	defer func(ns uint64) {
-		x.AttachNamespace(ctx, ns)
+		ctx = x.AttachNamespace(ctx, ns)
 	}(namespace)
 
 	for _, edge := range m.Edges {
@@ -68,7 +68,7 @@ func ExpandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			// to insert into. Now, attach the namespace in the context, so that further query
 			// proceeds as if made from the user of 'namespace'.
 			namespace = edge.GetNamespace()
-			x.AttachNamespace(ctx, namespace)
+			ctx = x.AttachNamespace(ctx, namespace)
 		}
 
 		var preds []string
