@@ -103,6 +103,8 @@ func (vc *viLocalCache) GetWithLockHeld(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	pl.Lock()
+	defer pl.Unlock()
 	return vc.GetValueFromPostingList(pl)
 }
 
