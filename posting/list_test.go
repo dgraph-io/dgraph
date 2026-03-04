@@ -1792,6 +1792,50 @@ func TestRecursiveSplits(t *testing.T) {
 	}
 }
 
+func TestCloneIndependentCommittedEntries(t *testing.T) {
+	original := newMutableLayer()
+	original.committedEntries[100] = &pb.PostingList{
+		Postings: []*pb.Posting{{Uid: 1}},
+	}
+	original.committedEntries[200] = &pb.PostingList{
+		Postings: []*pb.Posting{{Uid: 2}},
+	}
+
+	cloned := original.clone()
+
+	// Verify the clone has the same entries.
+	require.Equal(t, 2, len(cloned.committedEntries))
+	require.NotNil(t, cloned.committedEntries[100])
+	require.NotNil(t, cloned.committedEntries[200])
+
+	// Mutate the original's map (simulating setMutationAfterCommit with refresh=false).
+	original.committedEntries[300] = &pb.PostingList{
+		Postings: []*pb.Posting{{Uid: 3}},
+	}
+	delete(original.committedEntries, 100)
+
+	// Clone should be unaffected.
+	require.Equal(t, 2, len(cloned.committedEntries))
+	require.NotNil(t, cloned.committedEntries[100])
+	require.NotNil(t, cloned.committedEntries[200])
+	require.Nil(t, cloned.committedEntries[300])
+}
+
+func TestCloneNilMutableLayer(t *testing.T) {
+	var mm *MutableLayer
+	cloned := mm.clone()
+	require.Nil(t, cloned)
+}
+
+func TestNewMutableLayerSentinelValues(t *testing.T) {
+	mm := newMutableLayer()
+	require.Equal(t, math.MaxInt, mm.length)
+	require.Equal(t, uint64(math.MaxUint64), mm.deleteAllMarker)
+	require.Equal(t, uint64(math.MaxUint64), mm.committedUidsTime)
+	require.NotNil(t, mm.committedEntries)
+	require.NotNil(t, mm.committedUids)
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
