@@ -48,6 +48,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/worker"
 	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/dgraph-io/ristretto/v2/z"
 )
 
 const (
@@ -390,7 +391,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
-		InitializeAcl(nil)
+		closer := z.NewCloser(1)
+		InitializeAcl(closer)
 		return empty, err
 	}
 
