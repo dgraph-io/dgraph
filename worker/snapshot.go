@@ -289,5 +289,6 @@ func (w *grpcWorker) StreamSnapshot(stream pb.Worker_StreamSnapshotServer) error
 		return err
 	}
 	glog.Infof("Stream snapshot: OK")
+	n.Raft().ReportSnapshot(snap.Context.GetId(), raft.SnapshotFinish)
 	return nil
 }
