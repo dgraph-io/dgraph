@@ -196,6 +196,65 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	}
 }
 
+func TestSavePersistsAllComponents(t *testing.T) {
+	dir := t.TempDir()
+	ds := Init(dir)
+
+	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
+	require.NoError(t, ds.reset(ents))
+
+	// Create new entries, hard state, and snapshot to save.
+	newEntries := []raftpb.Entry{{Index: 6, Term: 5}, {Index: 7, Term: 5}}
+	hs := raftpb.HardState{Term: 5, Vote: 1, Commit: 7}
+	snap := raftpb.Snapshot{
+		Data: []byte("snap-data"),
+		Metadata: raftpb.SnapshotMetadata{
+			Index:     5,
+			Term:      5,
+			ConfState: raftpb.ConfState{Voters: []uint64{1, 2, 3}},
+		},
+	}
+
+	require.NoError(t, ds.Save(&hs, newEntries, &snap))
+
+	// Verify snapshot was persisted.
+	gotSnap, err := ds.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, snap.Metadata.Index, gotSnap.Metadata.Index)
+	require.Equal(t, snap.Metadata.Term, gotSnap.Metadata.Term)
+	require.Equal(t, snap.Data, gotSnap.Data)
+
+	// Verify hard state was persisted.
+	gotHS, err := ds.meta.HardState()
+	require.NoError(t, err)
+	require.Equal(t, hs.Term, gotHS.Term)
+	require.Equal(t, hs.Vote, gotHS.Vote)
+	require.Equal(t, hs.Commit, gotHS.Commit)
+
+	// Verify entries were persisted (after snapshot index).
+	last, err := ds.LastIndex()
+	require.NoError(t, err)
+	require.Equal(t, uint64(7), last)
+}
+
+func TestSaveEmptyComponents(t *testing.T) {
+	dir := t.TempDir()
+	ds := Init(dir)
+
+	ents := []raftpb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}}
+	require.NoError(t, ds.reset(ents))
+
+	// Save with empty hard state, no entries, and empty snapshot.
+	hs := raftpb.HardState{}
+	snap := raftpb.Snapshot{}
+	require.NoError(t, ds.Save(&hs, nil, &snap))
+
+	// Entries should be unchanged.
+	last, err := ds.LastIndex()
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), last)
+}
+
 func TestStorageAppend(t *testing.T) {
 	dir := t.TempDir()
 	ds := Init(dir)
