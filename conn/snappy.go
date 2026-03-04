@@ -42,11 +42,7 @@ type snappyReader struct {
 }
 
 func (r *snappyReader) Read(p []byte) (n int, err error) {
-	n, err = r.Reader.Read(p)
-	if err == io.EOF {
-		snappyReaderPool.Put(r)
-	}
-	return n, err
+	return r.Reader.Read(p)
 }
 
 type snappyCompressor struct {
