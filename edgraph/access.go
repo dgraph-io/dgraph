@@ -511,7 +511,7 @@ func upsertGuardian(ctx context.Context) error {
 		// we found a guardians group
 		guardiansUidStr = groupResp.GuardiansGroup[0].Uid
 	} else {
-		return errors.Wrap(err, "Multiple guardians group found")
+		return errors.New("Multiple guardians group found")
 	}
 
 	uid, err := strconv.ParseUint(guardiansUidStr, 0, 64)
@@ -587,7 +587,7 @@ func upsertGroot(ctx context.Context, passwd string) error {
 		// we found a groot user
 		grootUserUid = userResp.GrootUser[0].Uid
 	} else {
-		return errors.Wrap(err, "Multiple groot users found")
+		return errors.New("Multiple groot users found")
 	}
 
 	uid, err := strconv.ParseUint(grootUserUid, 0, 64)
