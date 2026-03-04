@@ -1997,7 +1997,7 @@ func hasPoormansAuth(ctx context.Context) error {
 		return errNoAuth
 	}
 	if tokens[0] != worker.Config.AuthToken {
-		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
+		return errors.Errorf("Provided auth token does not match. Permission denied.")
 	}
 	return nil
 }
