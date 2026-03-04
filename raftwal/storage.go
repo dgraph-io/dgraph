@@ -302,24 +302,21 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	return nil
 }
 
-// TODO(Aman): In the raft example here, we store the snapshot first, followed by entries
-// and then, hard state. https://github.com/etcd-io/etcd/blob/main/contrib/raftexample/raft.go
-// We should do the same here.
-// Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
-// first, then HardState and Snapshot if they are not empty. If persistent storage supports atomic
-// writes then all of them can be written together. Note that when writing an Entry with Index i,
-// any previously-persisted entries with Index >= i must be discarded.
+// Save persists Snapshot, Entries and HardState to stable storage.
+// The ordering follows the etcd Raft protocol: snapshot first (so recovery
+// can determine the correct starting point), then entries, then hard state.
+// See https://github.com/etcd-io/etcd/blob/main/contrib/raftexample/raft.go
 func (w *DiskStorage) Save(h *raftpb.HardState, es []raftpb.Entry, snap *raftpb.Snapshot) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
+	if err := w.meta.StoreSnapshot(snap); err != nil {
+		return err
+	}
 	if err := w.wal.AddEntries(es); err != nil {
 		return err
 	}
 	if err := w.meta.StoreHardState(h); err != nil {
-		return err
-	}
-	if err := w.meta.StoreSnapshot(snap); err != nil {
 		return err
 	}
 	return nil
