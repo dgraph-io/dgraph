@@ -2293,7 +2293,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			if parent == nil {
 				// I'm root. We reach here if root had a function.
 
-				if len(sg.Params.Cascade.Fields) >= 0 {
+				if len(sg.Params.Cascade.Fields) > 0 {
 					// DesitUIDs for this level becomes the sourceUIDs for the next level. In updateUidMatrix with cascade,
 					// we end up modifying the first list from the uidMatrix which ends up modifying the srcUids of the next level.
 					// So to avoid that we make a copy.
