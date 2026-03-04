@@ -774,13 +774,25 @@ func (n *node) applyCommitted(proposal *pb.Proposal, key uint64) error {
 
 		data, err := proto.Marshal(snap)
 		x.Check(err)
-		for {
-			// We should never let CreateSnapshot have an error.
-			err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
-			if err == nil {
-				break
+		{
+			const maxRetries = 10
+			backoff := 100 * time.Millisecond
+			for attempt := 0; ; attempt++ {
+				err := n.Store.CreateSnapshot(snap.Index, n.ConfState(), data)
+				if err == nil {
+					break
+				}
+				if attempt >= maxRetries {
+					glog.Errorf("CreateSnapshot failed after %d attempts: %v", attempt, err)
+					return err
+				}
+				glog.Warningf("Error while calling CreateSnapshot (attempt %d/%d): %v. Retrying...",
+					attempt+1, maxRetries, err)
+				time.Sleep(backoff)
+				if backoff < 5*time.Second {
+					backoff *= 2
+				}
 			}
-			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)

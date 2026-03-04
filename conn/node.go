@@ -276,9 +276,20 @@ func (n *Node) Snapshot() (raftpb.Snapshot, error) {
 
 // SaveToStorage saves the hard state, entries, and snapshot to persistent storage, in that order.
 func (n *Node) SaveToStorage(h *raftpb.HardState, es []raftpb.Entry, s *raftpb.Snapshot) {
-	for {
+	const maxRetries = 10
+	backoff := 100 * time.Millisecond
+	for attempt := 0; ; attempt++ {
 		if err := n.Store.Save(h, es, s); err != nil {
-			glog.Errorf("While trying to save Raft update: %v. Retrying...", err)
+			if attempt >= maxRetries {
+				glog.Fatalf("Raft WAL save failed after %d attempts, cannot continue safely: %v",
+					attempt, err)
+			}
+			glog.Errorf("While trying to save Raft update (attempt %d/%d): %v. Retrying...",
+				attempt+1, maxRetries, err)
+			time.Sleep(backoff)
+			if backoff < 5*time.Second {
+				backoff *= 2
+			}
 		} else {
 			return
 		}
