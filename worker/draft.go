@@ -989,9 +989,9 @@ func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 			})
 
 		if err != nil {
-			glog.Errorf("Error while applying txn status to disk (%d -> %d): %v",
-				start, commit, err)
-			panic(err)
+			glog.Fatalf("Unrecoverable error applying txn status to disk (%d -> %d) "+
+				"after %d retries: %v. Exiting to prevent state divergence.",
+				start, commit, x.Config.MaxRetries, err)
 		}
 	}
 
