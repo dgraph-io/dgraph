@@ -31,16 +31,55 @@ type listIter struct {
 	inBlockPos int     // position within current block
 
 	exhausted bool
+	legacy    bool // true if using legacy monolithic blob (migration fallback)
 }
 
 // newListIter creates a new iterator for a term's block-based posting list.
+// Falls back to the legacy monolithic blob format if no block directory exists.
 func newListIter(attr, encodedTerm string, readTs uint64, idf, k, b float64) *listIter {
 	dirKey := x.BM25TermDirKey(attr, encodedTerm)
 	dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
 	dir := bm25block.DecodeDir(dirBlob)
 
 	if len(dir.Blocks) == 0 {
-		return &listIter{exhausted: true}
+		// Fallback: try reading the legacy monolithic blob and wrap it as a single block.
+		legacyKey := x.BM25IndexKey(attr, encodedTerm)
+		legacyBlob := posting.ReadBM25BlobAt(legacyKey, readTs)
+		legacyEntries := bm25enc.Decode(legacyBlob)
+		if len(legacyEntries) == 0 {
+			return &listIter{exhausted: true}
+		}
+		// Build a synthetic single-block directory from the legacy data.
+		var maxTF uint32
+		for _, e := range legacyEntries {
+			if e.Value > maxTF {
+				maxTF = e.Value
+			}
+		}
+		dir = &bm25block.Dir{
+			NextID: 1,
+			Blocks: []bm25block.BlockMeta{{
+				FirstUID: legacyEntries[0].UID,
+				BlockID:  0,
+				Count:    uint32(len(legacyEntries)),
+				MaxTF:    maxTF,
+			}},
+		}
+		it := &listIter{
+			attr:        attr,
+			encodedTerm: encodedTerm,
+			readTs:      readTs,
+			idf:         idf,
+			k:           k,
+			b:           b,
+			dir:         dir,
+			ubPreSuf:    bm25block.SuffixMaxUBPre(dir, k, b),
+			blockIdx:    0,
+			block:       legacyEntries, // pre-loaded
+			inBlockPos:  -1,            // will advance on first next()
+			legacy:      true,
+		}
+		return it
 	}
 
 	it := &listIter{
@@ -215,6 +254,11 @@ func (it *listIter) findBlockForTarget(target uint64) int {
 
 // loadBlock decodes the block at the given directory index.
 func (it *listIter) loadBlock(idx int) {
+	if it.legacy {
+		// Legacy mode: single block already loaded.
+		it.inBlockPos = 0
+		return
+	}
 	bm := it.dir.Blocks[idx]
 	blockKey := x.BM25TermBlockKey(it.attr, it.encodedTerm, bm.BlockID)
 	blob := posting.ReadBM25BlobAt(blockKey, it.readTs)
@@ -288,13 +332,21 @@ func bm25Score(idf, tf, dl, avgDL, k, b float64) float64 {
 }
 
 // lookupDocLen looks up a single UID's document length from the block-based doclen store.
+// Falls back to the legacy monolithic doclen blob if no block directory exists.
 func lookupDocLen(attr string, uid, readTs uint64) float64 {
 	dirKey := x.BM25DocLenDirKey(attr)
 	dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
 	dir := bm25block.DecodeDir(dirBlob)
 
 	if len(dir.Blocks) == 0 {
-		return 1.0 // fallback
+		// Fallback: try the legacy monolithic doclen blob.
+		legacyKey := x.BM25DocLenKey(attr)
+		legacyBlob := posting.ReadBM25BlobAt(legacyKey, readTs)
+		legacyEntries := bm25enc.Decode(legacyBlob)
+		if v, ok := bm25enc.Search(legacyEntries, uid); ok {
+			return float64(v)
+		}
+		return 1.0
 	}
 
 	blockIdx := dir.FindBlock(uid)
@@ -317,17 +369,24 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 	// Build iterators for each query term.
 	var iters []*listIter
 	for _, token := range queryTokens {
+		// Compute df: try block directory first, then fall back to legacy blob.
+		var df uint64
 		dirKey := x.BM25TermDirKey(attr, token)
 		dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
 		dir := bm25block.DecodeDir(dirBlob)
-		if len(dir.Blocks) == 0 {
-			continue
+		if len(dir.Blocks) > 0 {
+			for _, bm := range dir.Blocks {
+				df += uint64(bm.Count)
+			}
+		} else {
+			// Legacy fallback: read the monolithic blob to get df.
+			legacyKey := x.BM25IndexKey(attr, token)
+			legacyBlob := posting.ReadBM25BlobAt(legacyKey, readTs)
+			legacyEntries := bm25enc.Decode(legacyBlob)
+			df = uint64(len(legacyEntries))
 		}
-
-		// Compute df from directory.
-		var df uint64
-		for _, bm := range dir.Blocks {
-			df += uint64(bm.Count)
+		if df == 0 {
+			continue
 		}
 		idf := math.Log1p((N - float64(df) + 0.5) / (float64(df) + 0.5))
 
