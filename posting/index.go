@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgraph/v25/posting/bm25block"
 	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -232,8 +233,9 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 }
 
 // addBM25IndexMutations handles index mutations for the BM25 tokenizer.
-// It stores term frequencies, document lengths, and corpus statistics as direct
-// Badger KV entries using compact varint encoding, bypassing posting lists.
+// It stores term frequencies, document lengths, and corpus statistics using
+// block-based storage: each term's postings and the doclen list are split into
+// fixed-size blocks (~128 entries) with a lightweight directory for navigation.
 func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationInfo) error {
 	attr := info.edge.Attr
 	uid := info.edge.Entity
@@ -261,45 +263,168 @@ func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationIn
 	}
 
 	if info.op == pb.DirectedEdge_DEL {
-		// For DELETE: remove uid from all BM25 term posting lists and doc length list.
+		// For DELETE: remove uid from all term blocks and doclen blocks.
 		for term := range termFreqs {
 			encodedTerm := string([]byte{tok.IdentBM25}) + term
-			key := x.BM25IndexKey(attr, encodedTerm)
-			blob := txn.cache.ReadBM25Blob(key)
-			entries := bm25enc.Decode(blob)
-			entries = bm25enc.Remove(entries, uid)
-			txn.cache.WriteBM25Blob(key, bm25enc.Encode(entries))
+			txn.bm25BlockRemove(attr, encodedTerm, uid)
 		}
-		// Remove doc length entry.
-		dlKey := x.BM25DocLenKey(attr)
-		blob := txn.cache.ReadBM25Blob(dlKey)
-		entries := bm25enc.Decode(blob)
-		entries = bm25enc.Remove(entries, uid)
-		txn.cache.WriteBM25Blob(dlKey, bm25enc.Encode(entries))
-
-		// Update corpus stats: decrement doc count and total terms.
+		txn.bm25DocLenBlockRemove(attr, uid)
 		return txn.updateBM25Stats(attr, -1, -int64(docLen))
 	}
 
-	// For SET: store term frequencies and doc length.
+	// For SET: upsert term frequencies and doc length into blocks.
 	for term, tf := range termFreqs {
 		encodedTerm := string([]byte{tok.IdentBM25}) + term
-		key := x.BM25IndexKey(attr, encodedTerm)
-		blob := txn.cache.ReadBM25Blob(key)
-		entries := bm25enc.Decode(blob)
-		entries = bm25enc.Upsert(entries, uid, tf)
-		txn.cache.WriteBM25Blob(key, bm25enc.Encode(entries))
+		txn.bm25BlockUpsert(attr, encodedTerm, uid, tf)
+	}
+	txn.bm25DocLenBlockUpsert(attr, uid, docLen)
+	return txn.updateBM25Stats(attr, 1, int64(docLen))
+}
+
+// bm25BlockUpsert inserts or updates a (uid, value) entry in the block-based
+// posting list for the given term. Handles block creation and splitting.
+func (txn *Txn) bm25BlockUpsert(attr, encodedTerm string, uid uint64, value uint32) {
+	dirKey := x.BM25TermDirKey(attr, encodedTerm)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		// First entry for this term: create a single block.
+		blockID := dir.AllocBlockID()
+		entries := []bm25enc.Entry{{UID: uid, Value: value}}
+		blockKey := x.BM25TermBlockKey(attr, encodedTerm, blockID)
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.Blocks = append(dir.Blocks, bm25block.BlockMetaFromEntries(blockID, entries))
+		txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+		return
 	}
 
-	// Store document length.
-	dlKey := x.BM25DocLenKey(attr)
-	blob := txn.cache.ReadBM25Blob(dlKey)
+	// Find the target block, read it, upsert, and handle splits.
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25TermBlockKey(attr, encodedTerm, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Upsert(entries, uid, value)
+
+	if len(entries) > bm25block.MaxBlockSize {
+		// Split the block.
+		mid := len(entries) / 2
+		left := entries[:mid]
+		right := entries[mid:]
+
+		// Write left block (reuse existing blockID).
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(left))
+		dir.UpdateBlockMeta(blockIdx, left)
+
+		// Write right block (new blockID).
+		newBlockID := dir.AllocBlockID()
+		newBlockKey := x.BM25TermBlockKey(attr, encodedTerm, newBlockID)
+		txn.cache.WriteBM25Blob(newBlockKey, bm25enc.Encode(right))
+		dir.InsertBlockMeta(blockIdx+1, bm25block.BlockMetaFromEntries(newBlockID, right))
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25BlockRemove removes a uid from the block-based posting list for the given term.
+func (txn *Txn) bm25BlockRemove(attr, encodedTerm string, uid uint64) {
+	dirKey := x.BM25TermDirKey(attr, encodedTerm)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25TermBlockKey(attr, encodedTerm, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Remove(entries, uid)
+
+	if len(entries) == 0 {
+		// Block is empty; remove it from the directory.
+		txn.cache.WriteBM25Blob(blockKey, nil)
+		dir.RemoveBlockMeta(blockIdx)
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25DocLenBlockUpsert inserts or updates a doc-length entry in the block-based
+// document-length list.
+func (txn *Txn) bm25DocLenBlockUpsert(attr string, uid uint64, docLen uint32) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		blockID := dir.AllocBlockID()
+		entries := []bm25enc.Entry{{UID: uid, Value: docLen}}
+		blockKey := x.BM25DocLenBlockKey(attr, blockID)
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.Blocks = append(dir.Blocks, bm25block.BlockMetaFromEntries(blockID, entries))
+		txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
 	entries := bm25enc.Decode(blob)
 	entries = bm25enc.Upsert(entries, uid, docLen)
-	txn.cache.WriteBM25Blob(dlKey, bm25enc.Encode(entries))
 
-	// Update corpus stats: increment doc count by 1 and total terms by docLen.
-	return txn.updateBM25Stats(attr, 1, int64(docLen))
+	if len(entries) > bm25block.MaxBlockSize {
+		mid := len(entries) / 2
+		left := entries[:mid]
+		right := entries[mid:]
+
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(left))
+		dir.UpdateBlockMeta(blockIdx, left)
+
+		newBlockID := dir.AllocBlockID()
+		newBlockKey := x.BM25DocLenBlockKey(attr, newBlockID)
+		txn.cache.WriteBM25Blob(newBlockKey, bm25enc.Encode(right))
+		dir.InsertBlockMeta(blockIdx+1, bm25block.BlockMetaFromEntries(newBlockID, right))
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25DocLenBlockRemove removes a uid from the block-based document-length list.
+func (txn *Txn) bm25DocLenBlockRemove(attr string, uid uint64) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Remove(entries, uid)
+
+	if len(entries) == 0 {
+		txn.cache.WriteBM25Blob(blockKey, nil)
+		dir.RemoveBlockMeta(blockIdx)
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
 }
 
 // updateBM25Stats reads the current corpus statistics for a BM25-indexed attribute,

@@ -31,6 +31,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/conn"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
+	// bm25block and bm25wand are used via bm25wand.go in this package.
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	ctask "github.com/dgraph-io/dgraph/v25/task"
@@ -1273,7 +1274,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return nil
 	}
 
-	// 3. Read corpus stats from direct Badger KV.
+	// 3. Read corpus stats.
 	statsKey := x.BM25StatsKey(attr)
 	statsBlob := posting.ReadBM25BlobAt(statsKey, q.ReadTs)
 	docCount, totalTerms := bm25enc.DecodeStats(statsBlob)
@@ -1284,7 +1285,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	avgDL := float64(totalTerms) / float64(docCount)
 	N := float64(docCount)
 
-	// Build filter set early if used as a filter, for efficient intersection during iteration.
+	// Build filter set if used as a filter.
 	var filterSet map[uint64]struct{}
 	if q.UidList != nil && len(q.UidList.Uids) > 0 {
 		filterSet = make(map[uint64]struct{}, len(q.UidList.Uids))
@@ -1293,86 +1294,18 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// 4. For each query token, read the BM25 term blob and collect term info.
-	type termInfo struct {
-		idf    float64
-		uidTFs map[uint64]uint32
-	}
-	termInfos := make(map[string]*termInfo)
-
-	for _, token := range queryTokens {
-		key := x.BM25IndexKey(attr, token)
-		blob := posting.ReadBM25BlobAt(key, q.ReadTs)
-		entries := bm25enc.Decode(blob)
-		if len(entries) == 0 {
-			continue
-		}
-
-		ti := &termInfo{uidTFs: make(map[uint64]uint32)}
-		df := float64(len(entries))
-		for _, e := range entries {
-			if filterSet != nil {
-				if _, ok := filterSet[e.UID]; !ok {
-					continue
-				}
-			}
-			ti.uidTFs[e.UID] = e.Value
-		}
-		ti.idf = math.Log1p((N - df + 0.5) / (df + 0.5))
-		termInfos[token] = ti
+	// 4. Determine top-k: use WAND when first is set and no offset.
+	// When offset is set or first is unset, score all documents.
+	topK := 0
+	if q.First > 0 && q.Offset == 0 {
+		topK = int(q.First)
 	}
 
-	// 5. Read doc lengths for all UIDs seen using binary search on the doclen blob.
-	allUids := make(map[uint64]struct{})
-	for _, ti := range termInfos {
-		for uid := range ti.uidTFs {
-			allUids[uid] = struct{}{}
-		}
-	}
+	// 5. Run WAND search over block-based posting lists (with Block-Max skipping).
+	results := wandSearch(attr, q.ReadTs, queryTokens, k, b, avgDL, N, topK, filterSet, true)
 
-	dlKey := x.BM25DocLenKey(attr)
-	dlBlob := posting.ReadBM25BlobAt(dlKey, q.ReadTs)
-	dlEntries := bm25enc.Decode(dlBlob)
-
-	docLens := make(map[uint64]uint32, len(allUids))
-	for uid := range allUids {
-		if v, ok := bm25enc.Search(dlEntries, uid); ok {
-			docLens[uid] = v
-		}
-	}
-
-	// 6. Compute final BM25 scores.
-	scores := make(map[uint64]float64)
-	for _, ti := range termInfos {
-		for uid, tf := range ti.uidTFs {
-			dl := float64(1)
-			if v, ok := docLens[uid]; ok {
-				dl = float64(v)
-			}
-			tfFloat := float64(tf)
-			score := ti.idf * (k + 1) * tfFloat / (k*(1-b+b*dl/avgDL) + tfFloat)
-			scores[uid] += score
-		}
-	}
-
-	// 7. Sort by score descending.
-	type uidScore struct {
-		uid   uint64
-		score float64
-	}
-	results := make([]uidScore, 0, len(scores))
-	for uid, score := range scores {
-		results = append(results, uidScore{uid: uid, score: score})
-	}
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].score != results[j].score {
-			return results[i].score > results[j].score
-		}
-		return results[i].uid < results[j].uid
-	})
-
-	// Apply first/offset pagination on score-sorted results before returning UIDs.
-	if q.First > 0 || q.Offset > 0 {
+	// 6. Apply first/offset pagination on score-sorted results.
+	if topK <= 0 && (q.First > 0 || q.Offset > 0) {
 		offset := int(q.Offset)
 		if offset > len(results) {
 			offset = len(results)
@@ -1383,7 +1316,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// Build output: UIDs sorted ascending (required by query pipeline)
+	// 7. Build output: UIDs sorted ascending (required by query pipeline)
 	// and ValueMatrix with aligned scores (for bm25_score pseudo-predicate).
 	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
 	uids := make([]uint64, len(results))
@@ -1392,8 +1325,6 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	}
 	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
 
-	// Populate ValueMatrix with BM25 scores aligned to UIDs.
-	// Each entry is a ValueList with a single float64 value.
 	scoreValues := make([]*pb.ValueList, len(results))
 	for i, r := range results {
 		buf := make([]byte, 8)
