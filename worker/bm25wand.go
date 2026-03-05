@@ -24,11 +24,11 @@ type listIter struct {
 	idf         float64
 	k, b        float64
 
-	dir       *bm25block.Dir
-	ubPreSuf  []float64 // suffix max of UBPre values
-	blockIdx  int       // current block index in dir.Blocks
-	block     []bm25enc.Entry // decoded current block
-	inBlockPos int     // position within current block
+	dir        *bm25block.Dir
+	ubPreSuf   []float64       // suffix max of UBPre values
+	blockIdx   int             // current block index in dir.Blocks
+	block      []bm25enc.Entry // decoded current block
+	inBlockPos int             // position within current block
 
 	exhausted bool
 	legacy    bool // true if using legacy monolithic blob (migration fallback)
@@ -98,7 +98,7 @@ func newListIter(attr, encodedTerm string, readTs uint64, idf, k, b float64) *li
 
 // currentDoc returns the UID at the current position.
 func (it *listIter) currentDoc() uint64 {
-	if it.exhausted || it.block == nil || it.inBlockPos >= len(it.block) {
+	if it.exhausted || it.block == nil || it.inBlockPos < 0 || it.inBlockPos >= len(it.block) {
 		return math.MaxUint64
 	}
 	return it.block[it.inBlockPos].UID
@@ -106,7 +106,7 @@ func (it *listIter) currentDoc() uint64 {
 
 // currentTF returns the term frequency at the current position.
 func (it *listIter) currentTF() uint32 {
-	if it.exhausted || it.block == nil || it.inBlockPos >= len(it.block) {
+	if it.exhausted || it.block == nil || it.inBlockPos < 0 || it.inBlockPos >= len(it.block) {
 		return 0
 	}
 	return it.block[it.inBlockPos].Value
@@ -114,10 +114,17 @@ func (it *listIter) currentTF() uint32 {
 
 // remainingUB returns the IDF-weighted upper-bound score for the remaining postings.
 func (it *listIter) remainingUB() float64 {
-	if it.exhausted || it.blockIdx >= len(it.ubPreSuf) {
+	if it.exhausted || len(it.ubPreSuf) == 0 {
 		return 0
 	}
-	return it.idf * it.ubPreSuf[it.blockIdx]
+	idx := it.blockIdx
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(it.ubPreSuf) {
+		return 0
+	}
+	return it.idf * it.ubPreSuf[idx]
 }
 
 // blockUB returns the IDF-weighted upper-bound for the current block only.
@@ -137,19 +144,24 @@ func (it *listIter) next() bool {
 	// Try advancing within the current block.
 	if it.block != nil {
 		it.inBlockPos++
-		if it.inBlockPos < len(it.block) {
+		if it.inBlockPos >= 0 && it.inBlockPos < len(it.block) {
 			return true
 		}
 	}
 
 	// Move to the next block.
-	it.blockIdx++
-	if it.blockIdx >= len(it.dir.Blocks) {
-		it.exhausted = true
-		return false
+	for {
+		it.blockIdx++
+		if it.blockIdx >= len(it.dir.Blocks) {
+			it.exhausted = true
+			return false
+		}
+		it.loadBlock(it.blockIdx)
+		if len(it.block) > 0 {
+			return true
+		}
+		// Empty block (corruption/race): skip it.
 	}
-	it.loadBlock(it.blockIdx)
-	return it.inBlockPos < len(it.block)
 }
 
 // skipTo advances to the first posting with UID >= target.
@@ -160,19 +172,25 @@ func (it *listIter) skipTo(target uint64) bool {
 	}
 
 	// If current doc is already >= target, no-op.
-	if it.block != nil && it.inBlockPos < len(it.block) && it.block[it.inBlockPos].UID >= target {
+	if it.block != nil && it.inBlockPos >= 0 && it.inBlockPos < len(it.block) &&
+		it.block[it.inBlockPos].UID >= target {
 		return true
 	}
 
 	// Check if target might be in the current block.
-	if it.block != nil && it.blockIdx < len(it.dir.Blocks) {
+	if it.block != nil && len(it.block) > 0 && it.blockIdx >= 0 &&
+		it.blockIdx < len(it.dir.Blocks) {
 		lastInBlock := it.block[len(it.block)-1].UID
 		if target <= lastInBlock {
-			// Binary search within current block.
-			pos := sort.Search(len(it.block)-it.inBlockPos, func(i int) bool {
-				return it.block[it.inBlockPos+i].UID >= target
+			startPos := it.inBlockPos
+			if startPos < 0 {
+				startPos = 0
+			}
+			// Binary search within current block from startPos.
+			pos := sort.Search(len(it.block)-startPos, func(i int) bool {
+				return it.block[startPos+i].UID >= target
 			})
-			it.inBlockPos += pos
+			it.inBlockPos = startPos + pos
 			if it.inBlockPos < len(it.block) {
 				return true
 			}
@@ -188,6 +206,9 @@ func (it *listIter) skipTo(target uint64) bool {
 
 	it.blockIdx = blockIdx
 	it.loadBlock(blockIdx)
+	if len(it.block) == 0 {
+		return it.next() // skip empty block
+	}
 
 	// Binary search within the block.
 	pos := sort.Search(len(it.block), func(i int) bool {
@@ -209,7 +230,8 @@ func (it *listIter) skipToWithBMW(target uint64, theta float64, otherUB float64)
 	}
 
 	// If current doc is already >= target, no-op.
-	if it.block != nil && it.inBlockPos < len(it.block) && it.block[it.inBlockPos].UID >= target {
+	if it.block != nil && it.inBlockPos >= 0 && it.inBlockPos < len(it.block) &&
+		it.block[it.inBlockPos].UID >= target {
 		return true
 	}
 
@@ -221,6 +243,10 @@ func (it *listIter) skipToWithBMW(target uint64, theta float64, otherUB float64)
 			// This block might have a winner; load and search it.
 			it.blockIdx = blockIdx
 			it.loadBlock(blockIdx)
+			if len(it.block) == 0 {
+				blockIdx++
+				continue // skip empty block
+			}
 			pos := sort.Search(len(it.block), func(i int) bool {
 				return it.block[i].UID >= target
 			})
@@ -231,7 +257,7 @@ func (it *listIter) skipToWithBMW(target uint64, theta float64, otherUB float64)
 			// Fall through to next block.
 		}
 		blockIdx++
-		// Update target to the next block's firstUID (we've already skipped past target).
+		// Update target to the next block's firstUID.
 		if blockIdx < len(it.dir.Blocks) {
 			target = it.dir.Blocks[blockIdx].FirstUID
 		}
@@ -255,8 +281,7 @@ func (it *listIter) findBlockForTarget(target uint64) int {
 // loadBlock decodes the block at the given directory index.
 func (it *listIter) loadBlock(idx int) {
 	if it.legacy {
-		// Legacy mode: single block already loaded.
-		it.inBlockPos = 0
+		// Legacy mode: single pre-loaded block; don't reset position.
 		return
 	}
 	bm := it.dir.Blocks[idx]
@@ -331,29 +356,65 @@ func bm25Score(idf, tf, dl, avgDL, k, b float64) float64 {
 	return idf * (k + 1) * tf / (k*(1-b+b*dl/avgDL) + tf)
 }
 
-// lookupDocLen looks up a single UID's document length from the block-based doclen store.
-// Falls back to the legacy monolithic doclen blob if no block directory exists.
-func lookupDocLen(attr string, uid, readTs uint64) float64 {
-	dirKey := x.BM25DocLenDirKey(attr)
-	dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
-	dir := bm25block.DecodeDir(dirBlob)
+// docLenCache caches document length lookups within a single query to avoid
+// repeated Badger reads for the same doclen block directory and blocks.
+type docLenCache struct {
+	attr   string
+	readTs uint64
+	dir    *bm25block.Dir
+	loaded bool
+	legacy bool
+	// Per-block cache: blockIdx -> decoded entries.
+	blocks map[int][]bm25enc.Entry
+	// Legacy entries (when using monolithic blob).
+	legacyEntries []bm25enc.Entry
+}
 
-	if len(dir.Blocks) == 0 {
-		// Fallback: try the legacy monolithic doclen blob.
-		legacyKey := x.BM25DocLenKey(attr)
-		legacyBlob := posting.ReadBM25BlobAt(legacyKey, readTs)
-		legacyEntries := bm25enc.Decode(legacyBlob)
-		if v, ok := bm25enc.Search(legacyEntries, uid); ok {
+func newDocLenCache(attr string, readTs uint64) *docLenCache {
+	return &docLenCache{
+		attr:   attr,
+		readTs: readTs,
+		blocks: make(map[int][]bm25enc.Entry),
+	}
+}
+
+func (c *docLenCache) ensureLoaded() {
+	if c.loaded {
+		return
+	}
+	c.loaded = true
+	dirKey := x.BM25DocLenDirKey(c.attr)
+	dirBlob := posting.ReadBM25BlobAt(dirKey, c.readTs)
+	c.dir = bm25block.DecodeDir(dirBlob)
+	if len(c.dir.Blocks) == 0 {
+		// Try legacy.
+		legacyKey := x.BM25DocLenKey(c.attr)
+		legacyBlob := posting.ReadBM25BlobAt(legacyKey, c.readTs)
+		c.legacyEntries = bm25enc.Decode(legacyBlob)
+		c.legacy = true
+	}
+}
+
+func (c *docLenCache) lookup(uid uint64) float64 {
+	c.ensureLoaded()
+	if c.legacy {
+		if v, ok := bm25enc.Search(c.legacyEntries, uid); ok {
 			return float64(v)
 		}
 		return 1.0
 	}
-
-	blockIdx := dir.FindBlock(uid)
-	bm := dir.Blocks[blockIdx]
-	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
-	blob := posting.ReadBM25BlobAt(blockKey, readTs)
-	entries := bm25enc.Decode(blob)
+	if len(c.dir.Blocks) == 0 {
+		return 1.0
+	}
+	blockIdx := c.dir.FindBlock(uid)
+	entries, ok := c.blocks[blockIdx]
+	if !ok {
+		bm := c.dir.Blocks[blockIdx]
+		blockKey := x.BM25DocLenBlockKey(c.attr, bm.BlockID)
+		blob := posting.ReadBM25BlobAt(blockKey, c.readTs)
+		entries = bm25enc.Decode(blob)
+		c.blocks[blockIdx] = entries
+	}
 	if v, ok := bm25enc.Search(entries, uid); ok {
 		return float64(v)
 	}
@@ -365,6 +426,8 @@ func lookupDocLen(attr string, uid, readTs uint64) float64 {
 func wandSearch(attr string, readTs uint64, queryTokens []string,
 	k, b, avgDL, N float64, topK int, filterSet map[uint64]struct{},
 	useBMW bool) []scoredDoc {
+
+	dlCache := newDocLenCache(attr, readTs)
 
 	// Build iterators for each query term.
 	var iters []*listIter
@@ -405,7 +468,7 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 
 	// If no top-k limit, score all matching documents.
 	if topK <= 0 {
-		return scoreAllDocs(iters, attr, readTs, k, b, avgDL, filterSet)
+		return scoreAllDocs(iters, dlCache, k, b, avgDL, filterSet)
 	}
 
 	// WAND algorithm with top-k heap.
@@ -454,13 +517,8 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 			if iters[i].currentDoc() < pivotDoc {
 				var ok bool
 				if useBMW {
-					// Compute other UBs for BMW skipping.
-					var otherUB float64
-					for j, jt := range iters {
-						if j != i {
-							otherUB += jt.remainingUB()
-						}
-					}
+					// Compute otherUB = total UB - this iter's UB (O(1) instead of O(q)).
+					otherUB := sumUB - iters[i].remainingUB()
 					ok = iters[i].skipToWithBMW(pivotDoc, theta, otherUB)
 				} else {
 					ok = iters[i].skipTo(pivotDoc)
@@ -492,7 +550,7 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 			}
 		}
 
-		dl := lookupDocLen(attr, pivotDoc, readTs)
+		dl := dlCache.lookup(pivotDoc)
 		var score float64
 		for _, it := range iters {
 			if it.currentDoc() == pivotDoc {
@@ -515,7 +573,7 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 
 // scoreAllDocs scores every matching document without early termination.
 // Used when no top-k limit is specified (the original behavior).
-func scoreAllDocs(iters []*listIter, attr string, readTs uint64,
+func scoreAllDocs(iters []*listIter, dlCache *docLenCache,
 	k, b, avgDL float64, filterSet map[uint64]struct{}) []scoredDoc {
 
 	// Collect all (uid, term) matches.
@@ -541,7 +599,7 @@ func scoreAllDocs(iters []*listIter, attr string, readTs uint64,
 	// Score all matching documents.
 	results := make([]scoredDoc, 0, len(matches))
 	for uid, terms := range matches {
-		dl := lookupDocLen(attr, uid, readTs)
+		dl := dlCache.lookup(uid)
 		var score float64
 		for _, tm := range terms {
 			score += bm25Score(tm.idf, float64(tm.tf), dl, avgDL, k, b)
