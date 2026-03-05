@@ -10,6 +10,10 @@ package query
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -299,4 +303,535 @@ func TestBM25ScoreWithPagination(t *testing.T) {
 	// Should return the second-highest scored document (not "fox fox fox").
 	require.NotContains(t, js, "fox fox fox")
 	require.Contains(t, js, "fox")
+}
+
+// parseScoresFromJSON extracts uid → score from JSON responses containing val(score).
+func parseScoresFromJSON(t *testing.T, js string) map[string]float64 {
+	t.Helper()
+	var resp struct {
+		Data struct {
+			Me []struct {
+				UID   string  `json:"uid"`
+				Score float64 `json:"val(score)"`
+			} `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+	scores := make(map[string]float64)
+	for _, item := range resp.Data.Me {
+		scores[item.UID] = item.Score
+	}
+	return scores
+}
+
+func TestBM25IncrementalAddBatch(t *testing.T) {
+	batch1 := `
+		<600> <description_bm25> "alpha bravo charlie" .
+		<601> <description_bm25> "delta echo foxtrot" .
+	`
+	batch2 := `
+		<602> <description_bm25> "golf hotel india" .
+		<603> <description_bm25> "juliet kilo lima" .
+		<604> <description_bm25> "mike november oscar" .
+	`
+	batch3 := `
+		<605> <description_bm25> "papa quebec romeo" .
+		<606> <description_bm25> "sierra tango uniform" .
+		<607> <description_bm25> "victor whiskey xray" .
+	`
+	cleanup := func() {
+		deleteTriplesInCluster(`
+			<600> <description_bm25> * .
+			<601> <description_bm25> * .
+			<602> <description_bm25> * .
+			<603> <description_bm25> * .
+			<604> <description_bm25> * .
+			<605> <description_bm25> * .
+			<606> <description_bm25> * .
+			<607> <description_bm25> * .
+		`)
+	}
+	t.Cleanup(cleanup)
+
+	countQuery := `
+	{
+		me(func: bm25(description_bm25, "alpha bravo delta echo golf juliet mike papa sierra victor")) {
+			count(uid)
+		}
+	}
+	`
+
+	// Batch 1: add 2 docs.
+	require.NoError(t, addTriplesToCluster(batch1))
+	js := processQueryNoErr(t, countQuery)
+	require.Contains(t, js, `"count":2`)
+
+	// Batch 2: add 3 more docs → total 5.
+	require.NoError(t, addTriplesToCluster(batch2))
+	js = processQueryNoErr(t, countQuery)
+	require.Contains(t, js, `"count":5`)
+
+	// Batch 3: add 3 more docs → total 8.
+	require.NoError(t, addTriplesToCluster(batch3))
+	js = processQueryNoErr(t, countQuery)
+	require.Contains(t, js, `"count":8`)
+
+	// Verify specific new UIDs are searchable.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "whiskey")) { uid } }`)
+	require.Contains(t, js, `"0x25e"`) // 606
+}
+
+func TestBM25CorpusStatsAffectIDF(t *testing.T) {
+	// Capture baseline score for "fox" query.
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "fox")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}
+	`
+	jsBefore := processQueryNoErr(t, scoreQuery)
+	scoresBefore := parseScoresFromJSON(t, jsBefore)
+	require.NotEmpty(t, scoresBefore, "baseline should have fox results")
+
+	// Add 10 non-fox docs → N grows, df("fox") stays same → IDF should increase.
+	var triples string
+	for i := 610; i < 620; i++ {
+		triples += fmt.Sprintf(`<%d> <description_bm25> "completely unrelated document about cats and dogs number %d" .
+`, i, i)
+	}
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		var del string
+		for i := 610; i < 620; i++ {
+			del += fmt.Sprintf("<%d> <description_bm25> * .\n", i)
+		}
+		deleteTriplesInCluster(del)
+	})
+
+	jsAfter := processQueryNoErr(t, scoreQuery)
+	scoresAfter := parseScoresFromJSON(t, jsAfter)
+
+	// Compare score for UID 503 ("fox fox fox") — should increase.
+	uid503 := "0x1f7"
+	before, ok1 := scoresBefore[uid503]
+	after, ok2 := scoresAfter[uid503]
+	require.True(t, ok1 && ok2, "UID 503 should appear in both before and after results")
+	require.Greater(t, after, before,
+		"IDF should increase when corpus grows with non-matching docs (before=%f, after=%f)", before, after)
+}
+
+func TestBM25DocumentUpdate(t *testing.T) {
+	// Add a doc with lots of "fox".
+	require.NoError(t, addTriplesToCluster(`<620> <description_bm25> "fox fox fox fox" .`))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<620> <description_bm25> * .`)
+	})
+
+	// Should rank top for "fox".
+	js := processQueryNoErr(t, `
+	{
+		me(func: bm25(description_bm25, "fox"), first: 1) {
+			uid
+		}
+	}`)
+	require.Contains(t, js, `"0x26c"`) // 620
+
+	// Update to remove "fox", add "cat".
+	deleteTriplesInCluster(`<620> <description_bm25> "fox fox fox fox" .`)
+	require.NoError(t, addTriplesToCluster(`<620> <description_bm25> "the cat sat on the mat" .`))
+
+	// Should no longer appear in "fox" results.
+	js = processQueryNoErr(t, `
+	{
+		me(func: bm25(description_bm25, "fox")) {
+			uid
+		}
+	}`)
+	require.NotContains(t, js, `"0x26c"`)
+
+	// Should appear in "cat" results.
+	js = processQueryNoErr(t, `
+	{
+		me(func: bm25(description_bm25, "cat")) {
+			uid
+		}
+	}`)
+	require.Contains(t, js, `"0x26c"`)
+}
+
+func TestBM25DocumentDeletion(t *testing.T) {
+	require.NoError(t, addTriplesToCluster(`<625> <description_bm25> "unique elephant term" .`))
+	t.Cleanup(func() {
+		// Cleanup in case test fails before explicit delete.
+		deleteTriplesInCluster(`<625> <description_bm25> * .`)
+	})
+
+	// Should find the elephant doc.
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
+	require.Contains(t, js, `"0x271"`) // 625
+
+	// Delete it.
+	deleteTriplesInCluster(`<625> <description_bm25> "unique elephant term" .`)
+
+	// Should return empty for "elephant".
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+
+	// Baseline "fox" results should be unaffected.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "fox")) { uid } }`)
+	require.Contains(t, js, "fox")
+}
+
+func TestBM25ScoreStabilityAsCorpusGrows(t *testing.T) {
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "fox")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}
+	`
+	uid503 := "0x1f7"
+
+	// Phase 1: baseline score.
+	js1 := processQueryNoErr(t, scoreQuery)
+	scores1 := parseScoresFromJSON(t, js1)
+	score1, ok := scores1[uid503]
+	require.True(t, ok, "UID 503 must appear in baseline")
+
+	// Phase 2: add 5 fox docs → IDF decreases.
+	var foxTriples string
+	for i := 630; i < 635; i++ {
+		foxTriples += fmt.Sprintf(`<%d> <description_bm25> "the fox runs quickly across the field number %d" .
+`, i, i)
+	}
+	require.NoError(t, addTriplesToCluster(foxTriples))
+	t.Cleanup(func() {
+		var del string
+		for i := 630; i < 640; i++ {
+			del += fmt.Sprintf("<%d> <description_bm25> * .\n", i)
+		}
+		deleteTriplesInCluster(del)
+	})
+
+	js2 := processQueryNoErr(t, scoreQuery)
+	scores2 := parseScoresFromJSON(t, js2)
+	score2, ok := scores2[uid503]
+	require.True(t, ok, "UID 503 must appear after adding fox docs")
+	require.Greater(t, score1, score2,
+		"Adding fox docs should decrease IDF and thus score (phase1=%f, phase2=%f)", score1, score2)
+
+	// Phase 3: add 5 non-fox docs → IDF increases relative to phase 2.
+	var nonFoxTriples string
+	for i := 635; i < 640; i++ {
+		nonFoxTriples += fmt.Sprintf(`<%d> <description_bm25> "unrelated content about birds and fish number %d" .
+`, i, i)
+	}
+	require.NoError(t, addTriplesToCluster(nonFoxTriples))
+
+	js3 := processQueryNoErr(t, scoreQuery)
+	scores3 := parseScoresFromJSON(t, js3)
+	score3, ok := scores3[uid503]
+	require.True(t, ok, "UID 503 must appear after adding non-fox docs")
+	require.Greater(t, score3, score2,
+		"Adding non-fox docs should increase IDF relative to phase2 (phase2=%f, phase3=%f)", score2, score3)
+}
+
+func TestBM25LargeCorpus(t *testing.T) {
+	// Add 100 docs: 50 with "alpha", 50 with "beta".
+	var triples string
+	for i := 700; i < 750; i++ {
+		triples += fmt.Sprintf(`<%d> <description_bm25> "alpha document content number %d with some padding words" .
+`, i, i)
+	}
+	for i := 750; i < 800; i++ {
+		triples += fmt.Sprintf(`<%d> <description_bm25> "beta document content number %d with some padding words" .
+`, i, i)
+	}
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		var del string
+		for i := 700; i < 800; i++ {
+			del += fmt.Sprintf("<%d> <description_bm25> * .\n", i)
+		}
+		deleteTriplesInCluster(del)
+	})
+
+	// Count alpha docs.
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "alpha")) { count(uid) } }`)
+	require.Contains(t, js, `"count":50`)
+
+	// Count beta docs.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "beta")) { count(uid) } }`)
+	require.Contains(t, js, `"count":50`)
+
+	// Union count: "alpha beta" should match all 100.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "alpha beta")) { count(uid) } }`)
+	require.Contains(t, js, `"count":100`)
+
+	// Pagination: first:10, offset:40 for alpha should return 10 results.
+	js = processQueryNoErr(t, `
+	{
+		var(func: bm25(description_bm25, "alpha")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score), first: 10, offset: 40) {
+			uid
+		}
+	}`)
+	var resp struct {
+		Data struct {
+			Me []struct{ UID string } `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+	require.Len(t, resp.Data.Me, 10, "pagination first:10 offset:40 should return exactly 10 results")
+}
+
+func TestBM25EdgeCaseSingleCharTerm(t *testing.T) {
+	require.NoError(t, addTriplesToCluster(`<640> <description_bm25> "x y z" .`))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<640> <description_bm25> * .`)
+	})
+
+	// Single-char terms may or may not be indexed depending on tokenizer.
+	// Just verify no panic/error.
+	_, err := processQuery(context.Background(), t, `
+	{
+		me(func: bm25(description_bm25, "x")) {
+			uid
+		}
+	}`)
+	require.NoError(t, err)
+}
+
+func TestBM25EdgeCaseLongDocument(t *testing.T) {
+	// Build a ~500-word document with "fox" appearing once.
+	words := make([]string, 500)
+	for i := range words {
+		words[i] = "padding"
+	}
+	words[250] = "fox"
+	longDoc := strings.Join(words, " ")
+
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`<645> <description_bm25> %q .`, longDoc)))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<645> <description_bm25> * .`)
+	})
+
+	// Get scores for "fox" query.
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "fox")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}
+	`
+	js := processQueryNoErr(t, scoreQuery)
+	scores := parseScoresFromJSON(t, js)
+
+	uid503 := "0x1f7" // "fox fox fox" (doclen=3)
+	uid645 := "0x285" // long doc (doclen~500)
+	s503, ok1 := scores[uid503]
+	s645, ok2 := scores[uid645]
+	require.True(t, ok1, "UID 503 must appear in fox results")
+	require.True(t, ok2, "UID 645 must appear in fox results")
+	require.Greater(t, s503, s645,
+		"Short doc with high tf should score higher than long doc with low tf (503=%f, 645=%f)", s503, s645)
+}
+
+func TestBM25EdgeCaseUnicode(t *testing.T) {
+	triples := `
+		<650> <description_bm25> "der schnelle braune Fuchs springt" .
+		<651> <description_bm25> "le renard brun rapide saute" .
+		<652> <description_bm25> "el zorro marrón rápido salta" .
+	`
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`
+			<650> <description_bm25> * .
+			<651> <description_bm25> * .
+			<652> <description_bm25> * .
+		`)
+	})
+
+	// Query German term.
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "Fuchs")) { uid } }`)
+	require.Contains(t, js, `"0x28a"`) // 650
+
+	// Query French term.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "renard")) { uid } }`)
+	require.Contains(t, js, `"0x28b"`) // 651
+
+	// Query Spanish term.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "zorro")) { uid } }`)
+	require.Contains(t, js, `"0x28c"`) // 652
+}
+
+func TestBM25EdgeCaseAllStopwordsDoc(t *testing.T) {
+	require.NoError(t, addTriplesToCluster(`<655> <description_bm25> "the a an is are was were" .`))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<655> <description_bm25> * .`)
+	})
+
+	// Query "the" — should return empty since "the" is a stopword.
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "the")) { uid } }`)
+	require.NotContains(t, js, `"0x28f"`) // 655 should not appear
+
+	// But the doc should exist via has().
+	js = processQueryNoErr(t, `
+	{
+		me(func: has(description_bm25)) @filter(uid(655)) {
+			uid
+		}
+	}`)
+	require.Contains(t, js, `"0x28f"`)
+}
+
+func TestBM25WithUidFilter(t *testing.T) {
+	// BM25 root with uid filter to restrict results.
+	query := `
+	{
+		me(func: bm25(description_bm25, "fox")) @filter(uid(501, 503)) {
+			uid
+			description_bm25
+		}
+	}
+	`
+	js := processQueryNoErr(t, query)
+	// Should contain only UIDs 501 and 503.
+	require.Contains(t, js, `"0x1f5"`) // 501
+	require.Contains(t, js, `"0x1f7"`) // 503
+	// Should NOT contain other fox docs like 502, 506, 507.
+	require.NotContains(t, js, `"0x1f6"`) // 502
+	require.NotContains(t, js, `"0x1fa"`) // 506
+}
+
+func TestBM25ScoreValuesAreValidFloats(t *testing.T) {
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "fox")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}
+	`
+	js := processQueryNoErr(t, scoreQuery)
+	scores := parseScoresFromJSON(t, js)
+	require.NotEmpty(t, scores, "should have at least one result")
+
+	var prevScore float64
+	first := true
+	// Iterate over results in order (they're orderdesc by score).
+	var resp struct {
+		Data struct {
+			Me []struct {
+				UID   string  `json:"uid"`
+				Score float64 `json:"val(score)"`
+			} `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+
+	for _, item := range resp.Data.Me {
+		score := item.Score
+		require.False(t, math.IsNaN(score), "score should not be NaN for uid %s", item.UID)
+		require.False(t, math.IsInf(score, 0), "score should not be Inf for uid %s", item.UID)
+		require.Greater(t, score, 0.0, "score should be positive for uid %s", item.UID)
+
+		if !first {
+			require.GreaterOrEqual(t, prevScore, score,
+				"scores should be in descending order: %f >= %f", prevScore, score)
+		}
+		prevScore = score
+		first = false
+	}
+}
+
+func TestBM25IncrementalAddThenDeleteThenReadd(t *testing.T) {
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<670> <description_bm25> * .`)
+	})
+
+	// Phase 1: add with "elephant".
+	require.NoError(t, addTriplesToCluster(`<670> <description_bm25> "elephant roams the savanna" .`))
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
+	require.Contains(t, js, `"0x29e"`) // 670
+
+	// Phase 2: delete.
+	deleteTriplesInCluster(`<670> <description_bm25> "elephant roams the savanna" .`)
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
+	require.NotContains(t, js, `"0x29e"`)
+
+	// Phase 3: re-add with different content.
+	require.NoError(t, addTriplesToCluster(`<670> <description_bm25> "penguin waddles on the ice" .`))
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "penguin")) { uid } }`)
+	require.Contains(t, js, `"0x29e"`)
+
+	// "elephant" should still not match 670.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
+	require.NotContains(t, js, `"0x29e"`)
+}
+
+func TestBM25NonIndexedPredicateError(t *testing.T) {
+	// "name" predicate does not have @index(bm25).
+	query := `
+	{
+		me(func: bm25(name, "alice")) {
+			uid
+		}
+	}
+	`
+	_, err := processQuery(context.Background(), t, query)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bm25")
+}
+
+func TestBM25ConcurrentBatchAdd(t *testing.T) {
+	// Add 5 batches of 4 docs each (UIDs 680-699) back-to-back.
+	t.Cleanup(func() {
+		var del string
+		for i := 680; i < 700; i++ {
+			del += fmt.Sprintf("<%d> <description_bm25> * .\n", i)
+		}
+		deleteTriplesInCluster(del)
+	})
+
+	for batch := 0; batch < 5; batch++ {
+		var triples string
+		for j := 0; j < 4; j++ {
+			uid := 680 + batch*4 + j
+			triples += fmt.Sprintf(`<%d> <description_bm25> "searchterm batch%d doc%d content here" .
+`, uid, batch, j)
+		}
+		require.NoError(t, addTriplesToCluster(triples))
+	}
+
+	// All 20 docs should be findable.
+	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "searchterm")) { count(uid) } }`)
+	require.Contains(t, js, `"count":20`)
+
+	// Spot-check a doc from each batch.
+	for batch := 0; batch < 5; batch++ {
+		uid := 680 + batch*4
+		hexUID := fmt.Sprintf(`"0x%x"`, uid)
+		term := fmt.Sprintf("batch%d", batch)
+		js = processQueryNoErr(t, fmt.Sprintf(`{ me(func: bm25(description_bm25, "%s")) { uid } }`, term))
+		require.Contains(t, js, hexUID, "doc %d from batch %d should be searchable", uid, batch)
+	}
 }
