@@ -393,6 +393,9 @@ type MemoryLayer struct {
 
 	// metrics
 	statsHolder *StatsHolder
+
+	// closer signals the metrics goroutine to stop
+	closer *z.Closer
 }
 
 func (ml *MemoryLayer) clear() {
@@ -512,6 +515,7 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 	ml.removeOnUpdate = removeOnUpdate
 	ml.statsHolder = NewStatsHolder()
 	if cacheSize > 0 {
+		ml.closer = z.NewCloser(1)
 		cache, err := ristretto.NewCache(&ristretto.Config[[]byte, *CachePL]{
 			// Use 5% of cache memory for storing counters.
 			NumCounters: int64(float64(cacheSize) * 0.05 * 2),
@@ -531,23 +535,29 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 		})
 		x.Check(err)
 		go func() {
+			defer ml.closer.Done()
 			m := cache.Metrics
 			ticker := time.NewTicker(10 * time.Second)
 			defer ticker.Stop()
 
-			for range ticker.C {
-				// Record the posting list cache hit ratio
-				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
+			for {
+				select {
+				case <-ticker.C:
+					// Record the posting list cache hit ratio
+					ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 
-				if EnableDetailedMetrics {
-					x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
-					x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
-					x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
+					if EnableDetailedMetrics {
+						x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
+						x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
+						x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
+					}
+
+					ml.cache.numCacheSave.Store(0)
+					ml.cache.numCacheRead.Store(0)
+					ml.cache.numCacheReadFails.Store(0)
+				case <-ml.closer.HasBeenClosed():
+					return
 				}
-
-				ml.cache.numCacheSave.Store(0)
-				ml.cache.numCacheRead.Store(0)
-				ml.cache.numCacheReadFails.Store(0)
 			}
 		}()
 

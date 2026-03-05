@@ -48,6 +48,9 @@ func SetEnabledDetailedMetrics(enableMetrics bool) {
 
 // Cleanup waits until the closer has finished processing.
 func Cleanup() {
+	if MemLayerInstance != nil && MemLayerInstance.closer != nil {
+		MemLayerInstance.closer.SignalAndWait()
+	}
 	closer.SignalAndWait()
 }
 
