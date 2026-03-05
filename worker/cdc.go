@@ -145,7 +145,10 @@ func (cdc *CDC) getFromPending(ts uint64) []CDCEvent {
 	}
 	cdc.Lock()
 	defer cdc.Unlock()
-	return cdc.pendingTxnEvents[ts]
+	orig := cdc.pendingTxnEvents[ts]
+	events := make([]CDCEvent, len(orig))
+	copy(events, orig)
+	return events
 }
 
 func (cdc *CDC) removeFromPending(ts uint64) {
