@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/algo"
 	"github.com/dgraph-io/dgraph/v25/conn"
 	"github.com/dgraph-io/dgraph/v25/posting"
+	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	ctask "github.com/dgraph-io/dgraph/v25/task"
@@ -1272,31 +1273,11 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return nil
 	}
 
-	// 3. Read corpus stats.
+	// 3. Read corpus stats from direct Badger KV.
 	statsKey := x.BM25StatsKey(attr)
-	statsPl, err := qs.cache.Get(statsKey)
-	if err != nil {
-		// No stats means no documents indexed yet.
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-	statsVal, err := statsPl.Value(q.ReadTs)
-	if err != nil || statsVal.Value == nil {
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-	statsData, ok := statsVal.Value.([]byte)
-	if !ok || len(statsData) != 16 {
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-	docCount := binary.BigEndian.Uint64(statsData[0:8])
-	totalTerms := binary.BigEndian.Uint64(statsData[8:16])
-	if docCount == 0 {
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-	if totalTerms == 0 {
+	statsBlob := posting.ReadBM25BlobAt(statsKey, q.ReadTs)
+	docCount, totalTerms := bm25enc.DecodeStats(statsBlob)
+	if docCount == 0 || totalTerms == 0 {
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
 		return nil
 	}
@@ -1312,7 +1293,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// 4. For each query token, read the posting list and collect term info.
+	// 4. For each query token, read the BM25 term blob and collect term info.
 	type termInfo struct {
 		idf    float64
 		uidTFs map[uint64]uint32
@@ -1321,39 +1302,27 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 
 	for _, token := range queryTokens {
 		key := x.BM25IndexKey(attr, token)
-		pl, err := qs.cache.Get(key)
-		if err != nil {
+		blob := posting.ReadBM25BlobAt(key, q.ReadTs)
+		entries := bm25enc.Decode(blob)
+		if len(entries) == 0 {
 			continue
 		}
 
 		ti := &termInfo{uidTFs: make(map[uint64]uint32)}
-		var df float64
-		err = pl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-			df++
-			// When used as filter, only collect TF for UIDs in the filter set.
+		df := float64(len(entries))
+		for _, e := range entries {
 			if filterSet != nil {
-				if _, ok := filterSet[p.Uid]; !ok {
-					return nil
+				if _, ok := filterSet[e.UID]; !ok {
+					continue
 				}
 			}
-			tf := uint32(1)
-			for _, f := range p.Facets {
-				if f.Key == "tf" && len(f.Value) >= 4 {
-					tf = binary.BigEndian.Uint32(f.Value[:4])
-					break
-				}
-			}
-			ti.uidTFs[p.Uid] = tf
-			return nil
-		})
-		if err != nil {
-			continue
+			ti.uidTFs[e.UID] = e.Value
 		}
 		ti.idf = math.Log1p((N - df + 0.5) / (df + 0.5))
 		termInfos[token] = ti
 	}
 
-	// 5. Read doc lengths for all UIDs seen.
+	// 5. Read doc lengths for all UIDs seen using binary search on the doclen blob.
 	allUids := make(map[uint64]struct{})
 	for _, ti := range termInfos {
 		for uid := range ti.uidTFs {
@@ -1361,28 +1330,15 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	docLens := make(map[uint64]uint32)
 	dlKey := x.BM25DocLenKey(attr)
-	dlPl, err := qs.cache.Get(dlKey)
-	if err == nil {
-		remaining := len(allUids)
-		_ = dlPl.Iterate(q.ReadTs, 0, func(p *pb.Posting) error {
-			if remaining == 0 {
-				return posting.ErrStopIteration
-			}
-			if _, needed := allUids[p.Uid]; needed {
-				dl := uint32(1)
-				for _, f := range p.Facets {
-					if f.Key == "dl" && len(f.Value) >= 4 {
-						dl = binary.BigEndian.Uint32(f.Value[:4])
-						break
-					}
-				}
-				docLens[p.Uid] = dl
-				remaining--
-			}
-			return nil
-		})
+	dlBlob := posting.ReadBM25BlobAt(dlKey, q.ReadTs)
+	dlEntries := bm25enc.Decode(dlBlob)
+
+	docLens := make(map[uint64]uint32, len(allUids))
+	for uid := range allUids {
+		if v, ok := bm25enc.Search(dlEntries, uid); ok {
+			docLens[uid] = v
+		}
 	}
 
 	// 6. Compute final BM25 scores.
@@ -1408,7 +1364,6 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	for uid, score := range scores {
 		results = append(results, uidScore{uid: uid, score: score})
 	}
-	// Sort by score descending for ordering, then collect UIDs.
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].score != results[j].score {
 			return results[i].score > results[j].score
@@ -1428,14 +1383,26 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// Build output UIDs sorted by UID (ascending) as required by the query pipeline.
+	// Build output: UIDs sorted ascending (required by query pipeline)
+	// and ValueMatrix with aligned scores (for bm25_score pseudo-predicate).
+	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
 	uids := make([]uint64, len(results))
 	for i, r := range results {
 		uids[i] = r.uid
 	}
-	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-
 	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
+
+	// Populate ValueMatrix with BM25 scores aligned to UIDs.
+	// Each entry is a ValueList with a single float64 value.
+	scoreValues := make([]*pb.ValueList, len(results))
+	for i, r := range results {
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, math.Float64bits(r.score))
+		scoreValues[i] = &pb.ValueList{
+			Values: []*pb.TaskValue{{Val: buf, ValType: pb.Posting_ValType(pb.Posting_FLOAT)}},
+		}
+	}
+	args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)
 	return nil
 }
 

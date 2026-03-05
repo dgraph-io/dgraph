@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
-	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok"
@@ -232,7 +232,8 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 }
 
 // addBM25IndexMutations handles index mutations for the BM25 tokenizer.
-// It stores term frequencies, document lengths, and corpus statistics.
+// It stores term frequencies, document lengths, and corpus statistics as direct
+// Badger KV entries using compact varint encoding, bypassing posting lists.
 func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationInfo) error {
 	attr := info.edge.Attr
 	uid := info.edge.Entity
@@ -260,107 +261,53 @@ func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationIn
 	}
 
 	if info.op == pb.DirectedEdge_DEL {
-		// For DELETE: remove uid from all BM25 term posting lists, doc length list,
-		// and decrement corpus stats.
+		// For DELETE: remove uid from all BM25 term posting lists and doc length list.
 		for term := range termFreqs {
 			encodedTerm := string([]byte{tok.IdentBM25}) + term
 			key := x.BM25IndexKey(attr, encodedTerm)
-			plist, err := txn.cache.GetFromDelta(key)
-			if err != nil {
-				return err
-			}
-			edge := &pb.DirectedEdge{
-				ValueId: uid,
-				Attr:    attr,
-				Op:      pb.DirectedEdge_DEL,
-			}
-			if err := plist.addMutation(ctx, txn, edge); err != nil {
-				return err
-			}
+			blob := txn.cache.ReadBM25Blob(key)
+			entries := bm25enc.Decode(blob)
+			entries = bm25enc.Remove(entries, uid)
+			txn.cache.WriteBM25Blob(key, bm25enc.Encode(entries))
 		}
 		// Remove doc length entry.
 		dlKey := x.BM25DocLenKey(attr)
-		dlPlist, err := txn.cache.GetFromDelta(dlKey)
-		if err != nil {
-			return err
-		}
-		dlEdge := &pb.DirectedEdge{
-			ValueId: uid,
-			Attr:    attr,
-			Op:      pb.DirectedEdge_DEL,
-		}
-		if err := dlPlist.addMutation(ctx, txn, dlEdge); err != nil {
-			return err
-		}
+		blob := txn.cache.ReadBM25Blob(dlKey)
+		entries := bm25enc.Decode(blob)
+		entries = bm25enc.Remove(entries, uid)
+		txn.cache.WriteBM25Blob(dlKey, bm25enc.Encode(entries))
 
 		// Update corpus stats: decrement doc count and total terms.
-		return txn.updateBM25Stats(ctx, attr, -1, -int64(docLen))
+		return txn.updateBM25Stats(attr, -1, -int64(docLen))
 	}
 
-	// For SET: store term frequencies, doc length, and update corpus stats.
+	// For SET: store term frequencies and doc length.
 	for term, tf := range termFreqs {
 		encodedTerm := string([]byte{tok.IdentBM25}) + term
 		key := x.BM25IndexKey(attr, encodedTerm)
-		plist, err := txn.cache.GetFromDelta(key)
-		if err != nil {
-			return err
-		}
-		// Store uid in the posting list. TF is stored as a facet so it survives
-		// the rollup cycle (REF postings without facets lose their Value field).
-		tfBuf := make([]byte, 4)
-		binary.BigEndian.PutUint32(tfBuf, tf)
-		edge := &pb.DirectedEdge{
-			ValueId: uid,
-			Attr:    attr,
-			Op:      pb.DirectedEdge_SET,
-			Facets:  []*api.Facet{{Key: "tf", Value: tfBuf, ValType: api.Facet_INT}},
-		}
-		if err := plist.addMutation(ctx, txn, edge); err != nil {
-			return err
-		}
+		blob := txn.cache.ReadBM25Blob(key)
+		entries := bm25enc.Decode(blob)
+		entries = bm25enc.Upsert(entries, uid, tf)
+		txn.cache.WriteBM25Blob(key, bm25enc.Encode(entries))
 	}
 
 	// Store document length.
 	dlKey := x.BM25DocLenKey(attr)
-	dlPlist, err := txn.cache.GetFromDelta(dlKey)
-	if err != nil {
-		return err
-	}
-	dlBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(dlBuf, docLen)
-	dlEdge := &pb.DirectedEdge{
-		ValueId: uid,
-		Attr:    attr,
-		Op:      pb.DirectedEdge_SET,
-		Facets:  []*api.Facet{{Key: "dl", Value: dlBuf, ValType: api.Facet_INT}},
-	}
-	if err := dlPlist.addMutation(ctx, txn, dlEdge); err != nil {
-		return err
-	}
+	blob := txn.cache.ReadBM25Blob(dlKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Upsert(entries, uid, docLen)
+	txn.cache.WriteBM25Blob(dlKey, bm25enc.Encode(entries))
 
 	// Update corpus stats: increment doc count by 1 and total terms by docLen.
-	return txn.updateBM25Stats(ctx, attr, 1, int64(docLen))
+	return txn.updateBM25Stats(attr, 1, int64(docLen))
 }
 
 // updateBM25Stats reads the current corpus statistics for a BM25-indexed attribute,
-// applies the given deltas, and writes back.
-func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, docCountDelta int64, totalTermsDelta int64) error {
+// applies the given deltas, and writes back as a direct Badger KV entry.
+func (txn *Txn) updateBM25Stats(attr string, docCountDelta int64, totalTermsDelta int64) error {
 	statsKey := x.BM25StatsKey(attr)
-	plist, err := txn.cache.GetFromDelta(statsKey)
-	if err != nil {
-		return err
-	}
-
-	// Read existing stats from posting with uid=1.
-	var docCount, totalTerms uint64
-	val, err := plist.Value(txn.StartTs)
-	if err == nil && val.Value != nil {
-		data, ok := val.Value.([]byte)
-		if ok && len(data) == 16 {
-			docCount = binary.BigEndian.Uint64(data[0:8])
-			totalTerms = binary.BigEndian.Uint64(data[8:16])
-		}
-	}
+	blob := txn.cache.ReadBM25Blob(statsKey)
+	docCount, totalTerms := bm25enc.DecodeStats(blob)
 
 	// Apply deltas.
 	if docCountDelta >= 0 {
@@ -384,18 +331,8 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, docCountDelta 
 		}
 	}
 
-	// Write back stats.
-	statsBuf := make([]byte, 16)
-	binary.BigEndian.PutUint64(statsBuf[0:8], docCount)
-	binary.BigEndian.PutUint64(statsBuf[8:16], totalTerms)
-	edge := &pb.DirectedEdge{
-		Entity:    1,
-		Attr:      attr,
-		Value:     statsBuf,
-		ValueType: pb.Posting_ValType(0),
-		Op:        pb.DirectedEdge_SET,
-	}
-	return plist.addMutation(ctx, txn, edge)
+	txn.cache.WriteBM25Blob(statsKey, bm25enc.EncodeStats(docCount, totalTerms))
+	return nil
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.

@@ -60,6 +60,8 @@ const (
 	BitCompletePosting byte = 0x08
 	// BitEmptyPosting signals that the value stores an empty posting list.
 	BitEmptyPosting byte = 0x10
+	// BitBM25Data signals that the value stores BM25 index data (direct KV, not a posting list).
+	BitBM25Data byte = 0x20
 )
 
 // List stores the in-memory representation of a posting list.
