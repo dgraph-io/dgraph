@@ -89,8 +89,7 @@ func (vt *viTxn) GetWithLockHeld(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	pl.Lock()
-	defer pl.Unlock()
+	pl.AssertLock()
 	return vt.GetValueFromPostingList(pl)
 }
 
