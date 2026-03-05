@@ -203,12 +203,12 @@ func (enc *encoder) idForAttr(attr string) uint16 {
 		return id
 	}
 
-	enc.idSlice = append(enc.idSlice, attr)
-	id := len(enc.idSlice) - 1
+	id := len(enc.idSlice)
 	if id > math.MaxUint16 {
 		glog.Errorf("Attribute ID overflow: %d unique predicates exceeds uint16 limit", id)
 		return 0
 	}
+	enc.idSlice = append(enc.idSlice, attr)
 	enc.attrMap[attr] = uint16(id)
 	return uint16(id)
 }
