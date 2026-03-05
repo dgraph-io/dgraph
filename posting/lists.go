@@ -76,6 +76,10 @@ type LocalCache struct {
 
 	// plists are posting lists in memory. They can be discarded to reclaim space.
 	plists map[string]*List
+
+	// bm25Writes buffers BM25 direct KV writes (key → encoded blob).
+	// These bypass the posting list infrastructure entirely.
+	bm25Writes map[string][]byte
 }
 
 // struct to implement LocalCache interface from vector-indexer
@@ -135,6 +139,7 @@ func NewLocalCache(startTs uint64) *LocalCache {
 		deltas:      make(map[string][]byte),
 		plists:      make(map[string]*List),
 		maxVersions: make(map[string]uint64),
+		bm25Writes:  make(map[string][]byte),
 	}
 }
 
@@ -142,6 +147,57 @@ func NewLocalCache(startTs uint64) *LocalCache {
 // around.
 func NoCache(startTs uint64) *LocalCache {
 	return &LocalCache{startTs: startTs}
+}
+
+// ReadBM25Blob returns the BM25 blob for the given key.
+// It checks the in-memory buffer first (read-your-own-writes),
+// then falls back to reading from pstore at startTs.
+func (lc *LocalCache) ReadBM25Blob(key []byte) []byte {
+	lc.RLock()
+	if blob, ok := lc.bm25Writes[string(key)]; ok {
+		lc.RUnlock()
+		return blob
+	}
+	lc.RUnlock()
+
+	// Fall back to Badger.
+	txn := pstore.NewTransactionAt(lc.startTs, false)
+	defer txn.Discard()
+	item, err := txn.Get(key)
+	if err != nil {
+		return nil
+	}
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return nil
+	}
+	return val
+}
+
+// WriteBM25Blob buffers a BM25 blob write for the given key.
+func (lc *LocalCache) WriteBM25Blob(key []byte, blob []byte) {
+	lc.Lock()
+	defer lc.Unlock()
+	if lc.bm25Writes == nil {
+		lc.bm25Writes = make(map[string][]byte)
+	}
+	lc.bm25Writes[string(key)] = blob
+}
+
+// ReadBM25BlobAt reads a BM25 blob from pstore at the given read timestamp.
+// This is used by the query read path (worker/task.go).
+func ReadBM25BlobAt(key []byte, readTs uint64) []byte {
+	txn := pstore.NewTransactionAt(readTs, false)
+	defer txn.Discard()
+	item, err := txn.Get(key)
+	if err != nil {
+		return nil
+	}
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		return nil
+	}
+	return val
 }
 
 func (lc *LocalCache) UpdateCommitTs(commitTs uint64) {
