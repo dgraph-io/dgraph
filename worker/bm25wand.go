@@ -36,10 +36,13 @@ type listIter struct {
 
 // newListIter creates a new iterator for a term's block-based posting list.
 // Falls back to the legacy monolithic blob format if no block directory exists.
-func newListIter(attr, encodedTerm string, readTs uint64, idf, k, b float64) *listIter {
-	dirKey := x.BM25TermDirKey(attr, encodedTerm)
-	dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
-	dir := bm25block.DecodeDir(dirBlob)
+// If dir is non-nil, it is used directly (avoids re-reading from Badger).
+func newListIter(attr, encodedTerm string, readTs uint64, idf, k, b float64, dir *bm25block.Dir) *listIter {
+	if dir == nil {
+		dirKey := x.BM25TermDirKey(attr, encodedTerm)
+		dirBlob := posting.ReadBM25BlobAt(dirKey, readTs)
+		dir = bm25block.DecodeDir(dirBlob)
+	}
 
 	if len(dir.Blocks) == 0 {
 		// Fallback: try reading the legacy monolithic blob and wrap it as a single block.
@@ -453,7 +456,7 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 		}
 		idf := math.Log1p((N - float64(df) + 0.5) / (float64(df) + 0.5))
 
-		it := newListIter(attr, token, readTs, idf, k, b)
+		it := newListIter(attr, token, readTs, idf, k, b, dir)
 		if !it.exhausted {
 			it.next() // prime the iterator
 			if !it.exhausted {
@@ -501,12 +504,12 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 		var pivotDoc uint64
 		for i, it := range iters {
 			sumUB += it.remainingUB()
-			if sumUB > theta {
+			if sumUB > theta && pivot == -1 {
 				pivot = i
 				pivotDoc = it.currentDoc()
-				break
 			}
 		}
+		// sumUB now contains the total UB across ALL iterators (needed for BMW).
 		if pivot == -1 {
 			break // sum of all UBs can't beat theta
 		}
