@@ -188,6 +188,8 @@ func (it *listIter) skipTo(target uint64) bool {
 			startPos := it.inBlockPos
 			if startPos < 0 {
 				startPos = 0
+			} else if startPos > len(it.block) {
+				startPos = len(it.block)
 			}
 			// Binary search within current block from startPos.
 			pos := sort.Search(len(it.block)-startPos, func(i int) bool {
