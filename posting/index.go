@@ -272,13 +272,26 @@ func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationIn
 		return txn.updateBM25Stats(attr, -1, -int64(docLen))
 	}
 
-	// For SET: upsert term frequencies and doc length into blocks.
+	// For SET: check if this UID already has a doclen entry (i.e., this is an update).
+	// If so, subtract old stats to avoid double-counting.
+	oldDocLen, isUpdate := txn.bm25DocLenBlockLookup(attr, uid)
+
 	for term, tf := range termFreqs {
 		encodedTerm := string([]byte{tok.IdentBM25}) + term
 		txn.bm25BlockUpsert(attr, encodedTerm, uid, tf)
 	}
 	txn.bm25DocLenBlockUpsert(attr, uid, docLen)
-	return txn.updateBM25Stats(attr, 1, int64(docLen))
+
+	var docCountDelta int64
+	var totalTermsDelta int64
+	if isUpdate {
+		// Document already existed: don't increment docCount, adjust totalTerms by diff.
+		totalTermsDelta = int64(docLen) - int64(oldDocLen)
+	} else {
+		docCountDelta = 1
+		totalTermsDelta = int64(docLen)
+	}
+	return txn.updateBM25Stats(attr, docCountDelta, totalTermsDelta)
 }
 
 // bm25BlockUpsert inserts or updates a (uid, value) entry in the block-based
@@ -398,6 +411,27 @@ func (txn *Txn) bm25DocLenBlockUpsert(attr string, uid uint64, docLen uint32) {
 		dir.UpdateBlockMeta(blockIdx, entries)
 	}
 	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25DocLenBlockLookup checks if a uid exists in the doclen blocks and returns its value.
+func (txn *Txn) bm25DocLenBlockLookup(attr string, uid uint64) (uint32, bool) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return 0, false
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	if v, ok := bm25enc.Search(entries, uid); ok {
+		return v, true
+	}
+	return 0, false
 }
 
 // bm25DocLenBlockRemove removes a uid from the block-based document-length list.
