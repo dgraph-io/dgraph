@@ -835,3 +835,184 @@ func TestBM25ConcurrentBatchAdd(t *testing.T) {
 		require.Contains(t, js, hexUID, "doc %d from batch %d should be searchable", uid, batch)
 	}
 }
+
+// parseCorpusCount returns the total number of documents with the description_bm25 predicate.
+func parseCorpusCount(t *testing.T) float64 {
+	t.Helper()
+	js := processQueryNoErr(t, `{ me(func: has(description_bm25)) { count(uid) } }`)
+	var resp struct {
+		Data struct {
+			Me []struct {
+				Count int `json:"count"`
+			} `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+	require.NotEmpty(t, resp.Data.Me)
+	n := float64(resp.Data.Me[0].Count)
+	require.Greater(t, n, 0.0, "corpus must have documents")
+	return n
+}
+
+func TestBM25ExactScoreValues(t *testing.T) {
+	// Exact score verification using b=0 (BM15 variant) to eliminate avgDL dependency.
+	// With b=0: score = idf * (k+1) * tf / (k + tf)
+	// This validates the core BM25 formula computes correct numerical values.
+	triples := `
+		<850> <description_bm25> "quasar quasar quasar" .
+		<851> <description_bm25> "quasar nebula pulsar" .
+	`
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`
+			<850> <description_bm25> * .
+			<851> <description_bm25> * .
+		`)
+	})
+
+	N := parseCorpusCount(t)
+
+	// Query "quasar" with b=0 so score depends only on tf, k, and IDF (not avgDL).
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "quasar", "1.2", "0")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`
+	js := processQueryNoErr(t, scoreQuery)
+	scores := parseScoresFromJSON(t, js)
+
+	k := 1.2
+	df := 2.0 // both 850 and 851 contain "quasar"
+	idf := math.Log1p((N - df + 0.5) / (df + 0.5))
+
+	// Doc 850 "quasar quasar quasar": tf=3, b=0 → score = idf * 2.2 * 3 / 4.2
+	expected850 := idf * (k + 1) * 3.0 / (k + 3.0)
+	// Doc 851 "quasar nebula pulsar": tf=1, b=0 → score = idf * 2.2 * 1 / 2.2 = idf
+	expected851 := idf * (k + 1) * 1.0 / (k + 1.0)
+
+	actual850, ok := scores["0x352"] // 850
+	require.True(t, ok, "UID 850 (0x352) must be in results")
+	actual851, ok := scores["0x353"] // 851
+	require.True(t, ok, "UID 851 (0x353) must be in results")
+
+	require.InEpsilon(t, expected850, actual850, 1e-6,
+		"Doc 850 score mismatch: expected %f, got %f (N=%f, df=%f, idf=%f)",
+		expected850, actual850, N, df, idf)
+	require.InEpsilon(t, expected851, actual851, 1e-6,
+		"Doc 851 score mismatch: expected %f, got %f (N=%f, df=%f, idf=%f)",
+		expected851, actual851, N, df, idf)
+
+	// Verify ordering: higher tf should yield higher score.
+	require.Greater(t, actual850, actual851)
+}
+
+func TestBM25BM15NoLengthNormalization(t *testing.T) {
+	// With b=0 (BM15 variant), document length should NOT affect the score.
+	// Two docs with the same term frequency but different lengths must score identically.
+	triples := `
+		<860> <description_bm25> "vortex" .
+		<861> <description_bm25> "vortex alpha bravo charlie delta echo foxtrot golf hotel india" .
+	`
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`
+			<860> <description_bm25> * .
+			<861> <description_bm25> * .
+		`)
+	})
+
+	// Query with b=0: length normalization disabled.
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "vortex", "1.2", "0")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`
+	js := processQueryNoErr(t, scoreQuery)
+	scores := parseScoresFromJSON(t, js)
+
+	score860, ok1 := scores["0x35c"] // 860
+	score861, ok2 := scores["0x35d"] // 861
+	require.True(t, ok1, "UID 860 must be in results")
+	require.True(t, ok2, "UID 861 must be in results")
+
+	// With b=0 and same tf=1, scores must be equal regardless of document length.
+	require.InDelta(t, score860, score861, 1e-9,
+		"b=0 should disable length normalization: short doc score=%f, long doc score=%f",
+		score860, score861)
+
+	// Now verify that with default b=0.75, the shorter doc scores higher.
+	scoreQueryDefault := `
+	{
+		var(func: bm25(description_bm25, "vortex")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`
+	js = processQueryNoErr(t, scoreQueryDefault)
+	scoresDefault := parseScoresFromJSON(t, js)
+
+	defScore860, ok1 := scoresDefault["0x35c"]
+	defScore861, ok2 := scoresDefault["0x35d"]
+	require.True(t, ok1, "UID 860 must be in default results")
+	require.True(t, ok2, "UID 861 must be in default results")
+	require.Greater(t, defScore860, defScore861,
+		"With b=0.75, shorter doc (doclen=1) should score higher than longer doc (doclen=10)")
+}
+
+func TestBM25SingleMatchingDocument(t *testing.T) {
+	// Edge case: a single document matching the query term (df=1).
+	// IDF should be high since the term is very rare.
+	triples := `<865> <description_bm25> "aardvark" .`
+	require.NoError(t, addTriplesToCluster(triples))
+	t.Cleanup(func() {
+		deleteTriplesInCluster(`<865> <description_bm25> * .`)
+	})
+
+	N := parseCorpusCount(t)
+
+	// Query with b=0 for exact verification.
+	scoreQuery := `
+	{
+		var(func: bm25(description_bm25, "aardvark", "1.2", "0")) {
+			score as bm25_score
+		}
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`
+	js := processQueryNoErr(t, scoreQuery)
+	scores := parseScoresFromJSON(t, js)
+
+	require.Len(t, scores, 1, "exactly one document should match 'aardvark'")
+
+	actual, ok := scores["0x361"] // 865
+	require.True(t, ok, "UID 865 (0x361) must be in results")
+
+	// With df=1, tf=1, b=0, k=1.2:
+	// idf = log1p((N - 1 + 0.5) / (1 + 0.5)) = log1p((N - 0.5) / 1.5)
+	// score = idf * 2.2 * 1 / (1.2 + 1) = idf * 2.2 / 2.2 = idf
+	k := 1.2
+	df := 1.0
+	idf := math.Log1p((N - df + 0.5) / (df + 0.5))
+	expected := idf * (k + 1) * 1.0 / (k + 1.0) // simplifies to idf
+
+	require.InEpsilon(t, expected, actual, 1e-6,
+		"Single-doc score mismatch: expected %f, got %f (N=%f, idf=%f)",
+		expected, actual, N, idf)
+	require.Greater(t, actual, 0.0, "score must be positive")
+	require.False(t, math.IsInf(actual, 0), "score must be finite")
+}
