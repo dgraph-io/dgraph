@@ -652,6 +652,146 @@ func TestNGramTokenizerNonStringInput(t *testing.T) {
 	require.Equal(t, 0, len(tokens2), "Expected empty tokens for nil input")
 }
 
+func TestBM25Tokenizer(t *testing.T) {
+	tokenizer, has := GetTokenizer("bm25")
+	require.True(t, has)
+	require.NotNil(t, tokenizer)
+	require.Equal(t, "bm25", tokenizer.Name())
+	require.Equal(t, "string", tokenizer.Type())
+	require.Equal(t, byte(IdentBM25), tokenizer.Identifier())
+	require.True(t, tokenizer.IsLossy())
+	require.False(t, tokenizer.IsSortable())
+}
+
+func TestBM25TokensPreservesDuplicates(t *testing.T) {
+	tok := BM25Tokenizer{lang: "en"}
+	tokens, err := tok.Tokens("fox fox fox dog")
+	require.NoError(t, err)
+	// "fox" should appear 3 times (duplicates preserved), "dog" once
+	foxCount := 0
+	dogCount := 0
+	for _, token := range tokens {
+		if token == "fox" {
+			foxCount++
+		}
+		if token == "dog" {
+			dogCount++
+		}
+	}
+	require.Equal(t, 3, foxCount, "Expected 3 occurrences of 'fox'")
+	require.Equal(t, 1, dogCount, "Expected 1 occurrence of 'dog'")
+}
+
+func TestBM25TokensWithFrequency(t *testing.T) {
+	tok := BM25Tokenizer{}
+	termFreqs, docLen, err := tok.TokensWithFrequency("the quick brown fox fox fox", "en")
+	require.NoError(t, err)
+	// "the" is a stopword and should be removed
+	_, hasThe := termFreqs["the"]
+	require.False(t, hasThe, "'the' should be removed as stopword")
+	// "fox" should have tf=3
+	require.Equal(t, uint32(3), termFreqs["fox"])
+	// "quick" -> "quick" (stemmed)
+	require.Contains(t, termFreqs, "quick")
+	require.Equal(t, uint32(1), termFreqs["quick"])
+	// "brown" -> "brown" (stemmed)
+	require.Contains(t, termFreqs, "brown")
+	require.Equal(t, uint32(1), termFreqs["brown"])
+	// docLen should be total tokens after stopword removal
+	require.Equal(t, uint32(5), docLen)
+}
+
+func TestBM25TokensEmpty(t *testing.T) {
+	tok := BM25Tokenizer{lang: "en"}
+	tokens, err := tok.Tokens("")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens))
+
+	termFreqs, docLen, err := tok.TokensWithFrequency("", "en")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(termFreqs))
+	require.Equal(t, uint32(0), docLen)
+}
+
+func TestBM25TokensSingleWord(t *testing.T) {
+	tok := BM25Tokenizer{lang: "en"}
+	tokens, err := tok.Tokens("hello")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(tokens))
+	require.Equal(t, "hello", tokens[0])
+}
+
+func TestBM25TokensStemming(t *testing.T) {
+	tok := BM25Tokenizer{lang: "en"}
+	tokens, err := tok.Tokens("running jumping swimming")
+	require.NoError(t, err)
+	require.Equal(t, 3, len(tokens))
+	require.Contains(t, tokens, "run")
+	require.Contains(t, tokens, "jump")
+	require.Contains(t, tokens, "swim")
+}
+
+func TestGetBM25QueryTokens(t *testing.T) {
+	tokens, err := GetBM25QueryTokens([]string{"quick brown fox fox"}, "en")
+	require.NoError(t, err)
+	// Query tokens should be deduplicated
+	require.Equal(t, 3, len(tokens))
+	// Each token should be encoded with the BM25 identifier prefix
+	for _, token := range tokens {
+		require.Equal(t, byte(IdentBM25), token[0], "Token should start with BM25 identifier")
+	}
+}
+
+func TestGetBM25QueryTokensEmpty(t *testing.T) {
+	tokens, err := GetBM25QueryTokens([]string{""}, "en")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens))
+}
+
+func TestBM25TokenizerForLang(t *testing.T) {
+	tokenizer, has := GetTokenizer("bm25")
+	require.True(t, has)
+	langTok := GetTokenizerForLang(tokenizer, "de")
+	bm25Tok, ok := langTok.(BM25Tokenizer)
+	require.True(t, ok)
+	// German: "Katzen" -> "katz" (stemmed)
+	tokens, err := bm25Tok.Tokens("Katzen und Katzen")
+	require.NoError(t, err)
+	// "und" is a German stopword
+	katzCount := 0
+	for _, token := range tokens {
+		if token == "katz" {
+			katzCount++
+		}
+	}
+	require.Equal(t, 2, katzCount, "Expected 2 occurrences of stemmed 'katz'")
+}
+
+func TestBM25AllStopwords(t *testing.T) {
+	tok := BM25Tokenizer{lang: "en"}
+	tokens, err := tok.Tokens("the a an is")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens))
+
+	termFreqs, docLen, err := tok.TokensWithFrequency("the a an is", "en")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(termFreqs))
+	require.Equal(t, uint32(0), docLen)
+}
+
+func TestGetBM25QueryTokensAllStopwords(t *testing.T) {
+	tokens, err := GetBM25QueryTokens([]string{"the a an"}, "en")
+	require.NoError(t, err)
+	require.Equal(t, 0, len(tokens))
+}
+
+func TestGetBM25QueryTokensWrongArgCount(t *testing.T) {
+	_, err := GetBM25QueryTokens([]string{}, "en")
+	require.Error(t, err)
+	_, err = GetBM25QueryTokens([]string{"a", "b"}, "en")
+	require.Error(t, err)
+}
+
 func BenchmarkTermTokenizer(b *testing.B) {
 	b.Skip() // tmp
 }

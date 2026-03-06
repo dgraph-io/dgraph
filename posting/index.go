@@ -28,6 +28,8 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/options"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgraph/v25/posting/bm25block"
+	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok"
@@ -68,6 +70,10 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 
 	var tokens []string
 	for _, it := range info.tokenizers {
+		// BM25 tokenizer is handled separately in addBM25IndexMutations.
+		if it.Identifier() == tok.IdentBM25 {
+			continue
+		}
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
@@ -179,6 +185,17 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		}
 	}
 
+	// Check if any tokenizer is BM25 and handle separately.
+	for _, it := range info.tokenizers {
+		if _, ok := tok.GetTokenizerForLang(it, info.edge.GetLang()).(tok.BM25Tokenizer); ok {
+			if err := txn.addBM25IndexMutations(ctx, info); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// Continue to process remaining non-BM25 tokenizers below.
+			continue
+		}
+	}
+
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
@@ -212,6 +229,268 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 		return err
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
+	return nil
+}
+
+// addBM25IndexMutations handles index mutations for the BM25 tokenizer.
+// It stores term frequencies, document lengths, and corpus statistics using
+// block-based storage: each term's postings and the doclen list are split into
+// fixed-size blocks (~128 entries) with a lightweight directory for navigation.
+func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationInfo) error {
+	attr := info.edge.Attr
+	uid := info.edge.Entity
+	lang := info.edge.GetLang()
+
+	schemaType, err := schema.State().TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
+		return errors.Errorf("Cannot BM25 index attribute %s of type object.", attr)
+	}
+
+	sv, err := types.Convert(info.val, schemaType)
+	if err != nil {
+		return err
+	}
+
+	bm25Tok := tok.BM25Tokenizer{}
+	termFreqs, docLen, err := bm25Tok.TokensWithFrequency(sv.Value, lang)
+	if err != nil {
+		return err
+	}
+
+	// Skip documents that tokenize to zero terms (e.g., all stopwords).
+	if docLen == 0 {
+		return nil
+	}
+
+	if info.op == pb.DirectedEdge_DEL {
+		// For DELETE: remove uid from all term blocks and doclen blocks.
+		for term := range termFreqs {
+			encodedTerm := string([]byte{tok.IdentBM25}) + term
+			txn.bm25BlockRemove(attr, encodedTerm, uid)
+		}
+		txn.bm25DocLenBlockRemove(attr, uid)
+		return txn.updateBM25Stats(attr, -1, -int64(docLen))
+	}
+
+	// For SET: check if this UID already has a doclen entry (i.e., this is an update).
+	// If so, subtract old stats to avoid double-counting.
+	oldDocLen, isUpdate := txn.bm25DocLenBlockLookup(attr, uid)
+
+	for term, tf := range termFreqs {
+		encodedTerm := string([]byte{tok.IdentBM25}) + term
+		txn.bm25BlockUpsert(attr, encodedTerm, uid, tf)
+	}
+	txn.bm25DocLenBlockUpsert(attr, uid, docLen)
+
+	var docCountDelta int64
+	var totalTermsDelta int64
+	if isUpdate {
+		// Document already existed: don't increment docCount, adjust totalTerms by diff.
+		totalTermsDelta = int64(docLen) - int64(oldDocLen)
+	} else {
+		docCountDelta = 1
+		totalTermsDelta = int64(docLen)
+	}
+	return txn.updateBM25Stats(attr, docCountDelta, totalTermsDelta)
+}
+
+// bm25BlockUpsert inserts or updates a (uid, value) entry in the block-based
+// posting list for the given term. Handles block creation and splitting.
+func (txn *Txn) bm25BlockUpsert(attr, encodedTerm string, uid uint64, value uint32) {
+	dirKey := x.BM25TermDirKey(attr, encodedTerm)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		// First entry for this term: create a single block.
+		blockID := dir.AllocBlockID()
+		entries := []bm25enc.Entry{{UID: uid, Value: value}}
+		blockKey := x.BM25TermBlockKey(attr, encodedTerm, blockID)
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.Blocks = append(dir.Blocks, bm25block.BlockMetaFromEntries(blockID, entries))
+		txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+		return
+	}
+
+	// Find the target block, read it, upsert, and handle splits.
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25TermBlockKey(attr, encodedTerm, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Upsert(entries, uid, value)
+
+	if len(entries) > bm25block.MaxBlockSize {
+		// Split the block.
+		mid := len(entries) / 2
+		left := entries[:mid]
+		right := entries[mid:]
+
+		// Write left block (reuse existing blockID).
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(left))
+		dir.UpdateBlockMeta(blockIdx, left)
+
+		// Write right block (new blockID).
+		newBlockID := dir.AllocBlockID()
+		newBlockKey := x.BM25TermBlockKey(attr, encodedTerm, newBlockID)
+		txn.cache.WriteBM25Blob(newBlockKey, bm25enc.Encode(right))
+		dir.InsertBlockMeta(blockIdx+1, bm25block.BlockMetaFromEntries(newBlockID, right))
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25BlockRemove removes a uid from the block-based posting list for the given term.
+func (txn *Txn) bm25BlockRemove(attr, encodedTerm string, uid uint64) {
+	dirKey := x.BM25TermDirKey(attr, encodedTerm)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25TermBlockKey(attr, encodedTerm, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Remove(entries, uid)
+
+	if len(entries) == 0 {
+		// Block is empty; remove it from the directory.
+		txn.cache.WriteBM25Blob(blockKey, nil)
+		dir.RemoveBlockMeta(blockIdx)
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25DocLenBlockUpsert inserts or updates a doc-length entry in the block-based
+// document-length list.
+func (txn *Txn) bm25DocLenBlockUpsert(attr string, uid uint64, docLen uint32) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		blockID := dir.AllocBlockID()
+		entries := []bm25enc.Entry{{UID: uid, Value: docLen}}
+		blockKey := x.BM25DocLenBlockKey(attr, blockID)
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.Blocks = append(dir.Blocks, bm25block.BlockMetaFromEntries(blockID, entries))
+		txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Upsert(entries, uid, docLen)
+
+	if len(entries) > bm25block.MaxBlockSize {
+		mid := len(entries) / 2
+		left := entries[:mid]
+		right := entries[mid:]
+
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(left))
+		dir.UpdateBlockMeta(blockIdx, left)
+
+		newBlockID := dir.AllocBlockID()
+		newBlockKey := x.BM25DocLenBlockKey(attr, newBlockID)
+		txn.cache.WriteBM25Blob(newBlockKey, bm25enc.Encode(right))
+		dir.InsertBlockMeta(blockIdx+1, bm25block.BlockMetaFromEntries(newBlockID, right))
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// bm25DocLenBlockLookup checks if a uid exists in the doclen blocks and returns its value.
+func (txn *Txn) bm25DocLenBlockLookup(attr string, uid uint64) (uint32, bool) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return 0, false
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	if v, ok := bm25enc.Search(entries, uid); ok {
+		return v, true
+	}
+	return 0, false
+}
+
+// bm25DocLenBlockRemove removes a uid from the block-based document-length list.
+func (txn *Txn) bm25DocLenBlockRemove(attr string, uid uint64) {
+	dirKey := x.BM25DocLenDirKey(attr)
+	dirBlob := txn.cache.ReadBM25Blob(dirKey)
+	dir := bm25block.DecodeDir(dirBlob)
+
+	if len(dir.Blocks) == 0 {
+		return
+	}
+
+	blockIdx := dir.FindBlock(uid)
+	bm := dir.Blocks[blockIdx]
+	blockKey := x.BM25DocLenBlockKey(attr, bm.BlockID)
+	blob := txn.cache.ReadBM25Blob(blockKey)
+	entries := bm25enc.Decode(blob)
+	entries = bm25enc.Remove(entries, uid)
+
+	if len(entries) == 0 {
+		txn.cache.WriteBM25Blob(blockKey, nil)
+		dir.RemoveBlockMeta(blockIdx)
+	} else {
+		txn.cache.WriteBM25Blob(blockKey, bm25enc.Encode(entries))
+		dir.UpdateBlockMeta(blockIdx, entries)
+	}
+	txn.cache.WriteBM25Blob(dirKey, bm25block.EncodeDir(dir))
+}
+
+// updateBM25Stats reads the current corpus statistics for a BM25-indexed attribute,
+// applies the given deltas, and writes back as a direct Badger KV entry.
+func (txn *Txn) updateBM25Stats(attr string, docCountDelta int64, totalTermsDelta int64) error {
+	statsKey := x.BM25StatsKey(attr)
+	blob := txn.cache.ReadBM25Blob(statsKey)
+	docCount, totalTerms := bm25enc.DecodeStats(blob)
+
+	// Apply deltas.
+	if docCountDelta >= 0 {
+		docCount += uint64(docCountDelta)
+	} else {
+		dec := uint64(-docCountDelta)
+		if dec > docCount {
+			docCount = 0
+		} else {
+			docCount -= dec
+		}
+	}
+	if totalTermsDelta >= 0 {
+		totalTerms += uint64(totalTermsDelta)
+	} else {
+		dec := uint64(-totalTermsDelta)
+		if dec > totalTerms {
+			totalTerms = 0
+		} else {
+			totalTerms -= dec
+		}
+	}
+
+	txn.cache.WriteBM25Blob(statsKey, bm25enc.EncodeStats(docCount, totalTerms))
 	return nil
 }
 

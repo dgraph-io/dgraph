@@ -318,6 +318,21 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			return err
 		}
 	}
+
+	// Flush BM25 direct KV writes. These are complete blobs (not deltas)
+	// and don't need rollup.
+	for key, blob := range cache.bm25Writes {
+		if err := writer.update(commitTs, func(btxn *badger.Txn) error {
+			return btxn.SetEntry(&badger.Entry{
+				Key:      []byte(key),
+				Value:    blob,
+				UserMeta: BitBM25Data,
+			})
+		}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

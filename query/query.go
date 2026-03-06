@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -371,6 +372,19 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
 	return val, nil
+}
+
+func valToTaskValue(v types.Val) *pb.TaskValue {
+	data := types.ValueForType(types.BinaryID)
+	res := &pb.TaskValue{ValType: v.Tid.Enum(), Val: x.Nilbyte}
+	if v.Value == nil {
+		return res
+	}
+	if err := types.Marshal(v, &data); err != nil {
+		return res
+	}
+	res.Val = data.Value.([]byte)
+	return res
 }
 
 var (
@@ -1369,6 +1383,9 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 	case sg.Attr == "uid" && sg.Params.DoCount:
 		// This is the count(uid) case.
 		// We will do the computation later while constructing the result.
+	case sg.Attr == "bm25_score":
+		// bm25_score is a pseudo-predicate handled inline during children processing.
+		// Its valueMatrix is already populated. Nothing to aggregate.
 	default:
 		return errors.Errorf("Unhandled pb.node <%v> with parent <%v>", sg.Attr, parent.Attr)
 	}
@@ -2173,6 +2190,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
@@ -2274,6 +2292,30 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
+
+			// If this is a BM25 root function, extract scores from ValueMatrix
+			// and store them in ParentVars for bm25_score pseudo-predicate children.
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(result.UidMatrix) > 0 &&
+				len(result.ValueMatrix) > 0 {
+				bm25Scores := types.NewShardedMap()
+				uids := result.UidMatrix[0].GetUids()
+				for i, uid := range uids {
+					if i < len(result.ValueMatrix) && len(result.ValueMatrix[i].Values) > 0 {
+						tv := result.ValueMatrix[i].Values[0]
+						if len(tv.Val) == 8 {
+							score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+							bm25Scores.Set(uid, types.Val{
+								Tid:   types.FloatID,
+								Value: score,
+							})
+						}
+					}
+				}
+				if sg.Params.ParentVars == nil {
+					sg.Params.ParentVars = make(map[string]varValue)
+				}
+				sg.Params.ParentVars["__bm25_scores__"] = varValue{Vals: bm25Scores}
+			}
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
@@ -2452,6 +2494,28 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
+
+		// Handle bm25_score pseudo-predicate: populate valueMatrix from parent's
+		// BM25 scores. Mark IsInternal so populateUidValVar case 4 (value variable)
+		// fires instead of case 3 (UID variable).
+		if child.Attr == "bm25_score" {
+			if bm25Var, ok := child.Params.ParentVars["__bm25_scores__"]; ok && bm25Var.Vals != nil {
+				child.valueMatrix = make([]*pb.ValueList, len(child.SrcUIDs.GetUids()))
+				for j, uid := range child.SrcUIDs.GetUids() {
+					if val, okv := bm25Var.Vals.Get(uid); okv {
+						child.valueMatrix[j] = &pb.ValueList{
+							Values: []*pb.TaskValue{valToTaskValue(val)},
+						}
+					} else {
+						child.valueMatrix[j] = &pb.ValueList{}
+					}
+				}
+			}
+			child.DestUIDs = &pb.List{}
+			child.Params.IsInternal = true
+			continue
+		}
+
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
@@ -2751,7 +2815,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext", "ngram",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
