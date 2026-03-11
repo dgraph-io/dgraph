@@ -6,9 +6,12 @@
 package x
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -99,4 +102,81 @@ func (l *Logger) Sync() {
 	}
 	_ = l.logger.Sync()
 	_ = l.writer.Close()
+}
+
+var slowOperationLogger *zap.Logger
+
+func init() {
+	initSlowOperationLogger()
+}
+
+func initSlowOperationLogger() {
+	config := zap.NewProductionEncoderConfig()
+	config.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.TimeKey = "timestamp"
+	config.MessageKey = "message"
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(config),
+		zapcore.AddSync(os.Stderr),
+		zapcore.WarnLevel,
+	)
+	slowOperationLogger = zap.New(core)
+}
+
+// SlowOperationLatency holds timing information for slow operation logging.
+type SlowOperationLatency struct {
+	Start      time.Time
+	Parsing    time.Duration
+	Processing time.Duration
+	Encoding   time.Duration
+}
+
+// Total returns the total duration since Start.
+func (l *SlowOperationLatency) Total() time.Duration {
+	return time.Since(l.Start)
+}
+
+// LogSlowOperation logs a slow operation with structured fields including trace ID.
+// It only logs if the operation duration exceeds the configured threshold.
+// Parameters:
+//   - operation: the type of operation (e.g., "query", "mutation", "backup")
+//   - opType: specific type within the operation (e.g., "dql", "graphql")
+//   - payload: the operation payload (e.g., query text) - will be truncated if too long
+func LogSlowOperation(ctx context.Context, operation, opType, payload string, latency *SlowOperationLatency) {
+	threshold := WorkerConfig.SlowQueryLogThreshold
+	if threshold <= 0 {
+		return
+	}
+
+	total := latency.Total()
+	if total < threshold {
+		return
+	}
+
+	fields := []zap.Field{
+		zap.String("operation", operation),
+		zap.String("type", opType),
+		zap.Duration("total", total),
+		zap.Duration("parsing", latency.Parsing),
+		zap.Duration("processing", latency.Processing),
+		zap.Duration("encoding", latency.Encoding),
+	}
+
+	// Extract trace ID from context if available
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().IsValid() {
+		fields = append(fields,
+			zap.String("trace_id", span.SpanContext().TraceID().String()),
+			zap.String("span_id", span.SpanContext().SpanID().String()),
+		)
+	}
+
+	// Truncate payload for logging (avoid huge log entries)
+	if len(payload) > 1000 {
+		payload = payload[:1000] + "...[truncated]"
+	}
+	fields = append(fields, zap.String("payload", payload))
+
+	slowOperationLogger.Warn("slow operation", fields...)
 }

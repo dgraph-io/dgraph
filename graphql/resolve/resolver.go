@@ -8,6 +8,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -482,6 +483,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 		endTime := time.Now()
 		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
 		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
+
+		// Log slow queries with structured fields for observability
+		if x.WorkerConfig.SlowQueryLogThreshold > 0 {
+			x.LogSlowOperation(ctx, "query", "graphql", gqlReq.Query, &x.SlowOperationLatency{
+				Start:      startTime,
+				Processing: endTime.Sub(startTime),
+			})
+		}
 	}()
 	ctx = context.WithValue(ctx, resolveStartTime, startTime)
 
@@ -508,8 +517,12 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 			if err != nil {
 				glog.Infof("Failed to marshal variables for logging : %s", err)
 			}
-			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n",
-				gqlReq.Query, string(b))
+			traceID := ""
+			if span.SpanContext().IsValid() {
+				traceID = fmt.Sprintf(" [trace_id=%s]", span.SpanContext().TraceID().String())
+			}
+			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s%s",
+				gqlReq.Query, string(b), traceID)
 		}
 	}
 

@@ -11,7 +11,7 @@ services:
       service: zero1
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:
@@ -23,7 +23,7 @@ services:
     working_dir: /data/alpha1
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
       - type: bind
