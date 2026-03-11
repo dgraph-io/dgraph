@@ -8,6 +8,7 @@ package testutil
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -17,13 +18,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
-
-	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const (

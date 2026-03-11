@@ -30,7 +30,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/zpages"
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
@@ -803,13 +802,6 @@ func run() {
 
 	worker.InitServerState()
 	worker.InitTasks()
-
-	if Alpha.Conf.GetBool("expose_trace") {
-		// TODO: Remove this once we get rid of event logs.
-		trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
-			return true, true
-		}
-	}
 
 	// Posting will initialize index which requires schema. Hence, initialize
 	// schema before calling posting.Init().
