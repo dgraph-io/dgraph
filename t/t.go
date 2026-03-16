@@ -1159,7 +1159,27 @@ var rdfFileNames = [...]string{
 	"workAt_0.rdf"}
 
 var ldbcDataFiles = map[string]string{
-	"ldbcTypes.schema": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/ldbc/sf0.3/ldbcTypes.schema?raw=true",
+	"ldbcTypes.schema": "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbcTypes.schema",
+}
+
+func wgetWithRetry(fname, url, dir string) error {
+	const maxRetries = 3
+	fpath := filepath.Join(dir, fname)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		cmd := exec.Command("wget", "--tries=3", "--waitretry=5", "--retry-connrefused", "-O", fname, url)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			fmt.Printf("attempt %d/%d failed to download %s: %v\n%s\n", attempt, maxRetries, fname, err, string(out))
+			if attempt < maxRetries {
+				time.Sleep(time.Duration(attempt*5) * time.Second)
+				continue
+			}
+			_ = os.Remove(fpath)
+			return fmt.Errorf("failed to download %s after %d attempts: %w", fname, maxRetries, err)
+		}
+		return nil
+	}
+	return nil
 }
 
 func downloadDataFiles() {
@@ -1168,12 +1188,13 @@ func downloadDataFiles() {
 		return
 	}
 	for fname, link := range datafiles {
-		cmd := exec.Command("wget", "-O", fname, link)
-		cmd.Dir = *tmp
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Printf("Error %v\n", err)
-			panic(fmt.Sprintf("error downloading a file: %s", string(out)))
+		fpath := filepath.Join(*tmp, fname)
+		if fi, err := os.Stat(fpath); err == nil && fi.Size() > 0 {
+			fmt.Printf("Skipping %s (already exists)\n", fname)
+			continue
+		}
+		if err := wgetWithRetry(fname, link, *tmp); err != nil {
+			panic(fmt.Sprintf("error downloading %s: %v", fname, err))
 		}
 	}
 }
@@ -1189,20 +1210,26 @@ func downloadLDBCFiles(dir string) {
 	}
 
 	start := time.Now()
+	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
 	for fname, link := range ldbcDataFiles {
+		fpath := filepath.Join(dir, fname)
+		if fi, err := os.Stat(fpath); err == nil && fi.Size() > 0 {
+			fmt.Printf("Skipping %s (already exists)\n", fname)
+			continue
+		}
 		wg.Add(1)
-		go func(fname, link string, wg *sync.WaitGroup) {
+		go func(fname, link string) {
 			defer wg.Done()
-			start := time.Now()
-			cmd := exec.Command("wget", "-O", fname, link)
-			cmd.Dir = dir
-			if out, err := cmd.CombinedOutput(); err != nil {
-				fmt.Printf("Error %v\n", err)
-				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			dlStart := time.Now()
+			if err := wgetWithRetry(fname, link, dir); err != nil {
+				panic(fmt.Sprintf("error downloading %s: %v", fname, err))
 			}
-			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(start))
-		}(fname, link, &wg)
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(dlStart))
+		}(fname, link)
 	}
 	wg.Wait()
 	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
@@ -1387,7 +1414,9 @@ func run() error {
 		needsData := testSuiteContainsAny("load", "ldbc", "all")
 		if needsData && *tmp == "" {
 			*tmp = filepath.Join(os.TempDir(), "dgraph-test-data")
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+		}
+		if needsData {
+			x.Check(os.MkdirAll(*tmp, 0755))
 		}
 		if testSuiteContainsAny("load", "all") {
 			downloadDataFiles()
@@ -1449,7 +1478,6 @@ func main() {
 	procId = rand.Intn(1000)
 
 	err := run()
-	_ = os.RemoveAll(*tmp)
 	if err != nil {
 		os.Exit(1)
 	}

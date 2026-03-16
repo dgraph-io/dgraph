@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -41,10 +42,10 @@ func (c *LocalCluster) HostDgraphBinaryPath() string {
 }
 
 var datafiles = map[string]string{
-	"1million.schema":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
-	"1million.rdf.gz":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
-	"21million.schema": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
-	"21million.rdf.gz": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
+	"1million.schema":  "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.schema",
+	"1million.rdf.gz":  "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.rdf.gz",
+	"21million.schema": "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.schema",
+	"21million.rdf.gz": "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.rdf.gz",
 }
 
 type DatasetType int
@@ -604,11 +605,22 @@ func (d *Dataset) ensureFile(filename string) string {
 }
 
 func downloadFile(fname, url string) error {
-	cmd := exec.Command("wget", "-O", fname, url)
-	cmd.Dir = datasetFilesPath
+	const maxRetries = 3
+	fpath := filepath.Join(datasetFilesPath, fname)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		cmd := exec.Command("wget", "--tries=3", "--waitretry=5", "--retry-connrefused", "-O", fname, url)
+		cmd.Dir = datasetFilesPath
 
-	if _, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("error downloading file %s: %w", fname, err)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("attempt %d/%d failed to download %s: %v\n%s", attempt, maxRetries, fname, err, string(out))
+			if attempt < maxRetries {
+				time.Sleep(time.Duration(attempt*5) * time.Second)
+				continue
+			}
+			_ = os.Remove(fpath)
+			return fmt.Errorf("error downloading file %s after %d attempts: %w", fname, maxRetries, err)
+		}
+		return nil
 	}
 	return nil
 }

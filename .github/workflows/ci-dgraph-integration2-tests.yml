@@ -29,6 +29,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore benchmark dataset cache
+        uses: actions/cache/restore@v4
+        with:
+          path: dgraphtest/datafiles
+          key: dataset-dgraphtest-v1
+
+      - name: Ensure datafiles directory
+        run: mkdir -p dgraphtest/datafiles
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -55,3 +64,10 @@ jobs:
           go clean -testcache
           # sleep
           sleep 5
+
+      - name: Save benchmark dataset cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: dgraphtest/datafiles
+          key: dataset-dgraphtest-v1

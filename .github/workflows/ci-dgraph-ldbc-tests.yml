@@ -28,6 +28,12 @@ jobs:
       - name: Checkout Dgraph
         uses: actions/checkout@v5
 
+      - name: Restore LDBC dataset cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/test-data
+          key: dataset-ldbc-v1
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -61,6 +67,13 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the ldbc tests
-          cd t; ./t --suite=ldbc
+          cd t; ./t --suite=ldbc --tmp=${{ github.workspace }}/test-data
           # clean up docker containers after test execution
           ./t -r
+
+      - name: Save LDBC dataset cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/test-data
+          key: dataset-ldbc-v1

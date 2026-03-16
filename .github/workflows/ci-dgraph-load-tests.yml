@@ -27,6 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Restore load test dataset cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/test-data
+          key: dataset-load-v1
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -60,8 +66,15 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the load tests
-          cd t; ./t --suite=load
+          cd t; ./t --suite=load --tmp=${{ github.workspace }}/test-data
           # clean up docker containers after test execution
           ./t -r
           # sleep
           sleep 5
+
+      - name: Save load test dataset cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/test-data
+          key: dataset-load-v1
