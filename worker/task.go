@@ -1318,6 +1318,8 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 
 	// 7. Build output: UIDs sorted ascending (required by query pipeline)
 	// and ValueMatrix with aligned scores (for bm25_score pseudo-predicate).
+	// We use a single pre-allocated buffer for all score encodings to reduce
+	// per-result heap allocations.
 	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
 	uids := make([]uint64, len(results))
 	for i, r := range results {
@@ -1325,12 +1327,18 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	}
 	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
 
+	// Encode scores into ValueMatrix. Each entry in ValueMatrix corresponds
+	// positionally to a UID in UidMatrix[0], enabling the bm25_score
+	// pseudo-predicate in query.go to map UIDs to scores.
+	scoreBuf := make([]byte, len(results)*8)
 	scoreValues := make([]*pb.ValueList, len(results))
 	for i, r := range results {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, math.Float64bits(r.score))
+		off := i * 8
+		binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(r.score))
+		// Use three-index slice to cap capacity at 8, preventing any downstream
+		// append from corrupting adjacent scores in the shared backing array.
 		scoreValues[i] = &pb.ValueList{
-			Values: []*pb.TaskValue{{Val: buf, ValType: pb.Posting_ValType(pb.Posting_FLOAT)}},
+			Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_ValType(pb.Posting_FLOAT)}},
 		}
 	}
 	args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)

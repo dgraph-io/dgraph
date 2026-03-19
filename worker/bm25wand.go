@@ -447,11 +447,11 @@ func wandSearch(attr string, readTs uint64, queryTokens []string,
 				df += uint64(bm.Count)
 			}
 		} else {
-			// Legacy fallback: read the monolithic blob to get df.
+			// Legacy fallback: read just the count header to get df.
+			// Avoids decoding the full posting list (which could be huge for common terms).
 			legacyKey := x.BM25IndexKey(attr, token)
 			legacyBlob := posting.ReadBM25BlobAt(legacyKey, readTs)
-			legacyEntries := bm25enc.Decode(legacyBlob)
-			df = uint64(len(legacyEntries))
+			df = uint64(bm25enc.DecodeCount(legacyBlob))
 		}
 		if df == 0 {
 			continue
