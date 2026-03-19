@@ -92,6 +92,37 @@ func TestUIDs(t *testing.T) {
 	require.Equal(t, []uint64{1, 5, 100}, UIDs(entries))
 }
 
+func TestDecodeCount(t *testing.T) {
+	// Normal case: count matches actual entries.
+	entries := []Entry{
+		{UID: 1, Value: 3},
+		{UID: 5, Value: 1},
+		{UID: 100, Value: 7},
+	}
+	data := Encode(entries)
+	require.Equal(t, uint32(3), DecodeCount(data))
+
+	// Empty/nil input.
+	require.Equal(t, uint32(0), DecodeCount(nil))
+	require.Equal(t, uint32(0), DecodeCount([]byte{}))
+	require.Equal(t, uint32(0), DecodeCount([]byte{1, 2, 3}))
+
+	// Zero count.
+	require.Equal(t, uint32(0), DecodeCount([]byte{0, 0, 0, 0}))
+
+	// Single entry.
+	single := Encode([]Entry{{UID: 42, Value: 10}})
+	require.Equal(t, uint32(1), DecodeCount(single))
+
+	// Large count.
+	large := make([]Entry, 10000)
+	for i := range large {
+		large[i] = Entry{UID: uint64(i*3 + 1), Value: uint32(i % 100)}
+	}
+	data = Encode(large)
+	require.Equal(t, uint32(10000), DecodeCount(data))
+}
+
 func TestStatsRoundtrip(t *testing.T) {
 	data := EncodeStats(12345, 98765)
 	dc, tt := DecodeStats(data)

@@ -6,6 +6,7 @@
 package bm25block
 
 import (
+	"encoding/binary"
 	"math"
 	"testing"
 
@@ -37,6 +38,18 @@ func TestDirRoundtripEmpty(t *testing.T) {
 	require.Empty(t, got.Blocks)
 	got = DecodeDir([]byte{})
 	require.Empty(t, got.Blocks)
+}
+
+func TestDecodeDirCorruptedLargeCount(t *testing.T) {
+	// A corrupted blob with a massive count should not panic due to integer overflow.
+	// count = MaxUint32, nextID = 0, followed by only 8 bytes of data.
+	data := make([]byte, 16)
+	binary.BigEndian.PutUint32(data[0:4], 0xFFFFFFFF) // count = MaxUint32
+	binary.BigEndian.PutUint32(data[4:8], 0)          // nextID = 0
+	got := DecodeDir(data)
+	// Should return an empty Dir (with nextID preserved) rather than panicking.
+	require.Empty(t, got.Blocks)
+	require.Equal(t, uint32(0), got.NextID)
 }
 
 func TestDirRoundtripSingle(t *testing.T) {
