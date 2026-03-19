@@ -19,6 +19,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// uidHex queries Dgraph for the hex UID string of a given decimal UID.
+// This avoids hardcoding hex values that depend on UID assignment order.
+func uidHex(t *testing.T, decimalUID int) string {
+	t.Helper()
+	js := processQueryNoErr(t, fmt.Sprintf(`{ me(func: uid(%d)) { uid } }`, decimalUID))
+	var resp struct {
+		Data struct {
+			Me []struct {
+				UID string `json:"uid"`
+			} `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+	require.NotEmpty(t, resp.Data.Me, "UID %d should exist", decimalUID)
+	return resp.Data.Me[0].UID
+}
+
 func TestBM25Basic(t *testing.T) {
 	query := `
 	{
@@ -376,9 +393,9 @@ func TestBM25IncrementalAddBatch(t *testing.T) {
 	js = processQueryNoErr(t, countQuery)
 	require.Contains(t, js, `"count":8`)
 
-	// Verify specific new UIDs are searchable.
-	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "whiskey")) { uid } }`)
-	require.Contains(t, js, `"0x25e"`) // 606
+	// Verify specific new terms are searchable.
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "whiskey")) { uid description_bm25 } }`)
+	require.Contains(t, js, "whiskey")
 }
 
 func TestBM25CorpusStatsAffectIDF(t *testing.T) {
@@ -417,7 +434,7 @@ func TestBM25CorpusStatsAffectIDF(t *testing.T) {
 	scoresAfter := parseScoresFromJSON(t, jsAfter)
 
 	// Compare score for UID 503 ("fox fox fox") — should increase.
-	uid503 := "0x1f7"
+	uid503 := uidHex(t, 503)
 	before, ok1 := scoresBefore[uid503]
 	after, ok2 := scoresAfter[uid503]
 	require.True(t, ok1 && ok2, "UID 503 should appear in both before and after results")
@@ -432,6 +449,8 @@ func TestBM25DocumentUpdate(t *testing.T) {
 		deleteTriplesInCluster(`<620> <description_bm25> * .`)
 	})
 
+	uid620 := uidHex(t, 620)
+
 	// Should rank top for "fox".
 	js := processQueryNoErr(t, `
 	{
@@ -439,7 +458,7 @@ func TestBM25DocumentUpdate(t *testing.T) {
 			uid
 		}
 	}`)
-	require.Contains(t, js, `"0x26c"`) // 620
+	require.Contains(t, js, `"`+uid620+`"`)
 
 	// Update to remove "fox", add "cat".
 	deleteTriplesInCluster(`<620> <description_bm25> "fox fox fox fox" .`)
@@ -452,7 +471,7 @@ func TestBM25DocumentUpdate(t *testing.T) {
 			uid
 		}
 	}`)
-	require.NotContains(t, js, `"0x26c"`)
+	require.NotContains(t, js, `"`+uid620+`"`)
 
 	// Should appear in "cat" results.
 	js = processQueryNoErr(t, `
@@ -461,7 +480,7 @@ func TestBM25DocumentUpdate(t *testing.T) {
 			uid
 		}
 	}`)
-	require.Contains(t, js, `"0x26c"`)
+	require.Contains(t, js, `"`+uid620+`"`)
 }
 
 func TestBM25DocumentDeletion(t *testing.T) {
@@ -471,9 +490,11 @@ func TestBM25DocumentDeletion(t *testing.T) {
 		deleteTriplesInCluster(`<625> <description_bm25> * .`)
 	})
 
+	uid625 := uidHex(t, 625)
+
 	// Should find the elephant doc.
 	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
-	require.Contains(t, js, `"0x271"`) // 625
+	require.Contains(t, js, `"`+uid625+`"`)
 
 	// Delete it.
 	deleteTriplesInCluster(`<625> <description_bm25> "unique elephant term" .`)
@@ -483,7 +504,7 @@ func TestBM25DocumentDeletion(t *testing.T) {
 	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 
 	// Baseline "fox" results should be unaffected.
-	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "fox")) { uid } }`)
+	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "fox")) { uid description_bm25 } }`)
 	require.Contains(t, js, "fox")
 }
 
@@ -499,7 +520,7 @@ func TestBM25ScoreStabilityAsCorpusGrows(t *testing.T) {
 		}
 	}
 	`
-	uid503 := "0x1f7"
+	uid503 := uidHex(t, 503)
 
 	// Phase 1: baseline score.
 	js1 := processQueryNoErr(t, scoreQuery)
@@ -642,8 +663,8 @@ func TestBM25EdgeCaseLongDocument(t *testing.T) {
 	js := processQueryNoErr(t, scoreQuery)
 	scores := parseScoresFromJSON(t, js)
 
-	uid503 := "0x1f7" // "fox fox fox" (doclen=3)
-	uid645 := "0x285" // long doc (doclen~500)
+	uid503 := uidHex(t, 503) // "fox fox fox" (doclen=3)
+	uid645 := uidHex(t, 645) // long doc (doclen~500)
 	s503, ok1 := scores[uid503]
 	s645, ok2 := scores[uid645]
 	require.True(t, ok1, "UID 503 must appear in fox results")
@@ -667,17 +688,21 @@ func TestBM25EdgeCaseUnicode(t *testing.T) {
 		`)
 	})
 
+	uid650 := uidHex(t, 650)
+	uid651 := uidHex(t, 651)
+	uid652 := uidHex(t, 652)
+
 	// Query German term.
 	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "Fuchs")) { uid } }`)
-	require.Contains(t, js, `"0x28a"`) // 650
+	require.Contains(t, js, `"`+uid650+`"`)
 
 	// Query French term.
 	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "renard")) { uid } }`)
-	require.Contains(t, js, `"0x28b"`) // 651
+	require.Contains(t, js, `"`+uid651+`"`)
 
 	// Query Spanish term.
 	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "zorro")) { uid } }`)
-	require.Contains(t, js, `"0x28c"`) // 652
+	require.Contains(t, js, `"`+uid652+`"`)
 }
 
 func TestBM25EdgeCaseAllStopwordsDoc(t *testing.T) {
@@ -686,9 +711,11 @@ func TestBM25EdgeCaseAllStopwordsDoc(t *testing.T) {
 		deleteTriplesInCluster(`<655> <description_bm25> * .`)
 	})
 
+	uid655 := uidHex(t, 655)
+
 	// Query "the" — should return empty since "the" is a stopword.
 	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "the")) { uid } }`)
-	require.NotContains(t, js, `"0x28f"`) // 655 should not appear
+	require.NotContains(t, js, `"`+uid655+`"`) // 655 should not appear
 
 	// But the doc should exist via has().
 	js = processQueryNoErr(t, `
@@ -697,7 +724,7 @@ func TestBM25EdgeCaseAllStopwordsDoc(t *testing.T) {
 			uid
 		}
 	}`)
-	require.Contains(t, js, `"0x28f"`)
+	require.Contains(t, js, `"`+uid655+`"`)
 }
 
 func TestBM25WithUidFilter(t *testing.T) {
@@ -711,12 +738,16 @@ func TestBM25WithUidFilter(t *testing.T) {
 	}
 	`
 	js := processQueryNoErr(t, query)
+	uid501 := uidHex(t, 501)
+	uid502 := uidHex(t, 502)
+	uid503 := uidHex(t, 503)
+	uid506 := uidHex(t, 506)
 	// Should contain only UIDs 501 and 503.
-	require.Contains(t, js, `"0x1f5"`) // 501
-	require.Contains(t, js, `"0x1f7"`) // 503
-	// Should NOT contain other fox docs like 502, 506, 507.
-	require.NotContains(t, js, `"0x1f6"`) // 502
-	require.NotContains(t, js, `"0x1fa"`) // 506
+	require.Contains(t, js, `"`+uid501+`"`)
+	require.Contains(t, js, `"`+uid503+`"`)
+	// Should NOT contain other fox docs like 502, 506.
+	require.NotContains(t, js, `"`+uid502+`"`)
+	require.NotContains(t, js, `"`+uid506+`"`)
 }
 
 func TestBM25ScoreValuesAreValidFloats(t *testing.T) {
@@ -770,22 +801,23 @@ func TestBM25IncrementalAddThenDeleteThenReadd(t *testing.T) {
 
 	// Phase 1: add with "elephant".
 	require.NoError(t, addTriplesToCluster(`<670> <description_bm25> "elephant roams the savanna" .`))
+	uid670 := uidHex(t, 670)
 	js := processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
-	require.Contains(t, js, `"0x29e"`) // 670
+	require.Contains(t, js, `"`+uid670+`"`)
 
 	// Phase 2: delete.
 	deleteTriplesInCluster(`<670> <description_bm25> "elephant roams the savanna" .`)
 	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
-	require.NotContains(t, js, `"0x29e"`)
+	require.NotContains(t, js, `"`+uid670+`"`)
 
 	// Phase 3: re-add with different content.
 	require.NoError(t, addTriplesToCluster(`<670> <description_bm25> "penguin waddles on the ice" .`))
 	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "penguin")) { uid } }`)
-	require.Contains(t, js, `"0x29e"`)
+	require.Contains(t, js, `"`+uid670+`"`)
 
 	// "elephant" should still not match 670.
 	js = processQueryNoErr(t, `{ me(func: bm25(description_bm25, "elephant")) { uid } }`)
-	require.NotContains(t, js, `"0x29e"`)
+	require.NotContains(t, js, `"`+uid670+`"`)
 }
 
 func TestBM25NonIndexedPredicateError(t *testing.T) {
@@ -828,11 +860,11 @@ func TestBM25ConcurrentBatchAdd(t *testing.T) {
 
 	// Spot-check a doc from each batch.
 	for batch := 0; batch < 5; batch++ {
-		uid := 680 + batch*4
-		hexUID := fmt.Sprintf(`"0x%x"`, uid)
+		decUID := 680 + batch*4
+		hexUID := uidHex(t, decUID)
 		term := fmt.Sprintf("batch%d", batch)
 		js = processQueryNoErr(t, fmt.Sprintf(`{ me(func: bm25(description_bm25, "%s")) { uid } }`, term))
-		require.Contains(t, js, hexUID, "doc %d from batch %d should be searchable", uid, batch)
+		require.Contains(t, js, `"`+hexUID+`"`, "doc %d from batch %d should be searchable", decUID, batch)
 	}
 }
 
@@ -895,10 +927,12 @@ func TestBM25ExactScoreValues(t *testing.T) {
 	// Doc 851 "quasar nebula pulsar": tf=1, b=0 → score = idf * 2.2 * 1 / 2.2 = idf
 	expected851 := idf * (k + 1) * 1.0 / (k + 1.0)
 
-	actual850, ok := scores["0x352"] // 850
-	require.True(t, ok, "UID 850 (0x352) must be in results")
-	actual851, ok := scores["0x353"] // 851
-	require.True(t, ok, "UID 851 (0x353) must be in results")
+	uid850 := uidHex(t, 850)
+	uid851 := uidHex(t, 851)
+	actual850, ok := scores[uid850]
+	require.True(t, ok, "UID 850 (%s) must be in results", uid850)
+	actual851, ok := scores[uid851]
+	require.True(t, ok, "UID 851 (%s) must be in results", uid851)
 
 	require.InEpsilon(t, expected850, actual850, 1e-6,
 		"Doc 850 score mismatch: expected %f, got %f (N=%f, df=%f, idf=%f)",
@@ -940,8 +974,10 @@ func TestBM25BM15NoLengthNormalization(t *testing.T) {
 	js := processQueryNoErr(t, scoreQuery)
 	scores := parseScoresFromJSON(t, js)
 
-	score860, ok1 := scores["0x35c"] // 860
-	score861, ok2 := scores["0x35d"] // 861
+	uid860 := uidHex(t, 860)
+	uid861 := uidHex(t, 861)
+	score860, ok1 := scores[uid860]
+	score861, ok2 := scores[uid861]
 	require.True(t, ok1, "UID 860 must be in results")
 	require.True(t, ok2, "UID 861 must be in results")
 
@@ -964,8 +1000,8 @@ func TestBM25BM15NoLengthNormalization(t *testing.T) {
 	js = processQueryNoErr(t, scoreQueryDefault)
 	scoresDefault := parseScoresFromJSON(t, js)
 
-	defScore860, ok1 := scoresDefault["0x35c"]
-	defScore861, ok2 := scoresDefault["0x35d"]
+	defScore860, ok1 := scoresDefault[uid860]
+	defScore861, ok2 := scoresDefault[uid861]
 	require.True(t, ok1, "UID 860 must be in default results")
 	require.True(t, ok2, "UID 861 must be in default results")
 	require.Greater(t, defScore860, defScore861,
@@ -999,8 +1035,9 @@ func TestBM25SingleMatchingDocument(t *testing.T) {
 
 	require.Len(t, scores, 1, "exactly one document should match 'aardvark'")
 
-	actual, ok := scores["0x361"] // 865
-	require.True(t, ok, "UID 865 (0x361) must be in results")
+	uid865 := uidHex(t, 865)
+	actual, ok := scores[uid865]
+	require.True(t, ok, "UID 865 (%s) must be in results", uid865)
 
 	// With df=1, tf=1, b=0, k=1.2:
 	// idf = log1p((N - 1 + 0.5) / (1 + 0.5)) = log1p((N - 0.5) / 1.5)
