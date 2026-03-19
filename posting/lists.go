@@ -79,6 +79,18 @@ type LocalCache struct {
 
 	// bm25Writes buffers BM25 direct KV writes (key → encoded blob).
 	// These bypass the posting list infrastructure entirely.
+	//
+	// CONCURRENCY NOTE: BM25 blocks use full-value overwrites rather than
+	// posting list deltas. Within a single Dgraph transaction this is safe
+	// (each Txn has its own LocalCache). Across concurrent transactions,
+	// Dgraph's Raft-based mutation serialization prevents lost updates for
+	// the same predicate+UID pair. However, two transactions updating
+	// different UIDs that share a common term could theoretically race on
+	// the same term block. In practice this is mitigated by:
+	//   1. Dgraph serializes mutations through Raft proposals
+	//   2. Block splits keep contention surface small
+	// If higher write concurrency is needed, blocks should be integrated
+	// into the posting list delta mechanism.
 	bm25Writes map[string][]byte
 }
 

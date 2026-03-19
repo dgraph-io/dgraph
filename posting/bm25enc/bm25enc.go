@@ -130,6 +130,17 @@ func UIDs(entries []Entry) []uint64 {
 	return uids
 }
 
+// DecodeCount reads just the entry count from the header of an encoded blob
+// without decoding any entries. This is O(1) and avoids allocating a full
+// []Entry slice, which matters for large posting lists (e.g., common terms
+// during legacy format migration).
+func DecodeCount(data []byte) uint32 {
+	if len(data) < 4 {
+		return 0
+	}
+	return binary.BigEndian.Uint32(data[:4])
+}
+
 // EncodeStats encodes BM25 corpus statistics (docCount, totalTerms) as 16 bytes.
 func EncodeStats(docCount, totalTerms uint64) []byte {
 	buf := make([]byte, 16)

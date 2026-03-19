@@ -77,7 +77,8 @@ func DecodeDir(data []byte) *Dir {
 	}
 	count := binary.BigEndian.Uint32(data[0:4])
 	nextID := binary.BigEndian.Uint32(data[4:8])
-	if int(count)*dirEntrySize+dirHeaderSize > len(data) {
+	// Use uint64 arithmetic to prevent integer overflow on corrupted data.
+	if uint64(count)*dirEntrySize+dirHeaderSize > uint64(len(data)) {
 		return &Dir{NextID: nextID}
 	}
 	blocks := make([]BlockMeta, count)
