@@ -1,0 +1,5 @@
+type User @key(fields: "userId") {
+	userId: ID!
+	username: String! @search(by: [hash])
+	email: String
+}

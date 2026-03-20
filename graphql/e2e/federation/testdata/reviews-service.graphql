@@ -1,0 +1,10 @@
+type Review {
+	id: ID!
+	rating: Int! @search
+	comment: String @search(by: [fulltext])
+}
+
+extend type User @key(fields: "userId") {
+	userId: ID! @external
+	reviews: [Review]
+}

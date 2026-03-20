@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1006,15 +1006,19 @@ func completeSchema(
 		providesTypeMap := providesFieldsMap[key]
 
 		// Common types to both Interface and Object.
-		addReferenceType(sch, defn, providesTypeMap)
+		// Don't generate reference types for @extends types in Apollo service query
+		if !(apolloServiceQuery && hasExtends(defn)) {
+			addReferenceType(sch, defn, providesTypeMap)
+		}
 
-		if params.generateUpdateMutation {
+		// Don't generate mutation input types for @extends types in Apollo service query
+		if params.generateUpdateMutation && !(apolloServiceQuery && hasExtends(defn)) {
 			addPatchType(sch, defn, providesTypeMap)
 			addUpdateType(sch, defn)
 			addUpdatePayloadType(sch, defn, providesTypeMap)
 		}
 
-		if params.generateDeleteMutation {
+		if params.generateDeleteMutation && !(apolloServiceQuery && hasExtends(defn)) {
 			addDeletePayloadType(sch, defn, providesTypeMap)
 		}
 
@@ -1022,33 +1026,47 @@ func completeSchema(
 		case ast.Interface:
 			// addInputType doesn't make sense as interface is like an abstract class and we can't
 			// create objects of its type.
-			if params.generateUpdateMutation {
+			// Don't generate mutations for @extends types in Apollo service query
+			if params.generateUpdateMutation && !(apolloServiceQuery && hasExtends(defn)) {
 				addUpdateMutation(sch, defn)
 			}
-			if params.generateDeleteMutation {
+			if params.generateDeleteMutation && !(apolloServiceQuery && hasExtends(defn)) {
 				addDeleteMutation(sch, defn)
 			}
 
 		case ast.Object:
 			// types and inputs needed for mutations
-			if params.generateAddMutation {
+			// Don't generate add input types for @extends types in Apollo service query
+			if params.generateAddMutation && !(apolloServiceQuery && hasExtends(defn)) {
 				addInputType(sch, defn, providesTypeMap)
 				addAddPayloadType(sch, defn, providesTypeMap)
 			}
-			addMutations(sch, defn, params)
+			if !(apolloServiceQuery && hasExtends(defn)) {
+				addMutations(sch, defn, params)
+			}
 		}
 
 		// types and inputs needed for query and search
-		addFilterType(sch, defn, providesTypeMap)
-		addTypeOrderable(sch, defn, providesTypeMap)
+		// Don't generate filter/orderable types for @extends types in Apollo service query
+		// to avoid conflicts when composing federated schemas
+		if !(apolloServiceQuery && hasExtends(defn)) {
+			addFilterType(sch, defn, providesTypeMap)
+			addTypeOrderable(sch, defn, providesTypeMap)
+		}
 		addFieldFilters(sch, defn, providesTypeMap, apolloServiceQuery)
-		addAggregationResultType(sch, defn, providesTypeMap)
+		if !(apolloServiceQuery && hasExtends(defn)) {
+			addAggregationResultType(sch, defn, providesTypeMap)
+		}
 		// Don't expose queries for the @extends type to the gateway
 		// as it is resolved through `_entities` resolver.
 		if !(apolloServiceQuery && hasExtends(defn)) {
 			addQueries(sch, defn, providesTypeMap, params)
 		}
-		addTypeHasFilter(sch, defn, providesTypeMap)
+		// addTypeHasFilter must come after addQueries so that fields added by queries (like vector_distance)
+		// are included in the HasFilter enum
+		if !(apolloServiceQuery && hasExtends(defn)) {
+			addTypeHasFilter(sch, defn, providesTypeMap)
+		}
 		// We need to call this at last as aggregateFields
 		// should not be part of HasFilter or UpdatePayloadType etc.
 		addAggregateFields(sch, defn, apolloServiceQuery)
