@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/test-data
-          key: dataset-ldbc-v1
+          key: dataset-ldbc-${{ hashFiles('testutil/benchmark-data-version') }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -67,7 +67,7 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the ldbc tests
-          cd t; ./t --suite=ldbc --tmp=${{ github.workspace }}/test-data
+          cd t; ./t --suite=ldbc --tmp=${{ github.workspace }}/test-data --keep-data
           # clean up docker containers after test execution
           ./t -r
 
@@ -76,4 +76,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/test-data
-          key: dataset-ldbc-v1
+          key: dataset-ldbc-${{ hashFiles('testutil/benchmark-data-version') }}

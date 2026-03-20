@@ -33,6 +33,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/dgraph-io/dgraph/v25/testutil"
@@ -93,7 +94,13 @@ var (
 		"unit = true unit tests only (no Docker, no integration tag). "+
 		"integration = everything except ldbc, load, and systest-heavy (with Docker). "+
 		"systest = systest-baseline + systest-heavy.")
-	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
+	tmp      = pflag.String("tmp", "", "Temporary directory used to download data.")
+	keepData = pflag.Bool("keep-data", false,
+		"If true, do not remove the data directory after tests complete. "+
+			"Useful in CI where data is cached between runs.")
+	dataRef = pflag.String("data-ref", "",
+		"Git ref (branch, tag, or SHA) for dgraph-benchmarks data. "+
+			"Overrides DGRAPH_TEST_DATA_REF env var and benchmark-data-version file.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
 	race        = pflag.Bool("race", false, "Set true to build with race")
@@ -1121,18 +1128,17 @@ func isHeavyPackage(pkg string) bool {
 	return false
 }
 
-var datafiles = map[string]string{
-	"1million-noindex.schema": "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million-noindex.schema",
-	"1million.schema":         "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.schema",
-	"1million.rdf.gz":         "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.rdf.gz",
-	"21million.schema":        "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.schema",
-	"21million.rdf.gz":        "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.rdf.gz",
+// datafilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
+// URLs are constructed at runtime from BenchmarkDataRef().
+var datafilePaths = map[string]string{
+	"1million-noindex.schema": "data/1million-noindex.schema",
+	"1million.schema":         "data/1million.schema",
+	"1million.rdf.gz":         "data/1million.rdf.gz",
+	"21million.schema":        "data/21million.schema",
+	"21million.rdf.gz":        "data/21million.rdf.gz",
 }
 
-var baseUrl = "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbc_rdf_0.3/"
-var suffix = "?raw=true"
-
-var rdfFileNames = [...]string{
+var ldbcRdfFileNames = [...]string{
 	"Deltas.rdf",
 	"comment_0.rdf",
 	"containerOf_0.rdf",
@@ -1156,83 +1162,81 @@ var rdfFileNames = [...]string{
 	"studyAt_0.rdf",
 	"tag_0.rdf",
 	"tagclass_0.rdf",
-	"workAt_0.rdf"}
-
-var ldbcDataFiles = map[string]string{
-	"ldbcTypes.schema": "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/ldbc/sf0.3/ldbcTypes.schema",
+	"workAt_0.rdf",
 }
 
-func wgetWithRetry(fname, url, dir string) error {
-	const maxRetries = 3
-	fpath := filepath.Join(dir, fname)
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		cmd := exec.Command("wget", "--tries=3", "--waitretry=5", "--retry-connrefused", "-O", fname, url)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Printf("attempt %d/%d failed to download %s: %v\n%s\n", attempt, maxRetries, fname, err, string(out))
-			if attempt < maxRetries {
-				time.Sleep(time.Duration(attempt*5) * time.Second)
-				continue
-			}
-			_ = os.Remove(fpath)
-			return fmt.Errorf("failed to download %s after %d attempts: %w", fname, maxRetries, err)
-		}
+// ldbcFilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
+var ldbcFilePaths = map[string]string{
+	"ldbcTypes.schema": "ldbc/sf0.3/ldbcTypes.schema",
+}
+
+func downloadDataFiles() error {
+	if !*downloadResources {
+		fmt.Print("Skipping downloading of resources\n")
 		return nil
+	}
+	ref := testutil.BenchmarkDataRef(*dataRef)
+	fmt.Printf("Using benchmark data ref: %s\n", ref)
+	for fname, repoPath := range datafilePaths {
+		fpath := filepath.Join(*tmp, fname)
+		if testutil.FileExistsAndValid(fpath) {
+			fmt.Printf("Skipping %s (already exists)\n", fname)
+			continue
+		}
+		var err error
+		if strings.HasSuffix(fname, ".rdf.gz") {
+			err = testutil.DownloadLFSFile(fname, ref, repoPath, *tmp)
+		} else {
+			err = testutil.DownloadFile(fname, testutil.BenchmarkRawURL(ref, repoPath), *tmp)
+		}
+		if err != nil {
+			return fmt.Errorf("error downloading %s: %v", fname, err)
+		}
 	}
 	return nil
 }
 
-func downloadDataFiles() {
+func downloadLDBCFiles(dir string) error {
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
-		return
-	}
-	for fname, link := range datafiles {
-		fpath := filepath.Join(*tmp, fname)
-		if fi, err := os.Stat(fpath); err == nil && fi.Size() > 0 {
-			fmt.Printf("Skipping %s (already exists)\n", fname)
-			continue
-		}
-		if err := wgetWithRetry(fname, link, *tmp); err != nil {
-			panic(fmt.Sprintf("error downloading %s: %v", fname, err))
-		}
-	}
-}
-
-func downloadLDBCFiles(dir string) {
-	if !*downloadResources {
-		fmt.Print("Skipping downloading of resources\n")
-		return
+		return nil
 	}
 
-	for _, name := range rdfFileNames {
-		ldbcDataFiles[name] = baseUrl + name + suffix
+	ref := testutil.BenchmarkDataRef(*dataRef)
+	fmt.Printf("Using benchmark data ref: %s\n", ref)
+
+	// All LDBC files (schema + RDF) are LFS-tracked.
+	allFiles := make(map[string]string)
+	for fname, repoPath := range ldbcFilePaths {
+		allFiles[fname] = repoPath
+	}
+	for _, name := range ldbcRdfFileNames {
+		allFiles[name] = "ldbc/sf0.3/ldbc_rdf_0.3/" + name
 	}
 
 	start := time.Now()
-	sem := make(chan struct{}, 5)
-	var wg sync.WaitGroup
-	for fname, link := range ldbcDataFiles {
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(5)
+	for fname, repoPath := range allFiles {
 		fpath := filepath.Join(dir, fname)
-		if fi, err := os.Stat(fpath); err == nil && fi.Size() > 0 {
+		if testutil.FileExistsAndValid(fpath) {
 			fmt.Printf("Skipping %s (already exists)\n", fname)
 			continue
 		}
-		wg.Add(1)
-		go func(fname, link string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
+		g.Go(func() error {
 			dlStart := time.Now()
-			if err := wgetWithRetry(fname, link, dir); err != nil {
-				panic(fmt.Sprintf("error downloading %s: %v", fname, err))
+			if err := testutil.DownloadLFSFile(fname, ref, repoPath, dir); err != nil {
+				return fmt.Errorf("error downloading %s: %v", fname, err)
 			}
-			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(dlStart))
-		}(fname, link)
+			fmt.Printf("Downloaded %s to %s in %s\n", fname, dir, time.Since(dlStart))
+			return nil
+		})
 	}
-	wg.Wait()
-	fmt.Printf("Downloaded %d files in %s \n", len(ldbcDataFiles), time.Since(start))
+	if err := g.Wait(); err != nil {
+		return err
+	}
+	fmt.Printf("Downloaded %d files in %s\n", len(allFiles), time.Since(start))
+	return nil
 }
 
 func createTestCoverageFile(path string) error {
@@ -1419,7 +1423,10 @@ func run() error {
 			x.Check(os.MkdirAll(*tmp, 0755))
 		}
 		if testSuiteContainsAny("load", "all") {
-			downloadDataFiles()
+			if err := downloadDataFiles(); err != nil {
+				fmt.Printf("Failed to download data files: %v\n", err)
+				return
+			}
 		}
 		if testSuiteContainsAny("ldbc", "all") {
 			// LDBC files go into a subdirectory because the LDBC test bulk-loads
@@ -1427,7 +1434,10 @@ func run() error {
 			// with LDBC data causes schema mismatches.
 			ldbcDir := filepath.Join(*tmp, "ldbc")
 			x.Check(os.MkdirAll(ldbcDir, 0755))
-			downloadLDBCFiles(ldbcDir)
+			if err := downloadLDBCFiles(ldbcDir); err != nil {
+				fmt.Printf("Failed to download LDBC files: %v\n", err)
+				return
+			}
 		}
 		for i, task := range valid {
 			select {
@@ -1478,6 +1488,9 @@ func main() {
 	procId = rand.Intn(1000)
 
 	err := run()
+	if !*keepData && *tmp != "" {
+		_ = os.RemoveAll(*tmp)
+	}
 	if err != nil {
 		os.Exit(1)
 	}

@@ -20,13 +20,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/enc"
+	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -41,11 +41,13 @@ func (c *LocalCluster) HostDgraphBinaryPath() string {
 	return filepath.Join(c.tempBinDir, "dgraph_host")
 }
 
-var datafiles = map[string]string{
-	"1million.schema":  "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.schema",
-	"1million.rdf.gz":  "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/1million.rdf.gz",
-	"21million.schema": "https://raw.githubusercontent.com/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.schema",
-	"21million.rdf.gz": "https://media.githubusercontent.com/media/dgraph-io/dgraph-benchmarks/refs/heads/main/data/21million.rdf.gz",
+// datafilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
+// URLs are constructed at runtime by combining these with the configured ref.
+var datafilePaths = map[string]string{
+	"1million.schema":  "data/1million.schema",
+	"1million.rdf.gz":  "data/1million.rdf.gz",
+	"21million.schema": "data/21million.schema",
+	"21million.rdf.gz": "data/21million.rdf.gz",
 }
 
 type DatasetType int
@@ -592,35 +594,21 @@ func (d *Dataset) GqlSchemaPath() string {
 
 func (d *Dataset) ensureFile(filename string) string {
 	fullPath := filepath.Join(datasetFilesPath, filename)
-	if exists, _ := fileExists(fullPath); !exists {
-		url, ok := datafiles[filename]
+	if !testutil.FileExistsAndValid(fullPath) {
+		repoPath, ok := datafilePaths[filename]
 		if !ok {
-			panic(fmt.Sprintf("dataset file %s not found in datafiles map", filename))
+			panic(fmt.Sprintf("dataset file %s not found in datafilePaths map", filename))
 		}
-		if err := downloadFile(filename, url); err != nil {
+		ref := testutil.BenchmarkDataRef("")
+		var err error
+		if strings.HasSuffix(filename, ".rdf.gz") {
+			err = testutil.DownloadLFSFile(filename, ref, repoPath, datasetFilesPath)
+		} else {
+			err = testutil.DownloadFile(filename, testutil.BenchmarkRawURL(ref, repoPath), datasetFilesPath)
+		}
+		if err != nil {
 			panic(fmt.Sprintf("failed to download %s: %v", filename, err))
 		}
 	}
 	return fullPath
-}
-
-func downloadFile(fname, url string) error {
-	const maxRetries = 3
-	fpath := filepath.Join(datasetFilesPath, fname)
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		cmd := exec.Command("wget", "--tries=3", "--waitretry=5", "--retry-connrefused", "-O", fname, url)
-		cmd.Dir = datasetFilesPath
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("attempt %d/%d failed to download %s: %v\n%s", attempt, maxRetries, fname, err, string(out))
-			if attempt < maxRetries {
-				time.Sleep(time.Duration(attempt*5) * time.Second)
-				continue
-			}
-			_ = os.Remove(fpath)
-			return fmt.Errorf("error downloading file %s after %d attempts: %w", fname, maxRetries, err)
-		}
-		return nil
-	}
-	return nil
 }
