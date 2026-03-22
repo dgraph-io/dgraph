@@ -580,10 +580,14 @@ func (ph *persistentHNSW[T]) uidScoreForNode(
 	return score
 }
 
-// appendDedup appends newUids to edges, skipping any that already exist.
-// Uses a linear scan since edge lists are typically small (< efConstruction).
+// appendDedup appends newUids to edges, skipping any that already exist
+// or equal notAUid. Uses a linear scan since edge lists are typically
+// small (< efConstruction).
 func appendDedup(edges []uint64, newUids []uint64) []uint64 {
 	for _, uid := range newUids {
+		if uid == notAUid {
+			continue
+		}
 		found := false
 		for _, e := range edges {
 			if e == uid {
@@ -599,7 +603,8 @@ func appendDedup(edges []uint64, newUids []uint64) []uint64 {
 }
 
 // insertUidsTopKByScore incrementally maintains a best-to-worst sorted uid list capped at `keep`.
-// It assumes `edges` is already sorted best-to-worst according to simType semantics.
+// Edges may arrive unsorted (e.g. from the fast-path appendDedup), so this function
+// deduplicates, scores, and re-sorts existing edges before inserting new ones.
 func insertUidsTopKByScore[T c.Float](
 	edges []uint64,
 	newUids []uint64,
@@ -613,6 +618,42 @@ func insertUidsTopKByScore[T c.Float](
 	if len(edges) > keep {
 		edges = edges[:keep]
 	}
+
+	// Score cache avoids redundant distance computations across the
+	// sort and subsequent binary-search insertions.
+	scoreCache := make(map[uint64]T, len(edges)+len(newUids))
+	cachedScore := func(uid uint64) T {
+		if s, ok := scoreCache[uid]; ok {
+			return s
+		}
+		s := score(uid)
+		scoreCache[uid] = s
+		return s
+	}
+
+	// Dedup existing edges and remove notAUid, then re-sort by score
+	// so that binary-search insertion below is correct even if edges
+	// arrived unsorted from the fast path.
+	filtered := edges[:0]
+	for _, uid := range edges {
+		if uid == notAUid {
+			continue
+		}
+		dup := false
+		for _, f := range filtered {
+			if f == uid {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			filtered = append(filtered, uid)
+		}
+	}
+	edges = filtered
+	sort.Slice(edges, func(i, j int) bool {
+		return simType.isBetterScore(cachedScore(edges[i]), cachedScore(edges[j]))
+	})
 
 	for _, uid := range newUids {
 		if uid == notAUid {
@@ -631,9 +672,9 @@ func insertUidsTopKByScore[T c.Float](
 			continue
 		}
 
-		scoreNew := score(uid)
+		scoreNew := cachedScore(uid)
 		pos := sort.Search(len(edges), func(i int) bool {
-			return simType.isBetterScore(scoreNew, score(edges[i]))
+			return simType.isBetterScore(scoreNew, cachedScore(edges[i]))
 		})
 		edges = append(edges, 0)
 		copy(edges[pos+1:], edges[pos:])
@@ -688,9 +729,10 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 		}
 
 		// Filter out self-loops before anything else.
+		// Allocate a new slice to avoid mutating allLayerNeighbors[level].
 		newUids := allLayerNeighbors[level]
 		if uuid != notAUid {
-			dst := newUids[:0]
+			dst := make([]uint64, 0, len(newUids))
 			for _, uid := range newUids {
 				if uid != uuid {
 					dst = append(dst, uid)
