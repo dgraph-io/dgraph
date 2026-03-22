@@ -580,6 +580,24 @@ func (ph *persistentHNSW[T]) uidScoreForNode(
 	return score
 }
 
+// appendDedup appends newUids to edges, skipping any that already exist.
+// Uses a linear scan since edge lists are typically small (< efConstruction).
+func appendDedup(edges []uint64, newUids []uint64) []uint64 {
+	for _, uid := range newUids {
+		found := false
+		for _, e := range edges {
+			if e == uid {
+				found = true
+				break
+			}
+		}
+		if !found {
+			edges = append(edges, uid)
+		}
+	}
+	return edges
+}
+
 // insertUidsTopKByScore incrementally maintains a best-to-worst sorted uid list capped at `keep`.
 // It assumes `edges` is already sorted best-to-worst according to simType semantics.
 func insertUidsTopKByScore[T c.Float](
@@ -596,21 +614,23 @@ func insertUidsTopKByScore[T c.Float](
 		edges = edges[:keep]
 	}
 
-	seen := make(map[uint64]struct{}, len(edges)+len(newUids))
-	filtered := edges[:0]
-	for _, uid := range edges {
+	for _, uid := range newUids {
 		if uid == notAUid {
 			continue
 		}
-		if _, ok := seen[uid]; ok {
+		// Linear duplicate check — cheaper than a map for the common case
+		// of 1 new uid into a list of O(efConstruction) edges.
+		dup := false
+		for _, e := range edges {
+			if e == uid {
+				dup = true
+				break
+			}
+		}
+		if dup {
 			continue
 		}
-		seen[uid] = struct{}{}
-		filtered = append(filtered, uid)
-	}
-	edges = filtered
 
-	insertSorted := func(edges []uint64, uid uint64) []uint64 {
 		scoreNew := score(uid)
 		pos := sort.Search(len(edges), func(i int) bool {
 			return simType.isBetterScore(scoreNew, score(edges[i]))
@@ -618,18 +638,6 @@ func insertUidsTopKByScore[T c.Float](
 		edges = append(edges, 0)
 		copy(edges[pos+1:], edges[pos:])
 		edges[pos] = uid
-		return edges
-	}
-
-	for _, uid := range newUids {
-		if uid == notAUid {
-			continue
-		}
-		if _, ok := seen[uid]; ok {
-			continue
-		}
-		seen[uid] = struct{}{}
-		edges = insertSorted(edges, uid)
 		if len(edges) > keep {
 			edges = edges[:keep]
 		}
@@ -679,38 +687,7 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			continue
 		}
 
-		// We maintain the invariant that allLayerEdges[level] is sorted best-to-worst
-		// (according to ph.simType semantics) and bounded by efConstruction.
-		//
-		// This lets us do incremental updates cheaply: for each new neighbor, compute its
-		// score once, binary-search insertion into the sorted list, then truncate.
-		if !inVecReady {
-			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
-				// Without the source vector we can't score edges reliably.
-				// Fall back to "append then truncate" after a cheap de-dupe.
-				allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
-				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
-				if len(allLayerEdges[level]) > ph.efConstruction {
-					allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
-				}
-				continue
-			}
-			inVecReady = true
-		}
-
-		// Small local cache for scores computed during this call.
-		scoreCache := make(map[uint64]T, len(allLayerEdges[level])+len(allLayerNeighbors[level]))
-
-		getScore := func(uid uint64) T {
-			if s, ok := scoreCache[uid]; ok {
-				return s
-			}
-			s := ph.uidScoreForNode(tc, uuid, inVec, uid, &outVec)
-			scoreCache[uid] = s
-			return s
-		}
-
-		// Filter out self-loops here (helper only knows about notAUid).
+		// Filter out self-loops before anything else.
 		newUids := allLayerNeighbors[level]
 		if uuid != notAUid {
 			dst := newUids[:0]
@@ -720,6 +697,35 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 				}
 			}
 			newUids = dst
+		}
+		if len(newUids) == 0 {
+			continue
+		}
+
+		// Fast path: if the combined list fits within efConstruction, just
+		// append + dedup without computing any distance scores. This avoids
+		// expensive vector reads, distance computations, map allocations,
+		// and sorted insertion for the common case during early construction
+		// when edge lists are not yet full.
+		if len(allLayerEdges[level])+len(newUids) <= ph.efConstruction {
+			allLayerEdges[level] = appendDedup(allLayerEdges[level], newUids)
+			continue
+		}
+
+		if !inVecReady {
+			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
+				allLayerEdges[level] = append(allLayerEdges[level], newUids...)
+				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
+				if len(allLayerEdges[level]) > ph.efConstruction {
+					allLayerEdges[level] = allLayerEdges[level][:ph.efConstruction]
+				}
+				continue
+			}
+			inVecReady = true
+		}
+
+		getScore := func(uid uint64) T {
+			return ph.uidScoreForNode(tc, uuid, inVec, uid, &outVec)
 		}
 
 		allLayerEdges[level] = insertUidsTopKByScore(allLayerEdges[level], newUids, ph.efConstruction, ph.simType, getScore)
