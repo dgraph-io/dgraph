@@ -86,6 +86,11 @@ func TestParseDQL(t *testing.T) {
 				<name> <is> <something-else> .
 			}
 		}`,
+		`{
+			<user-query>(func: uid(0x1)) {
+				name
+			}
+		}`,
 	}
 
 	for _, tc := range testCases {

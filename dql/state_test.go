@@ -193,6 +193,24 @@ func TestVariablesDefault(t *testing.T) {
 	}
 }
 
+func TestIRIRefInIdentifyMutationOrQuery(t *testing.T) {
+	input := `{
+		<user-query>(func: uid(0x1)) {
+			name
+		}
+	}`
+	l := lex.Lexer{
+		Input: input,
+	}
+	l.Run(lexTopLevel)
+	it := l.NewIterator()
+	for it.Next() {
+		item := it.Item()
+		require.NotEqual(t, item.Typ, lex.ItemError, "Error: %v", item.String())
+		t.Log(item.String())
+	}
+}
+
 func TestIRIRef(t *testing.T) {
 	input := `
 	query testQuery {

@@ -388,6 +388,11 @@ func lexIdentifyMutationOrQuery(l *lex.Lexer) lex.StateFn {
 			// else it is a query
 			l.Emit(itemName)
 			return lexQuery
+		case r == lsThan:
+			if err := lex.IRIRef(l, itemName); err != nil {
+				return l.Errorf(err.Error())
+			}
+			return lexQuery
 		case r == '#':
 			return lexComment
 		case r == lex.EOF:
