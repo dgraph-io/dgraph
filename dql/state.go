@@ -389,7 +389,7 @@ func lexIdentifyMutationOrQuery(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemName)
 			return lexQuery
 		case r == lsThan:
-			l.backup()
+			l.Backup()
 			return lexQuery
 		case r == '#':
 			return lexComment
