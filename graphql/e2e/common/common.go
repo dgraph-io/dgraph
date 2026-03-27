@@ -55,13 +55,13 @@ var (
 	retryableCreateNamespaceErrors = append(retryableUpdateGQLSchemaErrors,
 		"is not indexed",
 	)
-
-	safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
-		"Schema update counter didn't increment, " +
-		"indicating that the GraphQL layer didn't get the updated schema even after 10" +
-		" retries. The most probable cause is the new GraphQL schema is same as the old" +
-		" GraphQL schema."
 )
+
+const safelyUpdateGQLSchemaErr = "New Counter: %v, Old Counter: %v.\n" +
+	"Schema update counter didn't increment, " +
+	"indicating that the GraphQL layer didn't get the updated schema even after 10" +
+	" retries. The most probable cause is the new GraphQL schema is same as the old" +
+	" GraphQL schema."
 
 // GraphQLParams is parameters for constructing a GraphQL query - that's
 // http POST with this body, or http GET with this in the query string.

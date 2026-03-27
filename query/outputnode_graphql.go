@@ -84,7 +84,7 @@ func (genc *graphQLEncoder) encode(encInp encodeInput) bool {
 		val, err := genc.getScalarVal(encInp.fj)
 		if err != nil {
 			genc.errs = append(genc.errs, encInp.parentField.GqlErrorf(encInp.parentPath,
-				err.Error()))
+				"%s", err.Error()))
 			// return false so that the caller can appropriately handle null writing.
 			return false
 		}
@@ -592,7 +592,7 @@ func (genc *graphQLEncoder) writeCustomField(curSelection gqlSchema.Field,
 
 		// if there was an error getting the value, append the error
 		genc.errs = append(genc.errs, curSelection.GqlErrorf(append(parentPath,
-			curSelection.ResponseName()), err.Error()))
+			curSelection.ResponseName()), "%s", err.Error()))
 	}
 
 	// if no custom fastJson node was found or there was error getting the value, return false
@@ -652,7 +652,7 @@ func (genc *graphQLEncoder) processCustomFields(field gqlSchema.Field, n fastJso
 				for _, parent := range res.parents {
 					childNode, err := genc.makeCustomNode(childAttr, res.childVal)
 					if err != nil {
-						genc.errCh <- x.GqlErrorList{res.childField.GqlErrorf(nil, err.Error())}
+						genc.errCh <- x.GqlErrorList{res.childField.GqlErrorf(nil, "%s", err.Error())}
 						continue
 					}
 					childNode.next = parent.child
@@ -740,7 +740,7 @@ func (genc *graphQLEncoder) resolveCustomField(childField gqlSchema.Field,
 
 	fconf, err := childField.CustomHTTPConfig()
 	if err != nil {
-		genc.errCh <- x.GqlErrorList{childField.GqlErrorf(nil, err.Error())}
+		genc.errCh <- x.GqlErrorList{childField.GqlErrorf(nil, "%s", err.Error())}
 		return
 	}
 	// for resolving a custom field, we need to carry out following steps:
@@ -1116,7 +1116,7 @@ func (genc *graphQLEncoder) completeRootAggregateQuery(fj fastJsonNode, query gq
 			val, err = genc.getScalarVal(genc.children(fj))
 			if err != nil {
 				genc.errs = append(genc.errs, f.GqlErrorf(append(qryPath,
-					f.ResponseName()), err.Error()))
+					f.ResponseName()), "%s", err.Error()))
 				// all aggregate properties are nullable, so no special checks are required
 				val = gqlSchema.JsonNull
 			}
@@ -1191,7 +1191,7 @@ func (genc *graphQLEncoder) completeAggregateChildren(fj fastJsonNode,
 			val, err = genc.getScalarVal(fj)
 			if err != nil {
 				genc.errs = append(genc.errs, f.GqlErrorf(append(fieldPath,
-					f.ResponseName()), err.Error()))
+					f.ResponseName()), "%s", err.Error()))
 				// all aggregate properties are nullable, so no special checks are required
 				val = gqlSchema.JsonNull
 			}

@@ -147,7 +147,7 @@ func lexText(l *lex.Lexer) lex.StateFn {
 // Assumes that caller has consumed initial '<'
 func lexIRIRef(l *lex.Lexer, styp lex.ItemType, sfn lex.StateFn) lex.StateFn {
 	if err := lex.IRIRef(l, styp); err != nil {
-		return l.Errorf(err.Error())
+		return l.Errorf("%s", err.Error())
 	}
 	return sfn
 }
@@ -384,7 +384,7 @@ forLoop:
 			return nil
 		case r == quote:
 			if err := l.LexQuotedString(); err != nil {
-				return l.Errorf(err.Error())
+				return l.Errorf("%s", err.Error())
 			}
 			l.Emit(itemText)
 		default:
