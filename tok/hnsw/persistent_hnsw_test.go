@@ -160,18 +160,18 @@ func flatInMemListWriteMutation(test flatInMemListAddMutationTest, t *testing.T)
 	// should not modify db [test.startTs, test.finishTs)
 	if string(tsDbs[test.finishTs-1].inMemTestDb[test.key]) != string(tsDbs[test.startTs].inMemTestDb[test.key]) {
 		t.Errorf(
-			"Database at time %q not equal to expected database at time %q. Expected: %q, Got: %q",
+			"Database at time %d not equal to expected database at time %d. Expected: %q, Got: %q",
 			test.finishTs-1, test.startTs,
 			tsDbs[test.startTs].inMemTestDb[test.key],
 			tsDbs[test.finishTs-1].inMemTestDb[test.key])
 	}
 	if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) != string(test.t.Value[:]) {
-		t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
+		t.Errorf("The database at time %d for key %q gave value  of %q instead of %q", test.finishTs,
 			test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 	}
 	if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) !=
 		string(tsDbs[99].inMemTestDb[test.key][:]) {
-		t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
+		t.Errorf("The database at time %d for key %q gave value  of %q instead of %q", test.finishTs,
 			test.key, string(tsDbs[99].inMemTestDb[test.key][:]),
 			string(tsDbs[test.finishTs].inMemTestDb[test.key][:]))
 	}
@@ -232,11 +232,11 @@ func TestFlatInMemListAddMultipleWritesMutation(t *testing.T) {
 		} else {
 			if string(tsDbs[test.finishTs-1].inMemTestDb[test.key][:]) !=
 				string(flatInMemListAddMultipleWritesMutationTests[test.currIteration-1].t.Value[:]) {
-				t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
+				t.Errorf("The database at time %d for key %q gave value  of %q instead of %q", test.finishTs,
 					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 			}
 			if string(tsDbs[test.finishTs].inMemTestDb[test.key][:]) != string(test.t.Value[:]) {
-				t.Errorf("The database at time %q for key %q gave value  of %q instead of %q", test.finishTs,
+				t.Errorf("The database at time %d for key %q gave value  of %q instead of %q", test.finishTs,
 					test.key, string(tsDbs[test.finishTs].inMemTestDb[test.key][:]), string(test.t.Value[:]))
 			}
 		}
@@ -357,7 +357,7 @@ func TestFlatEntryInsertToPersistentFlatStorage(t *testing.T) {
 		entryKey := DataKey(ConcatStrings(flatPh.pred, VecEntry), 1)
 		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])])
 		if entryVal != test.inUuid {
-			t.Errorf("entry value stored is incorrect. Expected: %q, Got: %q", test.inUuid, entryVal)
+			t.Errorf("entry value stored is incorrect. Expected: %d, Got: %d", test.inUuid, entryVal)
 		}
 	}
 }
@@ -418,7 +418,7 @@ func TestNonflatEntryInsertToPersistentFlatStorage(t *testing.T) {
 		entryKey := DataKey(ConcatStrings(flatPh.pred, VecEntry), 1)
 		entryVal := BytesToUint64(tsDbs[99].inMemTestDb[string(entryKey[:])])
 		if entryVal != 5 {
-			t.Errorf("entry value stored is incorrect. Expected: %q, Got: %q", 5, entryVal)
+			t.Errorf("entry value stored is incorrect. Expected: %d, Got: %d", 5, entryVal)
 		}
 		for i := range tsDbs {
 			key := DataKey(flatPh.pred, test.inUuid)
