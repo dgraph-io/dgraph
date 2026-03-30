@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [v25.3.0] - 2026-03-05
+
+[v25.3.0]: https://github.com/dgraph-io/dgraph/compare/v25.2.0...v25.3.0
+
+- **Added**
+
+- **Bulk Loader**
+  - feat(bulk): add a "skip reduce" flag to the bulk loader (#9618)
+  - feat(bulk): add HNSW vector index support to bulk loader (#9598)
+  - feat(bulk): add error logging to bulk loader (#9601)
+
+- **Test**
+  - feat(test): simplify macOS testing with automatic cross-compilation (#9585)
+
+- **Fixed**
+
+- **Core**
+  - fix(posting): prevent stale cache hits when maxTs < readTs (#9597) (#9614)
+  - fix(core): fix opentelemetry upgrade issues (#9595)
+  - fix: fetch schema over network to ensure @unique check across groups (#9596)
+
+- **Test**
+  - fix(test): resolve macOS binary selection and test data clobbering (#9606)
+  - fix(test): macOS local image, plugin tests, and test suite restructuring (#9610)
+  - fix(test): make TestDropNamespaceErr resilient to async namespace operations (#9589)
+
+- **Changed**
+
+- **Perf**
+  - perf(concurrency): cancel remaining goroutines when error occurs (#9484)
+
+- **Chore**
+  - chore: update docs references (#9617)
+  - chore(test): Clean up testing guide and Makefile testing dependency checks (#9611)
+  - chore: address CVEs (Feb '26 edition) (#9608)
+    > **WARNING** In #9608, badger will no longer be copied into the Dgraph image. You can download
+    > it from [the releases page](https://github.com/dgraph-io/dgraph/releases).
+  - chore: suppress receipt of graphql request to logging level 2 (#9612)
+  - chore(core): use provider.RetrieveWithCredContext instead of deprecated provider.Retrieve
+    (#9551)
+  - chore: remove hardcoded GOMAXPROCS; print cpu info in startup-banner (#9600)
+
+- **Dependency Updates**
+  - chore(deps): bump go.opentelemetry.io/otel/sdk from 1.39.0 to 1.40.0 (#9616)
+
 ## [v25.2.0] - 2026-01-28
 
 [v25.2.0]: https://github.com/dgraph-io/dgraph/compare/v25.1.0...v25.2.0

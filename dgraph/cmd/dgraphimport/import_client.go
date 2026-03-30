@@ -13,6 +13,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/dgo/v250"
@@ -55,19 +57,53 @@ func Import(ctx context.Context, connectionString string, bulkOutDir string) err
 	return streamSnapshot(ctx, dg, bulkOutDir, resp.Groups)
 }
 
+// isRetryableError returns true for transient errors that may resolve after a brief wait,
+// such as Raft proposal backlogs during membership changes.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	// Only retry errors that indicate the server is alive but temporarily busy.
+	// Do NOT retry connectivity errors ("unable to connect to the leader",
+	// "connection refused") as those may indicate a permanent quorum loss and
+	// would cause negative test cases to wait unnecessarily.
+	return strings.Contains(msg, "overloaded")
+}
+
 // initiateSnapshotStream initiates a snapshot stream session with the Dgraph server.
+// It retries on transient errors (e.g. "overloaded with pending proposals") with
+// exponential backoff up to 60 seconds total.
 func initiateSnapshotStream(ctx context.Context, dc api.DgraphClient) (*api.UpdateExtSnapshotStreamingStateResponse, error) {
 	glog.Info("[import] Initiating external snapshot stream")
 	req := &api.UpdateExtSnapshotStreamingStateRequest{
 		Start: true,
 	}
-	resp, err := dc.UpdateExtSnapshotStreamingState(ctx, req)
-	if err != nil {
-		glog.Errorf("[import] failed to initiate external snapshot stream: %v", err)
-		return nil, fmt.Errorf("failed to initiate external snapshot stream: %v", err)
+
+	const maxRetryDuration = 60 * time.Second
+	deadline := time.Now().Add(maxRetryDuration)
+	retryDelay := time.Second
+
+	for {
+		resp, err := dc.UpdateExtSnapshotStreamingState(ctx, req)
+		if err == nil {
+			glog.Info("[import] External snapshot stream initiated successfully")
+			return resp, nil
+		}
+
+		if !isRetryableError(err) || time.Now().After(deadline) {
+			glog.Errorf("[import] failed to initiate external snapshot stream: %v", err)
+			return nil, fmt.Errorf("failed to initiate external snapshot stream: %v", err)
+		}
+
+		glog.Warningf("[import] transient error initiating snapshot stream, retrying in %v: %v", retryDelay, err)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(retryDelay):
+		}
+		retryDelay = min(retryDelay*2, 10*time.Second)
 	}
-	glog.Info("[import] External snapshot stream initiated successfully")
-	return resp, nil
 }
 
 // streamSnapshot takes a p directory and a set of group IDs and streams the data from the

@@ -224,7 +224,11 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 	}
 	provider := x.MinioCredentialsProvider(uri.Scheme, defaultCreds)
 
-	creds, _ := provider.Retrieve() // Error is always nil.
+	// no cred context needed
+	creds, err := provider.RetrieveWithCredContext(nil)
+	if err != nil {
+		return err
+	}
 
 	req.AccessKey = creds.AccessKeyID
 	req.SecretKey = pb.Sensitive(creds.SecretAccessKey)

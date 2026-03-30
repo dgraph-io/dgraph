@@ -51,6 +51,7 @@ type BulkOptions struct {
 	MapBufSize       uint64
 	PartitionBufSize int64
 	SkipMapPhase     bool
+	SkipReducePhase  bool
 	CleanupTmp       bool
 	NumReducers      int
 	Version          bool
@@ -59,6 +60,8 @@ type BulkOptions struct {
 	ConnStr          string
 	HttpAddr         string
 	IgnoreErrors     bool
+	LogErrors        bool
+	ErrorLogPath     string
 	CustomTokenizers string
 	NewUids          bool
 	ClientDir        string
@@ -79,18 +82,60 @@ type BulkOptions struct {
 	Badger badger.Options
 }
 
+// chunkWithMeta wraps a chunk buffer with metadata about the source file.
+type chunkWithMeta struct {
+	buf      *bytes.Buffer
+	filename string
+}
+
 type state struct {
 	opt           *BulkOptions
 	prog          *progress
 	xids          *xidmap.XidMap
 	schema        *schemaStore
 	shards        *shardMap
-	readerChunkCh chan *bytes.Buffer
+	readerChunkCh chan *chunkWithMeta
 	mapFileId     uint32 // Used atomically to name the output files of the mappers.
 	dbs           []*badger.DB
 	tmpDbs        []*badger.DB // Temporary DB to write the split lists to avoid ordering issues.
+	vectorTmpDb   *badger.DB   // Shared temporary DB for vector data and HNSW index building.
 	writeTs       uint64       // All badger writes use this timestamp
 	namespaces    *sync.Map    // To store the encountered namespaces.
+	errorLog      *errorLogger // Error logger for --log_errors
+}
+
+// errorLogger provides thread-safe logging of parsing errors to a file.
+type errorLogger struct {
+	mu   sync.Mutex
+	file *os.File
+}
+
+func newErrorLogger(path string) (*errorLogger, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return &errorLogger{file: f}, nil
+}
+
+func (e *errorLogger) Log(filename string, err error, extra string) {
+	if e == nil || e.file == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Truncate very long extra info in the log
+	if len(extra) > 500 {
+		extra = extra[:500] + "..."
+	}
+	fmt.Fprintf(e.file, "file: %s\nerror: %v\n%s\n", filename, err, extra)
+}
+
+func (e *errorLogger) Close() error {
+	if e == nil || e.file == nil {
+		return nil
+	}
+	return e.file.Close()
 }
 
 type loader struct {
@@ -100,7 +145,7 @@ type loader struct {
 	dg      *dgo.Dgraph
 }
 
-func newLoader(opt *BulkOptions) *loader {
+func newLoader(opt *BulkOptions, precomputedWriteTs uint64) *loader {
 	if opt == nil {
 		log.Fatalf("Cannot create loader with nil options.")
 	}
@@ -130,16 +175,38 @@ func newLoader(opt *BulkOptions) *loader {
 		x.Checkf(err, "Unable to connect to alpha, Is it running at %s?", opt.ConnStr)
 	}
 
+	var errLog *errorLogger
+	if opt.LogErrors {
+		if !opt.IgnoreErrors {
+			fmt.Fprintln(os.Stderr, "Warning: --log_errors requires --ignore_errors to be set")
+		}
+		var err error
+		errLog, err = newErrorLogger(opt.ErrorLogPath)
+		x.Checkf(err, "Unable to create error log file at %s", opt.ErrorLogPath)
+		fmt.Printf("Error logging enabled, writing to: %s\n", opt.ErrorLogPath)
+	}
+
+	writeTs := precomputedWriteTs
+	if writeTs == 0 {
+		writeTs = getWriteTimestamp(zero, dg)
+	}
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
 		shards: newShardMap(opt.MapShards),
 		// Lots of gz readers, so not much channel buffer needed.
-		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
-		writeTs:       getWriteTimestamp(zero, dg),
+		readerChunkCh: make(chan *chunkWithMeta, opt.NumGoroutines),
+		writeTs:       writeTs,
 		namespaces:    &sync.Map{},
+		errorLog:      errLog,
 	}
-	st.schema = newSchemaStore(readSchema(opt), opt, st)
+	var parsedSchema *schema.ParsedSchema
+	if !opt.SkipMapPhase {
+		parsedSchema = readSchema(opt)
+	} else {
+		parsedSchema = &schema.ParsedSchema{}
+	}
+	st.schema = newSchemaStore(parsedSchema, opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -348,7 +415,7 @@ func (ld *loader) mapStage() {
 			for {
 				chunkBuf, err := chunk.Chunk(r)
 				if chunkBuf != nil && chunkBuf.Len() > 0 {
-					ld.readerChunkCh <- chunkBuf
+					ld.readerChunkCh <- &chunkWithMeta{buf: chunkBuf, filename: file}
 				}
 				if err == io.EOF {
 					break
@@ -453,7 +520,7 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 			_, err := fmt.Fprintf(gqlBuf, jsonSchema, ns, schema)
 			x.Check(err)
 		}
-		ld.readerChunkCh <- gqlBuf
+		ld.readerChunkCh <- &chunkWithMeta{buf: gqlBuf, filename: "<gql_schema>"}
 	}
 
 	buf := readGqlSchema(ld.opt)
@@ -530,6 +597,16 @@ func (ld *loader) cleanup() {
 		opts := db.Opts()
 		x.Check(db.Close())
 		x.Check(os.RemoveAll(opts.Dir))
+	}
+	if ld.vectorTmpDb != nil {
+		opts := ld.vectorTmpDb.Opts()
+		x.Check(ld.vectorTmpDb.Close())
+		x.Check(os.RemoveAll(opts.Dir))
+	}
+	if ld.errorLog != nil {
+		if err := ld.errorLog.Close(); err != nil {
+			glog.Warningf("error closing error log: %v", err)
+		}
 	}
 	ld.prog.endSummary()
 }

@@ -11,7 +11,7 @@ services:
       - 9180:9180
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:
@@ -28,7 +28,7 @@ services:
       - 6180:6180
     volumes:
       - type: bind
-        source: $GOPATH/bin
+        source: ${LINUX_GOBIN:-$GOPATH/bin}
         target: /gobin
         read_only: true
     command:

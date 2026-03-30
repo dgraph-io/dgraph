@@ -142,10 +142,19 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 		return processTask(ctx, q, gid)
 	}
 
+	// Add span for cross-alpha network call
+	ctx, networkSpan := otel.Tracer("").Start(ctx, "ProcessTaskOverNetwork.RemoteCall")
+	networkSpan.SetAttributes(
+		attribute.String("target_group", fmt.Sprintf("%d", gid)),
+		attribute.String("predicate", x.SafeUTF8(attr)),
+		attribute.Bool("is_remote", true),
+	)
+
 	result, err := processWithBackupRequest(ctx, gid,
 		func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.ServeTask(ctx, q)
 		})
+	networkSpan.End()
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +348,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	defer stop()
 	span.AddEvent("Number of uids and args.srcFn", trace.WithAttributes(
 		attribute.Int64("uids_count", int64(srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", args.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 
 	switch srcFn.fnType {
 	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
@@ -786,7 +795,7 @@ func (qs *queryState) handleUidPostings(
 	defer stop()
 	span.AddEvent("Number of uids and args.srcFn", trace.WithAttributes(
 		attribute.Int64("uids_count", int64(srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", args.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 	if srcFn.n == 0 {
 		return nil
 	}
@@ -814,9 +823,9 @@ func (qs *queryState) handleUidPostings(
 	needFiltering := needsStringFiltering(srcFn, q.Langs, q.Attr)
 	isList := schema.State().IsList(q.Attr)
 
-	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
+	eg, egCtx := errgroup.WithContext(ctx)
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
@@ -825,8 +834,8 @@ func (qs *queryState) handleUidPostings(
 		for i := start; i < end; i++ {
 			if i%100 == 0 {
 				select {
-				case <-ctx.Done():
-					return ctx.Err()
+				case <-egCtx.Done():
+					return egCtx.Err()
 				default:
 				}
 			}
@@ -969,14 +978,12 @@ func (qs *queryState) handleUidPostings(
 		if end > srcFn.n {
 			end = srcFn.n
 		}
-		go func(start, end int) {
-			errCh <- calculate(start, end)
-		}(start, end)
+		eg.Go(func() error {
+			return calculate(start, end)
+		})
 	}
-	for range numGo {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 	// All goroutines are done. Now attach their results.
 	out := args.out
@@ -1003,10 +1010,11 @@ const (
 
 // processTask processes the query, accumulates and returns the result.
 func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "processTask."+q.Attr)
+	safeAttr := x.SafeUTF8(q.Attr)
+	ctx, span := otel.Tracer("").Start(ctx, "processTask."+safeAttr)
 	defer span.End()
 
-	stop := x.SpanTimer(span, "processTask"+q.Attr)
+	stop := x.SpanTimer(span, "processTask"+safeAttr)
 	defer stop()
 
 	span.SetAttributes(
@@ -1236,7 +1244,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	if span != nil {
 		span.AddEvent("Processing UIDs", trace.WithAttributes(
 			attribute.Int64("uid_count", int64(arg.srcFn.n)),
-			attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+			attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 	}
 
 	attr := arg.q.Attr
@@ -1353,7 +1361,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 	defer stop()
 	span.AddEvent("Processing UIDs", trace.WithAttributes(
 		attribute.Int64("uid_count", int64(arg.srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 
 	attr := arg.q.Attr
 	span.AddEvent("Function information", trace.WithAttributes(
@@ -1521,7 +1529,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	defer stop()
 	span.AddEvent("Processing UIDs", trace.WithAttributes(
 		attribute.Int64("uid_count", int64(arg.srcFn.n)),
-		attribute.String("srcFn", fmt.Sprintf("%+v", arg.srcFn))))
+		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", arg.srcFn)))))
 
 	attr := arg.q.Attr
 	typ := arg.srcFn.atype
@@ -1625,11 +1633,20 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		attribute.Int("num_go", numGo),
 		attribute.Int("width", width)))
 
+	eg, egCtx := errgroup.WithContext(ctx)
 	filtered := make([]*pb.List, numGo)
 	filter := func(idx, start, end int) error {
 		filtered[idx] = &pb.List{}
 		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
+		for i := start; i < end; i++ {
+			uid := uids.Uids[i]
+			if i%100 == 0 {
+				select {
+				case <-egCtx.Done():
+					return egCtx.Err()
+				default:
+				}
+			}
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1651,21 +1668,19 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 		return nil
 	}
 
-	errCh := make(chan error, numGo)
 	for i := range numGo {
 		start := i * width
 		end := start + width
 		if end > len(uids.Uids) {
 			end = len(uids.Uids)
 		}
-		go func(idx, start, end int) {
-			errCh <- filter(idx, start, end)
-		}(i, start, end)
+		idx := i
+		eg.Go(func() error {
+			return filter(idx, start, end)
+		})
 	}
-	for range numGo {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 	final := &pb.List{}
 	for _, out := range filtered {
@@ -2207,7 +2222,14 @@ func interpretVFloatOrUid(val string) ([]float32, uint64, error) {
 
 // ServeTask is used to respond to a query.
 func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, error) {
-	ctx, span := otel.Tracer("").Start(ctx, "worker.ServeTask")
+	// Manually extract trace context from gRPC metadata using the propagator
+	// This ensures the trace context is properly extracted for cross-alpha tracing
+	ctx = x.ExtractTraceContext(ctx)
+
+	// Sanitize attr for span name to ensure valid UTF-8 for OTLP export
+	safeAttr := x.SafeUTF8(q.Attr)
+	ctx, span := otel.Tracer("").Start(ctx, "worker.ServeTask",
+		trace.WithAttributes(attribute.String("predicate", safeAttr)))
 	defer span.End()
 
 	if ctx.Err() != nil {

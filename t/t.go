@@ -86,13 +86,19 @@ var (
 		"Don't bring up a cluster, instead use an existing cluster with this prefix.")
 	skipSlow = pflag.BoolP("skip-slow", "s", false,
 		"If true, don't run tests on slow packages.")
-	suite = pflag.String("suite", "unit", "This flag is used to specify which "+
-		"test suites to run. Possible values are all, ldbc, load, unit, systest, vector, core. Multiple suites can be "+
-		"selected like --suite=ldbc,load")
+	suite = pflag.String("suite", "integration", "This flag is used to specify which "+
+		"test suites to run. Possible values are all, ldbc, load, unit, integration, systest, "+
+		"systest-baseline, systest-heavy, vector, core. Multiple suites can be "+
+		"selected like --suite=ldbc,load. "+
+		"unit = true unit tests only (no Docker, no integration tag). "+
+		"integration = everything except ldbc, load, and systest-heavy (with Docker). "+
+		"systest = systest-baseline + systest-heavy.")
 	tmp               = pflag.String("tmp", "", "Temporary directory used to download data.")
 	downloadResources = pflag.BoolP("download", "d", true,
 		"Flag to specify whether to download resources or not")
-	race = pflag.Bool("race", false, "Set true to build with race")
+	race        = pflag.Bool("race", false, "Set true to build with race")
+	testTimeout = pflag.String("timeout", "",
+		"Timeout for each test package (e.g. 60m, 2h). Defaults to 30m (180m with --race).")
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
@@ -420,16 +426,32 @@ func sanitizeFilename(pkg string) string {
 	return strings.ReplaceAll(pkg, "/", "_")
 }
 
+// gotestsumBin returns the absolute path to gotestsum inside $GOPATH/bin.
+// This avoids relying on $PATH, which may not include $GOPATH/bin on all machines
+// (the check-deps-gotestsum.sh script validates at this same path).
+func gotestsumBin() string {
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(os.Getenv("HOME"), "go")
+	}
+	return filepath.Join(gopath, "bin", "gotestsum")
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
-	args := []string{"gotestsum", "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
-		"-v", "-failfast", "-tags=integration"}
-	if *race {
+	args := []string{gotestsumBin(), "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
+		"-v", "-failfast"}
+	if !isUnitOnly() {
+		args = append(args, "-tags=integration")
+	}
+	switch {
+	case *testTimeout != "":
+		args = append(args, "-timeout", *testTimeout)
+	case *race:
 		args = append(args, "-timeout", "180m")
-		// Todo: There are few race errors in tests itself. Enable this once that is fixed.
-		// args = append(args, "-race")
-	} else {
+	default:
 		args = append(args, "-timeout", "30m")
 	}
+	// Todo: There are few race errors in tests itself. Enable -race once that is fixed.
 
 	if *count > 0 {
 		args = append(args, "-count="+strconv.Itoa(*count))
@@ -451,7 +473,11 @@ func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error 
 	if err != nil {
 		return fmt.Errorf("while getting absolute path of tmp directory: %v Error: %v", *tmp, err)
 	}
-	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+abs)
+	dataDir := abs
+	if strings.Contains(pkg, "/ldbc") {
+		dataDir = filepath.Join(abs, "ldbc")
+	}
+	cmd.Env = append(cmd.Env, "TEST_DATA_DIRECTORY="+dataDir)
 	// Use failureCatcher.
 	cmd.Stdout = oc
 
@@ -527,7 +553,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 
 	var started, stopped bool
 	start := func() error {
-		if len(*useExisting) > 0 || started {
+		if isUnitOnly() || len(*useExisting) > 0 || started {
 			return nil
 		}
 		err := startCluster(defaultCompose, prefix)
@@ -540,7 +566,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 	}
 
 	stop := func() {
-		if *keepCluster || stopped {
+		if isUnitOnly() || *keepCluster || stopped {
 			return
 		}
 		wg.Add(1)
@@ -573,6 +599,76 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		}
 	}()
 
+	// defaultPaused tracks whether the default cluster has been stopped to
+	// free memory for custom-cluster tests.
+	var defaultPaused bool
+
+	// pauseDefault stops the default cluster containers (without removing
+	// them) so that custom-cluster tests have the full Docker memory
+	// budget.  On macOS/Docker-Desktop the VM is memory-constrained and
+	// running 16+ Dgraph processes simultaneously causes OOM kills.
+	pauseDefault := func() {
+		if !started || stopped {
+			return
+		}
+		cmd := command("docker", "compose", "--compatibility",
+			"-f", defaultCompose, "-p", prefix, "stop")
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to pause default cluster %s: %v\n", prefix, err)
+		} else {
+			defaultPaused = true
+			fmt.Printf("DEFAULT CLUSTER PAUSED: %s\n", prefix)
+		}
+	}
+
+	// resumeDefault restarts the stopped default cluster containers and
+	// waits for them to become healthy.
+	resumeDefault := func() error {
+		if !started || stopped {
+			return start()
+		}
+		if !defaultPaused {
+			return nil // already running
+		}
+		cmd := command("docker", "compose", "--compatibility",
+			"-f", defaultCompose, "-p", prefix, "start")
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: failed to resume default cluster %s: %v\n", prefix, err)
+			// If resume fails, recreate the cluster from scratch.
+			started = false
+			return start()
+		}
+		fmt.Printf("DEFAULT CLUSTER RESUMED: %s\n", prefix)
+
+		// Wait for health after resume.
+		var resumeWg sync.WaitGroup
+		for i := 1; i <= NumZeroNodes; i++ {
+			resumeWg.Add(1)
+			go func(n int) {
+				defer resumeWg.Done()
+				in := testutil.GetContainerInstance(prefix, "zero"+strconv.Itoa(n))
+				if err := in.BestEffortWaitForHealthy(ZeroPort); err != nil {
+					fmt.Printf("Warning: zero%d health check after resume: %v\n", n, err)
+				}
+			}(i)
+		}
+		for i := 1; i <= NumAlphaNodes; i++ {
+			resumeWg.Add(1)
+			go func(n int) {
+				defer resumeWg.Done()
+				in := testutil.GetContainerInstance(prefix, "alpha"+strconv.Itoa(n))
+				if err := in.BestEffortWaitForHealthy(AlphaPort); err != nil {
+					fmt.Printf("Warning: alpha%d health check after resume: %v\n", n, err)
+				}
+			}(i)
+		}
+		resumeWg.Wait()
+		defaultPaused = false
+		return nil
+	}
+
 	for task := range taskCh {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -589,14 +685,23 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				// If we only need to run custom cluster tests, then skip this one.
 				continue
 			}
-			if err := start(); err != nil {
-				return err
+			if !isUnitOnly() {
+				if err := resumeDefault(); err != nil {
+					return err
+				}
 			}
 			if err = runTestsFor(ctx, task.pkg.ID, prefix, xmlFile); err != nil {
 				// fmt.Printf("ERROR for package: %s. Err: %v\n", task.pkg.ID, err)
 				return err
 			}
 		} else {
+			if isUnitOnly() {
+				// Skip custom-cluster packages entirely in unit mode —
+				// they only contain integration tests.
+				continue
+			}
+			// Pause the default cluster to free memory for the custom cluster.
+			pauseDefault()
 			// we are not using err variable here because we dont want to
 			// print logs of default cluster in case of custom test fail.
 			if cerr := runCustomClusterTest(ctx, task.pkg.ID, wg, xmlFile); cerr != nil {
@@ -770,7 +875,13 @@ func getPackages() []task {
 		}
 		return out
 	}
-	cfg := &packages.Config{BuildFlags: []string{"-tags=integration"}}
+	// When running unit-only, don't add --tags=integration so that only true
+	// unit tests (without //go:build integration) are discovered and compiled.
+	var buildFlags []string
+	if !isUnitOnly() {
+		buildFlags = []string{"-tags=integration"}
+	}
+	cfg := &packages.Config{BuildFlags: buildFlags}
 
 	pkgs, err := packages.Load(cfg, *baseDir+"/...")
 	x.Check(err)
@@ -890,6 +1001,22 @@ var loadPackages = []string{
 	"/dgraph/cmd/bulk/systest",
 }
 
+// heavyPackages lists resource-intensive systest packages separated into
+// the systest-heavy suite. These spin up large Docker clusters (20-112
+// services) and can cause OOM on macOS Docker Desktop.
+// Use --suite=systest-heavy to run them, or --suite=systest for both.
+var heavyPackages = []string{
+	"/systest/backup/minio",
+	"/systest/backup/minio-large",
+	"/systest/backup/nfs-backup",
+	"/systest/backup/advanced-scenarios/",
+	"/systest/backup/encryption",
+	"/systest/backup/multi-tenancy",
+	"/systest/tracing/jaeger1",
+	"/systest/tracing/jaeger2",
+	"/systest/online-restore",
+}
+
 func testSuiteContains(suite string) bool {
 	for _, str := range testsuite {
 		if suite == str {
@@ -897,6 +1024,22 @@ func testSuiteContains(suite string) bool {
 		}
 	}
 	return false
+}
+
+func testSuiteContainsAny(suites ...string) bool {
+	for _, suite := range suites {
+		if testSuiteContains(suite) {
+			return true
+		}
+	}
+	return false
+}
+
+// isUnitOnly returns true when the suite is exactly "unit" with nothing else.
+// In unit-only mode, the runner skips Docker clusters and --tags=integration,
+// running only tests that don't require the integration build tag.
+func isUnitOnly() bool {
+	return len(testsuite) == 1 && testsuite[0] == "unit"
 }
 
 func isValidPackageForSuite(pkg string) bool {
@@ -910,22 +1053,28 @@ func isValidPackageForSuite(pkg string) bool {
 	if testSuiteContains("load") {
 		valid = valid || isLoadPackage(pkg)
 	}
+	// "unit" = true unit tests (no --tags=integration, same package scope as integration)
 	if testSuiteContains("unit") {
-		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg))
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg) && !isHeavyPackage(pkg))
+	}
+	// "integration" replaces old "unit" — everything except ldbc, load, and systest-heavy
+	if testSuiteContains("integration") {
+		valid = valid || (!isLoadPackage(pkg) && !isLDBCPackage(pkg) && !isHeavyPackage(pkg))
 	}
 	if testSuiteContains("vector") {
 		valid = valid || isVectorPackage(pkg)
 	}
-	if testSuiteContains("systest") {
-		valid = valid || isSystestPackage(pkg)
+	// "systest" = both systest-baseline and systest-heavy (backward compatible)
+	if testSuiteContainsAny("systest", "systest-baseline") {
+		valid = valid || (isSystestPackage(pkg) && !isHeavyPackage(pkg))
+	}
+	if testSuiteContainsAny("systest", "systest-heavy") {
+		valid = valid || isHeavyPackage(pkg)
 	}
 	if testSuiteContains("core") {
 		valid = valid || isCorePackage(pkg)
 	}
-	if valid {
-		return valid
-	}
-	return false
+	return valid
 }
 
 func isLoadPackage(pkg string) bool {
@@ -961,6 +1110,15 @@ func isCorePackage(pkg string) bool {
 
 func isVectorPackage(pkg string) bool {
 	return strings.HasSuffix(pkg, "/vector")
+}
+
+func isHeavyPackage(pkg string) bool {
+	for _, p := range heavyPackages {
+		if strings.HasSuffix(pkg, p) || strings.Contains(pkg, p) {
+			return true
+		}
+	}
+	return false
 }
 
 var datafiles = map[string]string{
@@ -1020,7 +1178,7 @@ func downloadDataFiles() {
 	}
 }
 
-func downloadLDBCFiles() {
+func downloadLDBCFiles(dir string) {
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return
@@ -1038,12 +1196,12 @@ func downloadLDBCFiles() {
 			defer wg.Done()
 			start := time.Now()
 			cmd := exec.Command("wget", "-O", fname, link)
-			cmd.Dir = *tmp
+			cmd.Dir = dir
 			if out, err := cmd.CombinedOutput(); err != nil {
 				fmt.Printf("Error %v\n", err)
 				panic(fmt.Sprintf("error downloading a file: %s", string(out)))
 			}
-			fmt.Printf("Downloaded %s to %s in %s \n", fname, *tmp, time.Since(start))
+			fmt.Printf("Downloaded %s to %s in %s \n", fname, dir, time.Since(start))
 		}(fname, link, &wg)
 	}
 	wg.Wait()
@@ -1151,6 +1309,18 @@ func run() error {
 	fmt.Printf("Proc ID is %d\n", procId)
 	fmt.Printf("Detected architecture: %s", runtime.GOARCH)
 
+	// Ensure $GOPATH/bin is in PATH so that tools installed via `go install`
+	// (e.g. protoc-gen-go) are found by subprocesses like protoc.
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(os.Getenv("HOME"), "go")
+	}
+	gopathBin := filepath.Join(gopath, "bin")
+	currentPath := os.Getenv("PATH")
+	if !strings.Contains(currentPath, gopathBin) {
+		os.Setenv("PATH", gopathBin+string(os.PathListSeparator)+currentPath)
+	}
+
 	start := time.Now()
 	oc.Took(0, "START", time.Millisecond)
 
@@ -1181,8 +1351,11 @@ func run() error {
 	closer := z.NewCloser(N)
 	testCh := make(chan task)
 	errCh := make(chan error, 1000)
+	var runWg sync.WaitGroup
 	for range N {
+		runWg.Add(1)
 		go func() {
+			defer runWg.Done()
 			if err := runTests(testCh, closer); err != nil {
 				errCh <- err
 				closer.Signal()
@@ -1211,20 +1384,21 @@ func run() error {
 	go func() {
 		defer close(testCh)
 		valid := getPackages()
-
-		if testSuiteContains("load") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = os.TempDir()
-			}
+		needsData := testSuiteContainsAny("load", "ldbc", "all")
+		if needsData && *tmp == "" {
+			*tmp = filepath.Join(os.TempDir(), "dgraph-test-data")
 			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
+		}
+		if testSuiteContainsAny("load", "all") {
 			downloadDataFiles()
 		}
-		if testSuiteContains("ldbc") || testSuiteContains("all") {
-			if *tmp == "" {
-				*tmp = filepath.Join(os.TempDir(), "/ldbcdata")
-			}
-			x.Check(testutil.MakeDirEmpty([]string{*tmp}))
-			downloadLDBCFiles()
+		if testSuiteContainsAny("ldbc", "all") {
+			// LDBC files go into a subdirectory because the LDBC test bulk-loads
+			// the entire directory (-f <dir>). Mixing load data (1million, 21million)
+			// with LDBC data causes schema mismatches.
+			ldbcDir := filepath.Join(*tmp, "ldbc")
+			x.Check(os.MkdirAll(ldbcDir, 0755))
+			downloadLDBCFiles(ldbcDir)
 		}
 		for i, task := range valid {
 			select {
@@ -1237,6 +1411,7 @@ func run() error {
 	}()
 
 	closer.Wait()
+	runWg.Wait() // Ensure wrapper goroutines finish sending to errCh before closing it.
 	close(errCh)
 	for err := range errCh {
 		if err != nil {
@@ -1253,7 +1428,7 @@ func run() error {
 
 func validateAllowed(testSuite []string) {
 
-	allowed := []string{"all", "ldbc", "load", "unit", "systest", "vector", "core"}
+	allowed := []string{"all", "ldbc", "load", "unit", "integration", "systest", "systest-baseline", "systest-heavy", "vector", "core"}
 	for _, str := range testSuite {
 		onlyAllowed := false
 		for _, allowedStr := range allowed {
@@ -1262,7 +1437,7 @@ func validateAllowed(testSuite []string) {
 			}
 		}
 		if !onlyAllowed {
-			log.Fatalf("Allowed options for suite are only all, load, ldbc or unit; passed in %+v", testSuite)
+			log.Fatalf("Allowed options for suite are: %s; passed in %+v", strings.Join(allowed, ", "), testSuite)
 		}
 	}
 }

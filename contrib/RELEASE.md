@@ -9,7 +9,7 @@ This document outlines the steps needed to build and push a new release of Dgrap
    [ci-dgraph-weekly-upgrade-tests](https://github.com/dgraph-io/dgraph/actions/workflows/ci-dgraph-weekly-upgrade-tests.yml),
    it takes about 60-70 minutes… Note that you only need to do this if there are changes on the main
    branch after the last run (it runs weekly on Sunday nights).
-1. Update the CHANGELOG.md. Sonnet 4.5 does a great job of doing this. Example prompt:
+1. Update the CHANGELOG.md. GenAI does a great job of doing this. Example prompt:
    `I'm releasing vXX.X.X off the main branch, add a new entry for this release. Conform to the "Keep a Changelog" format, use past entries as a formatting guide. Run the trunk linter on your changes.`.
 1. Validate the version does not have storage incompatibilities with the previous version. If so, add a warning to the CHANGELOG.md
    that export/import of data will need to be run as part of the upgrade process.

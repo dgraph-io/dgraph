@@ -8,10 +8,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -64,11 +62,67 @@ const (
 	]`
 )
 
-func TestBulkLoaderNoDqlSchema(t *testing.T) {
-	if runtime.GOOS != "linux" && os.Getenv("DGRAPH_BINARY") == "" {
-		fmt.Println("You can set the DGRAPH_BINARY environment variable to path of a native dgraph binary to run these tests")
-		t.Skip("Skipping test on non-Linux platforms due to dgraph binary dependency")
+func TestBulkLoaderSkipReducePhase(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+
+	require.NoError(t, c.StartZero(0))
+	require.NoError(t, c.HealthCheck(true))
+
+	baseDir := t.TempDir()
+	dataFile := filepath.Join(baseDir, "data.json")
+	require.NoError(t, os.WriteFile(dataFile, []byte(jsonData), os.ModePerm))
+	gqlSchemaFile := filepath.Join(baseDir, "gql.schema")
+	require.NoError(t, os.WriteFile(gqlSchemaFile, []byte(gqlSchema), os.ModePerm))
+
+	// First run: map phase only, preserve tmp dir
+	mapOpts := dgraphtest.BulkOpts{
+		DataFiles:       []string{dataFile},
+		GQLSchemaFiles:  []string{gqlSchemaFile},
+		TmpDir:          tmpDir,
+		SkipReducePhase: true,
 	}
+	require.NoError(t, c.BulkLoad(mapOpts))
+
+	// Second run: reduce phase only, using the same tmp dir.
+	// Data and schema files are not needed; all input was processed in the map phase.
+	reduceOpts := dgraphtest.BulkOpts{
+		TmpDir:       tmpDir,
+		SkipMapPhase: true,
+	}
+	require.NoError(t, c.BulkLoad(reduceOpts))
+
+	require.NoError(t, c.Start())
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.RootNamespace))
+
+	params := dgraphapi.GraphQLParams{
+		Query: `query {
+			getMessage(uniqueId: 3) {
+				content
+				author
+			}
+		}`,
+	}
+	data, err := hc.RunGraphqlQuery(params, false)
+	require.NoError(t, err)
+	require.NoError(t, dgraphapi.CompareJSON(`{
+		"getMessage": {
+		  "content": "DVTCTXCVYI",
+		  "author": "USYMVFJYXA"
+		}
+	  }`, string(data)))
+}
+
+func TestBulkLoaderNoDqlSchema(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(2).WithNumZeros(1).
 		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
 	c, err := dgraphtest.NewLocalCluster(conf)

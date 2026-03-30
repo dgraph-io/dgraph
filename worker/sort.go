@@ -66,10 +66,19 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 		return processSort(ctx, q)
 	}
 
+	// Add span for cross-alpha network call
+	ctx, networkSpan := otel.Tracer("").Start(ctx, "SortOverNetwork.RemoteCall")
+	networkSpan.SetAttributes(
+		attribute.String("target_group", fmt.Sprintf("%d", gid)),
+		attribute.String("attr", x.SafeUTF8(q.Order[0].Attr)),
+		attribute.Bool("is_remote", true),
+	)
+
 	result, err := processWithBackupRequest(
 		ctx, gid, func(ctx context.Context, c pb.WorkerClient) (interface{}, error) {
 			return c.Sort(ctx, q)
 		})
+	networkSpan.End()
 	if err != nil {
 		return &emptySortResult, err
 	}
@@ -81,6 +90,10 @@ func (w *grpcWorker) Sort(ctx context.Context, s *pb.SortMessage) (*pb.SortResul
 	if ctx.Err() != nil {
 		return &emptySortResult, ctx.Err()
 	}
+
+	// Manually extract trace context from gRPC metadata for cross-alpha tracing
+	ctx = x.ExtractTraceContext(ctx)
+
 	ctx, span := otel.Tracer("").Start(ctx, "worker.Sort")
 	defer span.End()
 
