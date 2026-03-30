@@ -24,9 +24,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/benchdata"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/enc"
-	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -39,15 +39,6 @@ func (c *LocalCluster) HostDgraphBinaryPath() string {
 		return filepath.Join(c.tempBinDir, "dgraph")
 	}
 	return filepath.Join(c.tempBinDir, "dgraph_host")
-}
-
-// datafilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
-// URLs are constructed at runtime by combining these with the configured ref.
-var datafilePaths = map[string]string{
-	"1million.schema":  "data/1million.schema",
-	"1million.rdf.gz":  "data/1million.rdf.gz",
-	"21million.schema": "data/21million.schema",
-	"21million.rdf.gz": "data/21million.rdf.gz",
 }
 
 type DatasetType int
@@ -593,22 +584,9 @@ func (d *Dataset) GqlSchemaPath() string {
 }
 
 func (d *Dataset) ensureFile(filename string) string {
-	fullPath := filepath.Join(datasetFilesPath, filename)
-	if !testutil.FileExistsAndValid(fullPath) {
-		repoPath, ok := datafilePaths[filename]
-		if !ok {
-			panic(fmt.Sprintf("dataset file %s not found in datafilePaths map", filename))
-		}
-		ref := testutil.BenchmarkDataRef("")
-		var err error
-		if strings.HasSuffix(filename, ".rdf.gz") {
-			err = testutil.DownloadLFSFile(filename, ref, repoPath, datasetFilesPath)
-		} else {
-			err = testutil.DownloadFile(filename, testutil.BenchmarkRawURL(ref, repoPath), datasetFilesPath)
-		}
-		if err != nil {
-			panic(fmt.Sprintf("failed to download %s: %v", filename, err))
-		}
+	paths, err := benchdata.EnsureFiles(datasetFilesPath, benchdata.DataRef(""), benchdata.TestDataFile(filename))
+	if err != nil {
+		panic(fmt.Sprintf("failed to ensure %s: %v", filename, err))
 	}
-	return fullPath
+	return paths[0]
 }

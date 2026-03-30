@@ -33,9 +33,9 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/dgraph-io/dgraph/v25/benchdata"
 	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -1128,72 +1128,15 @@ func isHeavyPackage(pkg string) bool {
 	return false
 }
 
-// datafilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
-// URLs are constructed at runtime from BenchmarkDataRef().
-var datafilePaths = map[string]string{
-	"1million-noindex.schema": "data/1million-noindex.schema",
-	"1million.schema":         "data/1million.schema",
-	"1million.rdf.gz":         "data/1million.rdf.gz",
-	"21million.schema":        "data/21million.schema",
-	"21million.rdf.gz":        "data/21million.rdf.gz",
-}
-
-var ldbcRdfFileNames = [...]string{
-	"Deltas.rdf",
-	"comment_0.rdf",
-	"containerOf_0.rdf",
-	"forum_0.rdf",
-	"hasCreator_0.rdf",
-	"hasInterest_0.rdf",
-	"hasMember_0.rdf",
-	"hasModerator_0.rdf",
-	"hasTag_0.rdf",
-	"hasType_0.rdf",
-	"isLocatedIn_0.rdf",
-	"isPartOf_0.rdf",
-	"isSubclassOf_0.rdf",
-	"knows_0.rdf",
-	"likes_0.rdf",
-	"organisation_0.rdf",
-	"person_0.rdf",
-	"place_0.rdf",
-	"post_0.rdf",
-	"replyOf_0.rdf",
-	"studyAt_0.rdf",
-	"tag_0.rdf",
-	"tagclass_0.rdf",
-	"workAt_0.rdf",
-}
-
-// ldbcFilePaths maps filenames to their paths inside the dgraph-benchmarks repo.
-var ldbcFilePaths = map[string]string{
-	"ldbcTypes.schema": "ldbc/sf0.3/ldbcTypes.schema",
-}
-
 func downloadDataFiles() error {
 	if !*downloadResources {
 		fmt.Print("Skipping downloading of resources\n")
 		return nil
 	}
-	ref := testutil.BenchmarkDataRef(*dataRef)
+	ref := benchdata.DataRef(*dataRef)
 	fmt.Printf("Using benchmark data ref: %s\n", ref)
-	for fname, repoPath := range datafilePaths {
-		fpath := filepath.Join(*tmp, fname)
-		if testutil.FileExistsAndValid(fpath) {
-			fmt.Printf("Skipping %s (already exists)\n", fname)
-			continue
-		}
-		var err error
-		if strings.HasSuffix(fname, ".rdf.gz") {
-			err = testutil.DownloadLFSFile(fname, ref, repoPath, *tmp)
-		} else {
-			err = testutil.DownloadFile(fname, testutil.BenchmarkRawURL(ref, repoPath), *tmp)
-		}
-		if err != nil {
-			return fmt.Errorf("error downloading %s: %v", fname, err)
-		}
-	}
-	return nil
+	_, err := benchdata.EnsureFiles(*tmp, ref, benchdata.LoadTestFiles...)
+	return err
 }
 
 func downloadLDBCFiles(dir string) error {
@@ -1201,42 +1144,10 @@ func downloadLDBCFiles(dir string) error {
 		fmt.Print("Skipping downloading of resources\n")
 		return nil
 	}
-
-	ref := testutil.BenchmarkDataRef(*dataRef)
+	ref := benchdata.DataRef(*dataRef)
 	fmt.Printf("Using benchmark data ref: %s\n", ref)
-
-	// All LDBC files (schema + RDF) are LFS-tracked.
-	allFiles := make(map[string]string)
-	for fname, repoPath := range ldbcFilePaths {
-		allFiles[fname] = repoPath
-	}
-	for _, name := range ldbcRdfFileNames {
-		allFiles[name] = "ldbc/sf0.3/ldbc_rdf_0.3/" + name
-	}
-
-	start := time.Now()
-	g, _ := errgroup.WithContext(context.Background())
-	g.SetLimit(5)
-	for fname, repoPath := range allFiles {
-		fpath := filepath.Join(dir, fname)
-		if testutil.FileExistsAndValid(fpath) {
-			fmt.Printf("Skipping %s (already exists)\n", fname)
-			continue
-		}
-		g.Go(func() error {
-			dlStart := time.Now()
-			if err := testutil.DownloadLFSFile(fname, ref, repoPath, dir); err != nil {
-				return fmt.Errorf("error downloading %s: %v", fname, err)
-			}
-			fmt.Printf("Downloaded %s to %s in %s\n", fname, dir, time.Since(dlStart))
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return err
-	}
-	fmt.Printf("Downloaded %d files in %s\n", len(allFiles), time.Since(start))
-	return nil
+	_, err := benchdata.EnsureFiles(dir, ref, benchdata.LDBCFiles...)
+	return err
 }
 
 func createTestCoverageFile(path string) error {
