@@ -1804,6 +1804,9 @@ func addQueryIfUnique(qctx context.Context, qc *queryContext) error {
 			// in the mutation, then we reject the mutation.
 
 			if !strings.HasPrefix(pred.ObjectId, "val(") {
+				if pred.ObjectValue == nil {
+					continue
+				}
 				val := strconv.Quote(fmt.Sprintf("%v", dql.TypeValFrom(pred.ObjectValue).Value))
 				query := fmt.Sprintf(`%v as var(func: eq(%v,"%v"))`, queryVar, predicateName, val[1:len(val)-1])
 				if _, err := buildQuery.WriteString(query); err != nil {
@@ -2218,6 +2221,9 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 			continue
 		}
 		pred1 := qc.gmuList[gmuIndex].Set[rdfIndex]
+		if pred1.ObjectValue == nil {
+			continue
+		}
 		pred1Value := dql.TypeValFrom(pred1.ObjectValue).Value
 		for j := range qc.uniqueVars {
 			if i == j {
@@ -2229,6 +2235,9 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 				continue
 			}
 			pred2 := qc.gmuList[gmuIndex2].Set[rdfIndex2]
+			if pred2.ObjectValue == nil {
+				continue
+			}
 			if pred2.Predicate == pred1.Predicate && dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
 				pred2.Subject != pred1.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",

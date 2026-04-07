@@ -285,4 +285,94 @@ func TestVerifyUniqueWithinMutationBoundsChecks(t *testing.T) {
 		err := verifyUniqueWithinMutation(qc)
 		require.NoError(t, err)
 	})
+
+	// Regression test for https://github.com/dgraph-io/dgraph/issues/9670
+	// When an NQuad has a nil ObjectValue (e.g. a UID edge on a predicate
+	// marked @unique), verifyUniqueWithinMutation would panic with a nil
+	// pointer dereference in dql.TypeValFrom.
+	t.Run("nil ObjectValue should not panic", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:     "_:a",
+							Predicate:   "friend",
+							ObjectId:    "0x1",
+							ObjectValue: nil, // UID edge, no value
+						},
+					},
+				},
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+			},
+		}
+		// Before fix: panics with "nil pointer dereference" in dql.TypeValFrom
+		require.NotPanics(t, func() {
+			_ = verifyUniqueWithinMutation(qc)
+		})
+	})
+
+	// Same issue but with two NQuads where one has a nil ObjectValue
+	// and the other has a real value — the inner loop comparison must
+	// also handle the nil case.
+	t.Run("nil ObjectValue mixed with value NQuad should not panic", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:   "_:a",
+							Predicate: "email",
+							ObjectValue: &api.Value{
+								Val: &api.Value_StrVal{StrVal: "test@example.com"},
+							},
+						},
+						{
+							Subject:     "_:a",
+							Predicate:   "friend",
+							ObjectId:    "0x2",
+							ObjectValue: nil, // UID edge
+						},
+					},
+				},
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+				encodeIndex(0, 1): {},
+			},
+		}
+		require.NotPanics(t, func() {
+			err := verifyUniqueWithinMutation(qc)
+			require.NoError(t, err)
+		})
+	})
+
+	// Verify that val(...) reference edges (ObjectId="val(x)", ObjectValue=nil)
+	// don't panic. These go through a different code path in addQueryIfUnique
+	// but could still appear in uniqueVars and be iterated by
+	// verifyUniqueWithinMutation.
+	t.Run("val() reference with nil ObjectValue should not panic", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{
+					Set: []*api.NQuad{
+						{
+							Subject:     "_:a",
+							Predicate:   "email",
+							ObjectId:    "val(queryVar)",
+							ObjectValue: nil,
+						},
+					},
+				},
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+			},
+		}
+		require.NotPanics(t, func() {
+			_ = verifyUniqueWithinMutation(qc)
+		})
+	})
 }
