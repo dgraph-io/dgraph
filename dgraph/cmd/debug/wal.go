@@ -35,6 +35,18 @@ func printEntry(es raftpb.Entry, pending map[uint64]bool, isZero bool) {
 	fmt.Fprintf(&buf, "%d . %d . %v . %-6s . %8d .", es.Term, es.Index, es.Type,
 		humanize.Bytes(uint64(es.Size())), key)
 	if es.Type == raftpb.EntryConfChange {
+		var cc raftpb.ConfChange
+		if err := cc.Unmarshal(es.Data); err != nil {
+			fmt.Fprintf(&buf, " [ConfChange unmarshal error: %v]", err)
+			return
+		}
+		fmt.Fprintf(&buf, " Type: %s . NodeID: %#x .", cc.Type, cc.NodeID)
+		if len(cc.Context) > 0 {
+			var rc pb.RaftContext
+			if err := proto.Unmarshal(cc.Context, &rc); err == nil {
+				fmt.Fprintf(&buf, " RaftContext: %s", rc.String())
+			}
+		}
 		return
 	}
 	if len(es.Data) == 0 {

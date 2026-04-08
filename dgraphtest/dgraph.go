@@ -88,11 +88,12 @@ type dnode interface {
 }
 
 type zero struct {
-	id            int    // 0, 1, 2
-	containerID   string // container ID in docker world
-	containerName string // something like test-1234_zero2
-	aliasName     string // something like alpha0, zero1
-	isRunning     bool
+	id             int    // 0, 1, 2
+	containerID    string // container ID in docker world
+	containerName  string // something like test-1234_zero2
+	aliasName      string // something like alpha0, zero1
+	isRunning      bool
+	myAddrOverride string // if set, overrides the --my flag value
 }
 
 func (z *zero) cname() string {
@@ -128,7 +129,11 @@ func (z *zero) bindings(offset int) nat.PortMap {
 }
 
 func (z *zero) cmd(c *LocalCluster) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
+	myAddr := fmt.Sprintf("%s:%v", z.aname(), zeroGrpcPort)
+	if z.myAddrOverride != "" {
+		myAddr = z.myAddrOverride
+	}
+	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s", myAddr), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
