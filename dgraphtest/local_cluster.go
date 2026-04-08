@@ -1397,6 +1397,27 @@ func (c *LocalCluster) GetAlphaGrpcEndpoint(id int) (string, error) {
 
 // CopyExportToHost copies exported files from the container to a host directory.
 // It returns the paths to RDF/JSON files and schema files on the host.
+func (c *LocalCluster) ReadFileFromContainer(containerPath string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	ts, _, err := c.dcli.CopyFromContainer(ctx, c.alphas[0].cid(), containerPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error copying file from container [%v]", c.alphas[0].cname())
+	}
+	defer ts.Close()
+
+	tr := tar.NewReader(ts)
+	if _, err := tr.Next(); err != nil {
+		return nil, errors.Wrap(err, "error reading tar header")
+	}
+	data, err := io.ReadAll(tr)
+	if err != nil {
+		return nil, errors.Wrap(err, "error reading file contents from tar stream")
+	}
+	return data, nil
+}
+
 func (c *LocalCluster) CopyExportToHost(exportDir, hostDir string) (dataFiles, schemaFiles []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()

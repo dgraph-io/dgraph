@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -304,6 +305,26 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		restorePreds = buildPredsForDefaultNamespace(restorePreds, req.FromNamespace)
 	}
 	for _, pred := range restorePreds {
+		// HNSW vector indexes produce supporting predicates (__vector_entry,
+		// __vector_, __vector_dead) that are stored alongside the base vector
+		// predicate in the same Badger instance. During normal operation these
+		// are never registered as tablets in Zero — the HNSW code writes them
+		// directly via AddMutationWithLockHeld, and transaction validation in
+		// Zero's checkPreds strips the VecKeyword suffix to resolve the base
+		// predicate's group. Registering them here would create an inconsistent
+		// state that causes backup manifest duplication and may trigger futile
+		// rebalancing attempts.
+		//
+		// Skipping ForceTablet is safe because the restore mapper decides which
+		// data keys to restore based on the manifest's predicate set (predSet),
+		// not on Zero's tablet assignments. The supporting predicate data will
+		// still be restored to the correct Alpha's Badger store.
+		if strings.HasSuffix(pred, hnsw.VecEntry) ||
+			strings.HasSuffix(pred, hnsw.VecKeyword) ||
+			strings.HasSuffix(pred, hnsw.VecDead) {
+			continue
+		}
+
 		// Force the tablet to be moved to this group, even
 		// if it's currently being served by another group.
 		tablet, err := groups().ForceTablet(pred)

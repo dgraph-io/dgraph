@@ -287,10 +287,22 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 
 	}
 
-	// see if any of the predicates are vector predicates and add the supporting
-	// vector predicates to the backup request.
+	// HNSW vector indexes create supporting predicates (entry, keyword, dead) that
+	// are not tracked as tablets in Zero's membership state. They exist only as data
+	// in the same Badger store as their base vector predicate. We need to discover
+	// them here and include them in the backup. Since the membership state only tells
+	// us which predicates belong to which group (not their type or index info), we
+	// call GetSchemaOverNetwork to fetch the schema from each group's Alpha and check
+	// which predicates are float32vector with HNSW indexes.
+	//
+	// Groups with no predicates must be skipped because GetSchemaOverNetwork treats
+	// an empty predicate list as "return all schemas from all groups", which would
+	// incorrectly associate supporting predicates from other groups with this group.
 	vecPredMap := make(map[uint32][]string)
 	for gid, preds := range predMap {
+		if len(preds) == 0 {
+			continue
+		}
 		schema, err := GetSchemaOverNetwork(ctx, &pb.SchemaRequest{Predicates: preds})
 		if err != nil {
 			return err
@@ -298,8 +310,8 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 
 		for _, pred := range schema {
 			if pred.Type == "float32vector" && len(pred.IndexSpecs) != 0 {
-				vecPredMap[gid] = append(vecPredMap[gid], pred.Predicate+hnsw.VecEntry, pred.Predicate+hnsw.VecKeyword,
-					pred.Predicate+hnsw.VecDead)
+				vecPredMap[gid] = append(vecPredMap[gid], pred.Predicate+hnsw.VecEntry,
+					pred.Predicate+hnsw.VecKeyword, pred.Predicate+hnsw.VecDead)
 			}
 		}
 	}
