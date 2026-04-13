@@ -838,6 +838,26 @@ func TestHealth(t *testing.T) {
 	require.True(t, info[0].Uptime > int64(time.Duration(1)))
 }
 
+// TestPprofCmdlineNotExposed ensures that /debug/pprof/cmdline is not reachable
+// without authentication. The endpoint exposes the full process command line,
+// which may include the admin token passed via --security "token=...".
+// The other pprof sub-endpoints should remain accessible.
+func TestPprofCmdlineNotExposed(t *testing.T) {
+	// cmdline must be blocked — it leaks the admin token from process args.
+	resp, err := http.Get(fmt.Sprintf("%s/debug/pprof/cmdline", addr))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode,
+		"/debug/pprof/cmdline should return 404; got %d", resp.StatusCode)
+
+	// Sanity-check that other pprof endpoints are still reachable.
+	resp2, err := http.Get(fmt.Sprintf("%s/debug/pprof/heap", addr))
+	require.NoError(t, err)
+	defer resp2.Body.Close()
+	require.Equal(t, http.StatusOK, resp2.StatusCode,
+		"/debug/pprof/heap should return 200; got %d", resp2.StatusCode)
+}
+
 func setDrainingMode(t *testing.T, enable bool, accessJwt string) {
 	drainingRequest := `mutation drain($enable: Boolean) {
 		draining(enable: $enable) {

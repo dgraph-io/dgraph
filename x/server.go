@@ -22,17 +22,17 @@ var (
 	ServerCloser = z.NewCloser(0)
 )
 
-func StartListenHttpAndHttps(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
+func StartListenHttpAndHttps(l net.Listener, tlsCfg *tls.Config, closer *z.Closer, h http.Handler) {
 	defer closer.Done()
 	m := cmux.New(l)
-	startServers(m, tlsCfg)
+	startServers(m, tlsCfg, h)
 	err := m.Serve()
 	if err != nil {
 		glog.Errorf("error from cmux serve: %v", err)
 	}
 }
 
-func startServers(m cmux.CMux, tlsConf *tls.Config) {
+func startServers(m cmux.CMux, tlsConf *tls.Config, h http.Handler) {
 	httpRule := m.Match(func(r io.Reader) bool {
 		// no tls config is provided. http is being used.
 		if tlsConf == nil {
@@ -48,19 +48,20 @@ func startServers(m cmux.CMux, tlsConf *tls.Config) {
 		// monitoring tools which operate without authentication.
 		return strings.HasPrefix(path, "/health")
 	})
-	go startListen(httpRule)
+	go startListen(httpRule, h)
 
 	// if tls is enabled, make tls encryption based connections as default
 	if tlsConf != nil {
 		httpsRule := m.Match(cmux.Any())
 		// this is chained listener. tls listener will decrypt
 		// the message and send it in plain text to HTTP server
-		go startListen(tls.NewListener(httpsRule, tlsConf))
+		go startListen(tls.NewListener(httpsRule, tlsConf), h)
 	}
 }
 
-func startListen(l net.Listener) {
+func startListen(l net.Listener, h http.Handler) {
 	srv := &http.Server{
+		Handler:           h, // nil falls back to http.DefaultServeMux
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      600 * time.Second,
 		IdleTimeout:       2 * time.Minute,

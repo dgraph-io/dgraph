@@ -310,7 +310,7 @@ func run() {
 
 	tlsCfg, err := x.LoadServerTLSConfig(Zero.Conf)
 	x.Check(err)
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer)
+	go x.StartListenHttpAndHttps(httpListener, tlsCfg, st.zero.closer, nil)
 
 	baseMux := http.NewServeMux()
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
