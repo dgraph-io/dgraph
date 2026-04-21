@@ -508,6 +508,14 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		// that were baked into the WAL at initial bootstrap.
 		var rc pb.RaftContext
 		x.Check(proto.Unmarshal(cc.Context, &rc))
+
+		// Drop the stale pool before connecting to the new address so that
+		// repeated dial errors to the old address are eliminated immediately.
+		if oldMember, ok := n.server.membershipState().GetZeros()[rc.Id]; ok {
+			if oldMember.GetAddr() != rc.Addr {
+				conn.GetPools().Remove(oldMember.GetAddr())
+			}
+		}
 		go n.Connect(rc.Id, rc.Addr)
 
 		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0, Learner: rc.IsLearner}
@@ -789,6 +797,8 @@ func (n *node) reconcileZeroAddresses() {
 		// following periodic cycle.
 		return
 	}
+	// V(2): emitted on every 10s tick, too noisy for production at Info level.
+	glog.V(2).Infof("Zero address reconciliation complete: all addresses up to date")
 }
 
 func (n *node) checkQuorum(closer *z.Closer) {

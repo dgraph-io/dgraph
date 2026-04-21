@@ -1075,19 +1075,6 @@ func (c *LocalCluster) GetAlphaHttpClient(alphaID int) (*dgraphapi.HTTPClient, e
 	return dgraphapi.GetHttpClient(url, "")
 }
 
-// GetZeroStateURL returns the full HTTP URL for the /state endpoint of the
-// specified Zero node.
-func (c *LocalCluster) GetZeroStateURL(id int) (string, error) {
-	if id >= c.conf.numZeros {
-		return "", fmt.Errorf("invalid id of zero: %v", id)
-	}
-	pubPort, err := publicPort(c.dcli, c.zeros[id], zeroHttpPort)
-	if err != nil {
-		return "", err
-	}
-	return "http://0.0.0.0:" + pubPort + "/state", nil
-}
-
 // serverURL returns url to the 'server' 'endpoint'
 func (c *LocalCluster) serverURL(server, endpoint string) (string, error) {
 	pubPort, err := publicPort(c.dcli, c.alphas[0], alphaHttpPort)
