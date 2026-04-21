@@ -587,18 +587,7 @@ func setupServer(closer *z.Closer) {
 	x.ServerCloser.AddRunning(3)
 	go serveGRPC(grpcListener, tlsCfg, x.ServerCloser)
 
-	// Block /debug/pprof/cmdline — importing net/http/pprof registers it on
-	// http.DefaultServeMux, but it exposes the full process command line which
-	// may include the admin token from --security "token=...".
-	serverHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/debug/pprof/cmdline" {
-			http.NotFound(w, r)
-			return
-		}
-		http.DefaultServeMux.ServeHTTP(w, r)
-	})
-	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser, serverHandler)
-
+	serverHandler := x.SanitizedDefaultServeMux()
 	go x.StartListenHttpAndHttps(httpListener, tlsCfg, x.ServerCloser, serverHandler)
 
 	go func() {

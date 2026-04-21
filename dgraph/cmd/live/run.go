@@ -751,7 +751,7 @@ func run() error {
 	z.SetTmpDir(opt.tmpDir)
 
 	go func() {
-		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
+		if err := http.ListenAndServe(opt.httpAddr, x.SanitizedDefaultServeMux()); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
 		}
 	}()

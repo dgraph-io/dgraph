@@ -297,3 +297,96 @@ func TestVerifyUniqueWithinMutationBoundsChecks(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestValidateCondValue(t *testing.T) {
+	// Valid conditions that should pass.
+	valid := []string{
+		``,
+		`@if(eq(len(v), 0))`,
+		` @if(eq(len(v), 0)) `,
+		`@if(eq(name, "Alice"))`,
+		`@if(le(len(c1), 100) AND lt(len(c2), 100))`,
+		`@if(not(eq(len(v), 0)))`,
+		`@if(eq(name, "has (parens) inside"))`,
+		`@filter(eq(len(v), 0))`,
+	}
+	for _, c := range valid {
+		require.NoError(t, validateCondValue(c), "expected valid: %q", c)
+	}
+
+	// Invalid conditions that should be rejected.
+	invalid := []struct {
+		cond string
+		desc string
+	}{
+		{
+			cond: "@if(eq(name, \"x\"))\n  leak(func: has(dgraph.type)) { uid }",
+			desc: "DQL injection via newline and extra query block",
+		},
+		{
+			cond: "@if(eq(name, \"x\")) } leak(func: uid(0x1)) { uid",
+			desc: "DQL injection closing brace then new block",
+		},
+		{
+			cond: "eq(name, \"x\")",
+			desc: "missing @if/@filter prefix",
+		},
+		{
+			cond: "@if(eq(name, \"x\")",
+			desc: "unbalanced parentheses",
+		},
+		{
+			cond: "@if(eq(name, \"x\")) extra",
+			desc: "trailing content after condition",
+		},
+	}
+	for _, tc := range invalid {
+		require.Error(t, validateCondValue(tc.cond), "expected invalid (%s): %q", tc.desc, tc.cond)
+	}
+}
+
+func TestValidateValObjectId(t *testing.T) {
+	valid := []string{
+		"val(v)",
+		"val(queryVariable)",
+		"val(my_var_123)",
+		"val(Amt)",
+	}
+	for _, v := range valid {
+		require.NoError(t, validateValObjectId(v), "expected valid: %q", v)
+	}
+
+	invalid := []string{
+		"val(v)}\nleak(func: has(dgraph.type)) { uid }",
+		"val()",
+		"val(123)",
+		"val(v) extra",
+		"notval(v)",
+	}
+	for _, v := range invalid {
+		require.Error(t, validateValObjectId(v), "expected invalid: %q", v)
+	}
+}
+
+func TestValidateLangTag(t *testing.T) {
+	valid := []string{
+		"",
+		"en",
+		"fr",
+		"zh-Hans",
+		"en-US",
+	}
+	for _, v := range valid {
+		require.NoError(t, validateLangTag(v), "expected valid: %q", v)
+	}
+
+	invalid := []string{
+		"en)}\nleak(func: has(dgraph.type)) { uid }",
+		"en )",
+		"@en",
+		"en;drop",
+	}
+	for _, v := range invalid {
+		require.Error(t, validateLangTag(v), "expected invalid: %q", v)
+	}
+}

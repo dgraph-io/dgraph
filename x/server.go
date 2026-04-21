@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"expvar"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -86,4 +88,43 @@ func parseRequestPath(r io.Reader) (path string, ok bool) {
 	}
 
 	return request.URL.Path, true
+}
+
+// filteredExpvarHandler serves /debug/vars but omits the "cmdline" key that
+// expvar publishes by default (os.Args), which may contain the admin token
+// from --security "token=...".
+func filteredExpvarHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == "cmdline" {
+			return
+		}
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
+}
+
+// SanitizedDefaultServeMux returns an http.Handler that wraps
+// http.DefaultServeMux but blocks endpoints that expose the full process
+// command line (which may include the admin token from --security "token=..."):
+//   - /debug/pprof/cmdline — registered by net/http/pprof
+//   - /debug/vars          — served with a filtered handler that omits "cmdline"
+func SanitizedDefaultServeMux() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/debug/pprof/cmdline" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path == "/debug/vars" {
+			filteredExpvarHandler(w, r)
+			return
+		}
+		http.DefaultServeMux.ServeHTTP(w, r)
+	})
 }

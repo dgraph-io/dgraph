@@ -3012,3 +3012,93 @@ func TestLargeStringIndex(t *testing.T) {
 	require.Contains(t, dqlSchema,
 		`{"predicate":"name_term","type":"string","index":true,"tokenizer":["term"]}`)
 }
+
+// TestDQLInjectionViaCondField is a security regression test for LEAD-001.
+// It verifies that a crafted cond field containing an injected DQL query block
+// is rejected by input validation before reaching the query builder.
+func TestDQLInjectionViaCondField(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`
+		name: string @index(exact) .
+		email: string @index(exact) .
+		secret: string .
+	`))
+
+	// Seed data that should NOT be readable via a mutation request.
+	seed := `{
+		set {
+			_:u1 <dgraph.type> "User" .
+			_:u1 <name> "Alice" .
+			_:u1 <email> "alice@example.com" .
+			_:u1 <secret> "SSN-111-22-3333" .
+
+			_:u2 <dgraph.type> "User" .
+			_:u2 <name> "Bob" .
+			_:u2 <email> "bob@example.com" .
+			_:u2 <secret> "API_KEY_secret_abc123" .
+		}
+	}`
+	_, err := mutationWithTs(mutationInp{body: seed, typ: "application/rdf", commitNow: true})
+	require.NoError(t, err)
+
+	// Craft the injection payload. The cond value closes the @if() clause and
+	// appends an entirely new named query block "leak" that would exfiltrate all
+	// data if the injection were not blocked.
+	injectionPayload := `{
+		"query": "{ q(func: uid(0x1)) { uid } }",
+		"mutations": [{
+			"set": [{"uid": "0x1", "dgraph.type": "Dummy"}],
+			"cond": "@if(eq(name, \"nonexistent\"))\n  leak(func: has(dgraph.type)) { uid dgraph.type name email secret }"
+		}]
+	}`
+
+	// The injection payload must be rejected by cond validation.
+	_, err = mutationWithTs(mutationInp{
+		body:      injectionPayload,
+		typ:       "application/json",
+		commitNow: true,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid cond value")
+
+	// Verify that no mutation was applied — the request was rejected entirely.
+	q := `{ q(func: has(dgraph.type)) { uid name } }`
+	res, _, err := queryWithTs(queryInp{body: q, typ: "application/dql"})
+	require.NoError(t, err)
+	require.NotContains(t, res, "Dummy")
+
+	// Verify that a legitimate conditional upsert still works.
+	legitimateUpsert := `{
+		"query": "{ q(func: eq(name, \"Alice\")) { v as uid } }",
+		"mutations": [{
+			"set": [{"uid": "uid(v)", "email": "alice-updated@example.com"}],
+			"cond": "@if(eq(len(v), 1))"
+		}]
+	}`
+	_, err = mutationWithTs(mutationInp{
+		body:      legitimateUpsert,
+		typ:       "application/json",
+		commitNow: true,
+	})
+	require.NoError(t, err)
+}
+
+func TestStringWithQuote(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchemaWithRetry(`name: string @unique @index(exact) .`))
+	mu := `{ set { <0x01> <name> "\"problem\" is the quotes (json)" . } }`
+	require.NoError(t, runMutation(mu))
+
+	var data struct {
+		Data struct {
+			Q []struct {
+				Name string `json:"name"`
+			} `json:"q"`
+		} `json:"data"`
+	}
+	q := `{ q(func: has(name)) { name } }`
+	res, _, err := queryWithTs(queryInp{body: q, typ: "application/dql"})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(res), &data))
+	require.Equal(t, `"problem" is the quotes (json)`, data.Data.Q[0].Name)
+}
