@@ -32,12 +32,13 @@ check-deps: check-deps-go check-deps-docker check-deps-gotestsum check-deps-ack 
 .PHONY: check
 check: check-deps
 	@echo "LINUX_GOBIN=$(LINUX_GOBIN)"
-	@if [ -f "$(LINUX_GOBIN)/dgraph" ]; then \
-		file $(LINUX_GOBIN)/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary at $(LINUX_GOBIN)/dgraph is not a Linux executable" && exit 1); \
+	@DBIN=$${BIN:-dgraph}; \
+	if [ -f "$(LINUX_GOBIN)/$$DBIN" ]; then \
+		file $(LINUX_GOBIN)/$$DBIN | grep -q "ELF.*executable" || (echo "Error: $$DBIN binary at $(LINUX_GOBIN)/$$DBIN is not a Linux executable" && exit 1); \
 	else \
-		echo "Error: dgraph binary not found at $(LINUX_GOBIN)/dgraph" && exit 1; \
-	fi
-	@echo "The dgraph binary is a Linux executable (as required)"
+		echo "Error: $$DBIN binary not found at $(LINUX_GOBIN)/$$DBIN" && exit 1; \
+	fi; \
+	echo "The $$DBIN binary is a Linux executable (as required)"
 
 # ---- check-deps-{tool} targets ----
 #
