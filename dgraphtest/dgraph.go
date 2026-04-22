@@ -21,6 +21,8 @@ import (
 	docker "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 )
 
 const (
@@ -128,7 +130,7 @@ func (z *zero) bindings(offset int) nat.PortMap {
 }
 
 func (z *zero) cmd(c *LocalCluster) []string {
-	zcmd := []string{"/gobin/dgraph", "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
+	zcmd := []string{buildvars.GoBinDgraphPath.Get(), "zero", fmt.Sprintf("--my=%s:%v", z.aname(), zeroGrpcPort), "--bindall",
 		fmt.Sprintf(`--replicas=%v`, c.conf.replicas), "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
@@ -236,7 +238,7 @@ func (a *alpha) bindings(offset int) nat.PortMap {
 }
 
 func (a *alpha) cmd(c *LocalCluster) []string {
-	acmd := []string{"/gobin/dgraph", "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
+	acmd := []string{buildvars.GoBinDgraphPath.Get(), "alpha", fmt.Sprintf("--my=%s:%v", a.aname(), alphaInterPort),
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
@@ -427,7 +429,14 @@ func getPortMappingsOnMac(containerID, privatePort string) (string, error) {
 		// Example: "0.0.0.0:55069->8080/tcp," => "55069"
 		for _, part := range fields[1:] {
 			if strings.Contains(part, privatePort+"/tcp") {
-				return strings.Split(strings.Split(part, ":")[1], "->")[0], nil
+				// A port entry like "8080/tcp" has no colon because the port
+				// wasn't published to the host; skip it rather than panic on
+				// an out-of-range index.
+				colonParts := strings.Split(part, ":")
+				if len(colonParts) < 2 {
+					continue
+				}
+				return strings.Split(colonParts[1], "->")[0], nil
 			}
 		}
 	}

@@ -18,6 +18,8 @@ import (
 
 	"github.com/pkg/errors"
 	"golang.org/x/mod/modfile"
+
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 )
 
 var (
@@ -26,7 +28,7 @@ var (
 )
 
 func (c *LocalCluster) dgraphImage() string {
-	return "dgraph/dgraph:local"
+	return buildvars.DockerImage.Get() + ":local"
 }
 
 // setupBinary sets up dgraph binaries in tempBinDir.
@@ -222,12 +224,12 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 }
 
 func copyBinary(fromDir, toDir, version string) error {
-	binaryName := "dgraph"
+	binaryName := buildvars.Bin.Get()
 	if version != localVersion {
 		binaryName = fmt.Sprintf(binaryNameFmt, version)
 	}
 	fromPath := filepath.Join(fromDir, binaryName)
-	toPath := filepath.Join(toDir, "dgraph")
+	toPath := filepath.Join(toDir, buildvars.Bin.Get())
 	if err := copy(fromPath, toPath); err != nil {
 		return errors.Wrapf(err, "error while copying binary into tempBinDir [%v], from [%v]", toPath, fromPath)
 	}
