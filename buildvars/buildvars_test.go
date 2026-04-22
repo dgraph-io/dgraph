@@ -258,10 +258,10 @@ func TestBuildTags_ComposesWithExtraBuildTags(t *testing.T) {
 	}
 
 	// Extra set → composed
-	ExtraBuildTags.SetDefault("istari requirefips")
-	if got := BuildTags.Get(); got != "jemalloc istari requirefips" {
+	ExtraBuildTags.SetDefault("myfork requirefips")
+	if got := BuildTags.Get(); got != "jemalloc myfork requirefips" {
 		t.Errorf("with extra: BuildTags.Get() = %q, want %q",
-			got, "jemalloc istari requirefips")
+			got, "jemalloc myfork requirefips")
 	}
 
 	// Env override wins (Makefile passes composed value directly)

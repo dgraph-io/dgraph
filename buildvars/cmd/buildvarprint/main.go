@@ -22,7 +22,8 @@
 // Intended callers:
 //
 //	make build-env              — uses shell format for eval sourcing
-//	istari/scripts/check-buildvars.sh  — uses plain format for diff
+//	validation scripts          — use plain format for diffing against
+//	                              Make-side values
 //
 // Values in shell format are single-quoted with embedded single quotes
 // escaped. Values in make format are emitted raw (newlines and special

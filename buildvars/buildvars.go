@@ -27,8 +27,9 @@
 // Derived Vars automatically pick up the override because they recompute
 // at Get() time.
 //
-// The package has no dependency on the fork's istari/ tree; deleting
-// that tree leaves the upstream behavior intact (upstream defaults).
+// The package has no dependency on any private-fork tree; a vendor or
+// downstream that removes all fork-specific files sees only the
+// upstream defaults declared here.
 package buildvars
 
 import (
@@ -119,8 +120,8 @@ func (v *Var) Get() string {
 
 // Default returns the currently-registered default (ignoring any env
 // override). For derived Vars this triggers the computation. Exposed
-// primarily for diagnostic tooling and for the Istari warning logic
-// that needs to log what the default would be.
+// primarily for diagnostic tooling that needs to log what the default
+// would be (independent of what any env override would produce).
 func (v *Var) Default() string {
 	v.mu.RLock()
 	literal := v.defaultValue
@@ -208,7 +209,7 @@ var (
 	// overlays produced by a compose-rewriting build step. Test harnesses
 	// route docker-compose invocations through this directory when set.
 	// Upstream default: empty (no overlay).
-	ComposeBuildDir = newVar("ISTARI_COMPOSE_BUILD_DIR", "")
+	ComposeBuildDir = newVar("DGRAPH_COMPOSE_BUILD_DIR", "")
 
 	// BuildTags is the space-separated list of Go build tags passed to
 	// `go build` (via -tags). Upstream default composes "jemalloc" (the
@@ -231,16 +232,16 @@ var (
 	})
 
 	// ExtraBuildTags is the list of additional Go build tags a fork
-	// appends to [BuildTags]. Upstream default: empty. Forks (e.g.
-	// dgraph-sec) set this to "istari requirefips" to enable fork-
-	// specific code paths at compile time. The Makefile concatenates
+	// appends to [BuildTags]. Upstream default: empty. Forks that need
+	// compile-time code paths set this to space-separated tag names
+	// (e.g. "myfork requirefips"). The Makefile concatenates
 	// ExtraBuildTags onto BuildTags, so callers typically read BuildTags
 	// to see the final tag set.
 	//
-	// In Makefile form this is PRIVATE_BUILD_TAGS; the name here drops
-	// "PRIVATE" because the value is a public, documented build-config
-	// knob — "private" referred to the fork's private repo, not the
-	// variable's access control.
+	// Historical note: the environment variable is PRIVATE_BUILD_TAGS for
+	// Make compatibility; the Go identifier drops "PRIVATE" because the
+	// value is a public, documented build-config knob — "private" referred
+	// only to fork-local build choices, not to access control.
 	ExtraBuildTags = newVar("PRIVATE_BUILD_TAGS", "")
 
 	// GoRunTags is the build-tag list passed via -tags to `go run`
@@ -249,13 +250,12 @@ var (
 	// buildvarprint binary picks up a fork's init-time default overrides).
 	//
 	// Distinct from [BuildTags]: GoRunTags contains only the tags
-	// needed to trigger fork-specific init()-time registration (typically
-	// just the fork's primary tag like "istari"). BuildTags adds
-	// "jemalloc" and any other compile-time-only tags a long-running
-	// binary needs.
+	// needed to trigger fork-specific init()-time registration
+	// (typically just a fork's primary tag). BuildTags adds "jemalloc"
+	// and any other compile-time-only tags a long-running binary needs.
 	//
-	// Upstream default: empty. Forks override to their registration tag
-	// (e.g. "istari") via istari/gopkg/env's init() or similar.
+	// Upstream default: empty. Forks override via an init()-time
+	// SetDefault call in the package their registration tag guards.
 	GoRunTags = newVar("GO_RUN_TAGS", "")
 
 	// DgraphVersion is the version tag baked into the Docker image and
