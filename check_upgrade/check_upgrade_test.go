@@ -24,7 +24,22 @@ import (
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
+// skipIfFIPSBinary skips the current test when either (a) the test binary
+// itself is FIPS-tagged (x.FIPSEnabled), or (b) the dgraph binary under
+// test is FIPS-restricted (x.FIPSBinary()). Upgrade-path tests pin a
+// specific upstream SHA for the "old" binary; that commit predates any
+// FIPS-enforcing toolchain, so attempting to build it under a FIPS
+// configuration either fails outright or produces a binary that refuses
+// to start. The test is semantically valid upstream and under a
+// non-FIPS fork; we skip only when FIPS enforcement rules it out.
+func skipIfFIPSBinary(t *testing.T) {
+	if x.FIPSEnabled || x.FIPSBinary() {
+		t.Skip("upgrade-path test pins a pre-FIPS upstream SHA; skipping under FIPS build")
+	}
+}
+
 func TestCheckUpgrade(t *testing.T) {
+	skipIfFIPSBinary(t)
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithACL(time.Hour).WithVersion("57aa5c4ac")
 	c, err := dgraphtest.NewLocalCluster(conf)
@@ -96,6 +111,7 @@ func TestCheckUpgrade(t *testing.T) {
 }
 
 func TestQueryDuplicateNodes(t *testing.T) {
+	skipIfFIPSBinary(t)
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).
 		WithACL(time.Hour).WithVersion("57aa5c4ac").WithAclAlg(jwt.GetSigningMethod("HS256"))
 	c, err := dgraphtest.NewLocalCluster(conf)

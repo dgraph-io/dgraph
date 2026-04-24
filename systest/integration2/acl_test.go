@@ -21,6 +21,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// skipIfFIPSBinary skips the current test when either the test binary is
+// FIPS-tagged (x.FIPSEnabled) or the dgraph binary under test is FIPS-
+// restricted (x.FIPSBinary). Upgrade-path tests pin a pre-FIPS upstream
+// version for the "old" binary; that version predates any FIPS-enforcing
+// toolchain, so attempting to build it under a FIPS configuration either
+// fails outright or produces a binary that refuses to start. The test is
+// semantically valid upstream and on non-FIPS forks; we skip only when
+// FIPS enforcement rules it out.
+func skipIfFIPSBinary(t *testing.T) {
+	if x.FIPSEnabled || x.FIPSBinary() {
+		t.Skip("upgrade-path test pins a pre-FIPS upstream version; skipping under FIPS build")
+	}
+}
+
 type S struct {
 	Predicate string   `json:"predicate"`
 	Type      string   `json:"type"`
@@ -34,6 +48,7 @@ type Received struct {
 }
 
 func testDuplicateUserUpgradeStrat(t *testing.T, strat dgraphtest.UpgradeStrategy) {
+	skipIfFIPSBinary(t)
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
 		WithReplicas(1).WithACL(time.Hour).WithVersion("v23.0.1")
 	c, err := dgraphtest.NewLocalCluster(conf)

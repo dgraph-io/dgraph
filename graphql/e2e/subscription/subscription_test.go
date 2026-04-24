@@ -61,7 +61,7 @@ const (
     	text: String! @search(by: [term])
      	owner: String! @search(by: [hash])
    }
-# Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
+# Dgraph.Authorization {"VerificationKey":"secret-long-enough","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 `
 	schCustomDQL = `
 	type Tweets {
@@ -177,7 +177,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -206,7 +206,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	common.RequireNoGQLErrors(t, addResult)
 	time.Sleep(pollInterval)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", subExp)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -294,7 +294,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -323,7 +323,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	common.RequireNoGQLErrors(t, addResult)
 	time.Sleep(pollInterval)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", subExp)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -385,7 +385,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -413,7 +413,7 @@ func TestSubscriptionAuthWithoutExpiry(t *testing.T) {
 	addResult := add.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, addResult)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", -1)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -444,7 +444,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -473,7 +473,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	common.RequireNoGQLErrors(t, addResult)
 	time.Sleep(pollInterval)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", subExp)
 	require.NoError(t, err)
 
 	// first subscription
@@ -498,7 +498,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 		string(resp.Data))
 
 	// 2nd subscription
-	jwtToken, err = metaInfo.GetSignedToken("secret", 2*subExp)
+	jwtToken, err = metaInfo.GetSignedToken("secret-long-enough", 2*subExp)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
@@ -592,7 +592,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -621,7 +621,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	common.RequireNoGQLErrors(t, addResult)
 	time.Sleep(pollInterval)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", subExp)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", subExp)
 	require.NoError(t, err)
 
 	// first subscription
@@ -668,7 +668,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 
 	// 2nd subscription
 	metaInfo.AuthVars["USER"] = "pawan"
-	jwtToken, err = metaInfo.GetSignedToken("secret", 2*subExp)
+	jwtToken, err = metaInfo.GetSignedToken("secret-long-enough", 2*subExp)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
@@ -784,7 +784,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "authorization",
@@ -812,7 +812,7 @@ func TestSubscriptionAuthHeaderCaseInsensitive(t *testing.T) {
 	addResult := add.ExecuteAsPost(t, common.GraphqlURL)
 	common.RequireNoGQLErrors(t, addResult)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", -1)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -847,7 +847,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	common.SafelyUpdateGQLSchemaOnAlpha1(t, schAuth)
 
 	metaInfo := &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -857,7 +857,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 		"ROLE": "USER",
 	}
 
-	jwtToken, err := metaInfo.GetSignedToken("secret", -1)
+	jwtToken, err := metaInfo.GetSignedToken("secret-long-enough", -1)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -885,7 +885,7 @@ func TestSubscriptionAuth_MultiSubscriptionResponses(t *testing.T) {
 	subscriptionClient.Terminate()
 	time.Sleep(pollInterval)
 
-	jwtToken, err = metaInfo.GetSignedToken("secret", 3*time.Second)
+	jwtToken, err = metaInfo.GetSignedToken("secret-long-enough", 3*time.Second)
 	require.NoError(t, err)
 
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)

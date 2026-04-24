@@ -21,8 +21,12 @@ func NewMinioClient() (*minio.Client, error) {
 		return nil, fmt.Errorf("testutil.MinioInstance is not set")
 	}
 
+	// Secret key padded to 14+ bytes so "AWS4"+secret satisfies the
+	// OpenSSL FIPS provider's HMAC key-length minimum when the test
+	// client is run against a FIPS-enforcing alpha/minio pair. Matches
+	// MINIO_SECRET_KEY in dgraph/minio.env, systest/backup.env.
 	mc, err := minio.New(MinioInstance, &minio.Options{
-		Creds:  credentials.NewStaticV4("accesskey", "secretkey", ""),
+		Creds:  credentials.NewStaticV4("accesskey", "secretkey-long-enough", ""),
 		Secure: false,
 	})
 	if err != nil {
