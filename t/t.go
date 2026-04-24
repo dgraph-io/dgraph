@@ -752,6 +752,13 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			}(i)
 		}
 		resumeWg.Wait()
+		// HTTP /health returns OK before alpha has fully re-established its
+		// internal connection pool to zero after a docker-compose `start`.
+		// The first test to run immediately after resume occasionally hits
+		// "No connection exists" in DropAll/Alter because groups().Leader(0)
+		// is still nil. Sleep a few seconds so membership sync can complete.
+		// Cheap compared to a whole cluster restart on failure.
+		time.Sleep(5 * time.Second)
 		defaultPaused = false
 		return nil
 	}
