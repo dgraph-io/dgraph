@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,7 +21,7 @@
 // Forks override literal defaults from their own package init():
 //
 //	func init() {
-//	    buildvars.Bin.SetDefault("dgraph-sec")
+//	    buildvars.Bin.SetDefault("myfork-dgraph")
 //	}
 //
 // Derived Vars automatically pick up the override because they recompute
@@ -182,7 +182,7 @@ var (
 	// (what `go build -o` writes, matching upstream's $(BIN) in
 	// dgraph/Makefile) and at runtime (what compose files and test
 	// harnesses invoke as /gobin/$BIN). Upstream default: "dgraph".
-	// Forks rename (e.g. "dgraph-sec") via env or SetDefault.
+	// Forks rename (e.g. "myfork-dgraph") via env or SetDefault.
 	Bin = newVar("BIN", "dgraph")
 
 	// DockerImage is the Docker image tag (without :tag suffix) used by

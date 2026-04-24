@@ -79,10 +79,11 @@ func (c *LocalCluster) setupBinary() error {
 			return err
 		}
 
-		// 2. Copy the host-native binary (for local bulk/live commands) as "dgraph_host".
-		hostSrc := filepath.Join(gopath, "bin", "dgraph")
+		// 2. Copy the host-native binary (for local bulk/live commands) as
+		// hostBinaryFileName (see load.go).
+		hostSrc := filepath.Join(gopath, "bin", buildvars.Bin.Get())
 
-		hostDst := filepath.Join(c.tempBinDir, "dgraph_host")
+		hostDst := filepath.Join(c.tempBinDir, hostBinaryFileName)
 		if err := copyFile(hostSrc, hostDst); err != nil {
 			return errors.Wrapf(err, "error copying host-native binary from [%v] to [%v]", hostSrc, hostDst)
 		}

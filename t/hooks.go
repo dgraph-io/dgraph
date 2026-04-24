@@ -30,5 +30,11 @@ var EnvForCompose = defaultEnvForCompose
 // fall through to the upstream-compatible "-f <path>" form.
 var ComposeFileArgs = defaultComposeFileArgs
 
-func defaultEnvForCompose() []string                       { return nil }
-func defaultComposeFileArgs(path, baseDir string) []string { return []string{"-f", path} }
+func defaultEnvForCompose() []string { return nil }
+
+// defaultComposeFileArgs ignores baseDir; it only exists in the signature so
+// overrides that need it (for resolving paths relative to the repo root) do
+// not have to thread it through some other channel.
+func defaultComposeFileArgs(path, _ string) []string {
+	return []string{"-f", path}
+}

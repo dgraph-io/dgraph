@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -310,9 +310,9 @@ func TestGoBinDgraphPath_TracksBin(t *testing.T) {
 	os.Unsetenv(string(GoBinDgraphPath.Name))
 
 	// Override via env
-	t.Setenv("BIN", "dgraph-sec")
-	if got := GoBinDgraphPath.Get(); got != "/gobin/dgraph-sec" {
-		t.Errorf("via env: GoBinDgraphPath.Get() = %q, want %q", got, "/gobin/dgraph-sec")
+	t.Setenv("BIN", "myfork-dgraph")
+	if got := GoBinDgraphPath.Get(); got != "/gobin/myfork-dgraph" {
+		t.Errorf("via env: GoBinDgraphPath.Get() = %q, want %q", got, "/gobin/myfork-dgraph")
 	}
 
 	// Override via SetDefault
