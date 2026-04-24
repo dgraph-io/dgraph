@@ -247,7 +247,7 @@ func startCluster(composeFile, prefix string) error {
 	// Retry once after a full `down -v` — the second attempt finds a fresh
 	// volume and succeeds. One retry is enough in practice for this class
 	// of race; anything persistent is a real configuration error.
-	const upAttempts = 2
+	const upAttempts = 3
 	var lastErr error
 	var cmdStderr strings.Builder
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
@@ -266,13 +266,19 @@ func startCluster(composeFile, prefix string) error {
 				fmt.Printf("docker compose stderr:\n%s\n", stderr)
 			}
 			if attempt < upAttempts {
-				// Tear down any partial state so the retry starts from
-				// a clean volume/network baseline.
+				// Tear down any partial state so the retry starts from a
+				// clean volume/network baseline. Run `down -v` to remove
+				// the volume the next attempt will recreate, then sleep
+				// briefly so docker has time to release the mount points
+				// before the next `up` tries to populate a fresh volume.
+				// Without the sleep, the retry can hit the same volume-
+				// init race the first attempt did.
 				downArgs := append([]string{"docker", "compose", "--compatibility"},
 					append(composeArgs, "-p", prefix, "down", "-v")...)
 				downCmd := command(downArgs...)
 				downCmd.Stderr = nil
 				_ = downCmd.Run()
+				time.Sleep(2 * time.Second)
 				fmt.Printf("Retrying cluster bring-up (attempt %d/%d) after `down -v`...\n", attempt+1, upAttempts)
 			}
 		}
