@@ -214,7 +214,7 @@ var (
 	// BuildTags is the space-separated list of Go build tags passed to
 	// `go build` (via -tags). Upstream default composes "jemalloc" (the
 	// well-known libjemalloc tag) with any tags a fork adds via
-	// [ExtraBuildTags]. Both the Makefile and this Var use the same
+	// [PrivateBuildTags]. Both the Makefile and this Var use the same
 	// composition, so `make` and direct `go run` agree on the final
 	// tag set.
 	//
@@ -224,30 +224,30 @@ var (
 	// Makefile handles OS gating for the actual `go build` invocation.
 	BuildTags = newDerivedVar("BUILD_TAGS", func() string {
 		base := "jemalloc"
-		extra := ExtraBuildTags.Get()
+		extra := PrivateBuildTags.Get()
 		if extra == "" {
 			return base
 		}
 		return base + " " + extra
 	})
 
-	// ExtraBuildTags is the list of additional Go build tags a fork
+	// PrivateBuildTags is the list of additional Go build tags a fork
 	// appends to [BuildTags]. Upstream default: empty. Forks that need
 	// compile-time code paths set this to space-separated tag names
 	// (e.g. "myfork requirefips"). The Makefile concatenates
-	// ExtraBuildTags onto BuildTags, so callers typically read BuildTags
+	// PrivateBuildTags onto BuildTags, so callers typically read BuildTags
 	// to see the final tag set.
 	//
-	// Historical note: the environment variable is PRIVATE_BUILD_TAGS for
-	// Make compatibility; the Go identifier drops "PRIVATE" because the
-	// value is a public, documented build-config knob — "private" referred
-	// only to fork-local build choices, not to access control.
-	ExtraBuildTags = newVar("PRIVATE_BUILD_TAGS", "")
+	// "Private" here refers to fork-local build choices (tags that enable
+	// private/downstream code paths), not access control. The name is
+	// retained for compatibility with the established PRIVATE_BUILD_TAGS
+	// environment variable that Makefile and CI have long used.
+	PrivateBuildTags = newVar("PRIVATE_BUILD_TAGS", "")
 
 	// GoRunTags is the build-tag list passed via -tags to `go run`
 	// invocations from Makefile helper recipes (e.g. `build-env` runs
-	// `go run -tags=$(GO_RUN_TAGS) ./buildvars/cmd/buildvarprint` so the
-	// buildvarprint binary picks up a fork's init-time default overrides).
+	// `go run -tags=$(GO_RUN_TAGS) ./buildvars/cmd/buildvars` so the
+	// buildvars CLI picks up a fork's init-time default overrides).
 	//
 	// Distinct from [BuildTags]: GoRunTags contains only the tags
 	// needed to trigger fork-specific init()-time registration
@@ -349,7 +349,7 @@ var All = []*Var{
 	RuntimeTag,
 	ComposeBuildDir,
 	BuildTags,
-	ExtraBuildTags,
+	PrivateBuildTags,
 	GoRunTags,
 	DgraphVersion,
 	Build,

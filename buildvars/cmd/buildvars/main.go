@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Command buildvarprint emits the [buildvars] registry as lines of text
+// Command buildvars emits the [buildvars] registry as lines of text
 // in a selectable format for consumption by shell eval, GNU Make eval,
 // or direct parsing by a validation script.
 //
@@ -15,9 +15,9 @@
 //
 // Usage:
 //
-//	eval "$(go run ./buildvars/cmd/buildvarprint)"             # shell
-//	go run ./buildvars/cmd/buildvarprint -format=plain         # plain
-//	$(eval $(shell go run ./buildvars/cmd/buildvarprint -format=make))
+//	eval "$(go run ./buildvars/cmd/buildvars)"             # shell
+//	go run ./buildvars/cmd/buildvars -format=plain         # plain
+//	$(eval $(shell go run ./buildvars/cmd/buildvars -format=make))
 //
 // Intended callers:
 //
@@ -57,7 +57,7 @@ func main() {
 			fmt.Fprintf(os.Stdout, "export %s=%s\n", v.Name, shellQuote(v.Get()))
 		}
 	case "make":
-		// `:=` rather than `?=` so buildvarprint's value overrides any
+		// `:=` rather than `?=` so this command's value overrides any
 		// ambient Make default. Callers that want fallback-only shape
 		// can post-process to replace `:=` with `?=`.
 		for _, v := range buildvars.All {
@@ -68,7 +68,7 @@ func main() {
 			fmt.Fprintf(os.Stdout, "%s=%s\n", v.Name, v.Get())
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "buildvarprint: unknown format %q (want shell|make|plain)\n", *format)
+		fmt.Fprintf(os.Stderr, "buildvars: unknown format %q (want shell|make|plain)\n", *format)
 		os.Exit(2)
 	}
 }
