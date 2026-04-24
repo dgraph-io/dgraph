@@ -53,10 +53,10 @@ func TestAdminMutationMiddlewareConfig(t *testing.T) {
 
 	tests := map[string]securityRequirements{
 		// Superadmin (Guardian-of-Galaxy) auth — highest privilege operations.
-		"backup":     {desc: "database backups", ipWhitelist: true, superAdminAuth: true},
-		"config":     {desc: "cluster config changes", ipWhitelist: true, superAdminAuth: true},
-		"draining":   {desc: "draining mode", ipWhitelist: true, superAdminAuth: true},
-		"restore":    {desc: "backup restore", ipWhitelist: true, superAdminAuth: true},
+		"backup":   {desc: "database backups", ipWhitelist: true, superAdminAuth: true},
+		"config":   {desc: "cluster config changes", ipWhitelist: true, superAdminAuth: true},
+		"draining": {desc: "draining mode", ipWhitelist: true, superAdminAuth: true},
+		"restore":  {desc: "backup restore", ipWhitelist: true, superAdminAuth: true},
 		"restoreTenant": { // CVE: previously absent from this map (CVSS 10.0)
 			desc:           "cross-namespace backup restore — accepts attacker-controlled URLs",
 			ipWhitelist:    true,
