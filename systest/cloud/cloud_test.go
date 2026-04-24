@@ -160,10 +160,12 @@ func TestEnvironmentAccess(t *testing.T) {
 	require.Contains(t, resp.Errors.Error(), "task failed")
 
 	// Export with the minio creds should work for non-galaxy.
-	resp = testutil.Export(t, nsToken, minioDest, "accesskey", "secretkey")
+	// Secret key is padded to 14+ bytes so "AWS4"+secret satisfies the
+	// OpenSSL FIPS provider's HMAC key-length minimum (see dgraph/minio.env).
+	resp = testutil.Export(t, nsToken, minioDest, "accesskey", "secretkey-long-enough")
 	require.Zero(t, len(resp.Errors))
 
 	// Galaxy guardian should provide the credentials as well.
-	resp = testutil.Export(t, galaxyToken, minioDest, "accesskey", "secretkey")
+	resp = testutil.Export(t, galaxyToken, minioDest, "accesskey", "secretkey-long-enough")
 	require.Zero(t, len(resp.Errors))
 }

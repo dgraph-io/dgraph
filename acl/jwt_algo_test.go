@@ -22,8 +22,16 @@ import (
 )
 
 func TestACLJwtAlgo(t *testing.T) {
+	// The binary-under-test may be FIPS-enforcing even when the test binary
+	// itself is not (the default for integration2 tests). Skip EdDSA either
+	// when this test binary is FIPS-tagged (x.FIPSEnabled) or when the
+	// environment signals the dgraph binary is a FIPS build (x.FIPSBinary).
+	fipsBinary := x.FIPSEnabled || x.FIPSBinary()
 	for _, algo := range jwt.GetAlgorithms() {
 		if algo == "none" || algo == "" {
+			continue
+		}
+		if algo == "EdDSA" && fipsBinary {
 			continue
 		}
 
