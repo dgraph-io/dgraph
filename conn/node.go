@@ -555,7 +555,11 @@ func (n *Node) DeletePeer(pid uint64) {
 
 var errInternalRetry = errors.New("Retry proposal again")
 
-func (n *Node) proposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
+// ProposeConfChange proposes a Raft configuration change (add, remove, or
+// update a node) and blocks until it is committed or the context expires.
+// It is used by both the conn package internally and by the zero package
+// (for address reconciliation via ConfChangeUpdateNode).
+func (n *Node) ProposeConfChange(ctx context.Context, conf raftpb.ConfChange) error {
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
@@ -599,7 +603,7 @@ func (n *Node) addToCluster(ctx context.Context, rc *pb.RaftContext) error {
 	for err == errInternalRetry {
 		glog.Infof("Trying to add %#x to cluster. Addr: %v\n", pid, rc.Addr)
 		glog.Infof("Current confstate at %#x: %+v\n", n.Id, n.ConfState())
-		err = n.proposeConfChange(ctx, cc)
+		err = n.ProposeConfChange(ctx, cc)
 	}
 	return err
 }
@@ -618,7 +622,7 @@ func (n *Node) ProposePeerRemoval(ctx context.Context, id uint64) error {
 	}
 	err := errInternalRetry
 	for err == errInternalRetry {
-		err = n.proposeConfChange(ctx, cc)
+		err = n.ProposeConfChange(ctx, cc)
 	}
 	return err
 }

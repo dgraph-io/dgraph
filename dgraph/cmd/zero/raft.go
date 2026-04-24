@@ -500,6 +500,28 @@ func (n *node) applyConfChange(e raftpb.Entry) {
 		n.DeletePeer(cc.NodeID)
 		n.server.removeZero(cc.NodeID)
 
+	} else if cc.Type == raftpb.ConfChangeUpdateNode && len(cc.Context) > 0 {
+		// ConfChangeUpdateNode is a Raft-provided mechanism for updating node
+		// metadata (e.g. addresses) without changing cluster membership. It is
+		// a no-op inside the Raft library; the application is responsible for
+		// interpreting the Context bytes. We use it to fix stale Zero addresses
+		// that were baked into the WAL at initial bootstrap.
+		var rc pb.RaftContext
+		x.Check(proto.Unmarshal(cc.Context, &rc))
+
+		// Drop the stale pool before connecting to the new address so that
+		// repeated dial errors to the old address are eliminated immediately.
+		if oldMember, ok := n.server.membershipState().GetZeros()[rc.Id]; ok {
+			if oldMember.GetAddr() != rc.Addr {
+				conn.GetPools().Remove(oldMember.GetAddr())
+			}
+		}
+		go n.Connect(rc.Id, rc.Addr)
+
+		m := &pb.Member{Id: rc.Id, Addr: rc.Addr, GroupId: 0, Learner: rc.IsLearner}
+		n.server.storeZero(m)
+		glog.Infof("Applied ConfChangeUpdateNode for Zero %#x: addr=%q", rc.Id, rc.Addr)
+
 	} else if len(cc.Context) > 0 {
 		var rc pb.RaftContext
 		x.Check(proto.Unmarshal(cc.Context, &rc))
@@ -696,10 +718,87 @@ func (n *node) updateZeroMembershipPeriodically(closer *z.Closer) {
 		select {
 		case <-ticker:
 			n.server.updateZeroLeader()
+			n.reconcileZeroAddresses()
 		case <-closer.HasBeenClosed():
 			return
 		}
 	}
+}
+
+// reconcileZeroAddresses detects mismatches between the current --my address
+// (or transport-layer peer addresses) and what is stored in MembershipState,
+// then proposes a ConfChangeUpdateNode through Raft to correct them. This
+// ensures that stale addresses baked into the WAL at initial bootstrap are
+// replaced with the current addresses after a restart. Only the leader can
+// propose, so this function is a no-op on followers.
+func (n *node) reconcileZeroAddresses() {
+	if !n.AmLeader() {
+		return
+	}
+
+	state := n.server.membershipState()
+	if state == nil {
+		return
+	}
+
+	for id, zero := range state.GetZeros() {
+		var correctAddr string
+
+		if id == n.Id {
+			correctAddr = n.RaftContext.Addr
+		} else if peerAddr, ok := n.Peer(id); ok {
+			correctAddr = peerAddr
+		} else {
+			continue
+		}
+
+		if correctAddr == zero.GetAddr() {
+			continue
+		}
+
+		// Validate: ensure no other Zero already claims this address.
+		duplicate := false
+		for otherId, otherZero := range state.GetZeros() {
+			if otherId != id && otherZero.GetAddr() == correctAddr {
+				glog.Warningf("Skipping address reconciliation for Zero %#x: "+
+					"address %q already used by Zero %#x", id, correctAddr, otherId)
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
+
+		glog.Infof("Zero %#x address mismatch: MembershipState has %q, expected %q. "+
+			"Proposing ConfChangeUpdateNode.", id, zero.GetAddr(), correctAddr)
+
+		rc := &pb.RaftContext{
+			Id:    id,
+			Addr:  correctAddr,
+			Group: 0,
+		}
+		data, err := proto.Marshal(rc)
+		if err != nil {
+			glog.Errorf("Error marshalling RaftContext for address update: %v", err)
+			continue
+		}
+
+		cc := raftpb.ConfChange{
+			Type:    raftpb.ConfChangeUpdateNode,
+			NodeID:  id,
+			Context: data,
+		}
+		if err := n.ProposeConfChange(n.ctx, cc); err != nil {
+			glog.Errorf("Failed to propose ConfChangeUpdateNode for Zero %#x: %v", id, err)
+		}
+		// Propose one update at a time to respect Raft's single pending
+		// ConfChange constraint. The next mismatch will be handled in the
+		// following periodic cycle.
+		return
+	}
+	// V(2): emitted on every 10s tick, too noisy for production at Info level.
+	glog.V(2).Infof("Zero address reconciliation complete: all addresses up to date")
 }
 
 func (n *node) checkQuorum(closer *z.Closer) {
@@ -923,6 +1022,10 @@ func (n *node) Run() {
 				if rd.RaftState == raft.StateLeader && !leader {
 					glog.Infoln("I've become the leader, updating leases.")
 					n.server.updateLeases()
+					// Eagerly reconcile on leader election so stale WAL
+					// addresses are corrected without waiting for the
+					// periodic 10s tick.
+					go n.reconcileZeroAddresses()
 				}
 				leader = rd.RaftState == raft.StateLeader
 				// group id hardcoded as 0

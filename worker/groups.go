@@ -323,9 +323,15 @@ func (g *groupi) applyState(myId uint64, state *pb.MembershipState) {
 			atomic.StoreUint64(&g.membershipChecksum, group.Checksum)
 		}
 	}
-	for _, member := range g.state.Zeros {
+	for id, member := range g.state.Zeros {
 		if x.WorkerConfig.MyAddr != member.Addr {
 			conn.GetPools().Connect(member.Addr, x.WorkerConfig.TLSClientConfig)
+		}
+		// Remove stale pool if this Zero changed address.
+		if oldState != nil {
+			if old, ok := oldState.Zeros[id]; ok && old.Addr != member.Addr {
+				conn.GetPools().Remove(old.Addr)
+			}
 		}
 	}
 	if !foundSelf {

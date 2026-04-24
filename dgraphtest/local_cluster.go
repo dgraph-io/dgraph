@@ -603,6 +603,75 @@ func (c *LocalCluster) StopZero(id int) error {
 	return c.stopContainer(c.zeros[id])
 }
 
+// GetZeroContainerName returns the Docker container name for the specified Zero,
+// which also serves as a DNS alias on the cluster network.
+func (c *LocalCluster) GetZeroContainerName(id int) (string, error) {
+	if id >= c.conf.numZeros {
+		return "", fmt.Errorf("invalid id of zero: %v", id)
+	}
+	return c.zeros[id].containerName, nil
+}
+
+// SetZeroMyAddr overrides the --my flag for the specified Zero node. The next
+// time the container is recreated (via RecreateZero), this address will be
+// used instead of the default container alias.
+func (c *LocalCluster) SetZeroMyAddr(id int, addr string) error {
+	if id >= c.conf.numZeros {
+		return fmt.Errorf("invalid id of zero: %v", id)
+	}
+	c.zeros[id].myAddrOverride = addr
+	return nil
+}
+
+// RecreateZero destroys the Zero container and creates a new one with the
+// current command-line flags (e.g. a different --my address). The Zero's data
+// directory is preserved across the recreation by extracting it from the old
+// (stopped) container and injecting it into the new one. This simulates a
+// process restart with persistent storage — the exact scenario where stale WAL
+// addresses surface.
+func (c *LocalCluster) RecreateZero(id int) error {
+	if id >= c.conf.numZeros {
+		return fmt.Errorf("invalid id of zero: %v", id)
+	}
+	z := c.zeros[id]
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	// Extract the data directory from the stopped container so the WAL survives.
+	dataReader, _, err := c.dcli.CopyFromContainer(ctx, z.cid(), zeroWorkingDir)
+	if err != nil {
+		return errors.Wrapf(err, "error copying data from zero container [%v]", z.cname())
+	}
+	defer dataReader.Close()
+
+	// Read the tar into memory (Zero WAL is small).
+	dataTar, err := io.ReadAll(dataReader)
+	if err != nil {
+		return errors.Wrap(err, "error reading zero data tar")
+	}
+
+	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
+	if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil {
+		return errors.Wrapf(err, "error removing zero container [%v]", z.cname())
+	}
+
+	cid, err := c.createContainer(z)
+	if err != nil {
+		return errors.Wrapf(err, "error recreating zero container [%v]", z.cname())
+	}
+	z.containerID = cid
+
+	// Inject the data directory into the new container. CopyToContainer expects
+	// a tar archive rooted at the parent of the target path.
+	if err := c.dcli.CopyToContainer(ctx, cid, "/data", bytes.NewReader(dataTar),
+		container.CopyToContainerOptions{}); err != nil {
+		return errors.Wrapf(err, "error restoring data to zero container [%v]", z.cname())
+	}
+
+	return nil
+}
+
 func (c *LocalCluster) StopAlpha(id int) error {
 	if id >= c.conf.numAlphas {
 		return fmt.Errorf("invalid id of alpha: %v", id)

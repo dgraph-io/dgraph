@@ -124,6 +124,12 @@ func (p *Pools) RemoveInvalid(state *pb.MembershipState) {
 	}
 }
 
+// Remove disconnects and removes the pool for addr. It is a no-op if addr is
+// not in the pool. Used to clean up stale connections after an address change.
+func (p *Pools) Remove(addr string) {
+	p.remove(addr)
+}
+
 func (p *Pools) remove(addr string) {
 	p.Lock()
 	defer p.Unlock()

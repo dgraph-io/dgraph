@@ -515,6 +515,17 @@ func (s *Server) Connect(ctx context.Context,
 		return nil, err
 	}
 
+	// Ensure this Zero's own address in MembershipState reflects the current
+	// --my flag, even before ConfChangeUpdateNode has been committed through
+	// Raft. This prevents Alphas from receiving a stale address during the
+	// brief window between restart and reconciliation.
+	myAddr := s.Node.RaftContext.Addr
+	if myId := s.Node.Id; myAddr != "" {
+		if z, ok := ms.GetZeros()[myId]; ok && z.GetAddr() != myAddr {
+			z.Addr = myAddr
+		}
+	}
+
 	if m.ClusterInfoOnly {
 		// This request only wants to access the membership state, and nothing else. Most likely
 		// from our clients.
