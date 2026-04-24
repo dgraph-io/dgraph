@@ -34,6 +34,9 @@ import (
 // Docker containers). On non-Linux (macOS) it is "dgraph_host", a separate
 // native binary copied by setupBinary().
 func (c *LocalCluster) HostDgraphBinaryPath() string {
+	if name := HostBinaryName(); name != "" {
+		return filepath.Join(c.tempBinDir, name)
+	}
 	if runtime.GOOS == "linux" {
 		return filepath.Join(c.tempBinDir, "dgraph")
 	}

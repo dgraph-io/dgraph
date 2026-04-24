@@ -117,10 +117,16 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating tempBinDir")
 	}
+	if err := WidenTempDirPerms(c.tempBinDir); err != nil {
+		return err
+	}
 	log.Printf("[INFO] tempBinDir: %v", c.tempBinDir)
 	c.tempSecretsDir, err = os.MkdirTemp("", c.conf.prefix)
 	if err != nil {
 		return errors.Wrap(err, "error while creating tempSecretsDir")
+	}
+	if err := WidenTempDirPerms(c.tempSecretsDir); err != nil {
+		return err
 	}
 	log.Printf("[INFO] tempSecretsDir: %v", c.tempSecretsDir)
 
@@ -305,6 +311,7 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	}
 
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
+	ApplyContainerUser(cconf)
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
@@ -1242,11 +1249,17 @@ func (c *LocalCluster) setupSecrets() error {
 		if err := os.WriteFile(c.encKeyPath, encKey, 0600); err != nil {
 			return err
 		}
+		if err := WidenSecretFilePerms(c.encKeyPath); err != nil {
+			return err
+		}
 	}
 
 	if c.conf.acl {
 		aclSecretPath := filepath.Join(c.tempSecretsDir, aclKeyFile)
 		if err := generateACLSecret(c.conf.aclAlg, aclSecretPath); err != nil {
+			return err
+		}
+		if err := WidenSecretFilePerms(aclSecretPath); err != nil {
 			return err
 		}
 	}
@@ -1305,6 +1318,12 @@ func runOpennssl(args ...string) error {
 }
 
 func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
+	if tokenizers, handled, err := GeneratePlugins(raceEnabled, c.tempBinDir, baseRepoDir); handled {
+		if err == nil {
+			c.customTokenizers = tokenizers
+		}
+		return err
+	}
 	_, curr, _, ok := runtime.Caller(0)
 	if !ok {
 		return errors.New("error while getting current file")

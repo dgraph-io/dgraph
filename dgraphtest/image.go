@@ -60,6 +60,10 @@ func (c *LocalCluster) setupBinary() error {
 			return errors.New("GOPATH is not set")
 		}
 
+		if handled, err := SetupLinuxBinaries(c.tempBinDir, c.conf.version); handled {
+			return err
+		}
+
 		if runtime.GOOS == "linux" {
 			// On Linux $GOPATH/bin/dgraph is both the native and Docker binary.
 			return copyBinary(filepath.Join(gopath, "bin"), c.tempBinDir, c.conf.version)
@@ -79,7 +83,7 @@ func (c *LocalCluster) setupBinary() error {
 		hostSrc := filepath.Join(gopath, "bin", "dgraph")
 
 		hostDst := filepath.Join(c.tempBinDir, "dgraph_host")
-		if err := copy(hostSrc, hostDst); err != nil {
+		if err := copyFile(hostSrc, hostDst); err != nil {
 			return errors.Wrapf(err, "error copying host-native binary from [%v] to [%v]", hostSrc, hostDst)
 		}
 		return nil
@@ -216,7 +220,7 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return errors.Wrapf(err, "error while building dgraph binary\noutput:%v", string(out))
 	}
-	if err := copy(filepath.Join(dir, "dgraph", "dgraph"),
+	if err := copyFile(filepath.Join(dir, "dgraph", "dgraph"),
 		filepath.Join(binaryDir, fmt.Sprintf(binaryNameFmt, version))); err != nil {
 		return errors.Wrap(err, "error while copying binary")
 	}
@@ -230,13 +234,13 @@ func copyBinary(fromDir, toDir, version string) error {
 	}
 	fromPath := filepath.Join(fromDir, binaryName)
 	toPath := filepath.Join(toDir, buildvars.Bin.Get())
-	if err := copy(fromPath, toPath); err != nil {
+	if err := copyFile(fromPath, toPath); err != nil {
 		return errors.Wrapf(err, "error while copying binary into tempBinDir [%v], from [%v]", toPath, fromPath)
 	}
 	return nil
 }
 
-func copy(src, dst string) error {
+func copyFile(src, dst string) error {
 	// Validate inputs
 	if src == "" || dst == "" {
 		return errors.New("source or destination paths cannot be empty")
