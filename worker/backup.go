@@ -38,55 +38,70 @@ import (
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
 type predicateSet map[string]struct{}
 
-// Manifest records backup details, these are values used during restore.
-// Since is the timestamp from which the next incremental backup should start (it's set
-// to the readTs of the current backup).
-// Groups are the IDs of the groups involved.
-type Manifest struct {
-	// Type is the type of backup, either full or incremental.
+// ManifestBase holds per-backup metadata that is common to both the full Manifest
+// (used for restore) and the lightweight ManifestSummary (used for listing).
+// JSON keys are intentionally stable — they must not change because they are stored on disk.
+type ManifestBase struct {
+	// Type is the type of backup: "full" or "incremental".
 	Type string `json:"type"`
-	// SinceTsDeprecated is kept for backward compatibility. Use readTs instead of sinceTs.
+	// SinceTsDeprecated is the read timestamp of the previous backup and the start point
+	// for the next incremental backup. The field name is kept for Go API backward compatibility;
+	// the JSON key "since" is kept for on-disk backward compatibility with older Dgraph versions.
+	// New code should use ReadTs instead.
 	SinceTsDeprecated uint64 `json:"since"`
-	// ReadTs is the timestamp at which this backup was taken. This would be
-	// the since timestamp for the next incremental backup.
+	// ReadTs is the timestamp at which this backup was taken.
 	ReadTs uint64 `json:"read_ts"`
-	// Groups is the map of valid groups to predicates at the time the backup was created.
-	Groups map[uint32][]string `json:"groups"`
-	// BackupId is a unique ID assigned to all the backups in the same series
-	// (from the first full backup to the last incremental backup).
+	// BackupId is a unique ID assigned to all backups in the same series
+	// (from the first full backup through the last incremental backup).
 	BackupId string `json:"backup_id"`
-	// BackupNum is a monotonically increasing number assigned to each backup in
-	// a series. The full backup as BackupNum equal to one and each incremental
-	// backup gets assigned the next available number. Used to verify the integrity
-	// of the data during a restore.
+	// BackupNum is the 1-based position of this backup within its series; 1 = full backup.
 	BackupNum uint64 `json:"backup_num"`
-	// Version specifies the Dgraph version, the backup was taken on. For the backup taken on older
-	// versions (<= 20.11), the predicates in Group map do not have namespace. Version will be zero
-	// for older versions.
+	// Version specifies the Dgraph predicate-encoding version in use at backup time.
+	// 0 means pre-21.03 (no namespace prefix). The restore path reads this to trigger upgrades.
 	Version int `json:"version"`
-	// Path is the name of the backup directory to which this manifest belongs to.
+	// Path is the name of the backup directory that holds this backup's data files.
 	Path string `json:"path"`
-	// Encrypted indicates whether this backup was encrypted or not.
+	// Encrypted indicates whether this backup was encrypted.
 	Encrypted bool `json:"encrypted"`
-	// DropOperations lists the various DROP operations that took place since the last backup.
-	// These are used during restore to redo those operations before applying the backup.
-	DropOperations []*pb.DropOperation `json:"drop_operations"`
-	// Compression keeps track of the compression that was used for the data.
+	// Compression records the codec used to compress backup data files.
 	Compression string `json:"compression"`
 }
 
-// ValidReadTs function returns the valid read timestamp. The backup can have
-// the readTs=0 if the backup was done on an older version of dgraph. The
-// SinceTsDecprecated is kept for backward compatibility.
-func (m *Manifest) ValidReadTs() uint64 {
+// ValidReadTs returns the effective read timestamp for this backup entry.
+// Pre-21.03 backups stored the value in Since instead of ReadTs; this method
+// handles both cases transparently.
+func (m *ManifestBase) ValidReadTs() uint64 {
 	if m.ReadTs == 0 {
 		return m.SinceTsDeprecated
 	}
 	return m.ReadTs
 }
 
+// Manifest is the full per-backup record used during restore. It embeds ManifestBase
+// and adds the two heavy restore-only fields: Groups and DropOperations.
+type Manifest struct {
+	ManifestBase
+	// Groups maps group IDs to their predicate lists at backup time.
+	// Required by restore but omitted from the summary manifest to keep listing fast.
+	Groups map[uint32][]string `json:"groups"`
+	// DropOperations records DROP operations that occurred since the previous backup.
+	// Required by restore but omitted from the summary manifest.
+	DropOperations []*pb.DropOperation `json:"drop_operations"`
+}
+
 type MasterManifest struct {
 	Manifests []*Manifest
+}
+
+// ManifestSummary is a lightweight listing view of ManifestBase. It embeds
+// ManifestBase but deliberately excludes Groups and DropOperations, keeping
+// manifest_summary.json small even on clusters with large vector schemas.
+type ManifestSummary struct {
+	ManifestBase
+}
+
+type MasterManifestSummary struct {
+	Manifests []*ManifestSummary
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -354,12 +369,14 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 
 	dir := fmt.Sprintf(backupPathFmt, req.UnixTs)
 	m := Manifest{
-		ReadTs:         req.ReadTs,
+		ManifestBase: ManifestBase{
+			ReadTs:      req.ReadTs,
+			Version:     x.ManifestVersion,
+			Path:        dir,
+			Compression: "snappy",
+		},
 		Groups:         predMap,
-		Version:        x.ManifestVersion,
 		DropOperations: dropOperations,
-		Path:           dir,
-		Compression:    "snappy",
 	}
 	if req.SinceTs == 0 {
 		m.Type = "full"
@@ -384,17 +401,15 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	return nil
 }
 
-func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials) (
-	[]*Manifest, error) {
+func ProcessListBackups(ctx context.Context, location string, creds *x.MinioCredentials,
+	fullManifest bool) ([]*Manifest, error) {
 
-	manifests, err := ListBackupManifests(location, creds)
+	manifests, err := ListBackupManifests(location, creds, fullManifest)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot read manifests at location %s", location)
 	}
 
-	res := make([]*Manifest, 0, len(manifests))
-	res = append(res, manifests...)
-	return res, nil
+	return manifests, nil
 }
 
 // BackupProcessor handles the different stages of the backup process.
@@ -687,6 +702,10 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, m *Manifest) erro
 
 	if err := CreateManifest(handler, uri, manifest); err != nil {
 		return errors.Wrap(err, "complete backup failed")
+	}
+	// Best-effort: write summary manifest. Failure does not abort the backup.
+	if err := CreateManifestSummary(handler, manifest); err != nil {
+		glog.Warningf("Failed to write backup summary manifest (non-fatal): %v", err)
 	}
 	glog.Infof("Backup completed OK.")
 	return nil

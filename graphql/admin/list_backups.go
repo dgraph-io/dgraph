@@ -8,6 +8,8 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -25,6 +27,10 @@ type lsBackupInput struct {
 	SessionToken pb.Sensitive
 	Anonymous    bool
 	ForceFull    bool
+	SinceDate    string `json:"sinceDate"`
+	UntilDate    string `json:"untilDate"`
+	LastNDays    int    `json:"lastNDays"`
+	FullManifest bool   `json:"fullManifest"`
 }
 
 type group struct {
@@ -43,8 +49,79 @@ type manifest struct {
 	Encrypted bool     `json:"encrypted,omitempty"`
 }
 
+// parseGraphQLDate parses a YYYY-MM-DD or RFC3339 date string.
+func parseGraphQLDate(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, errors.Errorf("date string must not be empty")
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t.UTC(), nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	return t.UTC(), err
+}
+
+// buildBackupDateFilter constructs a BackupDateFilter from GraphQL input fields.
+func buildBackupDateFilter(input *lsBackupInput) (worker.BackupDateFilter, error) {
+	filter := worker.BackupDateFilter{}
+	if input.LastNDays < 0 {
+		return filter, errors.Errorf("lastNDays must be a positive integer, got %d", input.LastNDays)
+	}
+	if input.LastNDays > 0 && input.SinceDate != "" {
+		return filter, errors.Errorf("lastNDays and sinceDate are mutually exclusive")
+	}
+	if input.LastNDays > 0 {
+		since := time.Now().UTC().AddDate(0, 0, -input.LastNDays).Truncate(24 * time.Hour)
+		filter.Since = &since
+	}
+	if input.SinceDate != "" {
+		t, err := parseGraphQLDate(input.SinceDate)
+		if err != nil {
+			return filter, errors.Errorf("invalid sinceDate %q: %v", input.SinceDate, err)
+		}
+		filter.Since = &t
+	}
+	if input.UntilDate != "" {
+		t, err := parseGraphQLDate(input.UntilDate)
+		if err != nil {
+			return filter, errors.Errorf("invalid untilDate %q: %v", input.UntilDate, err)
+		}
+		var end time.Time
+		if strings.Contains(input.UntilDate, "T") {
+			// RFC3339 datetime: user gave an exact timestamp, respect it.
+			end = t
+		} else {
+			// Plain date (YYYY-MM-DD): extend to end of that calendar day.
+			end = t.Add(24*time.Hour - time.Millisecond)
+		}
+		filter.Until = &end
+	}
+	return filter, nil
+}
+
+// needsFullManifest returns true when the full manifest.json must be read.
+// It is true when the caller explicitly sets fullManifest OR when the query
+// selection set includes "groups", so existing queries that request groups
+// continue to receive populated data without any input change.
+func needsFullManifest(fullManifestFlag bool, selectionSet []schema.Field) bool {
+	if fullManifestFlag {
+		return true
+	}
+	for _, f := range selectionSet {
+		if f.Name() == "groups" {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 	input, err := getLsBackupInput(q)
+	if err != nil {
+		return resolve.EmptyResult(q, err)
+	}
+
+	filter, err := buildBackupDateFilter(input)
 	if err != nil {
 		return resolve.EmptyResult(q, err)
 	}
@@ -55,10 +132,13 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		SessionToken: input.SessionToken,
 		Anonymous:    input.Anonymous,
 	}
-	manifests, err := worker.ProcessListBackups(ctx, input.Location, creds)
+	manifests, err := worker.ProcessListBackups(ctx, input.Location, creds,
+		needsFullManifest(input.FullManifest, q.SelectionSet()))
 	if err != nil {
 		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
+	manifests = worker.FilterManifestsByDate(manifests, filter)
+
 	convertedManifests := convertManifests(manifests)
 
 	results := make([]map[string]interface{}, 0)

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -293,8 +294,147 @@ func CreateManifest(h UriHandler, uri *url.URL, manifest *MasterManifest) error 
 		"fix the backup manifest.", tmpManifest, backupManifest)
 }
 
+// BackupDateFilter holds optional date-range criteria for listing backups.
+type BackupDateFilter struct {
+	Since *time.Time
+	Until *time.Time
+}
+
+// parseBackupTime extracts the UTC timestamp from a backup directory path like
+// "dgraph.20260101.120000.000".
+func parseBackupTime(path string) (time.Time, error) {
+	const prefix = "dgraph."
+	if !strings.HasPrefix(path, prefix) {
+		return time.Time{}, fmt.Errorf("unexpected backup path format: %s", path)
+	}
+	t, err := time.Parse("20060102.150405.000", strings.TrimPrefix(path, prefix))
+	return t.UTC(), err
+}
+
+// FilterManifestsByDate returns only the manifests whose path timestamps fall
+// within the inclusive [filter.Since, filter.Until] window. Manifests whose
+// path cannot be parsed are always included (fail-open for old path formats).
+func FilterManifestsByDate(manifests []*Manifest, filter BackupDateFilter) []*Manifest {
+	if filter.Since == nil && filter.Until == nil {
+		return manifests
+	}
+	var out []*Manifest
+	for _, m := range manifests {
+		t, err := parseBackupTime(m.Path)
+		if err != nil {
+			glog.Warningf("FilterManifestsByDate: cannot parse backup path %q, including it: %v", m.Path, err)
+			out = append(out, m)
+			continue
+		}
+		if filter.Since != nil && t.Before(*filter.Since) {
+			continue
+		}
+		if filter.Until != nil && t.After(*filter.Until) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// BackupListStats holds summary statistics derived from a manifest list.
+type BackupListStats struct {
+	Total             int
+	LastFullBackup    *time.Time
+	LastIncrBackup    *time.Time
+	OldestBackup      *time.Time
+	NewestBackup      *time.Time
+	BackupSeriesCount int
+}
+
+// ComputeBackupListStats derives statistics from a list of manifests.
+func ComputeBackupListStats(manifests []*Manifest) BackupListStats {
+	stats := BackupListStats{Total: len(manifests)}
+	ids := make(map[string]struct{})
+	for _, m := range manifests {
+		if m.BackupId != "" {
+			ids[m.BackupId] = struct{}{}
+		}
+		t, err := parseBackupTime(m.Path)
+		if err != nil {
+			continue
+		}
+		tc := t
+		if stats.OldestBackup == nil || t.Before(*stats.OldestBackup) {
+			stats.OldestBackup = &tc
+		}
+		if stats.NewestBackup == nil || t.After(*stats.NewestBackup) {
+			stats.NewestBackup = &tc
+		}
+		if m.Type == "full" && (stats.LastFullBackup == nil || t.After(*stats.LastFullBackup)) {
+			stats.LastFullBackup = &tc
+		}
+		if m.Type == "incremental" && (stats.LastIncrBackup == nil || t.After(*stats.LastIncrBackup)) {
+			stats.LastIncrBackup = &tc
+		}
+	}
+	stats.BackupSeriesCount = len(ids)
+	return stats
+}
+
+// readMasterManifestSummary reads the lightweight manifest_summary.json file.
+func readMasterManifestSummary(h UriHandler) (*MasterManifestSummary, error) {
+	var ms MasterManifestSummary
+	b, err := h.Read(backupManifestSummary)
+	if err != nil {
+		return nil, errors.Wrap(err, "readMasterManifestSummary failed to read")
+	}
+	if err := json.Unmarshal(b, &ms); err != nil {
+		return nil, errors.Wrap(err, "readMasterManifestSummary failed to unmarshal")
+	}
+	return &ms, nil
+}
+
+// summariesToManifests converts lightweight summaries back to full Manifest structs
+// (with nil Groups/DropOperations) so the listing path is type-compatible.
+func summariesToManifests(summaries []*ManifestSummary) []*Manifest {
+	out := make([]*Manifest, len(summaries))
+	for i, s := range summaries {
+		out[i] = &Manifest{ManifestBase: s.ManifestBase}
+	}
+	return out
+}
+
+// CreateManifestSummary writes a lightweight manifest_summary.json that omits
+// Groups and DropOperations. The full manifest.json is left untouched.
+func CreateManifestSummary(h UriHandler, master *MasterManifest) (retErr error) {
+	summary := &MasterManifestSummary{
+		Manifests: make([]*ManifestSummary, len(master.Manifests)),
+	}
+	for i, m := range master.Manifests {
+		summary.Manifests[i] = &ManifestSummary{ManifestBase: m.ManifestBase}
+	}
+	w, err := h.CreateFile(tmpManifestSummary)
+	if err != nil {
+		return errors.Wrap(err, "createManifestSummary failed to create tmp file")
+	}
+	defer func() {
+		if err := w.Close(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
+	if err = json.NewEncoder(w).Encode(summary); err != nil {
+		return err
+	}
+	return errors.Wrapf(h.Rename(tmpManifestSummary, backupManifestSummary),
+		"MOVING TEMPORARY SUMMARY MANIFEST FAILED! Move %s to %s manually.",
+		tmpManifestSummary, backupManifestSummary)
+}
+
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, error) {
+//
+// When fullManifest is false (the default for listing), it tries the lightweight
+// manifest_summary.json first; if absent or unreadable it falls back to manifest.json.
+// The summary path omits Groups and DropOperations, making it fast even for 500 MB+ manifests.
+//
+// When fullManifest is true, the full manifest.json is always read — useful when the caller
+// needs predicate or DROP-operation data (e.g. --verbose listing, restore planning).
+func ListBackupManifests(l string, creds *x.MinioCredentials, fullManifest bool) ([]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
@@ -305,6 +445,18 @@ func ListBackupManifests(l string, creds *x.MinioCredentials) ([]*Manifest, erro
 		return nil, errors.Wrap(err, "error in listBackupManifests")
 	}
 
+	// Fast path: summary manifest (unless caller explicitly wants the full manifest).
+	if !fullManifest && h.FileExists(backupManifestSummary) {
+		ms, err := readMasterManifestSummary(h)
+		if err == nil {
+			glog.V(2).Infof("ListBackupManifests: using summary manifest (%d entries)",
+				len(ms.Manifests))
+			return summariesToManifests(ms.Manifests), nil
+		}
+		glog.Warningf("Summary manifest unreadable, falling back to full manifest: %v", err)
+	}
+
+	// Full manifest.json path.
 	m, err := GetManifest(h, uri)
 	if err != nil {
 		return nil, err

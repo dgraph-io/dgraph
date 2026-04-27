@@ -188,6 +188,27 @@ const adminTypes = `
 		"""
 		anonymous: Boolean
 
+		"""
+		Only return backups taken on or after this date (YYYY-MM-DD or RFC3339).
+		"""
+		sinceDate: String
+
+		"""
+		Only return backups on or before this date. For YYYY-MM-DD the entire day is
+		included (up to 23:59:59 UTC). For RFC3339 the exact timestamp is used as the cutoff.
+		"""
+		untilDate: String
+
+		"""
+		Only return backups from the last N calendar days. Cannot be combined with sinceDate.
+		"""
+		lastNDays: Int
+
+		"""
+		When true, reads the full manifest.json and includes predicate groups and drop
+		operations. Defaults to false, which reads the lightweight manifest_summary.json.
+		"""
+		fullManifest: Boolean
 	}
 
 	type BackupGroup {

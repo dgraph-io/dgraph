@@ -387,8 +387,10 @@ func copyToLocalFs(t *testing.T) {
 		minio.ListObjectsOptions{Prefix: "", Recursive: false})
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		if object.Key != "manifest.json" {
-			dstDir := backupDir + "/" + object.Key
+		// Only create local directories for backup sub-folder keys (end with "/").
+		// Root-level files like manifest.json and manifest_summary.json are not directories.
+		if strings.HasSuffix(object.Key, "/") {
+			dstDir := backupDir + "/" + strings.TrimSuffix(object.Key, "/")
 			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
 		}
 

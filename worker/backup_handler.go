@@ -51,6 +51,14 @@ const (
 	backupManifest = `manifest.json`
 
 	tmpManifest = `manifest_tmp.json`
+
+	// backupManifestSummary is the lightweight summary manifest written alongside
+	// manifest.json. It holds all per-backup metadata but omits Groups and
+	// DropOperations, keeping listing fast even for 500 MB+ manifests on clusters
+	// with many vector predicates. Old tools that do not know about this file continue
+	// to use manifest.json without any change.
+	backupManifestSummary = `manifest_summary.json`
+	tmpManifestSummary    = `manifest_summary_tmp.json`
 )
 
 func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.WriteCloser, error) {

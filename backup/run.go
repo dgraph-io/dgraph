@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -49,7 +50,11 @@ var opt struct {
 	destination string
 	format      string
 	verbose     bool
-	upgrade     bool // used by export backup command.
+	upgrade     bool   // used by export backup command
+	sinceDate   string // date-range filter lower bound (YYYY-MM-DD or RFC3339)
+	untilDate   string // date-range filter upper bound
+	lastNDays   int    // shorthand: last N calendar days
+	summary     bool   // print summary stats after the listing
 }
 
 func init() {
@@ -158,7 +163,15 @@ func initBackupLs() {
 	flag.StringVarP(&opt.location, "location", "l", "",
 		"Sets the source location URI (required).")
 	flag.BoolVar(&opt.verbose, "verbose", false,
-		"Outputs additional info in backup list.")
+		"Show groups and drop operations. Reads the full manifest.json instead of the lightweight summary.")
+	flag.StringVar(&opt.sinceDate, "since-date", "",
+		"Only show backups on or after this date (YYYY-MM-DD or RFC3339).")
+	flag.StringVar(&opt.untilDate, "until-date", "",
+		"Only show backups on or before this date (YYYY-MM-DD or RFC3339).")
+	flag.IntVar(&opt.lastNDays, "last-n-days", 0,
+		"Only show backups from the last N calendar days.")
+	flag.BoolVar(&opt.summary, "summary", false,
+		"Print summary statistics after the backup listing.")
 	_ = LsBackup.Cmd.MarkFlagRequired("location")
 }
 
@@ -247,11 +260,70 @@ func runRestoreCmd() error {
 	return nil
 }
 
+// parseFilterDate parses a date string in YYYY-MM-DD or RFC3339 format.
+func parseFilterDate(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, fmt.Errorf("date string must not be empty")
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t.UTC(), nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	return t.UTC(), err
+}
+
+// buildLsFilter constructs a BackupDateFilter from lsbackup flag values.
+// It validates flag combinations and returns an error for invalid inputs.
+func buildLsFilter(sinceDate, untilDate string, lastNDays int) (worker.BackupDateFilter, error) {
+	filter := worker.BackupDateFilter{}
+	if lastNDays < 0 {
+		return filter, fmt.Errorf("--last-n-days must be a positive integer, got %d", lastNDays)
+	}
+	if lastNDays > 0 && sinceDate != "" {
+		return filter, fmt.Errorf("--last-n-days and --since-date are mutually exclusive")
+	}
+	if lastNDays > 0 {
+		since := time.Now().UTC().AddDate(0, 0, -lastNDays).Truncate(24 * time.Hour)
+		filter.Since = &since
+	}
+	if sinceDate != "" {
+		t, err := parseFilterDate(sinceDate)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --since-date value %q: %w", sinceDate, err)
+		}
+		filter.Since = &t
+	}
+	if untilDate != "" {
+		t, err := parseFilterDate(untilDate)
+		if err != nil {
+			return filter, fmt.Errorf("invalid --until-date value %q: %w", untilDate, err)
+		}
+		var end time.Time
+		if strings.Contains(untilDate, "T") {
+			// RFC3339 datetime: user gave an exact timestamp, respect it.
+			end = t
+		} else {
+			// Plain date (YYYY-MM-DD): extend to end of that calendar day.
+			end = t.Add(24*time.Hour - time.Millisecond)
+		}
+		filter.Until = &end
+	}
+	return filter, nil
+}
+
 func runLsbackupCmd() error {
-	manifests, err := worker.ListBackupManifests(opt.location, nil)
+	// Validate and build the date filter before doing any I/O.
+	filter, err := buildLsFilter(opt.sinceDate, opt.untilDate, opt.lastNDays)
+	if err != nil {
+		return err
+	}
+
+	// --verbose reads the full manifest.json to include groups and drop-ops.
+	manifests, err := worker.ListBackupManifests(opt.location, nil, opt.verbose)
 	if err != nil {
 		return fmt.Errorf("while listing manifests: %w", err)
 	}
+	manifests = worker.FilterManifestsByDate(manifests, filter)
 
 	type backupEntry struct {
 		Path           string              `json:"path"`
@@ -269,7 +341,6 @@ func runLsbackupCmd() error {
 
 	var output backupOutput
 	for _, manifest := range manifests {
-
 		be := backupEntry{
 			Path:      manifest.Path,
 			Since:     manifest.SinceTsDeprecated,
@@ -291,6 +362,29 @@ func runLsbackupCmd() error {
 	}
 	_, _ = os.Stdout.Write(b)
 	fmt.Println()
+
+	if opt.summary {
+		stats := worker.ComputeBackupListStats(manifests)
+		if opt.sinceDate != "" || opt.untilDate != "" || opt.lastNDays > 0 {
+			fmt.Fprintf(os.Stderr, "\n--- Backup Summary (filtered) ---\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "\n--- Backup Summary ---\n")
+		}
+		fmt.Fprintf(os.Stderr, "Total backups listed : %d\n", stats.Total)
+		fmt.Fprintf(os.Stderr, "Backup series        : %d\n", stats.BackupSeriesCount)
+		if stats.OldestBackup != nil {
+			fmt.Fprintf(os.Stderr, "Oldest backup        : %s\n", stats.OldestBackup.Format(time.RFC3339))
+		}
+		if stats.NewestBackup != nil {
+			fmt.Fprintf(os.Stderr, "Newest backup        : %s\n", stats.NewestBackup.Format(time.RFC3339))
+		}
+		if stats.LastFullBackup != nil {
+			fmt.Fprintf(os.Stderr, "Last full backup     : %s\n", stats.LastFullBackup.Format(time.RFC3339))
+		}
+		if stats.LastIncrBackup != nil {
+			fmt.Fprintf(os.Stderr, "Last incr backup     : %s\n", stats.LastIncrBackup.Format(time.RFC3339))
+		}
+	}
 	return nil
 }
 
