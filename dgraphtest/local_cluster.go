@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -335,7 +336,7 @@ func (c *LocalCluster) destroyContainers() error {
 		wg.Add(1)
 		go func(z *zero) {
 			defer wg.Done()
-			if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !docker.IsErrNotFound(err) {
+			if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 				errChan <- errors.Wrapf(err, "error removing zero [%v]", z.cname())
 			}
 		}(zo)
@@ -345,7 +346,7 @@ func (c *LocalCluster) destroyContainers() error {
 		wg.Add(1)
 		go func(a *alpha) {
 			defer wg.Done()
-			if err := c.dcli.ContainerRemove(ctx, a.cid(), ro); err != nil && !docker.IsErrNotFound(err) {
+			if err := c.dcli.ContainerRemove(ctx, a.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 				errChan <- errors.Wrapf(err, "error removing alpha [%v]", a.cname())
 			}
 		}(aa)
@@ -645,7 +646,7 @@ func (c *LocalCluster) RecreateZero(id int) error {
 	}
 
 	ro := container.RemoveOptions{RemoveVolumes: true, Force: true}
-	if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !docker.IsErrNotFound(err) {
+	if err := c.dcli.ContainerRemove(ctx, z.cid(), ro); err != nil && !cerrdefs.IsNotFound(err) {
 		return errors.Wrapf(err, "error removing zero container [%v]", z.cname())
 	}
 
