@@ -796,6 +796,7 @@ func run() {
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
 	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
+	x.WorkerConfig.MutationsUsePipeline = featureFlagsConf.GetBool("mutations-use-pipeline")
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
