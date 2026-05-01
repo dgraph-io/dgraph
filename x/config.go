@@ -138,6 +138,10 @@ type WorkerOptions struct {
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.
 	Audit bool
+	// MutationsUsePipeline enables the per-predicate mutation pipeline in
+	// applyMutations. When false (default), mutations follow the legacy
+	// serial path. The flag is plumbed via the "feature-flags" superflag.
+	MutationsUsePipeline bool
 }
 
 // WorkerConfig stores the global instance of the worker package's options.
