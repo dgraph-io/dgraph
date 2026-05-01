@@ -141,12 +141,13 @@ type WorkerOptions struct {
 	// MutationsPipelineThreshold gates the per-predicate mutation pipeline
 	// in applyMutations. A mutation runs through the pipeline only when
 	// MutationsPipelineThreshold > 0 and len(m.Edges) >= the threshold;
-	// otherwise it falls back to the legacy serial path. Set to 0 (default)
-	// to disable the pipeline entirely. Set to 1 to always use the pipeline.
-	// The pipeline pays goroutine spin-up cost per predicate, so small
+	// otherwise it falls back to the legacy serial path. Set to 0 to
+	// disable the pipeline entirely. Set to 1 (default) to always use it.
+	// The pipeline pays goroutine spin-up cost per predicate, so tiny
 	// mutations are slower on it; bulk multi-predicate mutations are
-	// faster — pick a value above the per-mutation edge count where the
-	// crossover happens for your workload (~100 in benchmarks here).
+	// faster — set to a value above the per-mutation edge count where the
+	// crossover happens for your workload (~100 in benchmarks here) if
+	// you want only large mutations to take the pipeline path.
 	// Plumbed via the "feature-flags" superflag as
 	// "mutations-pipeline-threshold".
 	MutationsPipelineThreshold int
