@@ -129,11 +129,6 @@ func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *Pr
 }
 
 func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
-	startTime := time.Now()
-	defer func() {
-		fmt.Println("Inserting tokenizer indexes for predicate", pipeline.attr, "took", time.Since(startTime))
-	}()
-
 	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
 	if len(tokenizers) == 0 {
 		return nil
@@ -192,7 +187,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				if !loaded {
 					tokens, err = indexTokens(ctx, info)
 					if err != nil {
-						fmt.Println("ERRORRRING", err)
 						x.Panic(err)
 					}
 					syncMap.Store(key, tokens)
@@ -204,8 +198,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 				for _, token := range tokens.([]string) {
 					key := x.IndexKey(pipeline.attr, token)
-					pk, _ := x.Parse([]byte(key))
-					fmt.Println("TOKENS", key, pk)
 					val, ok := indexGenInThread[string(key)]
 					if !ok {
 						val = &pb.PostingList{}
@@ -217,8 +209,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 
 		for key, value := range indexGenInThread {
-			pk, _ := x.Parse([]byte(key))
-			fmt.Println("LOCAL MAP", pk, value)
 			indexesGenInMutation.Update(key, func(val *MutableLayer, ok bool) *MutableLayer {
 				if !ok {
 					val = newMutableLayer()
@@ -261,10 +251,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		mp.txn.cache.deltas.indexMap[pipeline.attr] = indexGenInTxn
 	}
 
-	fmt.Println("INSERTING INDEX", pipeline.attr, *postings)
 	updateFn := func(key string, value *MutableLayer) {
-		pk, _ := x.Parse([]byte(key))
-		fmt.Println("UPDATE INDEX", pk, value)
 		indexGenInTxn.Update(key, func(val *pb.PostingList, ok bool) *pb.PostingList {
 			if !ok {
 				val = &pb.PostingList{}
