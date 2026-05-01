@@ -526,8 +526,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	// Discard the posting lists from cache to release memory at the end.
 	defer txn.Update()
 
-	featureFlag := true
-	if featureFlag {
+	if x.WorkerConfig.MutationsUsePipeline {
 		mp := posting.NewMutationPipeline(txn)
 		return mp.Process(ctx, m.Edges)
 	}
