@@ -11,11 +11,14 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -407,6 +410,179 @@ func TestCount(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println(uids.Uids)
 	require.Equal(t, subjects, len(uids.Uids))
+}
+
+// fakeOracle is an in-memory stand-in for the zero Oracle. It hands out
+// monotonically increasing timestamps and rejects commits whose conflict
+// keys overlap a higher commitTs — same algorithm as
+// dgraph/cmd/zero/oracle.go's hasConflict.
+type fakeOracle struct {
+	mu        sync.Mutex
+	nextTs    uint64
+	keyCommit map[uint64]uint64 // conflict-key fingerprint -> commitTs
+	committed atomic.Int64
+	aborted   atomic.Int64
+}
+
+func newFakeOracle(initialTs uint64) *fakeOracle {
+	return &fakeOracle{nextTs: initialTs, keyCommit: map[uint64]uint64{}}
+}
+
+func (o *fakeOracle) reserveStartTs() uint64 {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.nextTs++
+	return o.nextTs
+}
+
+// tryCommit mirrors zero/oracle.go: for each conflict key, if a later
+// commitTs already exists, abort. Else stamp all keys with a fresh
+// commitTs and return it.
+func (o *fakeOracle) tryCommit(startTs uint64, conflictKeys []uint64) (uint64, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, k := range conflictKeys {
+		if last, ok := o.keyCommit[k]; ok && last > startTs {
+			o.aborted.Add(1)
+			return 0, false
+		}
+	}
+	o.nextTs++
+	commitTs := o.nextTs
+	for _, k := range conflictKeys {
+		o.keyCommit[k] = commitTs
+	}
+	o.committed.Add(1)
+	return commitTs, true
+}
+
+// runPipelineTxn drives a single mutation through the new pipeline with
+// real conflict-aware commit semantics. Returns (committed, error).
+func runPipelineTxn(t *testing.T, ps *badger.DB, oracle *fakeOracle,
+	edges []*pb.DirectedEdge) bool {
+	t.Helper()
+	startTs := oracle.reserveStartTs()
+	txn := posting.Oracle().RegisterStartTs(startTs)
+
+	if err := newRunMutations(context.Background(), edges, txn); err != nil {
+		t.Fatalf("pipeline failed at startTs=%d: %v", startTs, err)
+	}
+
+	// FillContext bridges plists -> deltas (via Update) and emits the
+	// txn's conflict keys as base-36 strings on ctx.Keys.
+	ctxApi := &api.TxnContext{}
+	txn.FillContext(ctxApi, 1, false)
+
+	keys := make([]uint64, 0, len(ctxApi.Keys))
+	for _, k := range ctxApi.Keys {
+		ki, err := strconv.ParseUint(k, 36, 64)
+		require.NoError(t, err)
+		keys = append(keys, ki)
+	}
+
+	commitTs, ok := oracle.tryCommit(startTs, keys)
+	if !ok {
+		return false
+	}
+	writer := posting.NewTxnWriter(ps)
+	require.NoError(t, txn.CommitToDisk(writer, commitTs))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(commitTs)
+	return true
+}
+
+// TestPipelineCountIndexConcurrent mirrors the systest's
+// TestCountIndexConcurrentSetDelScalarPredicate at unit-test scope: many
+// concurrent transactions setting <0x1> <name> "name<rand>" against a
+// scalar string predicate with @index(exact) @count, with real
+// conflict-checking commit semantics. After everything settles, the data
+// list for 0x1 should hold exactly one value, the count(1) bucket should
+// reference exactly 0x1, and no other count bucket should reference 0x1.
+func TestPipelineCountIndexConcurrent(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`name: string @index(exact) @count .`), 1))
+
+	pred := x.AttrInRootNamespace("name")
+	const target uint64 = 1
+
+	oracle := newFakeOracle(10)
+
+	const (
+		numRoutines  = 10
+		txnsPerRoute = 20
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for r := 0; r < numRoutines; r++ {
+		go func(seed int) {
+			defer wg.Done()
+			rnd := rand.New(rand.NewSource(int64(seed)))
+			for i := 0; i < txnsPerRoute; i++ {
+				value := []byte(fmt.Sprintf("name%d", rnd.Intn(10000)))
+				// Retry on conflict — same as a client doing dg.NewTxn().Mutate().
+				// Each attempt uses a fresh edge: makePostingFromEdge mutates
+				// edge.ValueId during processing, and reusing the object across
+				// attempts would make ValidateAndConvert see it as a uid edge.
+				// Real production gets a freshly-deserialized edge per Raft apply.
+				for attempt := 0; attempt < 100; attempt++ {
+					edge := &pb.DirectedEdge{
+						Entity:    target,
+						Attr:      pred,
+						Value:     value,
+						ValueType: pb.Posting_STRING,
+						Op:        pb.DirectedEdge_SET,
+					}
+					if runPipelineTxn(t, ps, oracle, []*pb.DirectedEdge{edge}) {
+						break
+					}
+				}
+			}
+		}(r)
+	}
+	wg.Wait()
+
+	t.Logf("committed=%d aborted=%d", oracle.committed.Load(), oracle.aborted.Load())
+
+	// Verify final state: exactly one value on 0x1, that uid in count(1) only.
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	dataKey := x.DataKey(pred, target)
+	dpl, err := readTxn.Get(dataKey)
+	require.NoError(t, err)
+	// Scalar string predicate: AllValues returns the live posting list values
+	// (one entry for a non-list scalar with a current value).
+	vals, err := dpl.AllValues(math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(vals),
+		"scalar predicate should retain exactly one value, got %v", vals)
+
+	for c := 0; c <= 5; c++ {
+		ck := x.CountKey(pred, uint32(c), false)
+		cpl, err := readTxn.Get(ck)
+		require.NoError(t, err)
+		cuids, err := cpl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		switch c {
+		case 1:
+			require.Equal(t, []uint64{target}, cuids.Uids,
+				"count(1) bucket must contain exactly the target uid")
+		default:
+			require.NotContains(t, cuids.Uids, target,
+				"count(%d) bucket must not contain the target uid", c)
+		}
+	}
 }
 
 func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
