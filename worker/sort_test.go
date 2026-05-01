@@ -301,7 +301,8 @@ func TestStringIndexWithLang(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	t.Skip()
+	t.Skip("Inherently racy: bypasses the Oracle conflict-checking commit path. " +
+		"Legacy and new pipeline both fail. Re-enable when the harness uses real txn conflicts.")
 	// Setup temporary directory for Badger DB
 	dir, err := os.MkdirTemp("", "storetest_")
 	require.NoError(t, err)
