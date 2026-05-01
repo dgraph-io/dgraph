@@ -284,183 +284,6 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	return nil
 }
 
-// func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
-// 	startTime := time.Now()
-// 	defer func() {
-// 		fmt.Println("Inserting tokenizer indexes for predicate", pipeline.attr, "took", time.Since(startTime))
-// 	}()
-
-// 	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
-// 	if len(tokenizers) == 0 {
-// 		return nil
-// 	}
-
-// 	values := make(map[string]*pb.PostingList, len(tokenizers)*len(*postings))
-// 	valPost := make(map[string]*pb.Posting)
-
-// 	indexEdge1 := &pb.DirectedEdge{
-// 		Attr: pipeline.attr,
-// 	}
-
-// 	for uid, postingList := range *postings {
-// 		fmt.Println("POSTING", uid, postingList)
-// 		for _, posting := range postingList.Postings {
-// 			key := fmt.Sprintf("%s,%s", posting.LangTag, posting.Value)
-// 			valPl, ok := values[key]
-// 			if !ok {
-// 				valPl = &pb.PostingList{}
-// 			}
-
-// 			indexEdge1.Op = GetPostingOp(posting.Op)
-// 			indexEdge1.ValueId = uid
-
-// 			mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge1)
-// 			valPl.Postings = append(valPl.Postings, mpost)
-// 			values[key] = valPl
-
-// 			newPosting := new(pb.Posting)
-// 			newPosting.ValType = posting.ValType
-// 			newPosting.Value = posting.Value
-// 			newPosting.LangTag = posting.LangTag
-// 			valPost[key] = newPosting
-// 		}
-// 	}
-
-// 	keysCreated := make([]string, 0, len(values))
-// 	for i := range values {
-// 		keysCreated = append(keysCreated, i)
-// 	}
-
-// 	//fmt.Println("START")
-
-// 	f := func(numGo int) *types.LockedShardedMap[string, *MutableLayer] {
-// 		wg := &sync.WaitGroup{}
-
-// 		globalMap := types.NewLockedShardedMap[string, *MutableLayer]()
-// 		process := func(start int) {
-// 			factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
-// 			if err != nil {
-// 				pipeline.errCh <- err
-// 					return
-// 			}
-
-// 			defer wg.Done()
-// 			localMap := make(map[string]*pb.PostingList, len(values)/numGo)
-// 			for i := start; i < len(values); i += numGo {
-// 				key := keysCreated[i]
-// 				valPl := values[key]
-// 				if len(valPl.Postings) == 0 {
-// 					continue
-// 				}
-
-// 				posting := valPost[key]
-// 				// Build info per iteration without indexEdge.
-// 				info := &indexMutationInfo{
-// 					tokenizers:   tokenizers,
-// 					factorySpecs: factorySpecs,
-// 					op:           pb.DirectedEdge_SET,
-// 					val: types.Val{
-// 						Tid:   types.TypeID(posting.ValType),
-// 						Value: posting.Value,
-// 					},
-// 				}
-
-// 				info.edge = &pb.DirectedEdge{
-// 					Attr:  pipeline.attr,
-// 					Op:    pb.DirectedEdge_SET,
-// 					Lang:  string(posting.LangTag),
-// 					Value: posting.Value,
-// 				}
-
-// 				tokens, erri := indexTokens(ctx, info)
-// 				if erri != nil {
-// 					fmt.Println("ERRORRRING", erri)
-// 					x.Panic(erri)
-// 				}
-
-// 				for _, token := range tokens {
-// 					key := x.IndexKey(pipeline.attr, token)
-// 					pk, _ := x.Parse([]byte(key))
-// 					fmt.Println("TOKENS", key, i, numGo, pk)
-// 					val, ok := localMap[string(key)]
-// 					if !ok {
-// 						val = &pb.PostingList{}
-// 					}
-// 					val.Postings = append(val.Postings, valPl.Postings...)
-// 					localMap[string(key)] = val
-// 				}
-// 			}
-
-// 			for key, value := range localMap {
-// 				pk, _ := x.Parse([]byte(key))
-// 				fmt.Println("LOCAL MAP", pk, numGo, value)
-// 				globalMap.Update(key, func(val *MutableLayer, ok bool) *MutableLayer {
-// 					if !ok {
-// 						val = newMutableLayer()
-// 						val.currentEntries = &pb.PostingList{}
-// 					}
-// 					for _, posting := range value.Postings {
-// 						val.insertPosting(posting, false)
-// 					}
-// 					return val
-// 				})
-// 			}
-// 		}
-
-// 		for i := range numGo {
-// 			wg.Add(1)
-// 			go process(i)
-// 		}
-
-// 		wg.Wait()
-
-// 		return globalMap
-// 	}
-
-// 	globalMapI := f(1)
-
-// 	mp.txn.cache.Lock()
-// 	defer mp.txn.cache.Unlock()
-
-// 	globalMap := mp.txn.cache.deltas.GetIndexMapForPredicate(pipeline.attr)
-// 	if globalMap == nil {
-// 		globalMap = types.NewLockedShardedMap[string, *pb.PostingList]()
-// 		mp.txn.cache.deltas.indexMap[pipeline.attr] = globalMap
-// 	}
-
-// 	updateFn := func(key string, value *MutableLayer) {
-// 		globalMap.Update(key, func(val *pb.PostingList, ok bool) *pb.PostingList {
-// 			if !ok {
-// 				val = &pb.PostingList{}
-// 			}
-// 			val.Postings = append(val.Postings, value.currentEntries.Postings...)
-// 			return val
-// 		})
-// 	}
-
-// 	if info.hasUpsert {
-// 		err := globalMapI.Iterate(func(key string, value *MutableLayer) error {
-// 			updateFn(key, value)
-// 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
-// 			return nil
-// 		})
-// 		if err != nil {
-// 			return err
-// 		}
-// 	} else {
-// 		err := globalMapI.Iterate(func(key string, value *MutableLayer) error {
-// 			updateFn(key, value)
-// 			mp.txn.addConflictKeyWithUid([]byte(key), value.currentEntries, info.hasUpsert, info.noConflict)
-// 			return nil
-// 		})
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	return nil
-// }
-
 type predicateInfo struct {
 	isList     bool
 	index      bool
@@ -752,8 +575,6 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 			continue
 		}
 
-		//fmt.Println("COUNT STATS", uid, prevCount, newCount, postingList, list.Print())
-
 		edge.ValueId = uid
 		edge.Op = pb.DirectedEdge_DEL
 		if prevCount > 0 {
@@ -766,7 +587,6 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 	}
 
 	for c, pl := range countMap {
-		//fmt.Println("COUNT", c, pl)
 		ck := x.CountKey(pipeline.attr, uint32(c), isReverseEdge)
 		if newPl, err := mp.txn.AddDelta(string(ck), pl, true, true); err != nil {
 			return err
@@ -788,7 +608,6 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
-		// fmt.Println("SINGLE EDGE", edge)
 		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
 		}
@@ -886,7 +705,6 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
 	for uid, pl := range postings {
-		//fmt.Println("ADDING DELTA", uid, pipeline.attr, pl)
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
 		key := baseKey + string(dataKey[len(dataKey)-8:])
 
@@ -1102,7 +920,6 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	numWg := 0
 	eg, egCtx := errgroup.WithContext(ctx)
 	for _, edge := range edges {
-		//fmt.Println("PROCESSING EDGE", edge)
 		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
 			l, err := mp.txn.Get(x.DataKey(edge.Attr, edge.Entity))
 			if err != nil {
