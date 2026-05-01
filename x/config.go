@@ -138,10 +138,18 @@ type WorkerOptions struct {
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.
 	Audit bool
-	// MutationsUsePipeline enables the per-predicate mutation pipeline in
-	// applyMutations. When false (default), mutations follow the legacy
-	// serial path. The flag is plumbed via the "feature-flags" superflag.
-	MutationsUsePipeline bool
+	// MutationsPipelineThreshold gates the per-predicate mutation pipeline
+	// in applyMutations. A mutation runs through the pipeline only when
+	// MutationsPipelineThreshold > 0 and len(m.Edges) >= the threshold;
+	// otherwise it falls back to the legacy serial path. Set to 0 (default)
+	// to disable the pipeline entirely. Set to 1 to always use the pipeline.
+	// The pipeline pays goroutine spin-up cost per predicate, so small
+	// mutations are slower on it; bulk multi-predicate mutations are
+	// faster — pick a value above the per-mutation edge count where the
+	// crossover happens for your workload (~100 in benchmarks here).
+	// Plumbed via the "feature-flags" superflag as
+	// "mutations-pipeline-threshold".
+	MutationsPipelineThreshold int
 }
 
 // WorkerConfig stores the global instance of the worker package's options.
