@@ -540,7 +540,31 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		list.Lock()
 		prevCount := list.GetLength(mp.txn.StartTs)
 
+		// For scalar (non-list) predicates, handleOldDeleteForSingle may have
+		// appended a synthetic Del-of-old-value alongside the user's Set, so
+		// that InsertTokenizerIndexes / ProcessReverse / count diffing can see
+		// the prior value. The synthetic Del must NOT be applied to the data
+		// list: scalar value postings all share Uid == math.MaxUint64
+		// (fingerprintEdge returns MaxUint64 for non-Lang scalars), and
+		// updateMutationLayer in singleUidUpdate mode would overwrite the
+		// just-inserted Set with [DeleteAll] and drop the new value entirely.
+		// A user-initiated Del (no accompanying Set) must still be applied.
+		skipSyntheticDel := false
+		if !isListEdge {
+			hasSet := false
+			for _, post := range postingList.Postings {
+				if post.Op == Set || post.Op == Ovr {
+					hasSet = true
+					break
+				}
+			}
+			skipSyntheticDel = hasSet
+		}
+
 		for _, post := range postingList.Postings {
+			if skipSyntheticDel && post.Op == Del {
+				continue
+			}
 			found, _, _ := list.findPosting(post.StartTs, post.Uid)
 			if found {
 				if post.Op == Set && isListEdge {
