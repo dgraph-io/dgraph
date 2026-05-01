@@ -128,8 +128,6 @@ func (d *Deltas) Get(key string) (*pb.PostingList, bool) {
 		}
 	}
 
-	// fmt.Println("GETTING KEY FROM DELTAS", pk, "res", res, "val", val, "d.deltas", d.deltas, "d.indexMap[pk.Attr]", d.indexMap[pk.Attr], "ok", ok)
-
 	return res, len(res.Postings) > 0
 }
 
@@ -396,20 +394,12 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 		lc.RLock()
 		defer lc.RUnlock()
 		if lc.plists == nil {
-			l, err := getNew(key, pstore, lc.startTs, readUids)
-			if err != nil {
-				return nil, err
-			}
-			pk, _ := x.Parse(key)
-			fmt.Println("READING NEW PLIST", pk, l.Print())
-			return l, nil
+			return getNew(key, pstore, lc.startTs, readUids)
 		}
 		if l, ok := lc.plists[skey]; ok {
 			if delta, ok := lc.deltas.Get(skey); ok && delta != nil {
 				l.setMutationWithPosting(lc.startTs, delta)
 			}
-			pk, _ := x.Parse(key)
-			fmt.Println("READING PLIST", pk, l.Print())
 			return l, nil
 		}
 		return nil, nil
@@ -442,8 +432,6 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk, readUids bool) (*Lis
 	}
 	lc.RUnlock()
 
-	pk, _ := x.Parse(key)
-	fmt.Println("READING ", pk, pl.Print())
 	return lc.SetIfAbsent(skey, pl), nil
 }
 
@@ -480,16 +468,11 @@ func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
 // given key. This is used for retrieving the value of a scalar predicats.
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	// This would return an error if there is some data in the local cache, but we couldn't read it.
-
-	pk, _ := x.Parse(key)
-	fmt.Println("READING SINGLE ", pk)
-
 	getListFromLocalCache := func() (*pb.PostingList, error) {
 		lc.RLock()
 
 		if delta, ok := lc.deltas.Get(string(key)); ok && delta != nil {
 			lc.RUnlock()
-			fmt.Println("READING SINGLE FROM DELTA", pk, delta)
 			return delta, nil
 		}
 
@@ -497,9 +480,7 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		lc.RUnlock()
 
 		if l != nil {
-			res, err := l.StaticValue(lc.startTs)
-			fmt.Println("READING SINGLE FROM PLISTS", pk, res, err, l.Print())
-			return res, err
+			return l.StaticValue(lc.startTs)
 		}
 
 		return nil, nil
@@ -517,15 +498,10 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	}
 
 	pl, err := getPostings()
-
-	fmt.Println("READING SINGLE ", pk, "pl:", pl)
-
 	if err == badger.ErrKeyNotFound {
-		fmt.Println("READING ", pk, nil)
 		return nil, nil
 	}
 	if err != nil {
-		fmt.Println("READING ", pk, err)
 		return nil, err
 	}
 
@@ -538,7 +514,6 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 		}
 	}
 	pl.Postings = pl.Postings[:idx]
-	// fmt.Println("READING ", pk, pl)
 	return pl, nil
 }
 
