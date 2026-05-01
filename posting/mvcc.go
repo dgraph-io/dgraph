@@ -496,8 +496,7 @@ func (ml *MemoryLayer) IterateDisk(ctx context.Context, f IterateDiskArgs) error
 		if err != nil {
 			return err
 		}
-		empty, err := false, nil
-		//empty, err := l.IsEmpty(f.ReadTs, 0)
+		empty, err := l.IsEmpty(f.ReadTs, 0)
 		switch {
 		case err != nil:
 			return err
