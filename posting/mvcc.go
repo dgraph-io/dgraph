@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -308,8 +307,6 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 				if len(pl.Postings) == 0 {
 					continue
 				}
-				pk, _ := x.Parse([]byte(key))
-				fmt.Println("COMMITTING", pk, pl)
 				if ts := cache.maxVersions[key]; ts >= commitTs {
 					// Skip write because we already have a write at a higher ts.
 					// Logging here can cause a lot of output when doing Raft log replay. So, let's
