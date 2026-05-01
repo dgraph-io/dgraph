@@ -233,7 +233,11 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	for uid := range *postings {
-		chMap[int(uid)%numGo] <- uid
+		// uid is uint64; converting directly to int can produce a negative
+		// value for uid >= 2^63, which would index outside chMap and resolve
+		// to a nil channel (deadlocks the dispatcher). Hash unsigned, then
+		// cast.
+		chMap[int(uid%uint64(numGo))] <- uid
 	}
 
 	for i := 0; i < numGo; i++ {
