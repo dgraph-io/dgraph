@@ -634,7 +634,6 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	dataKey := x.DataKey(pipeline.attr, 0)
 	insertDeleteAllEdge := !(info.index || info.reverse || info.count) // nolint
 
-	var oldVal *pb.Posting
 	for edge := range pipeline.edges {
 		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
@@ -644,6 +643,9 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			return err
 		}
 
+		// oldVal is reset per edge so a stale value from a previous iteration
+		// can't bleed into the nil-guarded branch below.
+		var oldVal *pb.Posting
 		uid := edge.Entity
 		pl, exists := postings[uid]
 
@@ -671,8 +673,13 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 
 		if exists {
 			if edge.Op == pb.DirectedEdge_DEL {
+				// findSingleValueInPostingList returns nil when the
+				// accumulated postings for this uid hold only Del entries
+				// (no Set), which happens when the same uid receives
+				// multiple Del edges in one batch (e.g. GraphQL
+				// deleteTask cleanup deleting many predicates per entity).
 				oldVal = findSingleValueInPostingList(pl)
-				if string(edge.Value) == string(oldVal.Value) {
+				if oldVal != nil && string(edge.Value) == string(oldVal.Value) {
 					setPosting()
 				}
 			} else {
