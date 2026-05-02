@@ -137,9 +137,20 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 // TODO: When the opRollup is not running the keys from keysPool of ir are dropped. Figure out some
 // way to handle that.
 func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
+	// Defensive copy. Callers (notably ReadPostingList's defer and the
+	// per-predicate mutation pipeline's ProcessCount loop) reuse a single
+	// key buffer across iterations and mutate its last 8 bytes per uid;
+	// keeping a slice header that aliases that buffer means every queued
+	// rollup target collapses to whatever uid was processed last. The
+	// async rollup then writes a BitCompletePosting to the wrong key,
+	// overwriting an unrelated posting list with WithDiscard. Take a copy
+	// here so the rollup queue owns its bytes.
+	keyCopy := make([]byte, len(key))
+	copy(keyCopy, key)
+
 	rki := ir.priorityKeys[priority]
 	batch := rki.keysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
+	*batch = append(*batch, keyCopy)
 	if len(*batch) < 16 {
 		rki.keysPool.Put(batch)
 		return
@@ -678,7 +689,16 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	}
 
 	l := new(List)
-	l.key = key
+	// Copy the key bytes. The caller (mutation pipeline ProcessCount and
+	// similar paths) reuses a single key buffer across loop iterations and
+	// mutates its trailing 8 bytes to scan many uids; without copying here
+	// the list's l.key field aliases that buffer, so by the time the list
+	// is read back from the in-memory cache (saveInCache stashes a
+	// copyList that shares the key alias) the bytes have changed. The
+	// async rollup path then takes alloc.Copy(l.key) to build the rolled-
+	// up KV's key and ends up writing a BitCompletePosting (with
+	// WithDiscard) to a different list's key — corrupting that list.
+	l.key = append([]byte(nil), key...)
 	l.plist = new(pb.PostingList)
 	l.mutationMap = newMutableLayer()
 	l.minTs = 0
