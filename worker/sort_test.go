@@ -585,6 +585,465 @@ func TestPipelineCountIndexConcurrent(t *testing.T) {
 	}
 }
 
+// TestPipelineReverseListCount mirrors the [uid] @reverse @count shape from
+// the 21million live-load test (genre predicate). One subject points at
+// multiple objects in a single transaction; we then verify that BOTH the
+// forward data list and the reverse data list are complete.
+//
+// Background: systest/21million/live's TestQueries/Run_queries/query-017
+// fails consistently with one specific film's `genre = Animation` edge
+// missing, while other genre edges from the same film are intact. This
+// is the smallest in-process repro of the same forward/reverse fanout
+// pattern that the live loader hits.
+func TestPipelineReverseListCount(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	// Subject -> list of object uids. Mirrors a film with multiple genres,
+	// and several films sharing some genres.
+	const (
+		madagascar = uint64(100)
+		brotherly  = uint64(101)
+		animation  = uint64(200)
+		shortFilm  = uint64(201)
+		comedy     = uint64(202)
+	)
+	wantForward := map[uint64][]uint64{
+		madagascar: {animation, shortFilm},
+		brotherly:  {animation, shortFilm, comedy},
+	}
+
+	// Single transaction containing all edges (the simplest case — no
+	// concurrency, no batching, no Oracle conflict path). If this fails,
+	// the bug is purely in the forward+reverse fanout within ProcessList.
+	edges := []*pb.DirectedEdge{}
+	for subj, objs := range wantForward {
+		for _, obj := range objs {
+			edges = append(edges, &pb.DirectedEdge{
+				Entity:    subj,
+				Attr:      pred,
+				ValueId:   obj,
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+
+	txn := posting.Oracle().RegisterStartTs(10)
+	require.NoError(t, newRunMutations(context.Background(), edges, txn))
+	txn.Update()
+	w := posting.NewTxnWriter(ps)
+	require.NoError(t, txn.CommitToDisk(w, 11))
+	require.NoError(t, w.Flush())
+	txn.UpdateCachedKeys(11)
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	// Forward: each subject must have all its expected objects.
+	for subj, wantObjs := range wantForward {
+		key := x.DataKey(pred, subj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantObjs, got.Uids,
+			"forward list for subject %d", subj)
+	}
+
+	// Reverse: each object must have all the subjects that point at it.
+	wantReverse := map[uint64][]uint64{}
+	for subj, objs := range wantForward {
+		for _, obj := range objs {
+			wantReverse[obj] = append(wantReverse[obj], subj)
+		}
+	}
+	for obj, wantSubjs := range wantReverse {
+		key := x.ReverseKey(pred, obj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantSubjs, got.Uids,
+			"reverse list for object %d", obj)
+	}
+}
+
+// TestPipelineReverseListCountMultiBatch escalates TestPipelineReverseListCount
+// by spreading edges across many sequential transactions, similar to how the
+// live loader chunks edges into many batches. Each batch is one transaction.
+func TestPipelineReverseListCountMultiBatch(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount2_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	// Many subjects, many objects, every (subject, object) combination — a
+	// dense forward fanout that pushes every reverse list to grow as well.
+	const (
+		nSubjects = 50
+		nObjects  = 20
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	// Build every edge.
+	allEdges := make([]*pb.DirectedEdge, 0, nSubjects*nObjects)
+	for s := 0; s < nSubjects; s++ {
+		for o := 0; o < nObjects; o++ {
+			allEdges = append(allEdges, &pb.DirectedEdge{
+				Entity:    subjBase + uint64(s),
+				Attr:      pred,
+				ValueId:   objBase + uint64(o),
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+
+	// Split into batches of 7 — a value chosen to make each batch carry a
+	// non-trivial mix of subjects and objects per ProcessList run.
+	const batchSize = 7
+	ts := uint64(10)
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batch := allEdges[start:end]
+
+		txn := posting.Oracle().RegisterStartTs(ts)
+		require.NoError(t, newRunMutations(context.Background(), batch, txn))
+		txn.Update()
+		w := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(w, ts+1))
+		require.NoError(t, w.Flush())
+		txn.UpdateCachedKeys(ts + 1)
+		ts += 2
+	}
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	// Forward: each subject must hold exactly all nObjects objects.
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		key := x.DataKey(pred, subj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantForwardObjs, got.Uids,
+			"forward list for subject %d (s=%d): missing some objects", subj, s)
+	}
+
+	// Reverse: each object must hold exactly all nSubjects subjects.
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		key := x.ReverseKey(pred, obj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+			"reverse list for object %d (o=%d): missing some subjects", obj, o)
+	}
+}
+
+// TestPipelineReverseListCountMultiPred escalates further: multiple
+// list-uid predicates with @reverse @count are mutated together in each
+// batch, so the per-predicate pipeline goroutines for each predicate run
+// in parallel inside Process(). This is the live-loader's actual shape
+// (genre + director.film + starring + rated all live in the same payload).
+func TestPipelineReverseListCountMultiPred(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount3_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes([]byte(`
+		genre: [uid] @reverse @count .
+		starring: [uid] @reverse @count .
+		director_film: [uid] @reverse @count .
+	`), 1))
+
+	preds := []string{
+		x.AttrInRootNamespace("genre"),
+		x.AttrInRootNamespace("starring"),
+		x.AttrInRootNamespace("director_film"),
+	}
+
+	const (
+		nSubjects = 30
+		nObjects  = 12
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	allEdges := make([]*pb.DirectedEdge, 0, len(preds)*nSubjects*nObjects)
+	for _, pred := range preds {
+		for s := 0; s < nSubjects; s++ {
+			for o := 0; o < nObjects; o++ {
+				allEdges = append(allEdges, &pb.DirectedEdge{
+					Entity:    subjBase + uint64(s),
+					Attr:      pred,
+					ValueId:   objBase + uint64(o),
+					ValueType: pb.Posting_UID,
+					Op:        pb.DirectedEdge_SET,
+				})
+			}
+		}
+	}
+	// Shuffle so each batch carries an interleaved mix of predicates.
+	rnd := rand.New(rand.NewSource(1))
+	rnd.Shuffle(len(allEdges), func(i, j int) {
+		allEdges[i], allEdges[j] = allEdges[j], allEdges[i]
+	})
+
+	const batchSize = 23
+	ts := uint64(10)
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batch := allEdges[start:end]
+
+		txn := posting.Oracle().RegisterStartTs(ts)
+		require.NoError(t, newRunMutations(context.Background(), batch, txn))
+		txn.Update()
+		w := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(w, ts+1))
+		require.NoError(t, w.Flush())
+		txn.UpdateCachedKeys(ts + 1)
+		ts += 2
+	}
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+
+	for _, pred := range preds {
+		for s := 0; s < nSubjects; s++ {
+			subj := subjBase + uint64(s)
+			pl, err := readTxn.Get(x.DataKey(pred, subj))
+			require.NoError(t, err)
+			got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+			require.NoError(t, err)
+			require.ElementsMatch(t, wantForwardObjs, got.Uids,
+				"forward list for pred=%q subj=%d", pred, subj)
+		}
+		for o := 0; o < nObjects; o++ {
+			obj := objBase + uint64(o)
+			pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+			require.NoError(t, err)
+			got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+			require.NoError(t, err)
+			require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+				"reverse list for pred=%q obj=%d", pred, obj)
+		}
+	}
+}
+
+// TestPipelineReverseListCountConcurrent mirrors the live-loader's actual
+// concurrency: many goroutines submitting batched transactions in parallel,
+// going through a real conflict-checking commit (the fakeOracle harness
+// also used by TestPipelineCountIndexConcurrent), against a [uid] @reverse
+// @count predicate. This is the closest in-process reproduction of the
+// systest/21million/live shape that we have without standing up a real
+// cluster.
+func TestPipelineReverseListCountConcurrent(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount4_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	const (
+		nSubjects = 60 // films
+		nObjects  = 25 // genres
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	allEdges := make([]*pb.DirectedEdge, 0, nSubjects*nObjects)
+	for s := 0; s < nSubjects; s++ {
+		for o := 0; o < nObjects; o++ {
+			allEdges = append(allEdges, &pb.DirectedEdge{
+				Entity:    subjBase + uint64(s),
+				Attr:      pred,
+				ValueId:   objBase + uint64(o),
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+	rnd := rand.New(rand.NewSource(7))
+	rnd.Shuffle(len(allEdges), func(i, j int) {
+		allEdges[i], allEdges[j] = allEdges[j], allEdges[i]
+	})
+
+	// Chunk into many small batches so multiple goroutines compete on the
+	// same predicate, mimicking `dgraph live -c 10` behavior.
+	const batchSize = 17
+	type batch []*pb.DirectedEdge
+	batches := []batch{}
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batches = append(batches, allEdges[start:end])
+	}
+
+	oracle := newFakeOracle(10)
+	const concurrency = 10
+
+	jobs := make(chan batch, len(batches))
+	for _, b := range batches {
+		jobs <- b
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for w := 0; w < concurrency; w++ {
+		go func() {
+			defer wg.Done()
+			for b := range jobs {
+				// Retry until commit, with a fresh edge clone each attempt
+				// (the pipeline mutates edge.ValueId during processing).
+				for attempt := 0; attempt < 200; attempt++ {
+					clones := make([]*pb.DirectedEdge, len(b))
+					for i, e := range b {
+						clones[i] = &pb.DirectedEdge{
+							Entity: e.Entity, Attr: e.Attr,
+							ValueId: e.ValueId, ValueType: e.ValueType, Op: e.Op,
+						}
+					}
+					if runPipelineTxn(t, ps, oracle, clones) {
+						break
+					}
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	t.Logf("committed=%d aborted=%d", oracle.committed.Load(), oracle.aborted.Load())
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+
+	missingForward := []string{}
+	missingReverse := []string{}
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		pl, err := readTxn.Get(x.DataKey(pred, subj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		if len(got.Uids) != nObjects {
+			missingForward = append(missingForward,
+				fmt.Sprintf("subj=%d has %d/%d", subj, len(got.Uids), nObjects))
+		}
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		if len(got.Uids) != nSubjects {
+			missingReverse = append(missingReverse,
+				fmt.Sprintf("obj=%d has %d/%d", obj, len(got.Uids), nSubjects))
+		}
+	}
+	require.Empty(t, missingForward, "forward lists missing entries")
+	require.Empty(t, missingReverse, "reverse lists missing entries")
+
+	// And the strict version: each list must match exactly.
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		pl, err := readTxn.Get(x.DataKey(pred, subj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantForwardObjs, got.Uids,
+			"forward list for subj %d", subj)
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+			"reverse list for obj %d", obj)
+	}
+}
+
 func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	// Setup temporary directory for Badger DB
 	dir, err := os.MkdirTemp("", "storetest_")
