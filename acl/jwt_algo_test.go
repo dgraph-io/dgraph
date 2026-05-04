@@ -16,19 +16,26 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func TestACLJwtAlgo(t *testing.T) {
-	// The binary-under-test may be FIPS-enforcing even when the test binary
-	// itself is not (the default for integration2 tests). Skip EdDSA either
-	// when this test binary is FIPS-tagged (x.FIPSEnabled) or when the
-	// environment signals the dgraph binary is a FIPS build (x.FIPSBinary).
-	fipsBinary := x.FIPSEnabled || x.FIPSBinary()
+	// EdDSA (Ed25519) is outside Go's FIPS validation boundary; the
+	// FIPS-restricted dgraph binary rejects it at JWT-signing setup.
+	// buildvars.FIPSEnabled() returns true under either signal — this
+	// test binary is FIPS-tagged, or the cluster's dgraph subprocess
+	// reports FIPS via DGRAPH_FIPS_BINARY=1 — so a single guard covers
+	// both. The remaining algorithms in jwt.GetAlgorithms() are
+	// FIPS-approvable and run in both modes.
+	fipsBinary := buildvars.FIPSEnabled()
 	for _, algo := range jwt.GetAlgorithms() {
 		if algo == "none" || algo == "" {
+			continue
+		}
+		if algo == "EdDSA" && fipsBinary {
 			continue
 		}
 		if algo == "EdDSA" && fipsBinary {
