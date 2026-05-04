@@ -633,12 +633,6 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		closer.Done()
 	}()
 
-	// Default cluster compose: pristine source path. startCluster/pauseDefault/
-	// resumeDefault route through ComposeFileArgs which handles the
-	// overlay rewrite + --project-directory when the file is in the generator
-	// manifest. dgraph/docker-compose.yml is inline-markered (NOT in the
-	// manifest) so the rewrite is a no-op today — but keeping the consistent
-	// code path future-proofs if the file moves to the generator-fed set.
 	defaultCompose := filepath.Join(*baseDir, "dgraph/docker-compose.yml")
 	prefix := getClusterPrefix()
 
