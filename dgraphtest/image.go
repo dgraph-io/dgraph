@@ -81,7 +81,7 @@ func (c *LocalCluster) setupBinary() error {
 
 		// 2. Copy the host-native binary (for local bulk/live commands) as
 		// hostBinaryFileName (see load.go).
-		hostSrc := filepath.Join(gopath, "bin", buildvars.Bin.Get())
+		hostSrc := filepath.Join(gopath, "bin", buildvars.BinaryName.Get())
 
 		hostDst := filepath.Join(c.tempBinDir, hostBinaryFileName)
 		if err := copyFile(hostSrc, hostDst); err != nil {
@@ -229,12 +229,12 @@ func buildDgraphBinary(dir, binaryDir, version string) error {
 }
 
 func copyBinary(fromDir, toDir, version string) error {
-	binaryName := buildvars.Bin.Get()
+	binaryName := buildvars.BinaryName.Get()
 	if version != localVersion {
 		binaryName = fmt.Sprintf(binaryNameFmt, version)
 	}
 	fromPath := filepath.Join(fromDir, binaryName)
-	toPath := filepath.Join(toDir, buildvars.Bin.Get())
+	toPath := filepath.Join(toDir, buildvars.BinaryName.Get())
 	if err := copyFile(fromPath, toPath); err != nil {
 		return errors.Wrapf(err, "error while copying binary into tempBinDir [%v], from [%v]", toPath, fromPath)
 	}

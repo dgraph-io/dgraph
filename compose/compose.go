@@ -201,7 +201,7 @@ func initService(basename string, idx, grpcPort int) service {
 		// no data volume
 	}
 
-	svc.Command = buildvars.Bin.Get()
+	svc.Command = buildvars.BinaryName.Get()
 	if opts.LocalBin {
 		svc.Command = buildvars.GoBinDgraphPath.Get()
 	}

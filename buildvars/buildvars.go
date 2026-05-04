@@ -11,17 +11,17 @@
 //
 // Each Var carries its own env-var name and a defaulter — either a literal
 // string or a function that computes the default at Get() time (useful for
-// Vars whose default depends on other Vars, e.g. /gobin/<Bin>).
+// Vars whose default depends on other Vars, e.g. /gobin/<BinaryName>).
 //
 // Usage:
 //
-//	bin := buildvars.Bin.Get()       // reads $BIN or default
-//	path := buildvars.GoBinDgraphPath.Get() // "/gobin/<Bin value>"
+//	bin := buildvars.BinaryName.Get()       // reads $BIN or default
+//	path := buildvars.GoBinDgraphPath.Get() // "/gobin/<BinaryName value>"
 //
 // Forks override literal defaults from their own package init():
 //
 //	func init() {
-//	    buildvars.Bin.SetDefault("myfork-dgraph")
+//	    buildvars.BinaryName.SetDefault("myfork-dgraph")
 //	}
 //
 // Derived Vars automatically pick up the override because they recompute
@@ -58,7 +58,7 @@ func shellOutput(cmd string, args ...string) string {
 // forms are exclusive — one is always nil.
 //
 // Instances are pointers; call sites reference exported constants (e.g.
-// [Bin]) and resolve values via the [Var.Get] method.
+// [BinaryName]) and resolve values via the [Var.Get] method.
 //
 // Literal defaults are mutable via [Var.SetDefault] so forks can override
 // from their own init() without affecting call sites. The mutation is
@@ -91,7 +91,7 @@ func newVar(name, initialDefault string) *Var {
 
 // newDerivedVar constructs a Var whose default is computed at Get() time
 // by calling the supplied function. Useful for Vars whose fall-through
-// depends on other Vars (e.g. GoBinDgraphPath = "/gobin/" + Bin.Get()).
+// depends on other Vars (e.g. GoBinDgraphPath = "/gobin/" + BinaryName.Get()).
 // The function is called on every Get() that falls through; it should be
 // cheap. [Var.SetDefault] can still be called to replace the computation
 // with a literal value.
@@ -178,12 +178,17 @@ func ExportAll() error {
 // initialized with the upstream OSS default value. Forks override via
 // the SetDefault method from their own init().
 var (
-	// Bin is the name of the dgraph binary — both at build time
+	// BinaryName is the name of the dgraph binary — both at build time
 	// (what `go build -o` writes, matching upstream's $(BIN) in
 	// dgraph/Makefile) and at runtime (what compose files and test
 	// harnesses invoke as /gobin/$BIN). Upstream default: "dgraph".
 	// Forks rename (e.g. "myfork-dgraph") via env or SetDefault.
-	Bin = newVar("BIN", "dgraph")
+	//
+	// The env-var name is kept as BIN for backward compatibility with
+	// shell scripts, Makefiles, and CI configs that reference $(BIN) /
+	// ${BIN} directly. The Go identifier is BinaryName because Go
+	// callers benefit from the more descriptive symbol.
+	BinaryName = newVar("BIN", "dgraph")
 
 	// DockerImage is the Docker image tag (without :tag suffix) used by
 	// Makefile local-image / docker-image targets and by the compose
@@ -311,24 +316,24 @@ var (
 	// GoBinDgraphPath is the in-container path to the dgraph binary (i.e.
 	// the bind-mounted /gobin directory + the binary name). Used by
 	// jepsen's --local-binary default and by the compose generator for
-	// services configured with LocalBin. Derived from [Bin] at
+	// services configured with LocalBin. Derived from [BinaryName] at
 	// Get() time so the path automatically tracks the binary name.
 	GoBinDgraphPath = newDerivedVar("GOBIN_DGRAPH_PATH", func() string {
-		return "/gobin/" + Bin.Get()
+		return "/gobin/" + BinaryName.Get()
 	})
 
 	// HostGopathDgraphPath is the host-side absolute path to the built
-	// dgraph binary ($GOPATH/bin/<Bin>). Used by testutil and t/t.go
+	// dgraph binary ($GOPATH/bin/<BinaryName>). Used by testutil and t/t.go
 	// to locate the binary on the runner host (outside of containers).
 	// Returns empty if $GOPATH is unset so callers can fall back to
 	// build.Default.GOPATH or their own resolution. Derived from
-	// [Bin] at Get() time.
+	// [BinaryName] at Get() time.
 	HostGopathDgraphPath = newDerivedVar("HOST_GOPATH_DGRAPH_PATH", func() string {
 		gopath := os.Getenv("GOPATH")
 		if gopath == "" {
 			return ""
 		}
-		return gopath + "/bin/" + Bin.Get()
+		return gopath + "/bin/" + BinaryName.Get()
 	})
 )
 
@@ -336,7 +341,7 @@ var (
 // tooling (diagnostic dumps, documentation generators, resolver overrides)
 // can iterate the canonical set.
 var All = []*Var{
-	Bin,
+	BinaryName,
 	DockerImage,
 	BuildImage,
 	BuildTag,

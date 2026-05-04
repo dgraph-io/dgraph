@@ -204,7 +204,7 @@ func ensureGoPathLinuxBinEnvVarSet() {
 func ensureDgraphLinuxBinary() error {
 	ensureGoPathLinuxBinEnvVarSet()
 	gopathLinuxBin := os.Getenv("LINUX_GOBIN")
-	dgraphBin := filepath.Join(gopathLinuxBin, buildvars.Bin.Get())
+	dgraphBin := filepath.Join(gopathLinuxBin, buildvars.BinaryName.Get())
 
 	if _, err := os.Stat(dgraphBin); err == nil {
 		return nil // binary exists

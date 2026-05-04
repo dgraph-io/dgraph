@@ -33,12 +33,12 @@ import (
 // hostBinaryFileName is the conventional filename for the host-OS-native
 // dgraph binary when it differs from the container binary (non-Linux). On
 // Linux the host and container binaries are the same file name (returned
-// by buildvars.Bin.Get()) and this constant is unused.
+// by buildvars.BinaryName.Get()) and this constant is unused.
 const hostBinaryFileName = "dgraph_host"
 
 // HostDgraphBinaryPath returns the path to the host-OS-native dgraph binary
 // in tempBinDir. On Linux this is the same binary used by Docker containers
-// (named by buildvars.Bin.Get(), typically "dgraph"). On non-Linux (macOS)
+// (named by buildvars.BinaryName.Get(), typically "dgraph"). On non-Linux (macOS)
 // it is a separate native binary staged as hostBinaryFileName by setupBinary().
 // The HostBinaryName hook lets a fork override the filename entirely.
 func (c *LocalCluster) HostDgraphBinaryPath() string {
@@ -46,7 +46,7 @@ func (c *LocalCluster) HostDgraphBinaryPath() string {
 		return filepath.Join(c.tempBinDir, name)
 	}
 	if runtime.GOOS == "linux" {
-		return filepath.Join(c.tempBinDir, buildvars.Bin.Get())
+		return filepath.Join(c.tempBinDir, buildvars.BinaryName.Get())
 	}
 	return filepath.Join(c.tempBinDir, hostBinaryFileName)
 }

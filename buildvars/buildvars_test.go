@@ -152,7 +152,7 @@ func TestPackageDefaults(t *testing.T) {
 		v    *Var
 		want string
 	}{
-		{Bin, "dgraph"},
+		{BinaryName, "dgraph"},
 		{DockerImage, "dgraph/dgraph"},
 		{BuildImage, "ubuntu"},
 		{BuildTag, "24.04"},
@@ -169,13 +169,13 @@ func TestPackageDefaults(t *testing.T) {
 }
 
 // TestHostGopathDgraphPath_DependsOnGopath verifies the HostGopathDgraphPath
-// derived Var composes GOPATH + Bin correctly, and returns empty
+// derived Var composes GOPATH + BinaryName correctly, and returns empty
 // when GOPATH is unset (so callers can fall back to build.Default.GOPATH).
 func TestHostGopathDgraphPath_DependsOnGopath(t *testing.T) {
-	origDefault := Bin.Default()
-	t.Cleanup(func() { Bin.SetDefault(origDefault) })
+	origDefault := BinaryName.Default()
+	t.Cleanup(func() { BinaryName.SetDefault(origDefault) })
 
-	os.Unsetenv(string(Bin.Name))
+	os.Unsetenv(string(BinaryName.Name))
 	os.Unsetenv(string(HostGopathDgraphPath.Name))
 
 	// With GOPATH set
@@ -287,7 +287,7 @@ func TestExportAll(t *testing.T) {
 	}
 
 	// Spot-check a few: each should now have its default-value in env
-	for _, v := range []*Var{Bin, DockerImage, GoBinDgraphPath} {
+	for _, v := range []*Var{BinaryName, DockerImage, GoBinDgraphPath} {
 		got := os.Getenv(v.Name)
 		want := v.Default()
 		if got != want {
@@ -297,16 +297,16 @@ func TestExportAll(t *testing.T) {
 	}
 }
 
-// TestGoBinDgraphPath_TracksBin verifies the specific derivation
-// that the user called out: when Bin changes (via env or override),
+// TestGoBinDgraphPath_TracksBinaryName verifies the specific derivation
+// that the user called out: when BinaryName changes (via env or override),
 // GoBinDgraphPath reflects that change.
-func TestGoBinDgraphPath_TracksBin(t *testing.T) {
+func TestGoBinDgraphPath_TracksBinaryName(t *testing.T) {
 	// Preserve original state; the rest of the file is exercising
 	// these in parallel-incompatible ways already.
-	origDefault := Bin.Default()
-	t.Cleanup(func() { Bin.SetDefault(origDefault) })
+	origDefault := BinaryName.Default()
+	t.Cleanup(func() { BinaryName.SetDefault(origDefault) })
 
-	os.Unsetenv(string(Bin.Name))
+	os.Unsetenv(string(BinaryName.Name))
 	os.Unsetenv(string(GoBinDgraphPath.Name))
 
 	// Override via env
@@ -317,7 +317,7 @@ func TestGoBinDgraphPath_TracksBin(t *testing.T) {
 
 	// Override via SetDefault
 	os.Unsetenv("BIN")
-	Bin.SetDefault("dgraph-alt")
+	BinaryName.SetDefault("dgraph-alt")
 	if got := GoBinDgraphPath.Get(); got != "/gobin/dgraph-alt" {
 		t.Errorf("via SetDefault: GoBinDgraphPath.Get() = %q, want %q", got, "/gobin/dgraph-alt")
 	}

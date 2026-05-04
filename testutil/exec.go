@@ -124,7 +124,7 @@ func DgraphBinaryPath() string {
 		gopath = build.Default.GOPATH
 	}
 
-	return filepath.Join(gopath, "bin", buildvars.Bin.Get())
+	return filepath.Join(gopath, "bin", buildvars.BinaryName.Get())
 }
 
 func DetectRaceInZeros(prefix string) bool {
