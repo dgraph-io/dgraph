@@ -100,31 +100,29 @@ func (pp *PredicatePipeline) close() {
 }
 
 func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
-	var wg errgroup.Group
-	numThreads := 10
-
-	for i := 0; i < numThreads; i++ {
-		wg.Go(func() error {
-			for edge := range pipeline.edges {
-				uid := edge.Entity
-
-				key := x.DataKey(pipeline.attr, uid)
-				pl, err := mp.txn.Get(key)
-				if err != nil {
-					return err
-				}
-				if err := pl.AddMutationWithIndex(ctx, edge, mp.txn); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
+	// Vector inserts must run serially within a txn. HNSW Insert does
+	// multi-key read-modify-write across the entry-pointer key, level edge
+	// lists, and neighbor back-edges; per-list locks make individual key
+	// updates atomic but the cross-key sequences are not. Concurrent
+	// inserters on the same txn cache lose updates and leave nodes
+	// unreachable from the entry point — visible as similar_to(k=N) returning
+	// fewer than N hits even though all N vectors are in the data list. The
+	// legacy applyMutations path arrives at the same result indirectly:
+	// x.DivideAndRule rounds num<256 down to numGo=1, so any vector mutation
+	// short of a few hundred edges runs single-threaded on main. Match that
+	// here. (TestVectorTwoTxnWithoutCommit reliably reproduced the corruption
+	// on Linux CI when this used 10 workers.)
+	for edge := range pipeline.edges {
+		uid := edge.Entity
+		key := x.DataKey(pipeline.attr, uid)
+		pl, err := mp.txn.Get(key)
+		if err != nil {
+			return err
+		}
+		if err := pl.AddMutationWithIndex(ctx, edge, mp.txn); err != nil {
+			return err
+		}
 	}
-
-	if err := wg.Wait(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
