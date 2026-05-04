@@ -7,36 +7,42 @@ package x
 
 import "os"
 
-// FIPSEnabled reports whether this binary was built with the FIPS-enforcement
-// build tag (requirefips) and is therefore restricted to FIPS 140-3 validated
-// cryptography. Declared as a var (not a const) so a FIPS-tagged sibling file
-// can flip the value from package init without the cost of a build-tag split
-// at every call site.
+// FIPSEnabled reports whether the dgraph binary in scope is running under
+// FIPS 140-3 enforcement. It returns true if either:
 //
-// Upstream (non-tagged) builds: FIPSEnabled == false, unchanged behavior.
-// FIPS-tagged builds: an init() in the tag-guarded x/fips.go sets it to true
-// before any test or main() body runs, so `if x.FIPSEnabled { ... }` guards
-// behave identically to a compile-time constant for practical purposes.
+//   - this binary was compiled with `-tags=fips` (the tag-guarded init()
+//     in x/fips.go flips fipsEnabledCompiled to true at package load), or
+//   - the runtime DGRAPH_FIPS_BINARY env var is set to "1" (the signal a
+//     test harness uses when its own binary isn't fips-tagged but the
+//     dgraph subprocess it launches is).
 //
-// The value is only written during package init; after init it is effectively
-// read-only. No synchronization is required.
-var FIPSEnabled = false
+// Test code typically calls this in a single guard:
+//
+//	if x.FIPSEnabled() {
+//	    t.Skip("test requires features unavailable under FIPS")
+//	}
+//
+// Upstream (non-tagged) builds with the env var unset always return false;
+// no behavior change.
+func FIPSEnabled() bool {
+	return fipsEnabledCompiled || FIPSBinary()
+}
 
-// FIPSBinary reports whether the dgraph binary under test (not necessarily the
-// test binary itself) is a FIPS-restricted build. Returns true when the
-// environment variable DGRAPH_FIPS_BINARY is set to "1".
+// FIPSBinary is the runtime-only component of [FIPSEnabled]. Exposed for the
+// rare caller that wants to distinguish "the dgraph subprocess we're about
+// to launch is FIPS" from "this test binary itself is FIPS-tagged" — most
+// call sites should prefer [FIPSEnabled], which ORs both signals.
 //
-// Test helpers use this in tandem with FIPSEnabled: FIPSEnabled is the
-// compile-time signal (this binary is FIPS), FIPSBinary is the runtime signal
-// (the child/cluster binary this test will launch is FIPS). A downstream fork
-// sets the env var from its package init() so any test that spawns a dgraph
-// subprocess can skip cases the FIPS-tagged binary cannot satisfy — e.g.
-// upgrade-path tests that `git checkout` a pre-FIPS upstream SHA and build
-// it under a FIPS toolchain.
-//
-// Upstream users: leave DGRAPH_FIPS_BINARY unset (or "0") for normal behavior.
-// Set to "1" when running a test harness against a FIPS-restricted dgraph
-// binary to opt into the FIPS-aware test skips.
+// Returns true when DGRAPH_FIPS_BINARY is set to exactly "1". A downstream
+// fork sets the env var from its package init() so any test that spawns a
+// dgraph subprocess can skip cases the FIPS-tagged binary cannot satisfy —
+// e.g. upgrade-path tests that `git checkout` a pre-FIPS upstream SHA and
+// build it under a FIPS toolchain.
 func FIPSBinary() bool {
 	return os.Getenv("DGRAPH_FIPS_BINARY") == "1"
 }
+
+// fipsEnabledCompiled is the compile-time component of [FIPSEnabled].
+// Default false; the tag-guarded init() in x/fips.go (under //go:build fips)
+// sets it to true when -tags=fips is in effect. Read-only after package init.
+var fipsEnabledCompiled = false

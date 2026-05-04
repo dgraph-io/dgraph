@@ -10,19 +10,25 @@ import (
 	"testing"
 )
 
-// TestFIPSEnabledDefault confirms the upstream-pristine default: without any
-// FIPS-enforcing tag in effect, FIPSEnabled is false. A tag-guarded sibling
-// file in a downstream fork flips it to true via package init.
-func TestFIPSEnabledDefault(t *testing.T) {
-	if FIPSEnabled {
-		t.Fatal("FIPSEnabled must default to false in non-FIPS builds; got true")
+// TestFIPSEnabled_DefaultFalse confirms the upstream-pristine default:
+// without -tags=fips and with DGRAPH_FIPS_BINARY unset, FIPSEnabled
+// returns false. Under -tags=fips, the tag-guarded init in x/fips.go
+// flips fipsEnabledCompiled to true and the untagged build of this test
+// isn't compiled — so it's safe to assert false here unconditionally.
+func TestFIPSEnabled_DefaultFalse(t *testing.T) {
+	saveAndUnsetEnv(t, "DGRAPH_FIPS_BINARY")
+	if FIPSEnabled() {
+		t.Fatal("FIPSEnabled() must return false in non-FIPS builds with " +
+			"DGRAPH_FIPS_BINARY unset; got true")
 	}
 }
 
-// TestFIPSBinaryEnv confirms FIPSBinary() reads DGRAPH_FIPS_BINARY: true only
-// when set to exactly "1". Covers the common states: unset, empty, "0", "1",
-// and a non-"1" value.
-func TestFIPSBinaryEnv(t *testing.T) {
+// TestFIPSEnabled_ReadsDgraphFIPSBinary confirms the runtime signal:
+// FIPSEnabled() returns true when DGRAPH_FIPS_BINARY is set to exactly
+// "1", regardless of the compile-time tag. Covers the common edge cases:
+// unset, empty, "0", "1", and other non-"1" values.
+func TestFIPSEnabled_ReadsDgraphFIPSBinary(t *testing.T) {
+	saveAndUnsetEnv(t, "DGRAPH_FIPS_BINARY")
 	cases := []struct {
 		name     string
 		setValue string // empty string means unset
@@ -35,30 +41,39 @@ func TestFIPSBinaryEnv(t *testing.T) {
 		{"true-literal", "true", false},
 		{"leading-space", " 1", false},
 	}
-	origHadValue := false
-	orig := ""
-	if v, ok := os.LookupEnv("DGRAPH_FIPS_BINARY"); ok {
-		origHadValue = true
-		orig = v
-	}
-	t.Cleanup(func() {
-		if origHadValue {
-			_ = os.Setenv("DGRAPH_FIPS_BINARY", orig)
-		} else {
-			_ = os.Unsetenv("DGRAPH_FIPS_BINARY")
-		}
-	})
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.name == "unset" {
 				_ = os.Unsetenv("DGRAPH_FIPS_BINARY")
 			} else {
-				_ = os.Setenv("DGRAPH_FIPS_BINARY", tc.setValue)
+				t.Setenv("DGRAPH_FIPS_BINARY", tc.setValue)
 			}
-			got := FIPSBinary()
-			if got != tc.want {
-				t.Errorf("FIPSBinary() = %v; want %v (env=%q)", got, tc.want, tc.setValue)
+			if got := FIPSEnabled(); got != tc.want {
+				t.Errorf("FIPSEnabled() = %v; want %v (env=%q)",
+					got, tc.want, tc.setValue)
+			}
+			// FIPSBinary should agree with the runtime-only side
+			// regardless of compile-time tag — verify directly.
+			if got := FIPSBinary(); got != tc.want {
+				t.Errorf("FIPSBinary() = %v; want %v (env=%q)",
+					got, tc.want, tc.setValue)
 			}
 		})
 	}
+}
+
+// saveAndUnsetEnv captures the current value of name (if any), unsets it,
+// and registers a cleanup to restore the original state. Avoids leaking
+// test-set env values across cases.
+func saveAndUnsetEnv(t *testing.T, name string) {
+	t.Helper()
+	orig, had := os.LookupEnv(name)
+	t.Cleanup(func() {
+		if had {
+			_ = os.Setenv(name, orig)
+		} else {
+			_ = os.Unsetenv(name)
+		}
+	})
+	_ = os.Unsetenv(name)
 }

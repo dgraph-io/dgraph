@@ -239,7 +239,7 @@ var (
 	// CustomBuildTags is the list of additional Go build tags a fork or
 	// downstream consumer appends to [BuildTags]. Upstream default: empty.
 	// Consumers that need compile-time code paths set this to space-
-	// separated tag names (e.g. "myfork requirefips"). The Makefile
+	// separated tag names (e.g. "myfork fips"). The Makefile
 	// concatenates CustomBuildTags onto BuildTags, so callers typically
 	// read BuildTags to see the final tag set.
 	CustomBuildTags = newVar("CUSTOM_BUILD_TAGS", "")
