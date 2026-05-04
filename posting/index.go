@@ -738,6 +738,17 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	}
 
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
+	// handleOldDeleteForSingle may have appended a synthetic Del-of-old-value
+	// alongside the user's Set so InsertTokenizerIndexes / ProcessReverse can
+	// emit index/reverse Del entries for the prior value. The synthetic Del
+	// must NOT be written to the scalar data list: scalar value postings all
+	// share Uid == math.MaxUint64, and at read time pickPostings sorts the two
+	// equal-ts postings non-deterministically (Go's sort.Slice is unstable),
+	// while setMutationAfterCommit's committedUids[mpost.Uid] = mpost
+	// overwrites in append order. Either way Del can clobber the new Set, so
+	// the data list reads as "no value." Strip the synthetic Del here before
+	// committing the data delta — same logic ProcessCount uses internally.
+	stripSyntheticDel := info.index || info.reverse
 
 	for uid, pl := range postings {
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
@@ -747,7 +758,28 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
 		}
 
-		if _, err := mp.txn.AddDelta(key, pl, false, false); err != nil {
+		writePl := pl
+		if stripSyntheticDel && len(pl.Postings) > 1 {
+			hasSet := false
+			for _, post := range pl.Postings {
+				if post.Op == Set || post.Op == Ovr {
+					hasSet = true
+					break
+				}
+			}
+			if hasSet {
+				filtered := &pb.PostingList{}
+				for _, post := range pl.Postings {
+					if post.Op == Del {
+						continue
+					}
+					filtered.Postings = append(filtered.Postings, post)
+				}
+				writePl = filtered
+			}
+		}
+
+		if _, err := mp.txn.AddDelta(key, writePl, false, false); err != nil {
 			return err
 		}
 	}
@@ -950,6 +982,14 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 }
 
 func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdge) error {
+	// handleDeleteAll calls schema.State().IsIndexed/IsReversed/HasCount, all of
+	// which only consult the pending mutSchema (the new schema with the index
+	// being built) when the context carries the isWrite flag. The legacy path
+	// in runMutation already calls schema.GetWriteContext at the top; the
+	// pipeline must do the same here, otherwise during a background index
+	// build a star-delete won't generate the index Del entries for the prior
+	// value, leaving stale uids in the index permanently.
+	ctx = schema.GetWriteContext(ctx)
 	predicates := map[string]*PredicatePipeline{}
 	var wg sync.WaitGroup
 	numWg := 0
