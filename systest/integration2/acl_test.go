@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -21,16 +22,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// skipIfFIPSBinary skips the current test when x.FIPSEnabled() reports
-// the test binary or the dgraph binary it spawns is fips-tagged.
-// Upgrade-path tests pin a pre-FIPS upstream version for the "old"
-// binary; that version predates any FIPS-enforcing toolchain, so
-// attempting to build it under a FIPS configuration either fails
-// outright or produces a binary that refuses to start. The test is
-// semantically valid upstream and on non-FIPS forks; we skip only when
-// FIPS enforcement rules it out.
-func skipIfFIPSBinary(t *testing.T) {
-	if x.FIPSEnabled() {
+// skipIfFIPS skips the current test under -tags=fips. Upgrade-path
+// tests pin a pre-FIPS upstream version for the "old" binary; that
+// version predates any FIPS-enforcing toolchain, so attempting to build
+// it under a FIPS configuration either fails outright or produces a
+// binary that refuses to start. Semantically valid in non-FIPS builds.
+func skipIfFIPS(t *testing.T) {
+	if buildvars.FIPSEnabled {
 		t.Skip("upgrade-path test pins a pre-FIPS upstream version; skipping under FIPS build")
 	}
 }
@@ -48,7 +46,7 @@ type Received struct {
 }
 
 func testDuplicateUserUpgradeStrat(t *testing.T, strat dgraphtest.UpgradeStrategy) {
-	skipIfFIPSBinary(t)
+	skipIfFIPS(t)
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
 		WithReplicas(1).WithACL(time.Hour).WithVersion("v23.0.1")
 	c, err := dgraphtest.NewLocalCluster(conf)
