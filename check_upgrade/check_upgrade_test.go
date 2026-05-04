@@ -25,7 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
-// skipIfFIPS skips the current test under -tags=fips. Upgrade-path
+// skipIfFIPS skips the current test when buildvars.FIPSEnabled is true. Upgrade-path
 // tests pin a specific upstream SHA for the "old" binary; that commit
 // predates any FIPS-enforcing toolchain, so attempting to build it
 // under a FIPS configuration either fails outright or produces a binary

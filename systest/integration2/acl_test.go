@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// skipIfFIPS skips the current test under -tags=fips. Upgrade-path
+// skipIfFIPS skips the current test when buildvars.FIPSEnabled is true. Upgrade-path
 // tests pin a pre-FIPS upstream version for the "old" binary; that
 // version predates any FIPS-enforcing toolchain, so attempting to build
 // it under a FIPS configuration either fails outright or produces a

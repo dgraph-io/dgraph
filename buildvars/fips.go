@@ -7,9 +7,10 @@ package buildvars
 
 // FIPSEnabled reports whether this binary was built with FIPS 140-3
 // enforcement and is therefore restricted to validated cryptography.
-// Default false. A downstream fork ships a tag-guarded sibling file in
-// this package (e.g. //go:build fips) that flips it to true at package
-// load before any caller's main() or test body runs.
+// Default false. A downstream fork that runs FIPS-enforced builds flips
+// this var to true from a tag-guarded init() (the tag is whatever the
+// fork uses to gate its FIPS-enforcing code paths) before any caller's
+// main() or test body runs.
 //
 // Test code uses it to skip cases the FIPS-tagged binary cannot satisfy:
 //
