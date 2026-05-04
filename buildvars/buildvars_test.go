@@ -244,21 +244,21 @@ func TestExport_Idempotent(t *testing.T) {
 	}
 }
 
-func TestBuildTags_ComposesWithPrivateBuildTags(t *testing.T) {
-	origExtra := PrivateBuildTags.Default()
-	t.Cleanup(func() { PrivateBuildTags.SetDefault(origExtra) })
+func TestBuildTags_ComposesWithCustomBuildTags(t *testing.T) {
+	origExtra := CustomBuildTags.Default()
+	t.Cleanup(func() { CustomBuildTags.SetDefault(origExtra) })
 
 	os.Unsetenv("BUILD_TAGS")
-	os.Unsetenv("PRIVATE_BUILD_TAGS")
+	os.Unsetenv("CUSTOM_BUILD_TAGS")
 
 	// Empty extra → just "jemalloc"
-	PrivateBuildTags.SetDefault("")
+	CustomBuildTags.SetDefault("")
 	if got := BuildTags.Get(); got != "jemalloc" {
 		t.Errorf("with empty extra: BuildTags.Get() = %q, want %q", got, "jemalloc")
 	}
 
 	// Extra set → composed
-	PrivateBuildTags.SetDefault("myfork requirefips")
+	CustomBuildTags.SetDefault("myfork requirefips")
 	if got := BuildTags.Get(); got != "jemalloc myfork requirefips" {
 		t.Errorf("with extra: BuildTags.Get() = %q, want %q",
 			got, "jemalloc myfork requirefips")

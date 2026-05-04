@@ -214,7 +214,7 @@ var (
 	// BuildTags is the space-separated list of Go build tags passed to
 	// `go build` (via -tags). Upstream default composes "jemalloc" (the
 	// well-known libjemalloc tag) with any tags a fork adds via
-	// [PrivateBuildTags]. Both the Makefile and this Var use the same
+	// [CustomBuildTags]. Both the Makefile and this Var use the same
 	// composition, so `make` and direct `go run` agree on the final
 	// tag set.
 	//
@@ -224,25 +224,20 @@ var (
 	// Makefile handles OS gating for the actual `go build` invocation.
 	BuildTags = newDerivedVar("BUILD_TAGS", func() string {
 		base := "jemalloc"
-		extra := PrivateBuildTags.Get()
+		extra := CustomBuildTags.Get()
 		if extra == "" {
 			return base
 		}
 		return base + " " + extra
 	})
 
-	// PrivateBuildTags is the list of additional Go build tags a fork
-	// appends to [BuildTags]. Upstream default: empty. Forks that need
-	// compile-time code paths set this to space-separated tag names
-	// (e.g. "myfork requirefips"). The Makefile concatenates
-	// PrivateBuildTags onto BuildTags, so callers typically read BuildTags
-	// to see the final tag set.
-	//
-	// "Private" here refers to fork-local build choices (tags that enable
-	// private/downstream code paths), not access control. The name is
-	// retained for compatibility with the established PRIVATE_BUILD_TAGS
-	// environment variable that Makefile and CI have long used.
-	PrivateBuildTags = newVar("PRIVATE_BUILD_TAGS", "")
+	// CustomBuildTags is the list of additional Go build tags a fork or
+	// downstream consumer appends to [BuildTags]. Upstream default: empty.
+	// Consumers that need compile-time code paths set this to space-
+	// separated tag names (e.g. "myfork requirefips"). The Makefile
+	// concatenates CustomBuildTags onto BuildTags, so callers typically
+	// read BuildTags to see the final tag set.
+	CustomBuildTags = newVar("CUSTOM_BUILD_TAGS", "")
 
 	// GoRunTags is the build-tag list passed via -tags to `go run`
 	// invocations from Makefile helper recipes (e.g. `build-env` runs
@@ -349,7 +344,7 @@ var All = []*Var{
 	RuntimeTag,
 	ComposeBuildDir,
 	BuildTags,
-	PrivateBuildTags,
+	CustomBuildTags,
 	GoRunTags,
 	DgraphVersion,
 	Build,

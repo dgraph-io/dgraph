@@ -49,7 +49,7 @@ if [[ ${DGRAPH_LOADER} == bulk ]]; then
 	Info "bulk loading 21million data set"
 	DockerCompose run --rm dg1 \
 		bash -s <<EOF
-            /gobin/${BIN:-dgraph} bulk --schema=<(curl -LSs ${SCHEMA_URL}) --files=<(curl -LSs ${DATA_URL}) \
+            ${GOBIN_DGRAPH_PATH:-/gobin/dgraph} bulk --schema=<(curl -LSs ${SCHEMA_URL}) --files=<(curl -LSs ${DATA_URL}) \
                                --format=rdf --zero=zero1:5180 --out=/data/dg1/bulk
             mv /data/dg1/bulk/0/p /data/dg1
 EOF

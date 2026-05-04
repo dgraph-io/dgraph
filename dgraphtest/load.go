@@ -32,8 +32,8 @@ import (
 
 // hostBinaryFileName is the conventional filename for the host-OS-native
 // dgraph binary when it differs from the container binary (non-Linux). On
-// Linux the host and container binaries are the same file (named
-// buildvars.Bin.Get()) and this constant is unused.
+// Linux the host and container binaries are the same file name (returned
+// by buildvars.Bin.Get()) and this constant is unused.
 const hostBinaryFileName = "dgraph_host"
 
 // HostDgraphBinaryPath returns the path to the host-OS-native dgraph binary

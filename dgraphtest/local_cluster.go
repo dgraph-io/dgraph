@@ -118,6 +118,11 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating tempBinDir")
 	}
+	// WidenTempDirPerms is a public hook (dgraphtest/hooks.go) — default
+	// is no-op. Downstream consumers running dgraph as a non-root user
+	// inside compose-test containers override it to widen perms on
+	// host-side temp dirs that are bind-mounted into containers, so the
+	// in-container uid can read/write those paths.
 	if err := WidenTempDirPerms(c.tempBinDir); err != nil {
 		return err
 	}
@@ -126,6 +131,7 @@ func (c *LocalCluster) init() error {
 	if err != nil {
 		return errors.Wrap(err, "error while creating tempSecretsDir")
 	}
+	// Same hook, applied to the secrets temp dir.
 	if err := WidenTempDirPerms(c.tempSecretsDir); err != nil {
 		return err
 	}
@@ -312,6 +318,12 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 	}
 
 	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
+	// ApplyContainerUser is a public hook (dgraphtest/hooks.go) — default
+	// is no-op. Downstream consumers that run dgraph as a non-root user
+	// inside the test container override it to set cconf.User to the
+	// host's uid:gid, so files the container writes are readable on the
+	// host (and bind-mounted host paths are readable inside the
+	// container).
 	ApplyContainerUser(cconf)
 	hconf := &container.HostConfig{Mounts: mts, PublishAllPorts: true, PortBindings: dc.bindings(c.conf.portOffset)}
 	networkConfig := &network.NetworkingConfig{
@@ -1312,6 +1324,13 @@ func (c *LocalCluster) inspectContainer(containerID string) (string, error) {
 }
 
 func (c *LocalCluster) setupSecrets() error {
+	// WidenSecretFilePerms is a public hook (dgraphtest/hooks.go) —
+	// default is no-op. Secret files are written with mode 0600
+	// (owner-only) which is correct upstream. Downstream consumers
+	// running the dgraph container as a non-root user that differs from
+	// the host owner override the hook to widen perms (e.g. add group-
+	// or world-read) so the in-container uid can read the bind-mounted
+	// secret files.
 	if c.conf.encryption {
 		// use this key because some of the data is already encrypted using this key.
 		encKey := []byte("1234567890123456")
@@ -1388,6 +1407,14 @@ func runOpennssl(args ...string) error {
 }
 
 func (c *LocalCluster) GeneratePlugins(raceEnabled bool) error {
+	// GeneratePlugins is a public hook (dgraphtest/hooks.go) — the
+	// upstream default returns (nil, false, nil), so the fallback path
+	// below (host-side `go build -buildmode=plugin`) runs. Downstream
+	// consumers whose toolchain isn't directly invokable on the host
+	// (e.g. forks pinning a Docker-only build image) override the hook
+	// to compile plugins inside that image and return their .so paths;
+	// when handled=true the override's outcome wins and the host-side
+	// fallback is skipped.
 	if tokenizers, handled, err := GeneratePlugins(raceEnabled, c.tempBinDir, baseRepoDir); handled {
 		if err == nil {
 			c.customTokenizers = tokenizers
