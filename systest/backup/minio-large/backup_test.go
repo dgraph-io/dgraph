@@ -224,7 +224,10 @@ func copyToLocalFs(t *testing.T) {
 		minio.ListObjectsOptions{Prefix: "", Recursive: false})
 	for object := range objectCh1 {
 		require.NoError(t, object.Err)
-		if object.Key != "manifest.json" {
+		// Skip root-level JSON manifest files (manifest.json, manifest_summary.json,
+		// manifest_summary_tmp.json). The inner recursive loop downloads them as files;
+		// MkdirAll on a path that already exists as a file fails with "not a directory".
+		if !strings.HasSuffix(object.Key, ".json") {
 			dstDir := backupDir + "/" + object.Key
 			require.NoError(t, os.MkdirAll(dstDir, os.ModePerm))
 		}

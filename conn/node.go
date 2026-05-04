@@ -23,6 +23,8 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4/y"
@@ -760,10 +762,13 @@ func (n *Node) joinCluster(ctx context.Context, rc *pb.RaftContext) (*api.Payloa
 		return nil, errors.Errorf("REUSE_RAFTID: Raft ID duplicates mine: %+v", rc)
 	}
 
-	// Check that the new node is not already part of the group.
+	// Reject if a peer with the same Raft ID is already registered at a
+	// different address AND that peer is still genuinely connected. Using the
+	// gRPC connection state is more accurate than IsHealthy(), which relies on
+	// a heartbeat timestamp and stays "healthy" for ~2s after the peer drops.
 	if addr, ok := n.Peer(rc.Id); ok && rc.Addr != addr {
-		// There exists a healthy connection to server with same id.
-		if _, err := GetPools().Get(addr); err == nil {
+		if pool, err := GetPools().Get(addr); err == nil &&
+			pool.Get().GetState() == connectivity.Ready {
 			return &api.Payload{}, errors.Errorf(
 				"REUSE_ADDR: IP Address same as existing peer: %s", addr)
 		}

@@ -1,0 +1,95 @@
+{
+  "Manifests": [
+    {
+      "type": "full",
+      "since": 0,
+      "read_ts": 100,
+      "groups": { "1": ["0-name", "0-age"] },
+      "backup_id": "series-alpha",
+      "backup_num": 1,
+      "version": 2105,
+      "path": "dgraph.20230115.120000.000",
+      "encrypted": false,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "incremental",
+      "since": 100,
+      "read_ts": 150,
+      "groups": { "1": ["0-name"] },
+      "backup_id": "series-alpha",
+      "backup_num": 2,
+      "version": 2105,
+      "path": "dgraph.20230201.080000.000",
+      "encrypted": false,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "full",
+      "since": 0,
+      "read_ts": 200,
+      "groups": { "1": ["0-name", "0-email", "0-age"] },
+      "backup_id": "series-beta",
+      "backup_num": 1,
+      "version": 2105,
+      "path": "dgraph.20240601.000000.000",
+      "encrypted": true,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "incremental",
+      "since": 200,
+      "read_ts": 250,
+      "groups": { "1": ["0-email"] },
+      "backup_id": "series-beta",
+      "backup_num": 2,
+      "version": 2105,
+      "path": "dgraph.20240615.000000.000",
+      "encrypted": true,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "incremental",
+      "since": 250,
+      "read_ts": 300,
+      "groups": { "1": ["0-name", "0-age", "0-email"] },
+      "backup_id": "series-beta",
+      "backup_num": 3,
+      "version": 2105,
+      "path": "dgraph.20240701.000000.000",
+      "encrypted": true,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "full",
+      "since": 0,
+      "read_ts": 400,
+      "groups": { "1": ["0-name", "0-age", "0-email", "0-score"] },
+      "backup_id": "series-gamma",
+      "backup_num": 1,
+      "version": 2105,
+      "path": "dgraph.20260101.000000.000",
+      "encrypted": false,
+      "drop_operations": null,
+      "compression": "snappy"
+    },
+    {
+      "type": "incremental",
+      "since": 400,
+      "read_ts": 450,
+      "groups": { "1": ["0-score"] },
+      "backup_id": "series-gamma",
+      "backup_num": 2,
+      "version": 2105,
+      "path": "dgraph.20260315.000000.000",
+      "encrypted": false,
+      "drop_operations": null,
+      "compression": "snappy"
+    }
+  ]
+}

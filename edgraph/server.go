@@ -721,9 +721,21 @@ func validateCondValue(cond string) error {
 	}
 
 	lower := strings.ToLower(cond)
-	if !strings.HasPrefix(lower, "@if(") && !strings.HasPrefix(lower, "@filter(") {
+	if !strings.HasPrefix(lower, "@if") && !strings.HasPrefix(lower, "@filter") {
 		return errors.Errorf("invalid cond value: must start with @if( or @filter(")
 	}
+
+	// Strip the directive prefix and verify the remainder (after optional whitespace) starts with '('.
+	prefix := "@if"
+	if strings.HasPrefix(lower, "@filter") {
+		prefix = "@filter"
+	}
+	rest := strings.TrimSpace(cond[len(prefix):])
+	if len(rest) == 0 || rest[0] != '(' {
+		return errors.Errorf("invalid cond value: must start with @if( or @filter(")
+	}
+	// Rebuild cond without the space so the paren-balancing logic works on the normalized form.
+	cond = prefix + rest
 
 	openIdx := strings.Index(cond, "(")
 	if openIdx == -1 {
@@ -781,6 +793,7 @@ var valVarRegexp = regexp.MustCompile(`^val\([a-zA-Z_][a-zA-Z0-9_.]*\)$`)
 // validateValObjectId checks that an ObjectId starting with "val(" is a well-formed
 // val(variableName) reference and contains no injected DQL syntax.
 func validateValObjectId(objectId string) error {
+	objectId = strings.TrimSpace(objectId)
 	if !valVarRegexp.MatchString(objectId) {
 		return errors.Errorf("invalid val() reference in ObjectId: %q", objectId)
 	}
@@ -792,6 +805,7 @@ var langTagRegexp = regexp.MustCompile(`^[a-zA-Z]+(-[a-zA-Z0-9]+)*$`)
 
 // validateLangTag checks that a language tag contains only safe characters.
 func validateLangTag(lang string) error {
+	lang = strings.TrimSpace(lang)
 	if lang == "" {
 		return nil
 	}
