@@ -1,5 +1,3 @@
-//go:build fips
-
 /*
  * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
@@ -7,8 +5,11 @@
 
 package buildvars
 
-// FIPSEnabled reports whether this binary was built with -tags=fips and
-// is therefore restricted to FIPS 140-3 validated cryptography.
+// FIPSEnabled reports whether this binary was built with FIPS 140-3
+// enforcement and is therefore restricted to validated cryptography.
+// Default false. A downstream fork ships a tag-guarded sibling file in
+// this package (e.g. //go:build fips) that flips it to true at package
+// load before any caller's main() or test body runs.
 //
 // Test code uses it to skip cases the FIPS-tagged binary cannot satisfy:
 //
@@ -16,7 +17,5 @@ package buildvars
 //	    t.Skip("test requires features unavailable under FIPS")
 //	}
 //
-// Companion declaration in buildvars/nofips.go (//go:build !fips) sets
-// the var to false; only one of the two files compiles into any given
-// build, matching Go's stdlib boring/notboring convention.
-var FIPSEnabled = true
+// Read-only after package init.
+var FIPSEnabled = false
