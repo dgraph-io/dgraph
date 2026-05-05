@@ -274,6 +274,16 @@ they form a Raft group and provide synchronous replication.
 			"with structured fields including trace ID for correlation with distributed traces. "+
 			"Disabled by default (0). Note: enabling this logs query text which may contain "+
 			"sensitive data; do not enable in deployments with strict data privacy requirements.").
+		Flag("mutations-pipeline-threshold",
+			"Per-mutation edge-count threshold for routing through the per-predicate "+
+				"mutation pipeline, which parallelizes work across distinct predicates "+
+				"in a single mutation. 0 disables the pipeline entirely (all mutations "+
+				"take the legacy path). 1 always uses the pipeline. A value N>1 uses "+
+				"the pipeline only when len(edges) >= N, leaving small interactive "+
+				"mutations on the legacy path — the pipeline pays per-predicate "+
+				"goroutine spin-up cost, so tiny mutations are slightly slower on it; "+
+				"bulk multi-predicate mutations are faster (crossover ~100 edges in "+
+				"benchmarks here).").
 		String())
 }
 
