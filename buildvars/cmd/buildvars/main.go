@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Command buildvars emits the [buildvars] registry as lines of text
-// in a selectable format for consumption by shell eval, GNU Make eval,
-// or direct parsing by a validation script.
+// Command buildvars emits the [buildvars] registry as lines of text in
+// a selectable format for consumption by shell eval, GNU Make eval, or
+// direct parsing by a validation script.
 //
 // Formats:
 //
@@ -25,10 +25,10 @@
 //	validation scripts          — use plain format for diffing against
 //	                              Make-side values
 //
-// Values in shell format are single-quoted with embedded single quotes
-// escaped. Values in make format are emitted raw (newlines and special
-// Make characters in values would break, but all current buildvars values
-// are simple strings).
+// The shell format single-quotes values and escapes embedded single
+// quotes. The make format emits values raw; newlines and special Make
+// characters would break it, but all current buildvars values are
+// simple strings.
 package main
 
 import (
@@ -40,7 +40,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/buildvars"
 )
 
-// shellQuote wraps s in single quotes, escaping any embedded single
+// shellQuote wraps s in single quotes and escapes any embedded single
 // quotes. Matches POSIX shell conventions for literal string quoting:
 // 'foo'"'"'bar' unambiguously represents foo'bar.
 func shellQuote(s string) string {
@@ -58,7 +58,7 @@ func main() {
 		}
 	case "make":
 		// `:=` rather than `?=` so this command's value overrides any
-		// ambient Make default. Callers that want fallback-only shape
+		// ambient Make default. Callers wanting fallback-only shape
 		// can post-process to replace `:=` with `?=`.
 		for _, v := range buildvars.All {
 			fmt.Fprintf(os.Stdout, "%s := %s\n", v.Name, v.Get())

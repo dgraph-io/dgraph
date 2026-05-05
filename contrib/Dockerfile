@@ -15,11 +15,11 @@ RUN rm -rf /var/lib/apt/lists/*
 # remove /var/lib/apt/lists/* to reduce image size.
 # see: https://docs.docker.com/develop/develop-images/dockerfile_best-practices
 #
-# Retry the install once on transient apt-get errors (most commonly the
-# `File has unexpected size... Mirror sync in progress?` race against
-# archive.ubuntu.com mid-publish, which surfaces frequently in CI). The
-# rm + sleep between attempts gives the mirror time to settle and forces
-# a fresh package-list fetch.
+# Retry the install once on transient apt-get errors. The most common
+# is the `File has unexpected size... Mirror sync in progress?` race
+# against archive.ubuntu.com mid-publish, which surfaces frequently in
+# CI. The rm + sleep between attempts gives the mirror time to settle
+# and forces a fresh package-list fetch.
 RUN set -eu; \
     install_pkgs() { \
         apt-get update && apt-get install -y --no-install-recommends \

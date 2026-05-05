@@ -155,13 +155,13 @@ func initService(basename string, idx, grpcPort int) service {
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
-	// EmitUser is a public hook (compose/hooks.go); the upstream default
-	// returns "" so the generated compose service inherits the image's
-	// own USER directive. Downstream consumers that run dgraph as a
-	// non-root user under compose can override the hook to return a
-	// "uid:gid" string (e.g. "${UID:-65532}"), which is then emitted as
-	// the service's `user:` field. Bind-mounted host paths must be
-	// readable by that uid for the container to start cleanly.
+	// EmitUser is a public hook in compose/hooks.go. The upstream
+	// default returns "" so the generated compose service inherits the
+	// image's own USER directive. Downstream consumers that run dgraph
+	// as a non-root user under compose override the hook to return a
+	// "uid:gid" string such as "${UID:-65532}", which is emitted as the
+	// service's `user:` field. Bind-mounted host paths must be readable
+	// by that uid for the container to start cleanly.
 	if u := EmitUser(); u != "" {
 		svc.User = u
 	}

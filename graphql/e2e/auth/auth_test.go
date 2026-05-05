@@ -615,15 +615,15 @@ func TestQueryWithStandardClaims(t *testing.T) {
 	if metaInfo.Algo == "RS256" {
 		t.Skip()
 	}
-	// JWTs below are pre-signed with the same secret used by the schema's
-	// VerificationKey ("secret-long-enough"). Both the secret and these
-	// fixture JWTs were re-signed when the test secrets were widened to
-	// 14+ bytes — the minimum HMAC key length NIST SP 800-131A requires
+	// The JWTs below are pre-signed with the secret the schema's
+	// VerificationKey uses ("secret-long-enough"). Both the secret and
+	// these fixture JWTs were re-signed when the test secrets grew to
+	// 14+ bytes: the minimum HMAC key length NIST SP 800-131A requires
 	// and that some FIPS-validated crypto providers enforce at
-	// EVP_MAC_init. Shorter keys are valid under stock HMAC but rejected
-	// at signing time on FIPS builds. The signatures here were verified
-	// against the previous secret before being re-signed against the new
-	// one, so claim payloads are unchanged.
+	// EVP_MAC_init. Shorter keys are valid under stock HMAC but
+	// rejected at signing time on FIPS builds. The signatures here
+	// were verified against the previous secret before re-signing
+	// against the new one, so claim payloads are unchanged.
 	testCases := []TestCase{
 		{
 			query: `

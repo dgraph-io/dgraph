@@ -51,9 +51,9 @@ ifneq ($(strip $(BUILD_RACE)),)
 endif
 
 # jemalloc stuff
-# Check common package-manager install paths: /usr/local/lib (make install
-# from source), /usr/lib (apt-get libjemalloc-dev), /usr/lib/libjemalloc_pic.a
-# (apk add jemalloc-dev on Alpine/Wolfi).
+# Check common package-manager install paths: /usr/local/lib (make
+# install from source), /usr/lib (apt-get libjemalloc-dev), and
+# /usr/lib/libjemalloc_pic.a (apk add jemalloc-dev on Alpine/Wolfi).
 HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a -o -f /usr/lib/libjemalloc.a -o -f /usr/lib/libjemalloc_pic.a && echo "jemalloc")
 JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.3.1/jemalloc-5.3.1.tar.bz2"
 
@@ -89,9 +89,10 @@ install: jemalloc
 		echo "Old SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
 	fi
 	@go mod tidy
-	@# Use 'go build -o' rather than 'go install': the latter honors the
-	@# package's default name (always "dgraph"), but we want to honor $(BIN)
-	@# so renames (e.g. fork binary) produce the correct file name.
+	@# Use 'go build -o' rather than 'go install': 'go install' honors
+	@# the package's default name (always "dgraph"), but we want to
+	@# honor $(BIN) so renames such as a fork binary produce the
+	@# correct file name.
 	@go build $(BUILD_FLAGS) -o $(INSTALL_TARGET)
 	@echo "Installed $(BIN) ($(GOOS)/$(GOARCH)) to $(INSTALL_TARGET)"
 	@if [ "$(HAS_SHA256SUM)" ] ; then \

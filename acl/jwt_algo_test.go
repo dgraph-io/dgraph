@@ -23,10 +23,11 @@ import (
 )
 
 func TestACLJwtAlgo(t *testing.T) {
-	// EdDSA (Ed25519) is outside Go's FIPS validation boundary; the
+	// EdDSA (Ed25519) lies outside Go's FIPS validation boundary; the
 	// FIPS-restricted dgraph binary rejects it at JWT-signing setup.
-	// Skip the EdDSA iteration when buildvars.FIPSEnabled is true. The remaining algorithms
-	// in jwt.GetAlgorithms() are FIPS-approvable and run in both modes.
+	// Skip the EdDSA iteration when buildvars.FIPSEnabled is true. The
+	// remaining algorithms in jwt.GetAlgorithms() are FIPS-approvable
+	// and run in both modes.
 	fipsBuild := buildvars.FIPSEnabled
 	for _, algo := range jwt.GetAlgorithms() {
 		if algo == "none" || algo == "" {

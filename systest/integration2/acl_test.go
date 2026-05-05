@@ -22,11 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// skipIfFIPS skips the current test when buildvars.FIPSEnabled is true. Upgrade-path
-// tests pin a pre-FIPS upstream version for the "old" binary; that
-// version predates any FIPS-enforcing toolchain, so attempting to build
-// it under a FIPS configuration either fails outright or produces a
-// binary that refuses to start. Semantically valid in non-FIPS builds.
+// skipIfFIPS skips the current test when buildvars.FIPSEnabled is true.
+// Upgrade-path tests pin a pre-FIPS upstream version for the "old"
+// binary; that version predates any FIPS-enforcing toolchain, so
+// building it under a FIPS configuration fails outright or produces a
+// binary that refuses to start. The test remains semantically valid in
+// non-FIPS builds.
 func skipIfFIPS(t *testing.T) {
 	if buildvars.FIPSEnabled {
 		t.Skip("upgrade-path test pins a pre-FIPS upstream version; skipping under FIPS build")
