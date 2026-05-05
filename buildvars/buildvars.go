@@ -69,14 +69,19 @@ type Var struct {
 	// and treated as immutable; do not mutate after package init.
 	Name string
 
-	// defaultValue is the registered fall-through when this Var has a
-	// literal (non-computed) default. Used iff defaulter is nil.
+	// defaultValue is the registered literal fall-through when no env
+	// override is set. Mutually exclusive with defaulter: if defaulter
+	// is non-nil it computes the default and defaultValue is empty;
+	// if defaulter is nil, defaultValue holds the answer (possibly the
+	// empty string, which is a valid default for vars like
+	// ComposeBuildDir).
 	defaultValue string
 
-	// defaulter computes the default at Get() time. Used for derived
-	// Vars whose fall-through depends on other Vars (e.g. a path built
-	// from another Var's current value). When non-nil, [Var.SetDefault]
-	// still works but overrides the computation with a literal.
+	// defaulter, when non-nil, computes the default at Get() time.
+	// Used for derived Vars whose fall-through depends on other Vars
+	// (e.g. a path built from another Var's current value). [Var.SetDefault]
+	// freezes the result by clearing defaulter and writing the literal
+	// to defaultValue.
 	defaulter func() string
 }
 
