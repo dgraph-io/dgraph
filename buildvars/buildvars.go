@@ -37,7 +37,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 )
 
 // shellOutput runs cmd with args, captures stdout, and returns it stripped
@@ -61,16 +60,17 @@ func shellOutput(cmd string, args ...string) string {
 // [BinaryName]) and resolve values via the [Var.Get] method.
 //
 // Literal defaults are mutable via [Var.SetDefault] so forks can override
-// from their own init() without affecting call sites. The mutation is
-// guarded by an internal mutex; all reads are consistent.
+// from their own init() without affecting call sites. SetDefault is
+// expected to run during package init() before any goroutines exist; no
+// synchronization is performed because no concurrent reader/writer
+// scenario is reachable in practice.
 type Var struct {
 	// Name is the literal environment variable name. Set at declaration
 	// and treated as immutable; do not mutate after package init.
 	Name string
 
 	// defaultValue is the registered fall-through when this Var has a
-	// literal (non-computed) default. Guarded by mu. Used iff defaulter
-	// is nil.
+	// literal (non-computed) default. Used iff defaulter is nil.
 	defaultValue string
 
 	// defaulter computes the default at Get() time. Used for derived
@@ -78,8 +78,6 @@ type Var struct {
 	// from another Var's current value). When non-nil, [Var.SetDefault]
 	// still works but overrides the computation with a literal.
 	defaulter func() string
-
-	mu sync.RWMutex
 }
 
 // newVar constructs a Var with a literal default. Used by the package's
@@ -107,42 +105,30 @@ func (v *Var) Get() string {
 	if val := os.Getenv(v.Name); val != "" {
 		return val
 	}
-	v.mu.RLock()
-	literal := v.defaultValue
-	literalSet := literal != "" || v.defaulter == nil
-	defaulter := v.defaulter
-	v.mu.RUnlock()
-	if literalSet {
-		return literal
+	if v.defaultValue != "" || v.defaulter == nil {
+		return v.defaultValue
 	}
-	return defaulter()
+	return v.defaulter()
 }
 
 // Default returns the currently-registered default (ignoring any env
-// override). For derived Vars this triggers the computation. Exposed
-// primarily for diagnostic tooling that needs to log what the default
-// would be (independent of what any env override would produce).
+// override). For derived Vars this triggers the computation. Exposed for
+// tests that mutate via [Var.SetDefault] and need to capture the prior
+// value to restore later, and for diagnostic tooling that wants to log
+// what the default would be (independent of what any env override would
+// produce).
 func (v *Var) Default() string {
-	v.mu.RLock()
-	literal := v.defaultValue
-	literalSet := literal != "" || v.defaulter == nil
-	defaulter := v.defaulter
-	v.mu.RUnlock()
-	if literalSet {
-		return literal
+	if v.defaultValue != "" || v.defaulter == nil {
+		return v.defaultValue
 	}
-	return defaulter()
+	return v.defaulter()
 }
 
 // SetDefault replaces the registered default value with a literal string.
 // For derived Vars this also clears the defaulter function, freezing the
-// default at the new literal. Typically called from a fork's package
-// init() to override upstream defaults with fork-specific values. Safe
-// to call concurrently but intended to run once at startup before any
-// Get calls.
+// default at the new literal. Intended to run once during package init()
+// before any goroutines exist; no synchronization is performed.
 func (v *Var) SetDefault(value string) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
 	v.defaultValue = value
 	v.defaulter = nil
 }
