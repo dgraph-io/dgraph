@@ -73,7 +73,7 @@ func TestCacheAfterDeltaUpdateRecieved(t *testing.T) {
 
 	// Write delta to disk and call update
 	txn := Oracle().RegisterStartTs(5)
-	txn.cache.deltas[string(key)] = delta
+	txn.cache.deltas.AddToDeltas(string(key), delta)
 
 	writer := NewTxnWriter(pstore)
 	require.NoError(t, txn.CommitToDisk(writer, 15))
@@ -145,6 +145,8 @@ func BenchmarkTestCache(b *testing.B) {
 }
 
 func TestRollupTimestamp(t *testing.T) {
+	require.NoError(t, schema.ParseBytes([]byte("rollup: [uid] ."), 1))
+
 	attr := x.AttrInRootNamespace("rollup")
 	key := x.DataKey(attr, 1)
 	// 3 Delta commits.
@@ -212,7 +214,7 @@ func TestCacheStaleWhenMaxTsLessThanReadTs(t *testing.T) {
 	require.NoError(t, err)
 
 	txn1 := Oracle().RegisterStartTs(5)
-	txn1.cache.deltas[string(key)] = delta1
+	txn1.cache.deltas.AddToDeltas(string(key), delta1)
 
 	writer1 := NewTxnWriter(pstore)
 	require.NoError(t, txn1.CommitToDisk(writer1, 10))
@@ -245,7 +247,7 @@ func TestCacheStaleWhenMaxTsLessThanReadTs(t *testing.T) {
 	require.NoError(t, err)
 
 	txn2 := Oracle().RegisterStartTs(15)
-	txn2.cache.deltas[string(key)] = delta2
+	txn2.cache.deltas.AddToDeltas(string(key), delta2)
 
 	writer2 := NewTxnWriter(pstore)
 	require.NoError(t, txn2.CommitToDisk(writer2, 20))
@@ -274,6 +276,8 @@ func TestCacheStaleWhenMaxTsLessThanReadTs(t *testing.T) {
 }
 
 func TestPostingListRead(t *testing.T) {
+	require.NoError(t, schema.ParseBytes([]byte("emptypl: [uid] ."), 1))
+
 	attr := x.AttrInRootNamespace("emptypl")
 	key := x.DataKey(attr, 1)
 
