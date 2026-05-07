@@ -593,8 +593,6 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	// var nns []persistentHeapElement[T]
 	visited := []persistentHeapElement[T]{}
 	inLevel := getInsertLayer(ph.maxLevels) // calculate layer to insert node at (randomized every time)
-	var layerErr error
-
 	for level := range inLevel {
 		// perform insertion for layers [level, max_level) only, when level < inLevel just find better start
 		err := ph.getVecFromUid(entry, tc, &startVec)
@@ -617,7 +615,6 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 
 	var outboundEdgesAllLayers = make([][]uint64, ph.maxLevels)
 	var inboundEdgesAllLayersMap = make(map[uint64][][]uint64)
-	nnUidArray := []uint64{}
 	for level := inLevel; level < ph.maxLevels; level++ {
 		err := ph.getVecFromUid(entry, tc, &startVec)
 		if err != nil {
@@ -626,38 +623,34 @@ func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 		layerResult, err := ph.searchPersistentLayer(tc, level, entry, startVec,
 			inVec, false, ph.efConstruction, index.AcceptAll[T])
 		if err != nil {
-			return []persistentHeapElement[T]{}, []*index.KeyValue{}, layerErr
+			return []persistentHeapElement[T]{}, []*index.KeyValue{}, err
 		}
 
 		entry = layerResult.bestNeighbor().index
 
 		nns := layerResult.neighbors
 		for i := range nns {
-			nnUidArray = append(nnUidArray, nns[i].index)
 			if inboundEdgesAllLayersMap[nns[i].index] == nil {
 				inboundEdgesAllLayersMap[nns[i].index] = make([][]uint64, ph.maxLevels)
 			}
 			inboundEdgesAllLayersMap[nns[i].index][level] =
 				append(inboundEdgesAllLayersMap[nns[i].index][level], inUuid)
-			// add nn to outboundEdges.
-			// These should already be correctly ordered.
 			outboundEdgesAllLayers[level] =
 				append(outboundEdgesAllLayers[level], nns[i].index)
 		}
 	}
 	edge, err := ph.addNeighbors(ctx, tc, inUuid, outboundEdgesAllLayers)
-	for i := range nnUidArray {
-		edge, err := ph.addNeighbors(
-			ctx, tc, nnUidArray[i], inboundEdgesAllLayersMap[nnUidArray[i]])
+	if err != nil {
+		return []persistentHeapElement[T]{}, []*index.KeyValue{}, err
+	}
+	edges = append(edges, edge)
+	for nnUid, inboundEdges := range inboundEdgesAllLayersMap {
+		edge, err := ph.addNeighbors(ctx, tc, nnUid, inboundEdges)
 		if err != nil {
 			return []persistentHeapElement[T]{}, []*index.KeyValue{}, err
 		}
 		edges = append(edges, edge)
 	}
-	if err != nil {
-		return []persistentHeapElement[T]{}, []*index.KeyValue{}, err
-	}
-	edges = append(edges, edge)
 
 	return visited, edges, nil
 }
