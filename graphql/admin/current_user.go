@@ -39,11 +39,11 @@ func extractName(ctx context.Context) (string, error) {
 }
 
 func (gsr *currentUserResolver) Rewrite(ctx context.Context,
-	gqlQuery schema.Query) ([]*dql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*dql.GraphQuery, map[string]string, error) {
 
 	name, err := extractName(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	gqlQuery.Rename("getUser")

@@ -110,14 +110,16 @@ func getAuthSelector(queryType schema.QueryType) func(t schema.Type) *schema.Rul
 	return queryAuthSelector
 }
 
-// Rewrite rewrites a GraphQL query into DQL.
+// Rewrite rewrites a GraphQL query into DQL. It also returns any DQL variable
+// bindings (e.g. parameterized password values) that must be passed to the
+// executor alongside the query string.
 func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
-	gqlQuery schema.Query) ([]*dql.GraphQuery, error) {
+	gqlQuery schema.Query) ([]*dql.GraphQuery, map[string]string, error) {
 
 	customClaims, err := gqlQuery.GetAuthMeta().ExtractCustomClaims(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	authRw := &authRewriter{
@@ -143,29 +145,30 @@ func (qr *queryRewriter) Rewrite(
 		// ATM, I'm not sure how to hook into the GraphQL validator to get that to happen
 		xid, uid, err := gqlQuery.IDArgValue()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid, authRw)
-		return dgQuery, nil
+		return dgQuery, nil, nil
 	case schema.SimilarByIdQuery:
 		xid, uid, err := gqlQuery.IDArgValue()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return rewriteAsSimilarByIdQuery(gqlQuery, uid, xid, authRw), nil
+		return rewriteAsSimilarByIdQuery(gqlQuery, uid, xid, authRw), nil, nil
 	case schema.SimilarByEmbeddingQuery:
-		return rewriteAsSimilarByEmbeddingQuery(gqlQuery, authRw), nil
+		return rewriteAsSimilarByEmbeddingQuery(gqlQuery, authRw), nil, nil
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery, authRw), nil
+		return rewriteAsQuery(gqlQuery, authRw), nil, nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery, authRw)
 	case schema.AggregateQuery:
-		return aggregateQuery(gqlQuery, authRw), nil
+		return aggregateQuery(gqlQuery, authRw), nil, nil
 	case schema.EntitiesQuery:
-		return entitiesQuery(gqlQuery, authRw)
+		queries, err := entitiesQuery(gqlQuery, authRw)
+		return queries, nil, err
 	default:
-		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
+		return nil, nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
 }
 
@@ -340,17 +343,18 @@ func aggregateQuery(query schema.Query, authRw *authRewriter) []*dql.GraphQuery 
 	return append([]*dql.GraphQuery{finalMainQuery}, dgQuery...)
 }
 
-func passwordQuery(m schema.Query, authRw *authRewriter) ([]*dql.GraphQuery, error) {
+func passwordQuery(m schema.Query, authRw *authRewriter) (
+	[]*dql.GraphQuery, map[string]string, error) {
 	xid, uid, err := m.IDArgValue()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dgQuery := rewriteAsGet(m, uid, xid, authRw)
 
 	// Handle empty dgQuery
 	if strings.HasSuffix(dgQuery[0].Attr, "()") {
-		return dgQuery, nil
+		return dgQuery, nil, nil
 	}
 
 	// mainQuery is the query with check<Type>Password as Attr.
@@ -362,15 +366,24 @@ func passwordQuery(m schema.Query, authRw *authRewriter) ([]*dql.GraphQuery, err
 	predicate := queriedType.DgraphPredicate(name)
 	password := m.ArgValue(name).(string)
 
+	// Parameterize the password as a DQL variable so the value is bound by
+	// the executor rather than interpolated into the query string. This
+	// prevents DQL injection via passwords containing characters such as
+	// a double-quote.
+	const pwdVar = "$pwd0"
+	if mainQuery.Args == nil {
+		mainQuery.Args = make(map[string]string)
+	}
+	mainQuery.Args[pwdVar] = "string"
+
 	// This adds the checkPwd function
 	op := &dql.GraphQuery{
 		Attr:   "checkPwd",
 		Func:   mainQuery.Func,
 		Filter: mainQuery.Filter,
 		Children: []*dql.GraphQuery{{
-			Var: "pwd",
-			Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
-				password),
+			Var:  "pwd",
+			Attr: fmt.Sprintf(`checkpwd(%s, %s)`, predicate, pwdVar),
 		}},
 	}
 
@@ -397,7 +410,7 @@ func passwordQuery(m schema.Query, authRw *authRewriter) ([]*dql.GraphQuery, err
 
 	mainQuery.Filter = ft
 
-	return append(dgQuery, op), nil
+	return append(dgQuery, op), map[string]string{pwdVar: password}, nil
 }
 
 func intersection(a, b []uint64) []uint64 {

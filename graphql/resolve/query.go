@@ -40,8 +40,10 @@ type QueryResolver interface {
 }
 
 // A QueryRewriter can build a Dgraph dql.GraphQuery from a GraphQL query,
+// along with any DQL variable bindings (e.g. for parameterized password
+// queries) that must be supplied to the executor.
 type QueryRewriter interface {
-	Rewrite(ctx context.Context, q schema.Query) ([]*dql.GraphQuery, error)
+	Rewrite(ctx context.Context, q schema.Query) ([]*dql.GraphQuery, map[string]string, error)
 }
 
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from
@@ -121,7 +123,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		}
 	}
 
-	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
+	dgQuery, vars, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
 			query.ResponseName()))
@@ -130,7 +132,8 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: qry, ReadOnly: true}, query)
+	resp, err := qr.executor.Execute(ctx,
+		&dgoapi.Request{Query: qry, Vars: vars, ReadOnly: true}, query)
 	queryTimer.Stop()
 
 	if err != nil && !x.IsGqlErrorList(err) {

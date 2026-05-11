@@ -42,6 +42,7 @@ type QueryRewritingCase struct {
 	GQLQuery     string
 	GQLVariables string
 	DGQuery      string
+	DGVars       map[string]string
 }
 
 func TestQueryRewriting(t *testing.T) {
@@ -70,9 +71,14 @@ func TestQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
+			dgQuery, dgVars, err := testRewriter.Rewrite(context.Background(), gqlQuery)
 			require.NoError(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+			if len(tcase.DGVars) == 0 {
+				require.Empty(t, dgVars)
+			} else {
+				require.Equal(t, tcase.DGVars, dgVars)
+			}
 		})
 	}
 }
