@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/benchdata"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/enc"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -38,13 +39,6 @@ func (c *LocalCluster) HostDgraphBinaryPath() string {
 		return filepath.Join(c.tempBinDir, "dgraph")
 	}
 	return filepath.Join(c.tempBinDir, "dgraph_host")
-}
-
-var datafiles = map[string]string{
-	"1million.schema":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.schema?raw=true",
-	"1million.rdf.gz":  "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/1million.rdf.gz?raw=true",
-	"21million.schema": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.schema?raw=true",
-	"21million.rdf.gz": "https://github.com/dgraph-io/dgraph-benchmarks/blob/main/data/21million.rdf.gz?raw=true",
 }
 
 type DatasetType int
@@ -590,25 +584,9 @@ func (d *Dataset) GqlSchemaPath() string {
 }
 
 func (d *Dataset) ensureFile(filename string) string {
-	fullPath := filepath.Join(datasetFilesPath, filename)
-	if exists, _ := fileExists(fullPath); !exists {
-		url, ok := datafiles[filename]
-		if !ok {
-			panic(fmt.Sprintf("dataset file %s not found in datafiles map", filename))
-		}
-		if err := downloadFile(filename, url); err != nil {
-			panic(fmt.Sprintf("failed to download %s: %v", filename, err))
-		}
+	paths, err := benchdata.EnsureFiles(datasetFilesPath, benchdata.DataRef(""), benchdata.TestDataFile(filename))
+	if err != nil {
+		panic(fmt.Sprintf("failed to ensure %s: %v", filename, err))
 	}
-	return fullPath
-}
-
-func downloadFile(fname, url string) error {
-	cmd := exec.Command("wget", "-O", fname, url)
-	cmd.Dir = datasetFilesPath
-
-	if _, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("error downloading file %s: %w", fname, err)
-	}
-	return nil
+	return paths[0]
 }
