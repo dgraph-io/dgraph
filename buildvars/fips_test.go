@@ -7,11 +7,11 @@ package buildvars
 
 import "testing"
 
-// TestFIPSEnabled_DefaultFalse confirms the upstream-pristine default:
-// FIPSEnabled is false. Forks that flip it via a tag-guarded sibling
-// file run their own assertion under that tag.
-func TestFIPSEnabled_DefaultFalse(t *testing.T) {
-	if FIPSEnabled {
-		t.Fatal("FIPSEnabled must be false in upstream builds; got true")
+// TestFIPS140CryptoRestricted_DefaultFalse confirms the upstream-pristine
+// default: FIPS140CryptoRestricted is false. Forks that flip it via a
+// tag-guarded sibling file run their own assertion under that tag.
+func TestFIPS140CryptoRestricted_DefaultFalse(t *testing.T) {
+	if FIPS140CryptoRestricted {
+		t.Fatal("FIPS140CryptoRestricted must be false in upstream builds; got true")
 	}
 }

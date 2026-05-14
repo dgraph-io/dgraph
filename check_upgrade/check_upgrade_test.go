@@ -25,14 +25,14 @@ import (
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
-// skipIfFIPS skips the current test when buildvars.FIPSEnabled is true.
-// Upgrade-path tests pin a specific upstream SHA for the "old" binary;
-// that commit predates any FIPS-enforcing toolchain, so building it
-// under a FIPS configuration fails outright or produces a binary that
+// skipIfFIPS skips the current test when buildvars.FIPS140CryptoRestricted
+// is true. Upgrade-path tests pin a specific upstream SHA for the "old"
+// binary; that commit predates any FIPS-enforcing toolchain, so building
+// it under a FIPS configuration fails outright or produces a binary that
 // refuses to start. The test remains semantically valid in non-FIPS
 // builds.
 func skipIfFIPS(t *testing.T) {
-	if buildvars.FIPSEnabled {
+	if buildvars.FIPS140CryptoRestricted {
 		t.Skip("upgrade-path test pins a pre-FIPS upstream SHA; skipping under FIPS build")
 	}
 }
