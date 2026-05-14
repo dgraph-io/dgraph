@@ -4,8 +4,11 @@ services:
   alpha1_backup_clust_ha:
     image: dgraph-nfs-client:local
     build:
-      context: .
-      dockerfile: ./Dockerfile
+      dockerfile_inline: |
+        FROM debian:bookworm-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+              nfs-common util-linux \
+            && rm -rf /var/lib/apt/lists/*
     working_dir: /data/alpha1
     links:
       - nfs:nfs
