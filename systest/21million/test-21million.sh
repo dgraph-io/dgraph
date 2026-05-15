@@ -124,7 +124,7 @@ if [[ ${LOADER} == bulk ]]; then
             mkdir -p /data/alpha1
             mkdir -p /data/alpha2
             mkdir -p /data/alpha3
-            /gobin/dgraph bulk --schema=${SCHEMA_FILE} --files=${DATA_FILE} \
+            ${GOBIN_DGRAPH_PATH:-/gobin/dgraph} bulk --schema=${SCHEMA_FILE} --files=${DATA_FILE} \
                                --format=rdf --zero=zero1:5180 --out=/data/zero1/bulk \
                                --reduce_shards 3 --map_shards 9
             mv /data/zero1/bulk/0/p /data/alpha1

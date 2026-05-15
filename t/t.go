@@ -35,6 +35,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/testutil"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -159,6 +160,7 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
 	}
+	cmd.Env = append(cmd.Env, EnvForCompose()...)
 
 	return cmd
 }
@@ -202,7 +204,7 @@ func ensureGoPathLinuxBinEnvVarSet() {
 func ensureDgraphLinuxBinary() error {
 	ensureGoPathLinuxBinEnvVarSet()
 	gopathLinuxBin := os.Getenv("LINUX_GOBIN")
-	dgraphBin := filepath.Join(gopathLinuxBin, "dgraph")
+	dgraphBin := filepath.Join(gopathLinuxBin, buildvars.BinaryName.Get())
 
 	if _, err := os.Stat(dgraphBin); err == nil {
 		return nil // binary exists
@@ -233,16 +235,58 @@ func startCluster(composeFile, prefix string) error {
 	if err := ensureDgraphLinuxBinary(); err != nil {
 		return err
 	}
-	cmd := command(
-		"docker", "compose", "--compatibility", "-f", composeFile, "-p", prefix,
-		"up", "--force-recreate", "--build", "--remove-orphans", "--detach")
-	cmd.Stderr = nil
+	// + --project-directory so relative bind-mount sources resolve against the
+	// pristine test package dir.
+	composeArgs := ComposeFileArgs(composeFile, *baseDir)
+	upArgs := append([]string{"docker", "compose", "--compatibility"},
+		append(composeArgs, "-p", prefix, "up", "--force-recreate", "--build", "--remove-orphans", "--detach")...)
 
+	// docker compose `up` on a shared named volume can race on initial
+	// volume population when multiple containers using the same volume
+	// start concurrently ("failed to mkdir .../_data/<entry>: file exists").
+	// Retry once after a full `down -v` — the second attempt finds a fresh
+	// volume and succeeds. One retry is enough in practice for this class
+	// of race; anything persistent is a real configuration error.
+	const upAttempts = 3
+	var lastErr error
+	var cmdStderr strings.Builder
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
-	if err := cmd.Run(); err != nil {
+	for attempt := 1; attempt <= upAttempts; attempt++ {
+		cmdStderr.Reset()
+		cmd := command(upArgs...)
+		cmd.Stderr = &cmdStderr
+		if err := cmd.Run(); err == nil {
+			lastErr = nil
+			break
+		} else {
+			lastErr = err
+			stderr := cmdStderr.String()
+			fmt.Printf("Bring-up attempt %d/%d failed: %v\n", attempt, upAttempts, err)
+			if stderr != "" {
+				fmt.Printf("docker compose stderr:\n%s\n", stderr)
+			}
+			if attempt < upAttempts {
+				// Tear down any partial state so the retry starts from a
+				// clean volume/network baseline. Run `down -v` to remove
+				// the volume the next attempt will recreate, then sleep
+				// briefly so docker has time to release the mount points
+				// before the next `up` tries to populate a fresh volume.
+				// Without the sleep, the retry can hit the same volume-
+				// init race the first attempt did.
+				downArgs := append([]string{"docker", "compose", "--compatibility"},
+					append(composeArgs, "-p", prefix, "down", "-v")...)
+				downCmd := command(downArgs...)
+				downCmd.Stderr = nil
+				_ = downCmd.Run()
+				time.Sleep(2 * time.Second)
+				fmt.Printf("Retrying cluster bring-up (attempt %d/%d) after `down -v`...\n", attempt+1, upAttempts)
+			}
+		}
+	}
+	if lastErr != nil {
 		fmt.Printf("While running command: %q Error: %v\n",
-			strings.Join(cmd.Args, " "), err)
-		return err
+			strings.Join(upArgs, " "), lastErr)
+		return lastErr
 	}
 	fmt.Printf("CLUSTER UP: %s. Package: %s\n", prefix, composeFile)
 
@@ -295,26 +339,39 @@ func outputLogs(prefix string) {
 			fmt.Printf("error closing file: %v", err)
 		}
 	}()
-	printLogs := func(container string) {
-		in := testutil.GetContainerInstance(prefix, container)
-		c := in.GetContainer()
+	printLogs := func(c *container.Summary) {
 		if c == nil {
 			return
 		}
 		logCmd := exec.Command("docker", "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
-		x.Check(err)
-		if _, err := f.Write(out); err != nil {
-			fmt.Printf("error writing container logs to file: %v", err)
+		if err != nil {
+			fmt.Printf("error fetching docker logs for %s: %v\n", c.ID, err)
 		}
-		fmt.Printf("Docker logs for %s is %s with error %+v ", c.ID, string(out), err)
+		if _, werr := f.Write(out); werr != nil {
+			fmt.Printf("error writing container logs to file: %v\n", werr)
+		}
+		// Stream to stdout so CI captures the logs, with a clear header
+		// per-container that `gh run view --log` can grep for. The
+		// previous implementation wrote a single long line; switch to a
+		// fenced block so a failing test is easy to triage from the log.
+		name := ""
+		if len(c.Names) > 0 {
+			name = c.Names[0]
+		}
+		fmt.Printf("\n===== DOCKER LOGS %s (%s) =====\n%s===== END LOGS %s =====\n",
+			name, c.ID, string(out), name)
 	}
-	for i := 0; i <= 3; i++ {
-		printLogs("zero" + strconv.Itoa(i))
+	// Iterate every container in the prefix group rather than guessing
+	// names: backup/encryption has alpha1-3, minio, zero1; cloud has
+	// alpha1, minio, zero1-3; upstream clusters have alpha0 etc.
+	// AllContainers returns every container with the project prefix.
+	containers := testutil.AllContainers(prefix)
+	if len(containers) == 0 {
+		fmt.Printf("---> NO CONTAINERS FOUND for prefix %s; nothing to log.\n", prefix)
 	}
-
-	for i := 0; i <= 6; i++ {
-		printLogs("alpha" + strconv.Itoa(i))
+	for i := range containers {
+		printLogs(&containers[i])
 	}
 	s := fmt.Sprintf("---> LOGS for %s written to %s .\n", prefix, f.Name())
 	_, err = oc.Write([]byte(s))
@@ -322,11 +379,14 @@ func outputLogs(prefix string) {
 }
 
 func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
+	composeArgs := ComposeFileArgs(composeFile, *baseDir)
 	go func() {
 		if err != nil {
 			outputLogs(prefix)
 		}
-		cmd := command("docker", "compose", "--compatibility", "-f", composeFile, "-p", prefix, "stop")
+		stopArgs := append([]string{"docker", "compose", "--compatibility"},
+			append(composeArgs, "-p", prefix, "stop")...)
+		cmd := command(stopArgs...)
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
@@ -370,7 +430,9 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			}
 		}
 
-		cmd = command("docker", "compose", "--compatibility", "-f", composeFile, "-p", prefix, "down", "-v")
+		downArgs := append([]string{"docker", "compose", "--compatibility"},
+			append(composeArgs, "-p", prefix, "down", "-v")...)
+		cmd = command(downArgs...)
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n",
 				prefix, err)
@@ -437,11 +499,34 @@ func gotestsumBin() string {
 	return filepath.Join(gopath, "bin", "gotestsum")
 }
 
+// testTags returns the comma-joined build-tag list for test
+// compilation. Starts from `integration` (unless unit-only), then appends
+// every extra tag in buildvars.GoRunTags so fork-specific tag-guarded
+// files compile into the test binary. In upstream builds GoRunTags is
+// empty, so the result is just "integration".
+func testTags(baseTag string) string {
+	tags := []string{}
+	if baseTag != "" {
+		tags = append(tags, baseTag)
+	}
+	if extra := strings.TrimSpace(buildvars.GoRunTags.Get()); extra != "" {
+		// Support space- or comma-separated extras.
+		for _, t := range strings.FieldsFunc(extra, func(r rune) bool { return r == ' ' || r == ',' }) {
+			if t != "" {
+				tags = append(tags, t)
+			}
+		}
+	}
+	return strings.Join(tags, ",")
+}
+
 func runTestsFor(ctx context.Context, pkg, prefix string, xmlFile string) error {
 	args := []string{gotestsumBin(), "--junitfile", xmlFile, "--format", "standard-verbose", "--max-fails", "1", "--",
 		"-v", "-failfast"}
 	if !isUnitOnly() {
-		args = append(args, "-tags=integration")
+		args = append(args, "-tags="+testTags("integration"))
+	} else if tags := testTags(""); tags != "" {
+		args = append(args, "-tags="+tags)
 	}
 	switch {
 	case *testTimeout != "":
@@ -611,8 +696,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !started || stopped {
 			return
 		}
-		cmd := command("docker", "compose", "--compatibility",
-			"-f", defaultCompose, "-p", prefix, "stop")
+		pauseArgs := append([]string{"docker", "compose", "--compatibility"},
+			append(ComposeFileArgs(defaultCompose, *baseDir), "-p", prefix, "stop")...)
+		cmd := command(pauseArgs...)
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Warning: failed to pause default cluster %s: %v\n", prefix, err)
@@ -631,8 +717,9 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !defaultPaused {
 			return nil // already running
 		}
-		cmd := command("docker", "compose", "--compatibility",
-			"-f", defaultCompose, "-p", prefix, "start")
+		resumeArgs := append([]string{"docker", "compose", "--compatibility"},
+			append(ComposeFileArgs(defaultCompose, *baseDir), "-p", prefix, "start")...)
+		cmd := command(resumeArgs...)
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("Warning: failed to resume default cluster %s: %v\n", prefix, err)
@@ -665,6 +752,13 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 			}(i)
 		}
 		resumeWg.Wait()
+		// HTTP /health returns OK before alpha has fully re-established its
+		// internal connection pool to zero after a docker-compose `start`.
+		// The first test to run immediately after resume occasionally hits
+		// "No connection exists" in DropAll/Alter because groups().Leader(0)
+		// is still nil. Sleep a few seconds so membership sync can complete.
+		// Cheap compared to a whole cluster restart on failure.
+		time.Sleep(5 * time.Second)
 		defaultPaused = false
 		return nil
 	}
@@ -740,7 +834,14 @@ func runCustomClusterTest(ctx context.Context, pkg string, wg *sync.WaitGroup, x
 	}
 	if !*keepCluster {
 		wg.Add(1)
-		defer stopCluster(compose, prefix, wg, err)
+		// Wrap in a closure so the `err` read by stopCluster is the
+		// value AT DEFER RUN TIME (i.e. after runTestsFor returns).
+		// The original form `defer stopCluster(..., err)` captured err
+		// at defer-STATEMENT time, which is always nil here, so
+		// stopCluster never dumped container logs on test failure.
+		defer func() {
+			stopCluster(compose, prefix, wg, err)
+		}()
 	}
 
 	err = runTestsFor(ctx, pkg, prefix, xmlFile)
@@ -837,6 +938,9 @@ type task struct {
 // for custom cluster tests (i.e. those not using default docker-compose.yml)
 func composeFileFor(pkg string) string {
 	dir := strings.Replace(pkg, "github.com/dgraph-io/dgraph/v25/", "", 1)
+	// Return the pristine source path; ComposeFileArgs (called from
+	// startCluster/stopCluster) handles the overlay rewrite + project-
+	// directory anchoring when the file is in the generator manifest.
 	return filepath.Join(*baseDir, dir, "docker-compose.yml")
 }
 
@@ -877,9 +981,15 @@ func getPackages() []task {
 	}
 	// When running unit-only, don't add --tags=integration so that only true
 	// unit tests (without //go:build integration) are discovered and compiled.
+	// Always thread GO_RUN_TAGS through so fork-tagged files participate in
+	// package discovery (e.g. tag-guarded init hooks for test harness).
 	var buildFlags []string
-	if !isUnitOnly() {
-		buildFlags = []string{"-tags=integration"}
+	if tags := testTags("integration"); isUnitOnly() {
+		if extraOnly := testTags(""); extraOnly != "" {
+			buildFlags = []string{"-tags=" + extraOnly}
+		}
+	} else {
+		buildFlags = []string{"-tags=" + tags}
 	}
 	cfg := &packages.Config{BuildFlags: buildFlags}
 

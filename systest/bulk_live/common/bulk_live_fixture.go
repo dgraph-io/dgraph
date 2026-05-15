@@ -122,7 +122,10 @@ func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *
 func (s *bsuite) setup(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) {
 	var env []string
 	if s.opts.remote {
-		env = append(env, "MINIO_ACCESS_KEY=accesskey", "MINIO_SECRET_KEY=secretkey")
+		// Secret key padded to 14+ bytes so "AWS4"+secret satisfies the
+		// OpenSSL FIPS provider's HMAC key-length minimum (matches
+		// dgraph/minio.env, systest/backup.env).
+		env = append(env, "MINIO_ACCESS_KEY=accesskey", "MINIO_SECRET_KEY=secretkey-long-enough")
 	}
 
 	require.NoError(s.t, makeDirEmpty(filepath.Join(rootDir, "out", "0")))

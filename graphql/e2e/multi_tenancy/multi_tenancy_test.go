@@ -256,7 +256,7 @@ func TestAuth(t *testing.T) {
 		username: String! @id
 		isPublic: Boolean @search
 	}
-	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}`
+	# Dgraph.Authorization  {"VerificationKey":"secret-long-enough","Header":"Authorization","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}`
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema, header)
 
 	ns := common.CreateNamespace(t, header, "alpha1")
@@ -277,7 +277,7 @@ func TestAuth(t *testing.T) {
 		username: String! @id
 		isPublic: Boolean @search
 	}
-	# Dgraph.Authorization  {"VerificationKey":"secret1","Header":"Authorization1","Namespace":"https://dgraph.io/jwt/claims1","Algo":"HS256"}`
+	# Dgraph.Authorization  {"VerificationKey":"secret1-long-enough","Header":"Authorization1","Namespace":"https://dgraph.io/jwt/claims1","Algo":"HS256"}`
 	common.SafelyUpdateGQLSchema(t, common.Alpha1HTTP, schema1, header1)
 
 	require.Equal(t, schema, common.AssertGetGQLSchema(t, common.Alpha1HTTP, header).Schema)
@@ -296,7 +296,7 @@ func TestAuth(t *testing.T) {
 
 	// for namespace 0, after adding multiple users, we should only get back the user "Alice"
 	header = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
-		PublicKey: "secret",
+		PublicKey: "secret-long-enough",
 		Namespace: "https://dgraph.io/jwt/claims",
 		Algo:      "HS256",
 		Header:    "Authorization",
@@ -312,7 +312,7 @@ func TestAuth(t *testing.T) {
 
 	// for namespace 1, after adding multiple users, we should only get back the public users
 	header1 = common.GetJWT(t, "Alice", nil, &testutil.AuthMeta{
-		PublicKey: "secret1",
+		PublicKey: "secret1-long-enough",
 		Namespace: "https://dgraph.io/jwt/claims1",
 		Algo:      "HS256",
 		Header:    "Authorization1",
@@ -345,7 +345,7 @@ func TestCORS(t *testing.T) {
 		})
 	}
 	# Dgraph.Allow-Origin "https://play.dgraph.io"
-	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	# Dgraph.Authorization  {"VerificationKey":"secret-long-enough","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
 	`, header)
 
 	ns := common.CreateNamespace(t, header, "alpha1")
@@ -363,7 +363,7 @@ func TestCORS(t *testing.T) {
 		})
 	}
 	# Dgraph.Allow-Origin "https://play1.dgraph.io"
-	# Dgraph.Authorization  {"VerificationKey":"secret","Header":"X-Test-Dgraph1","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
+	# Dgraph.Authorization  {"VerificationKey":"secret-long-enough","Header":"X-Test-Dgraph1","Namespace":"https://dgraph.io/jwt/claims","Algo":"HS256"}
 	`, header1)
 
 	// testCORS for namespace 0

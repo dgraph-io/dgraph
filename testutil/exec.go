@@ -12,8 +12,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -122,7 +124,7 @@ func DgraphBinaryPath() string {
 		gopath = build.Default.GOPATH
 	}
 
-	return os.ExpandEnv(gopath + "/bin/dgraph")
+	return filepath.Join(gopath, "bin", buildvars.BinaryName.Get())
 }
 
 func DetectRaceInZeros(prefix string) bool {

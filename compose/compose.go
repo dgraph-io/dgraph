@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/pflag"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -154,6 +155,16 @@ func initService(basename string, idx, grpcPort int) service {
 	svc.Image = opts.Image + ":" + opts.Tag
 	svc.ContainerName = containerName(svc.name)
 	svc.WorkingDir = fmt.Sprintf("/data/%s", svc.name)
+	// EmitUser is a public hook in compose/hooks.go. The upstream
+	// default returns "" so the generated compose service inherits the
+	// image's own USER directive. Downstream consumers that run dgraph
+	// as a non-root user under compose override the hook to return a
+	// "uid:gid" string such as "${UID:-65532}", which is emitted as the
+	// service's `user:` field. Bind-mounted host paths must be readable
+	// by that uid for the container to start cleanly.
+	if u := EmitUser(); u != "" {
+		svc.User = u
+	}
 	if idx > 1 {
 		svc.DependsOn = append(svc.DependsOn, name(basename, idx-1))
 	}
@@ -190,9 +201,9 @@ func initService(basename string, idx, grpcPort int) service {
 		// no data volume
 	}
 
-	svc.Command = "dgraph"
+	svc.Command = buildvars.BinaryName.Get()
 	if opts.LocalBin {
-		svc.Command = "/gobin/dgraph"
+		svc.Command = buildvars.GoBinDgraphPath.Get()
 	}
 	if opts.UserOwnership {
 		user, err := user.Current()
@@ -590,7 +601,7 @@ func main() {
 		"./docker-compose.yml", "name of output file")
 	cmd.PersistentFlags().BoolVarP(&opts.LocalBin, "local", "l", true,
 		"use locally-compiled binary if true, otherwise use binary from docker container")
-	cmd.PersistentFlags().StringVar(&opts.Image, "image", "dgraph/dgraph",
+	cmd.PersistentFlags().StringVar(&opts.Image, "image", buildvars.DockerImage.Get(),
 		"Docker image for alphas and zeros.")
 	cmd.PersistentFlags().StringVarP(&opts.Tag, "tag", "t", "latest",
 		"Docker tag for the --image image. Requires -l=false to use binary from docker container.")

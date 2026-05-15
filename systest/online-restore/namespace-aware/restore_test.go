@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -169,6 +170,9 @@ func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtes
 }
 
 func TestNameSpaceAwareRestoreOnSingleNode(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux: Docker port mapping is unreliable during restore")
+	}
 	baseClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).
 		WithReplicas(3).WithACL(20 * time.Hour).WithEncryption().WithUidLease(1000)
 	baseCluster, err := dgraphtest.NewLocalCluster(baseClusterConf)
@@ -189,6 +193,9 @@ func TestNameSpaceAwareRestoreOnSingleNode(t *testing.T) {
 }
 
 func TestNamespaceAwareRestoreOnMultipleGroups(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping on non-Linux: Docker port mapping is unreliable during restore")
+	}
 	baseClusterConf := dgraphtest.NewClusterConfig().WithNumAlphas(9).WithNumZeros(3).
 		WithReplicas(3).WithACL(20 * time.Hour).WithEncryption().WithUidLease(10000)
 	baseCluster, err := dgraphtest.NewLocalCluster(baseClusterConf)
