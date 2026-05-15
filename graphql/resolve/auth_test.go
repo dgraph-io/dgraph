@@ -43,6 +43,7 @@ type AuthQueryRewritingCase struct {
 	// Dgraph upsert query and mutations built from the GQL
 	DGQuery        string
 	DGQuerySec     string
+	DGVars         map[string]string
 	DGMutations    []*dgraphMutation
 	DGMutationsSec []*dgraphMutation
 
@@ -433,7 +434,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 				require.NoError(t, err)
 			}
 
-			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
+			dgQuery, dgVars, err := testRewriter.Rewrite(ctx, gqlQuery)
 
 			if tcase.Error != nil {
 				require.NotNil(t, err)
@@ -442,9 +443,14 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta, b []b
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+				if len(tcase.DGVars) == 0 {
+					require.Empty(t, dgVars)
+				} else {
+					require.Equal(t, tcase.DGVars, dgVars)
+				}
 			}
 			// Check for unused variables.
-			_, err = dql.Parse(dql.Request{Str: dgraph.AsString(dgQuery)})
+			_, err = dql.Parse(dql.Request{Str: dgraph.AsString(dgQuery), Variables: dgVars})
 			require.NoError(t, err)
 		})
 	}
