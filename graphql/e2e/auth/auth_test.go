@@ -615,6 +615,15 @@ func TestQueryWithStandardClaims(t *testing.T) {
 	if metaInfo.Algo == "RS256" {
 		t.Skip()
 	}
+	// The JWTs below are pre-signed with the secret the schema's
+	// VerificationKey uses ("secret-long-enough"). Both the secret and
+	// these fixture JWTs were re-signed when the test secrets grew to
+	// 14+ bytes: the minimum HMAC key length NIST SP 800-131A requires
+	// and that some FIPS-validated crypto providers enforce at
+	// EVP_MAC_init. Shorter keys are valid under stock HMAC but
+	// rejected at signing time on FIPS builds. The signatures here
+	// were verified against the previous secret before re-signing
+	// against the new one, so claim payloads are unchanged.
 	testCases := []TestCase{
 		{
 			query: `
@@ -623,7 +632,7 @@ func TestQueryWithStandardClaims(t *testing.T) {
 					name
 				}
 			}`,
-			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6IkFETUlOIn0.cH_EcC8Sd0pawJs96XPhpRsYVXuTybT1oUkluBDS8B4",
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIiwiUk9MRSI6IkFETUlOIn0.pZ2-Dib2lXrCeXghCoPD7CnZ8GUGXhv1WbbRQ7mhPnM",
 			result: `{"queryProject":[{"name":"Project1"},{"name":"Project2"}]}`,
 		},
 		{
@@ -633,7 +642,7 @@ func TestQueryWithStandardClaims(t *testing.T) {
 					name
 				}
 			}`,
-			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.wabcAkINZ6ycbEuziTQTSpv8T875Ky7JQu68ynoyDQE",
+			jwt:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjozNTE2MjM5MDIyLCJlbWFpbCI6InRlc3RAZGdyYXBoLmlvIiwiVVNFUiI6InVzZXIxIn0.skAQMpvEE4WoqCZ6z6cKXKTIhyLvFV2Fyj_m6U8-g5M",
 			result: `{"queryProject":[{"name":"Project1"}]}`,
 		},
 	}

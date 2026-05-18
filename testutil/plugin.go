@@ -15,7 +15,19 @@ import (
 	"strings"
 )
 
+// GeneratePlugins is the ./t test runner's plugin-build entrypoint. It
+// delegates to the BuildPlugins hook (see testutil/hooks.go) so a fork
+// can override the build with its own toolchain (e.g. microsoft/go under
+// FIPS, or an in-docker cross-compile).
 func GeneratePlugins(raceEnabled bool) {
+	BuildPlugins(raceEnabled)
+}
+
+// defaultBuildPlugins is the upstream-pristine implementation: compile
+// the four testutil/custom_plugins/<name>/main.go sources with stock
+// `go build -buildmode=plugin`, targeting GOOS=linux, and write the
+// resulting .so files to testutil/custom_plugins/0..3.so.
+func defaultBuildPlugins(raceEnabled bool) {
 	_, curr, _, ok := runtime.Caller(0)
 	if !ok {
 		fmt.Print("error while getting current file")

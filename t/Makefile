@@ -32,12 +32,20 @@ check-deps: check-deps-go check-deps-docker check-deps-gotestsum check-deps-ack 
 .PHONY: check
 check: check-deps
 	@echo "LINUX_GOBIN=$(LINUX_GOBIN)"
-	@if [ -f "$(LINUX_GOBIN)/dgraph" ]; then \
-		file $(LINUX_GOBIN)/dgraph | grep -q "ELF.*executable" || (echo "Error: dgraph binary at $(LINUX_GOBIN)/dgraph is not a Linux executable" && exit 1); \
+	@# DBIN is a recipe-local alias for "${BIN:-dgraph}": BIN with the
+	@# upstream-pristine default applied. The alias keeps the rest of
+	@# the recipe's path expressions short and parallels the same
+	@# pattern in compose/run.sh. The recipe does not rebind $$BIN
+	@# itself because BIN is a common shell variable name; a
+	@# fork-local alias avoids accidental leakage into commands the
+	@# recipe later invokes.
+	@DBIN=$${BIN:-dgraph}; \
+	if [ -f "$(LINUX_GOBIN)/$$DBIN" ]; then \
+		file $(LINUX_GOBIN)/$$DBIN | grep -q "ELF.*executable" || (echo "Error: $$DBIN binary at $(LINUX_GOBIN)/$$DBIN is not a Linux executable" && exit 1); \
 	else \
-		echo "Error: dgraph binary not found at $(LINUX_GOBIN)/dgraph" && exit 1; \
-	fi
-	@echo "The dgraph binary is a Linux executable (as required)"
+		echo "Error: $$DBIN binary not found at $(LINUX_GOBIN)/$$DBIN" && exit 1; \
+	fi; \
+	echo "The $$DBIN binary is a Linux executable (as required)"
 
 # ---- check-deps-{tool} targets ----
 #

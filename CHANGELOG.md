@@ -6,6 +6,68 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [v25.3.4] - 2026-05-11
+
+[v25.3.4]: https://github.com/dgraph-io/dgraph/compare/v25.3.3...v25.3.4
+
+- **Added**
+  - feat(backup): improve lsbackup tool (#9693)
+
+- **Fixed**
+  - fix(dql): whitespace sensitivity issues in conditional eval (#9692)
+  - fix: zero address change (#9680)
+  - fix tests (#9694)
+
+- **Changed**
+  - perf(hnsw): deduplicate neighbor updates and fix error handling (#9664)
+
+- **Chore**
+  - chore: update go version (#9699)
+  - chore: Update jemalloc to 5.3.1 (#9688)
+
+- **Security**
+  - Address CVE-2026-44840
+
+## [v25.3.3] - 2026-04-21
+
+[v25.3.3]: https://github.com/dgraph-io/dgraph/compare/v25.3.2...v25.3.3
+
+- **Dependency Updates**
+  - chore(deps): bump go.opentelemetry.io/otel/sdk from 1.42.0 to 1.43.0 (#9682)
+  - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp from 1.42.0 to
+    1.43.0 (#9681)
+
+- **Security**
+  - Address CVEs CVE-2026-41327, CVE-2026-41328, CVE-2026-41492
+
+## [v25.3.2] - 2026-04-13
+
+[v25.3.2]: https://github.com/dgraph-io/dgraph/compare/v25.3.1...v25.3.2
+
+- **Fixed**
+  - fix(unique): prevent nil pointer panic in verifyUniqueWithinMutation (#9677)
+  - fix(backup): prevent duplicate predicates in backup manifest for vector indexes (#9679)
+
+- **Security**
+  - Address CVE-2026-40173
+
+- **New Contributors**
+  - @shaunpatterson made their first contribution in #9677
+
+## [v25.3.1] - 2026-04-01
+
+[v25.3.1]: https://github.com/dgraph-io/dgraph/compare/v25.3.0...v25.3.1
+
+- **Fixed**
+  - fix(ci): bump trivy to v0.69.3 to resolve 404 download failure (#9660)
+  - fix(dql): support IRI-ref at query start (#9667)
+
+- **Chore**
+  - chore: update go version and new deps (#9668)
+
+- **Security**
+  - Address CVE-2026-34976
+
 ## [v25.3.0] - 2026-03-05
 
 [v25.3.0]: https://github.com/dgraph-io/dgraph/compare/v25.2.0...v25.3.0
@@ -285,6 +347,34 @@ as a guide.
   - @eileenaaa made their first contribution in #9483
   - @qujoux made their first contribution in #9492
   - @blacksmith-sh[bot] made their first contribution in #9504
+
+## [v24.1.9] - 2026-05-11
+
+[v24.1.9]: https://github.com/dgraph-io/dgraph/compare/v24.1.8...v24.1.9
+
+- **Security**
+  - Address CVE-2026-44840
+
+## [v24.1.8] - 2026-04-21
+
+[v24.1.8]: https://github.com/dgraph-io/dgraph/compare/v24.1.7...v24.1.8
+
+- **Security**
+  - Address CVEs CVE-2026-41327, CVE-2026-41328, CVE-2026-41492
+
+## [v24.1.7] - 2026-04-13
+
+[v24.1.7]: https://github.com/dgraph-io/dgraph/compare/v24.1.6...v24.1.7
+
+- **Security**
+  - Address CVE-2026-40173
+
+## [v24.1.6] - 2026-04-01
+
+[v24.1.6]: https://github.com/dgraph-io/dgraph/compare/v24.1.5...v24.1.6
+
+- **Security**
+  - Address CVE-2026-34976
 
 ## [v24.1.5] - 2024-12-30
 

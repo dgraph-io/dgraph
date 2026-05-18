@@ -2446,15 +2446,17 @@
       }
     }
   dgquery: |-
-    query {
+    query checkPwd($pwd0: string) {
       checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
         User.name : User.name
         dgraph.uid : uid
       }
       checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
-        pwd as checkpwd(User.pwd, "Password")
+        pwd as checkpwd(User.pwd, $pwd0)
       }
     }
+  dgvars:
+    $pwd0: Password
 
 - name: Password query with alias
   gqlquery: |
@@ -2464,15 +2466,37 @@
       }
     }
   dgquery: |-
-    query {
+    query checkPwd($pwd0: string) {
       checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
         User.name : User.name
         dgraph.uid : uid
       }
       checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
-        pwd as checkpwd(User.pwd, "Password")
+        pwd as checkpwd(User.pwd, $pwd0)
       }
     }
+  dgvars:
+    $pwd0: Password
+
+- name: Password query parameterizes pwd to prevent DQL injection
+  gqlquery: |
+    query {
+      checkUserPassword(name: "user1", pwd: "evil\") { msg } injected(func: has(User.name)) #") {
+        name
+      }
+    }
+  dgquery: |-
+    query checkPwd($pwd0: string) {
+      checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
+        User.name : User.name
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
+        pwd as checkpwd(User.pwd, $pwd0)
+      }
+    }
+  dgvars:
+    $pwd0: 'evil") { msg } injected(func: has(User.name)) #'
 
 - name: Rewrite without custom fields
   gqlquery: |

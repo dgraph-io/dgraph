@@ -101,8 +101,11 @@ func TestBackupMinio(t *testing.T) {
 	require.True(t, moveOk)
 
 	// Setup environmental variables for use during restore.
+	// Secret key padded to 14+ bytes so "AWS4"+secret satisfies the
+	// OpenSSL FIPS provider's HMAC key-length minimum (matches
+	// dgraph/minio.env, systest/backup.env).
 	os.Setenv("MINIO_ACCESS_KEY", "accesskey")
-	os.Setenv("MINIO_SECRET_KEY", "secretkey")
+	os.Setenv("MINIO_SECRET_KEY", "secretkey-long-enough")
 
 	// Setup test directories.
 	dirSetup(t)

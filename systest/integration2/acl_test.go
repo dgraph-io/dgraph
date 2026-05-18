@@ -14,12 +14,25 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
+	"github.com/dgraph-io/dgraph/v25/buildvars"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/x"
 
 	"github.com/stretchr/testify/require"
 )
+
+// skipIfFIPS skips the current test when buildvars.FIPS140CryptoRestricted
+// is true. Upgrade-path tests pin a pre-FIPS upstream version for the
+// "old" binary; that version predates any FIPS-enforcing toolchain, so
+// building it under a FIPS configuration fails outright or produces a
+// binary that refuses to start. The test remains semantically valid in
+// non-FIPS builds.
+func skipIfFIPS(t *testing.T) {
+	if buildvars.FIPS140CryptoRestricted {
+		t.Skip("upgrade-path test pins a pre-FIPS upstream version; skipping under FIPS build")
+	}
+}
 
 type S struct {
 	Predicate string   `json:"predicate"`
@@ -34,6 +47,7 @@ type Received struct {
 }
 
 func testDuplicateUserUpgradeStrat(t *testing.T, strat dgraphtest.UpgradeStrategy) {
+	skipIfFIPS(t)
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
 		WithReplicas(1).WithACL(time.Hour).WithVersion("v23.0.1")
 	c, err := dgraphtest.NewLocalCluster(conf)
