@@ -106,6 +106,7 @@ type ClusterConfig struct {
 	lambdaURL             string
 	featureFlags          []string
 	customPlugins         bool
+	startupArgs           []string
 	snapShotAfterEntries  uint64
 	snapshotAfterDuration time.Duration
 	repoDir               string
@@ -240,6 +241,13 @@ func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 // WithGraphqlLambdaURL sets the graphql lambda url for alpha
 func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
 	cc.lambdaURL = url
+	return cc
+}
+
+// WithStartupArg appends an extra flag to the Alpha startup command in the form
+// --arg=value. It may be called multiple times to accumulate additional flags.
+func (cc ClusterConfig) WithStartupArg(arg, value string) ClusterConfig {
+	cc.startupArgs = append(cc.startupArgs, fmt.Sprintf("--%s=%s", arg, value))
 	return cc
 }
 
