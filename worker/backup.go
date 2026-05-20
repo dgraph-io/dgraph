@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -87,6 +87,27 @@ type Manifest struct {
 	// DropOperations records DROP operations that occurred since the previous backup.
 	// Required by restore but omitted from the summary manifest.
 	DropOperations []*pb.DropOperation `json:"drop_operations"`
+}
+
+// checkBackupReadTsAdvanced returns an error if readTs does not advance the
+// backup chain past latestManifest. A regressed ReadTs means the cluster's
+// timestamp counter went backwards (typically because Zero state was wiped or
+// rebuilt while this backup chain was still active). The new posting list KVs
+// would carry commit_ts older than versions already in the chain, and
+// restore-reduce keeps the highest-version entry per key — so the new entries
+// are silently dropped at restore, corrupting indexes. Callers should require
+// forceFull to start a new chain when this triggers.
+func checkBackupReadTsAdvanced(latestManifest *Manifest, readTs uint64) error {
+	if latestManifest.Type == "" {
+		return nil
+	}
+	if readTs > latestManifest.ValidReadTs() {
+		return nil
+	}
+	return errors.Errorf("backup read_ts (%d) is not greater than the latest "+
+		"manifest's read_ts (%d); this usually means Zero state was reset or "+
+		"rebuilt while this backup chain was active. Use \"forceFull\" to "+
+		"start a new chain.", readTs, latestManifest.ValidReadTs())
 }
 
 type MasterManifest struct {
@@ -267,6 +288,10 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 	if req.ForceFull {
 		req.SinceTs = 0
 	} else {
+		if err := checkBackupReadTsAdvanced(latestManifest, req.ReadTs); err != nil {
+			return err
+		}
+
 		if x.WorkerConfig.EncryptionKey != nil {
 			// If encryption key given, latest backup should be encrypted.
 			if latestManifest.Type != "" && !latestManifest.Encrypted {
