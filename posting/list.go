@@ -158,6 +158,33 @@ func (mm *MutableLayer) setCurrentEntries(ts uint64, pl *pb.PostingList) {
 		x.AssertTruef(mm.readTs == ts, "List object reused for a different transaction %d %d", mm.readTs, ts)
 	}
 
+	// If currentEntries already contained a deleteAll (e.g. set inline by
+	// handleDeleteAll before the pipeline writes its accumulated postings),
+	// preserve it so a subsequent same-batch SET doesn't lose the deleteAll
+	// signal. The legacy path naturally avoids this because it appends via
+	// insertPosting instead of overwriting.
+	if mm.currentEntries != nil {
+		var existingDeleteAll *pb.Posting
+		for _, p := range mm.currentEntries.Postings {
+			if hasDeleteAll(p) {
+				existingDeleteAll = p
+				break
+			}
+		}
+		if existingDeleteAll != nil {
+			alreadyHas := false
+			for _, p := range pl.Postings {
+				if hasDeleteAll(p) {
+					alreadyHas = true
+					break
+				}
+			}
+			if !alreadyHas {
+				pl.Postings = append([]*pb.Posting{existingDeleteAll}, pl.Postings...)
+			}
+		}
+	}
+
 	mm.readTs = ts
 	mm.currentEntries = pl
 	clear(mm.currentUids)
