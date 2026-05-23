@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -164,6 +165,44 @@ func TestFastJsonNode(t *testing.T) {
 
 	enc.appendAttrs(fj, fj2)
 	require.Equal(t, fj2, enc.children(fj))
+}
+
+// TestNewNodeZeroInit guards the safety invariant for newNode's use of
+// z.Allocator.Allocate (which does not zero memory) instead of
+// AllocateAligned. The allocator is backed by z.Calloc-initialized buffers
+// that come up zero, and the bump allocator never re-hands-out a slot
+// within an encoder's lifetime, so every node returned by newNode must
+// have only the attr bits set in meta and zero next/child pointers.
+func TestNewNodeZeroInit(t *testing.T) {
+	enc := newEncoder()
+	const N = 4096
+	for i := 1; i <= N; i++ {
+		attr := uint16(i)
+		fj := enc.newNode(attr)
+		require.Equal(t, attr, enc.getAttr(fj),
+			"newNode #%d: attr round-trip", i)
+		require.Equal(t, uint64(attr)<<40, fj.meta,
+			"newNode #%d: meta must contain only attr bits, no leftover state", i)
+		require.Nil(t, fj.next,
+			"newNode #%d: next must be nil for a freshly allocated node", i)
+		require.Nil(t, fj.child,
+			"newNode #%d: child must be nil for a freshly allocated node", i)
+	}
+}
+
+// TestNewNodeAlignment guards the alignment invariant that lets newNode
+// skip AllocateAligned: every node returned from a sequence of newNode
+// calls must satisfy unsafe.Alignof(node{}), so subsequent typed pointer
+// access is safe.
+func TestNewNodeAlignment(t *testing.T) {
+	enc := newEncoder()
+	want := uintptr(unsafe.Alignof(node{}))
+	for i := 0; i < 1024; i++ {
+		fj := enc.newNode(uint16(i + 1))
+		addr := uintptr(unsafe.Pointer(fj))
+		require.Zerof(t, addr&(want-1),
+			"node #%d at %x is not %d-byte aligned", i, addr, want)
+	}
 }
 
 func BenchmarkFastJsonNodeEmpty(b *testing.B) {
