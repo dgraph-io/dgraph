@@ -518,13 +518,19 @@ func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline
 
 		// For uid (REF) postings, Value is always nil — the target uid lives in
 		// posting.Uid. Compare Uid directly; fall back to Value comparison for scalars.
+		//
+		// When the new value matches the committed value, skip emitting the
+		// synthetic DEL-of-old-value (there is nothing to delete). Critically,
+		// do NOT clear postings[uid]: the SET must still flow through
+		// InsertTokenizerIndexes / ProcessReverse so a newly-added index or
+		// reverse edge can be populated for the (unchanged) value. Clearing
+		// here is what caused TestSchemaMutationIndexRemove to leave the term
+		// index empty after a same-value SET following an @index alter.
 		if currValue.PostingType == pb.Posting_REF && oldVal.PostingType == pb.Posting_REF {
 			if oldVal.Uid == currValue.Uid {
-				postings[uid] = &pb.PostingList{}
 				continue
 			}
 		} else if string(oldVal.Value) == string(currValue.Value) {
-			postings[uid] = &pb.PostingList{}
 			continue
 		}
 
@@ -879,6 +885,21 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	stripSyntheticDel := info.index
 
 	for uid, pl := range postings {
+		// An empty PostingList means nothing was accumulated for this uid (e.g.
+		// a DEL whose value did not match the committed value, or a same-value
+		// SET-after-handleOldDeleteForSingle no-op). Writing an empty delta
+		// would call AddDelta → setMutation on the cached List with empty bytes,
+		// which resets the mutable layer's currentEntries to empty for this
+		// txn's startTs. A subsequent read through the same cached List then
+		// surfaces an empty data list. CommitToDisk skips empty deltas at the
+		// badger level, but the in-memory side effect on the cached List has
+		// already corrupted any concurrent reader holding that List. Skip the
+		// no-op uid entirely — matches the legacy per-edge path which simply
+		// does nothing when a DEL value does not match committed.
+		if len(pl.Postings) == 0 {
+			continue
+		}
+
 		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
 		key := baseKey + string(dataKey[len(dataKey)-8:])
 
