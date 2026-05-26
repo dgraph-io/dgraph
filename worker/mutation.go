@@ -223,6 +223,24 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 		}
 
+		// Register companion HNSW tablets with Zero so they are tracked in
+		// membership state. Without this, the per-shard __vector_* tablets that
+		// HNSW writes to Badger never appear in Zero's raft state, so Zero
+		// treats them as orphans on its 5-minute reconciliation sweep and
+		// Alpha refuses to serve queries against them. Inform is idempotent
+		// (it checks ServingTablet first) and survives Zero restarts.
+		if su.GetValueType() == pb.Posting_VFLOAT && len(su.GetIndexSpecs()) > 0 {
+			vecPreds := []string{
+				hnsw.ConcatStrings(su.Predicate, hnsw.VecKeyword),
+				hnsw.ConcatStrings(su.Predicate, hnsw.VecEntry),
+				hnsw.ConcatStrings(su.Predicate, hnsw.VecDead),
+			}
+			if _, err := groups().Inform(vecPreds); err != nil {
+				glog.Warningf("Failed to inform Zero about HNSW companion "+
+					"tablets for %s: %v", su.Predicate, err)
+			}
+		}
+
 		if err := checkSchema(su); err != nil {
 			return err
 		}
