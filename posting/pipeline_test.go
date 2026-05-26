@@ -1268,3 +1268,290 @@ func TestLegacyNonMatchingDelNoOp(t *testing.T) {
 	require.NotContains(t, indexUidsForVal(t, attr, "Blink", readTs), alice,
 		"legacy: index('Blink') must not contain alice")
 }
+
+// ---------------------------------------------------------------------------
+// Bug 10: same-value SET on already-committed scalar index entry
+// ---------------------------------------------------------------------------
+
+// TestMutationPipelineSameValueSetKeepsIndex is a baseline regression test:
+// when the schema already carries @index(term) at the time of the initial SET,
+// the index entry must survive a second identical SET on the same uid.
+//
+// This test passes both before and after the handleOldDeleteForSingle fix,
+// because the initial SET already populated the index. The companion test
+// TestMutationPipelineSetThenAddIndexThenResetMirrorsAlphaFailure is the one
+// that reproduces the actual alpha-level TestSchemaMutationIndexRemove
+// failure — that scenario requires the SET to happen *before* the @index
+// alter, so the second SET is responsible for populating the index.
+//
+// Legacy mirror: TestLegacySameValueSetKeepsIndex.
+func TestMutationPipelineSameValueSetKeepsIndex(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(term) .`), 1))
+
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	applyEdges(t, 2610, 2611, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", 2612), alice,
+		"initial: index('Alice') must contain alice")
+
+	applyEdges(t, 2620, 2621, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	const readTs = uint64(2622)
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", readTs), alice,
+		"index('Alice') must still contain alice after same-value SET re-commit")
+}
+
+// TestLegacySameValueSetKeepsIndex mirrors Bug 10 via the legacy path.
+func TestLegacySameValueSetKeepsIndex(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(term) .`), 1))
+
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	applyEdgesLegacy(t, 2710, 2711, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", 2712), alice,
+		"legacy initial: index('Alice') must contain alice")
+
+	applyEdgesLegacy(t, 2720, 2721, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	const readTs = uint64(2722)
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", readTs), alice,
+		"legacy: index('Alice') must still contain alice after same-value SET re-commit")
+}
+
+// TestMutationPipelineSetThenAddIndexThenResetMirrorsAlphaFailure is the
+// regression test for the alpha-level failure TestSchemaMutationIndexRemove.
+//
+// Sequence:
+//  1. Schema is `name: string` (no @index).
+//  2. SET <alice> name "Alice" is committed.
+//  3. Schema altered to add @index(term).
+//  4. SET <alice> name "Alice" again (same value, but now under @index(term)).
+//  5. Query the term index for "Alice" — must contain alice.
+//
+// Root cause (pre-fix): handleOldDeleteForSingle in posting/index.go saw that
+// the new value matched the committed value and replaced postings[uid] with
+// an empty PostingList. InsertTokenizerIndexes then iterated an empty list
+// for that uid and emitted no index entries, so the newly-added index never
+// got the "alice" → alice entry. Legacy passes because runMutation calls
+// addIndexMutations per SET edge regardless of whether the value changed.
+//
+// Fix: handleOldDeleteForSingle now `continue`s in the same-value branch
+// without clearing postings[uid]. The SET stays in place so
+// InsertTokenizerIndexes / ProcessReverse can populate the new index/reverse
+// edge. Index/reverse emissions on already-present entries are idempotent.
+func TestMutationPipelineSetThenAddIndexThenResetMirrorsAlphaFailure(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	// Step 1: no-index schema initially.
+	require.NoError(t, schema.ParseBytes([]byte(`name: string .`), 1))
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	// Step 2: SET Alice with no index.
+	applyEdges(t, 2810, 2811, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	// Step 3: alter — add term index. Simulate alpha's background reindex by
+	// flipping schema then re-running a SET (the reindex on alpha rewrites the
+	// index from existing data; here we replay the existing SET under the new
+	// schema to drive InsertTokenizerIndexes).
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(term) .`), 1))
+	applyEdges(t, 2820, 2821, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", 2822), alice,
+		"after reindex: index('Alice') must contain alice")
+
+	// Step 4: SET Alice again, same value, index now exists.
+	applyEdges(t, 2830, 2831, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	const readTs = uint64(2832)
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", readTs), alice,
+		"index('Alice') must still contain alice after same-value SET on top of @index(term)")
+}
+
+// TestLegacySetThenAddIndexThenResetMirrorsAlphaFailure is the legacy mirror
+// of the test above. Legacy is expected to pass because runMutation calls
+// addIndexMutations for every SET regardless of whether the value changed.
+func TestLegacySetThenAddIndexThenResetMirrorsAlphaFailure(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string .`), 1))
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	applyEdgesLegacy(t, 2910, 2911, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(term) .`), 1))
+	applyEdgesLegacy(t, 2920, 2921, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("Alice"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.Contains(t, indexUidsForVal(t, attr, "Alice", 2922), alice,
+		"legacy after reindex: index('Alice') must contain alice")
+}
+
+// scalarValue returns the string value of the single scalar posting under
+// (attr, entity) at readTs, or empty if there is no posting.
+func scalarValue(t *testing.T, attr string, entity, readTs uint64) string {
+	t.Helper()
+	l, err := GetNoStore(x.DataKey(attr, entity), readTs)
+	require.NoError(t, err)
+	var out string
+	require.NoError(t, l.Iterate(readTs, 0, func(p *pb.Posting) error {
+		out = string(p.Value)
+		return nil
+	}))
+	return out
+}
+
+// TestMutationPipelineDelWithWrongValueIsNoOp is the regression test for
+// TestDeleteScalarValue at the alpha integration level.
+//
+// Sequence:
+//  1. Schema: name: string @index(exact).
+//  2. SET <alice> name "xxx" (committed).
+//  3. DEL <alice> name "yyy" (wrong value — does not match committed "xxx").
+//  4. The data must still read as "xxx" — a DEL whose value does not match
+//     the committed value is a no-op per Dgraph semantics.
+//
+// Bug: ProcessSingle accumulates `postings[alice] = &pb.PostingList{}` for the
+// non-matching DEL (sameTarget is false, so setPosting is not called). The
+// data-write loop then calls AddDelta(dataKey, emptyPL) which clobbers the
+// in-memory list's mutable layer via setCurrentEntries → the next read at
+// readTs > commitTs surfaces an empty list.
+func TestMutationPipelineDelWithWrongValueIsNoOp(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(exact) .`), 1))
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	applyEdges(t, 3010, 3011, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("xxx"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	require.Equal(t, "xxx", scalarValue(t, attr, alice, 3012),
+		"sanity: committed value should be xxx")
+
+	applyEdges(t, 3020, 3021, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("yyy"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_DEL,
+	})
+
+	require.Equal(t, "xxx", scalarValue(t, attr, alice, 3022),
+		"DEL with wrong value must be a no-op — name still xxx")
+}
+
+// TestLegacyDelWithWrongValueIsNoOp mirrors the above via the legacy path.
+func TestLegacyDelWithWrongValueIsNoOp(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(exact) .`), 1))
+	attr := x.AttrInRootNamespace("name")
+	const alice = uint64(10)
+
+	applyEdgesLegacy(t, 3110, 3111, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("xxx"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_SET,
+	})
+
+	applyEdgesLegacy(t, 3120, 3121, &pb.DirectedEdge{
+		Entity: alice, Attr: attr,
+		Value: []byte("yyy"), ValueType: pb.Posting_STRING,
+		Op: pb.DirectedEdge_DEL,
+	})
+
+	require.Equal(t, "xxx", scalarValue(t, attr, alice, 3122),
+		"legacy: DEL with wrong value must be a no-op")
+}
+
+// TestMutationPipelineDelWrongValueTwoUidsCloseMatch mirrors TestDeleteScalarValue's
+// exact shape: two uids both set to "xxx", then DEL on one of them with value "yyy".
+// The DEL must not delete; the SET on the other uid must remain.
+func TestMutationPipelineDelWrongValueTwoUidsCloseMatch(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+
+	require.NoError(t, schema.ParseBytes([]byte(`name: string @index(exact) .`), 1))
+	attr := x.AttrInRootNamespace("name")
+	const (
+		a = uint64(0x12345)
+		b = uint64(0x12346)
+	)
+
+	applyEdges(t, 3210, 3211,
+		&pb.DirectedEdge{Entity: a, Attr: attr, Value: []byte("xxx"), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_SET},
+		&pb.DirectedEdge{Entity: b, Attr: attr, Value: []byte("xxx"), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_SET},
+	)
+
+	require.Equal(t, "xxx", scalarValue(t, attr, a, 3212), "sanity: a=xxx")
+	require.Equal(t, "xxx", scalarValue(t, attr, b, 3212), "sanity: b=xxx")
+
+	applyEdges(t, 3220, 3221,
+		&pb.DirectedEdge{Entity: a, Attr: attr, Value: []byte("yyy"), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_DEL},
+	)
+
+	const readTs = uint64(3222)
+	require.Equal(t, "xxx", scalarValue(t, attr, a, readTs),
+		"DEL with wrong value must be a no-op — a still xxx")
+	require.Equal(t, "xxx", scalarValue(t, attr, b, readTs),
+		"DEL on a must not touch b")
+	require.Contains(t, indexUidsForVal(t, attr, "xxx", readTs), a,
+		"index('xxx') must still contain a")
+	require.Contains(t, indexUidsForVal(t, attr, "xxx", readTs), b,
+		"index('xxx') must still contain b")
+}
