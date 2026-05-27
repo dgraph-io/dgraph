@@ -331,8 +331,23 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		}
 	}
 
+	// Dedup when merging. Companion tablets may already be present in predMap
+	// because runSchemaMutation now registers them with Zero via Inform, so
+	// state.Groups[gid].Tablets already includes them. The schema-based
+	// discovery above is kept as a safety net for legacy clusters whose
+	// companions predate that registration and so are not yet in Zero's state.
 	for gid, preds := range vecPredMap {
-		predMap[gid] = append(predMap[gid], preds...)
+		seen := make(map[string]struct{}, len(predMap[gid]))
+		for _, p := range predMap[gid] {
+			seen[p] = struct{}{}
+		}
+		for _, p := range preds {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			predMap[gid] = append(predMap[gid], p)
+			seen[p] = struct{}{}
+		}
 	}
 
 	glog.Infof(
