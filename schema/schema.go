@@ -467,17 +467,18 @@ func (s *state) HasCount(ctx context.Context, pred string) bool {
 func (s *state) PredicatesToDelete(pred string) []string {
 	s.RLock()
 	defer s.RUnlock()
-	preds := make([]string, 0)
-	if schema, ok := s.predicate[pred]; ok {
-		preds = append(preds, pred)
-
-		if schema.ValueType == pb.Posting_VFLOAT && len(schema.IndexSpecs) != 0 {
-			preds = append(preds, pred+hnsw.VecEntry)
-			preds = append(preds, pred+hnsw.VecKeyword)
-			preds = append(preds, pred+hnsw.VecDead)
-		}
+	schema, ok := s.predicate[pred]
+	if !ok {
+		return nil
 	}
-	return preds
+	if schema.ValueType == pb.Posting_VFLOAT && len(schema.IndexSpecs) != 0 {
+		// Vector predicate: pre-size to 4 (base + 3 vector sidecar preds).
+		preds := make([]string, 1, 4)
+		preds[0] = pred
+		return append(preds, pred+hnsw.VecEntry, pred+hnsw.VecKeyword, pred+hnsw.VecDead)
+	}
+	// Common case: exactly one predicate.
+	return []string{pred}
 }
 
 // IsList returns whether the predicate is of list type.
