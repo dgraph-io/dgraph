@@ -1834,3 +1834,37 @@ func BenchmarkAddMutations(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkSetMutationAfterCommit exercises the commit hot path that builds a
+// fresh committedEntries map. This is the path UpdateCachedKeys → updateItemInCache
+// → setMutationAfterCommit(refresh=true) walks for every committed transaction
+// against a cached List. Allocation behavior here directly drives GC pressure
+// on heavily mutated lists.
+func BenchmarkSetMutationAfterCommit(b *testing.B) {
+	for _, prior := range []int{1, 4, 32, 256} {
+		b.Run(fmt.Sprintf("priorEntries=%d", prior), func(b *testing.B) {
+			key := x.DataKey(x.AttrInRootNamespace("bench-commit"), uint64(prior))
+			l, err := GetNoStore(key, math.MaxUint64)
+			if err != nil {
+				b.Fatal(err)
+			}
+			l.mutationMap = newMutableLayer()
+			// Pre-populate committedEntries with `prior` versions to simulate a
+			// list that has been written many times.
+			for i := 0; i < prior; i++ {
+				pl := &pb.PostingList{
+					Postings: []*pb.Posting{{Uid: uint64(i + 1), Op: Set}},
+				}
+				l.mutationMap.committedEntries[uint64(i+1)] = pl
+			}
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				pl := &pb.PostingList{
+					Postings: []*pb.Posting{{Uid: uint64(i + 1000), Op: Set}},
+				}
+				l.setMutationAfterCommit(uint64(prior+i+1), uint64(prior+i+2), pl, true)
+			}
+		})
+	}
+}
