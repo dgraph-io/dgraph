@@ -1993,7 +1993,13 @@ func (sg *SubGraph) appendDummyValues() {
 }
 
 func getPredsFromVals(vl []*pb.ValueList) []string {
-	preds := make([]string, 0)
+	// Estimate by summing all inner ValueList lengths; a slight overcount when some
+	// values are empty is fine — it avoids the grow-and-copy of an unsized append.
+	n := 0
+	for _, l := range vl {
+		n += len(l.Values)
+	}
+	preds := make([]string, 0, n)
 	for _, l := range vl {
 		for _, v := range l.Values {
 			if len(v.Val) > 0 {
@@ -2070,12 +2076,12 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			preds = getPredicatesFromTypes(namespace, typeNames)
 			// restrict preds to allowed preds if ACL is turned on.
 			if sg.Params.AllowedPreds != nil {
-				// Take intersection of both the predicate lists
-				intersectPreds := make([]string, 0)
-				hashMap := make(map[string]bool)
+				// Take intersection of both the predicate lists.
+				hashMap := make(map[string]bool, len(sg.Params.AllowedPreds))
 				for _, allowedPred := range sg.Params.AllowedPreds {
 					hashMap[allowedPred] = true
 				}
+				intersectPreds := make([]string, 0, len(preds))
 				for _, pred := range preds {
 					if _, found := hashMap[pred]; found {
 						intersectPreds = append(intersectPreds, pred)
@@ -2796,7 +2802,8 @@ func getNodeTypes(ctx context.Context, sg *SubGraph) ([]string, error) {
 
 // getPredicatesFromTypes returns the list of preds contained in the given types.
 func getPredicatesFromTypes(namespace uint64, typeNames []string) []string {
-	var preds []string
+	// Estimate at 4 fields per type — typical for graph schemas.
+	preds := make([]string, 0, len(typeNames)*4)
 
 	for _, typeName := range typeNames {
 		typeDef, ok := schema.State().GetType(x.NamespaceAttr(namespace, typeName))
@@ -2819,7 +2826,7 @@ func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) 
 		return nil, err
 	}
 
-	filteredPreds := make([]string, 0)
+	filteredPreds := make([]string, 0, len(schs))
 	for _, sch := range schs {
 		if sch.GetType() != "uid" {
 			continue
