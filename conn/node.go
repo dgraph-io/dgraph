@@ -79,7 +79,15 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config) *Node {
+// electionTick controls how many ticks (each 100ms) before an election is triggered.
+// If electionTick <= 0, defaults to 20 (i.e., 2s election timeout).
+func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config,
+	electionTick int) *Node {
+
+	if electionTick <= 0 {
+		electionTick = 20
+	}
+
 	snap, err := store.Snapshot()
 	x.Check(err)
 
@@ -90,8 +98,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             20, // 2s if we call Tick() every 100 ms.
-			HeartbeatTick:            1,  // 100ms if we call Tick() every 100 ms.
+			ElectionTick:             electionTick, // Default 2s if tick is 100ms.
+			HeartbeatTick:            1,            // 100ms if we call Tick() every 100 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
 			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.
