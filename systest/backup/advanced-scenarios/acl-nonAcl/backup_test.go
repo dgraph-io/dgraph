@@ -41,7 +41,12 @@ func BackupRestore(t *testing.T, jwtTokenBackupAlpha string, jwtTokenRestoreAlph
 	e2eCommon.AssertGetGQLSchema(t, testutil.ContainerAddr(backupAlpha, 8080), header)
 	utilsCommon.AddItem(t, 1, 10, jwtTokenBackupAlpha, backupAlpha)
 	utilsCommon.CheckItemExists(t, 5, jwtTokenBackupAlpha, backupAlpha)
-	utilsCommon.TakeBackup(t, jwtTokenBackupAlpha, backupDst, backupAlpha)
+	// forceFull: each top-level test in this package runs against a different
+	// alpha/zero pair but shares the same backup volume, so the chain seen at
+	// /data/backups/ may already contain manifests from a sibling test's
+	// distinct cluster. Force a fresh chain so the backup-side ReadTs guard
+	// (worker/backup.go checkBackupReadTsAdvanced) doesn't refuse the call.
+	utilsCommon.TakeFullBackup(t, jwtTokenBackupAlpha, backupDst, backupAlpha)
 	utilsCommon.RunRestore(t, jwtTokenRestoreAlpha, restoreLocation, restoreAlpha)
 	dg := testutil.DgClientWithLogin(t, "groot", "password", x.RootNamespace)
 	testutil.WaitForRestore(t, dg, testutil.ContainerAddr(restoreAlpha, 8080))
