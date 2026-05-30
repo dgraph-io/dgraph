@@ -216,8 +216,7 @@ install-deps-docker-linux-apt:
 
 .PHONY: install-deps-docker-linux-dnf
 install-deps-docker-linux-dnf:
-	@sudo dnf -y install dnf-plugins-core && \
-	sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && \
+	@sudo curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo && \
 	sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 .PHONY: install-deps-docker-linux-pacman

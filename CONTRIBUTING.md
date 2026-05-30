@@ -126,6 +126,29 @@ Licensed variously under the Apache Public License 2.0 and Dgraph Community Lice
 See the [README](t/README.md) in the [_t_](t) folder for instructions on building Dgraph on
 non-Linux machines.
 
+#### Building Dgraph on Fedora / RHEL
+
+On Fedora, RHEL, and other `dnf`-based distributions, install the build prerequisites with:
+
+```bash
+make linux-dependency   # auto-detects apt / dnf / pacman; installs gcc, make, protobuf-compiler, etc.
+make install
+```
+
+Dgraph statically links jemalloc. Fedora's `jemalloc-devel` package ships only the shared library
+(not the static `libjemalloc.a` that Dgraph links against), so `make` compiles jemalloc 5.3.1 from
+source the first time and installs it to `/usr/local/lib` (this step needs `sudo`). The build
+applies a small source patch to `src/jemalloc_cpp.cpp` before compiling: libstdc++ 16 (GCC 16,
+e.g. Fedora 44) removed `std::__throw_bad_alloc` from its public ABI, and the patch rewrites the
+call to the standard `throw std::bad_alloc()` idiom, so C++ support stays enabled. Once the static
+library exists, subsequent builds detect it and skip the rebuild.
+
+After building, you can verify the binary with a quick single-node smoke test:
+
+```bash
+contrib/smoke-test.sh    # brings up a local zero+alpha, runs schema/mutation/query, tears down
+```
+
 ### Build Docker Image
 
 ```sh

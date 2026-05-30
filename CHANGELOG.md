@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [Unreleased]
+
+- **Fixed**
+  - fix(build): chain the jemalloc build recipe with `&&` (was `;`) so a failed compile no longer
+    falls through to `make install`, and clear any stale `/tmp/jemalloc-temp` before rebuilding
+
+- **Added**
+  - test: add `contrib/smoke-test.sh` to bring up a local zero+alpha and verify
+    schema/mutation/query against a freshly built binary
+
+- **Changed**
+  - build: `linux-dependency` now auto-detects the package manager (apt/dnf/pacman) and installs the
+    C/C++ toolchain + protobuf-compiler, so build prerequisites work on Fedora/RHEL and Arch in
+    addition to Debian/Ubuntu
+
+- **Docs**
+  - docs(contributing): document building Dgraph on Fedora/RHEL
+
 ## [v25.4.0] - 2026-07-30
 
 [v25.4.0]: https://github.com/dgraph-io/dgraph/compare/v25.3.8...v25.4.0
