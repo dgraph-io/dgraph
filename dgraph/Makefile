@@ -52,9 +52,10 @@ endif
 
 # jemalloc stuff
 # Check common package-manager install paths: /usr/local/lib (make
-# install from source), /usr/lib (apt-get libjemalloc-dev), and
-# /usr/lib/libjemalloc_pic.a (apk add jemalloc-dev on Alpine/Wolfi).
-HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a -o -f /usr/lib/libjemalloc.a -o -f /usr/lib/libjemalloc_pic.a && echo "jemalloc")
+# install from source), /usr/lib (apt-get libjemalloc-dev),
+# /usr/lib/libjemalloc_pic.a (apk add jemalloc-dev on Alpine/Wolfi), and
+# /usr/lib64 (dnf jemalloc-devel on Fedora/RHEL multilib systems).
+HAS_JEMALLOC = $(shell test -f /usr/local/lib/libjemalloc.a -o -f /usr/local/lib64/libjemalloc.a -o -f /usr/lib/libjemalloc.a -o -f /usr/lib64/libjemalloc.a -o -f /usr/lib/libjemalloc_pic.a -o -f /usr/lib64/libjemalloc_pic.a && echo "jemalloc")
 JEMALLOC_URL = "https://github.com/jemalloc/jemalloc/releases/download/5.3.1/jemalloc-5.3.1.tar.bz2"
 
 # go install variables
@@ -101,13 +102,13 @@ install: jemalloc
 
 jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
-		mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
-		echo "Downloading jemalloc" ; \
-		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
-		tar xjf ./jemalloc.tar.bz2 ; \
-		cd jemalloc-5.3.1 ; \
-		./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'; \
-		make ; \
+		rm -rf /tmp/jemalloc-temp && mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp && \
+		echo "Downloading jemalloc" && \
+		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 && \
+		tar xjf ./jemalloc.tar.bz2 && \
+		cd jemalloc-5.3.1 && \
+		./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto' --disable-cxx && \
+		make && \
 		if [ "$(USER_ID)" = "0" ]; then \
 			make install ; \
 		else \

@@ -221,17 +221,21 @@ coverage-docker-image: dgraph-coverage
 	@cp ./dgraph/dgraph ./linux/dgraph
 	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
-# build and run dependencies for ubuntu linux
+# build and run dependencies for linux (auto-detects apt / dnf / pacman)
+# The bundled jemalloc is compiled from source (see dgraph/Makefile), so a C/C++
+# toolchain plus curl/bzip2/tar are required even though libjemalloc itself is built locally.
 .PHONY: linux-dependency
 linux-dependency:
-	sudo apt-get update
-	sudo apt-get -y upgrade
-	sudo apt-get -y install ca-certificates
-	sudo apt-get -y install curl
-	sudo apt-get -y	install gnupg
-	sudo apt-get -y install lsb-release
-	sudo apt-get -y install build-essential
-	sudo apt-get -y install protobuf-compiler
+	@if command -v apt-get >/dev/null 2>&1; then \
+		sudo apt-get update && \
+		sudo apt-get install -y ca-certificates curl gnupg lsb-release build-essential protobuf-compiler bzip2; \
+	elif command -v dnf >/dev/null 2>&1; then \
+		sudo dnf install -y ca-certificates curl gnupg gcc gcc-c++ make bzip2 tar protobuf-compiler; \
+	elif command -v pacman >/dev/null 2>&1; then \
+		sudo pacman -S --noconfirm --needed ca-certificates curl gnupg base-devel protobuf; \
+	else \
+		echo "ERROR: No supported package manager found (tried: apt, dnf, pacman)"; exit 1; \
+	fi
 
 .PHONY: help
 help: ## Show available targets and variables
