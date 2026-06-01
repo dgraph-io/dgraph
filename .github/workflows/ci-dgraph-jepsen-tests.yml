@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   dgraph-jepsen-tests:
-    if: false # temporarily disabled -- jepsen tests have not been passing for some time
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
