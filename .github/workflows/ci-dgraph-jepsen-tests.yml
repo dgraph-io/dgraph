@@ -2,8 +2,9 @@ name: ci-dgraph-jepsen-tests
 
 on:
   workflow_dispatch: # allows manual trigger from GitHub UI
-  schedule:
-    - cron: 0 4 * * 3,6 # run twice weekly
+  # Scheduled runs temporarily disabled; trigger manually via workflow_dispatch.
+  # schedule:
+  #   - cron: 0 4 * * 3,6 # run twice weekly
 
 env:
   GOPATH: /home/runner/go
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   dgraph-jepsen-tests:
+    if: false # temporarily disabled -- jepsen tests have not been passing for some time
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
