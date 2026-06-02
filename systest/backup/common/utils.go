@@ -187,9 +187,23 @@ func CheckItemExists(t *testing.T, desriedSuffix int, jwtToken string, whichAlph
 }
 
 func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
+	takeBackupInternal(t, jwtToken, backupDst, whichAlpha, false)
+}
 
-	backupRequest := `mutation backup($dst: String!) {
-		backup(input: {destination: $dst}) {
+// TakeFullBackup forces a fresh backup chain by passing forceFull: true. Use
+// this when a test is reusing a backup destination that may contain manifests
+// from a prior cluster — the backup-side guard refuses incrementals whose
+// ReadTs has not advanced past the chain's latest manifest, which happens
+// whenever a different cluster (with a fresh Zero) writes into an existing
+// chain. forceFull starts a new chain at SinceTs=0 and sidesteps that check.
+func TakeFullBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha string) {
+	takeBackupInternal(t, jwtToken, backupDst, whichAlpha, true)
+}
+
+func takeBackupInternal(t *testing.T, jwtToken string, backupDst string, whichAlpha string, forceFull bool) {
+
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
 			response {
 				code
 			}
@@ -200,6 +214,7 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 		Query: backupRequest,
 		Variables: map[string]interface{}{
 			"dst": backupDst,
+			"ff":  forceFull,
 		},
 	}
 
@@ -218,12 +233,34 @@ func TakeBackup(t *testing.T, jwtToken string, backupDst string, whichAlpha stri
 	require.NoError(t, err)
 	defer func() { require.NoError(t, resp.Body.Close()) }()
 
-	var data interface{}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&data))
+	// Decode into a typed shape so a server-side error surfaces as a real
+	// failure message rather than a nil-map panic at the assertions below.
+	var br struct {
+		Data struct {
+			Backup struct {
+				Response struct {
+					Code string `json:"code"`
+				} `json:"response"`
+				TaskId string `json:"taskId"`
+			} `json:"backup"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&br))
 
-	require.Equal(t, "Success", testutil.JsonGet(data, "data", "backup", "response", "code").(string))
-	taskId := testutil.JsonGet(data, "data", "backup", "taskId").(string)
-	testutil.WaitForTask(t, taskId, false, testutil.ContainerAddr(whichAlpha, 8080))
+	if len(br.Errors) > 0 {
+		msgs := make([]string, 0, len(br.Errors))
+		for _, e := range br.Errors {
+			msgs = append(msgs, e.Message)
+		}
+		t.Fatalf("backup mutation returned errors: %s", strings.Join(msgs, "; "))
+	}
+
+	require.Equal(t, "Success", br.Data.Backup.Response.Code,
+		"backup mutation did not return Success (forceFull=%v)", forceFull)
+	testutil.WaitForTask(t, br.Data.Backup.TaskId, false, testutil.ContainerAddr(whichAlpha, 8080))
 }
 
 func RunRestore(t *testing.T, jwtToken string, restoreLocation string, whichAlpha string) {
