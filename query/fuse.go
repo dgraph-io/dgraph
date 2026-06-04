@@ -129,7 +129,10 @@ func channelRanks(c fuseChannel) map[uint64]int {
 	return ranks
 }
 
-// fuseRRF computes Reciprocal Rank Fusion over the channels.
+// fuseRRF computes (weighted) Reciprocal Rank Fusion over the channels. Each
+// channel contributes weight * 1/(k+rank); with the default weight of 1.0 this is
+// standard RRF, and per-channel weights let callers bias channels under either
+// fusion method rather than silently ignoring weights for rrf.
 func fuseRRF(channels []fuseChannel, k float64) map[uint64]float64 {
 	if k <= 0 || math.IsNaN(k) || math.IsInf(k, 0) {
 		k = defaultRRFK
@@ -137,7 +140,7 @@ func fuseRRF(channels []fuseChannel, k float64) map[uint64]float64 {
 	fused := make(map[uint64]float64)
 	for _, c := range channels {
 		for uid, rank := range channelRanks(c) {
-			fused[uid] += 1.0 / (k + float64(rank))
+			fused[uid] += c.weight * (1.0 / (k + float64(rank)))
 		}
 	}
 	return fused
@@ -282,11 +285,18 @@ func computeFuse(args []dql.Arg, needsVar []dql.VarContext,
 	channels := make([]fuseChannel, len(needsVar))
 	for i, nv := range needsVar {
 		v, ok := doneVars[nv.Name]
-		if !ok || v.Vals == nil || v.Vals.IsEmpty() {
-			// A channel that produced no scored results contributes nothing but is
-			// still a valid (empty) channel.
+		switch {
+		case !ok:
+			// The dependency scheduler guarantees every channel block has run and
+			// populated doneVars before this fuse block. A genuinely absent channel
+			// therefore signals an internal invariant violation rather than an empty
+			// result — surface it instead of silently degrading the fusion.
+			return varValue{}, errors.Errorf("fuse: channel %q was not produced", nv.Name)
+		case v.Vals == nil || v.Vals.IsEmpty():
+			// A channel that ran but matched nothing is a valid empty channel: it
+			// contributes nothing but must not drop the other channels' results.
 			channels[i] = fuseChannel{scores: map[uint64]float64{}, weight: 1.0}
-		} else {
+		default:
 			scores, err := scoresFromVar(v, nv.Name)
 			if err != nil {
 				return varValue{}, err

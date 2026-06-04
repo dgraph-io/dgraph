@@ -101,6 +101,27 @@ func TestFuseRRF_DisjointChannels(t *testing.T) {
 	require.InDelta(t, 1/(60.0+2), got[4], 1e-9)
 }
 
+func TestFuseRRF_AppliesWeights(t *testing.T) {
+	// Weights must affect RRF (not only linear): a uid ranked #1 in a 2x-weighted
+	// channel should beat a uid ranked #1 in a unit-weighted channel.
+	heavy := fuseChannel{scores: map[uint64]float64{1: 9.0}, weight: 2.0}
+	light := fuseChannel{scores: map[uint64]float64{2: 9.0}, weight: 1.0}
+	res := fuseChannels([]fuseChannel{heavy, light}, fuseOpts{method: fusionRRF, k: 60})
+	got := asMap(res)
+	require.InDelta(t, 2.0*(1/(60.0+1)), got[1], 1e-9)
+	require.InDelta(t, 1.0*(1/(60.0+1)), got[2], 1e-9)
+	require.Equal(t, uint64(1), res[0].uid, "heavier-weighted channel's top doc wins")
+}
+
+func TestFuseRRF_DefaultWeightIsStandardRRF(t *testing.T) {
+	// With the default weight of 1.0, weighted RRF reduces to standard RRF.
+	a := ch(map[uint64]float64{10: 9.0, 20: 5.0})
+	res := fuseChannels([]fuseChannel{a}, fuseOpts{method: fusionRRF, k: 60})
+	got := asMap(res)
+	require.InDelta(t, 1/(60.0+1), got[10], 1e-9)
+	require.InDelta(t, 1/(60.0+2), got[20], 1e-9)
+}
+
 func TestFuseLinear_MaxNormalizeAndWeights(t *testing.T) {
 	// BM25-ish scale vs cosine-ish scale.
 	text := fuseChannel{scores: map[uint64]float64{1: 10.0, 2: 5.0}, weight: 0.3}

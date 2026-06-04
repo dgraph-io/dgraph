@@ -215,7 +215,7 @@ func TestHybridSugarEquivalentToFuse(t *testing.T) {
 	}`
 	explicitQ := `
 	{
-		txt as var(func: bm25(description_bm25, "fox"))
+		txt as var(func: bm25(description_bm25, "fox"), first: 7)
 		vec as var(func: similar_to(description_vec, 7, "[3.0, 0.0, 0.0, 0.0]"))
 		f as var(func: fuse(txt, vec, method: "rrf", k: 60))
 		me(func: uid(f), orderdesc: val(f)) {

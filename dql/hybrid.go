@@ -18,7 +18,7 @@ import (
 //
 // becomes
 //
-//	__hybrid0_bm25 as var(func: bm25(textPred, "query"))
+//	__hybrid0_bm25 as var(func: bm25(textPred, "query"), first: 100)
 //	__hybrid0_vec  as var(func: similar_to(vecPred, 100, $vec))
 //	x              as var(func: fuse(__hybrid0_bm25, __hybrid0_vec, method: "rrf", k: 60))
 //
@@ -51,11 +51,12 @@ func rewriteHybridBlocks(res *Result) error {
 
 	// Guard against the (extremely unlikely) case of a user variable colliding with
 	// the synthetic channel names we generate, which would otherwise produce a
-	// confusing "defined multiple times" error the user can't act on.
+	// confusing "defined multiple times" error the user can't act on. Variables can
+	// be defined in nested blocks too, so check the whole query tree, not just roots.
 	for _, qu := range res.Query {
-		if qu != nil && strings.HasPrefix(qu.Var, hybridVarPrefix) {
+		if v, ok := findReservedHybridVar(qu); ok {
 			return fmt.Errorf("variable %q uses the reserved prefix %q (used internally by hybrid)",
-				qu.Var, hybridVarPrefix)
+				v, hybridVarPrefix)
 		}
 	}
 
@@ -75,6 +76,23 @@ func rewriteHybridBlocks(res *Result) error {
 	}
 	res.Query = expanded
 	return nil
+}
+
+// findReservedHybridVar walks a query block and its children for any variable using
+// the reserved hybrid prefix, returning the first one found.
+func findReservedHybridVar(qu *GraphQuery) (string, bool) {
+	if qu == nil {
+		return "", false
+	}
+	if strings.HasPrefix(qu.Var, hybridVarPrefix) {
+		return qu.Var, true
+	}
+	for _, ch := range qu.Children {
+		if v, ok := findReservedHybridVar(ch); ok {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // expandHybridBlock turns a single hybrid() block into [bm25, similar_to, fuse].
@@ -101,6 +119,12 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 	vecPred := fn.Args[1].Value
 	vecArg := fn.Args[2]
 
+	// Options follow the positionals as key/value pairs; an odd remainder means a
+	// malformed option list rather than something to silently drop.
+	if (len(fn.Args)-numPositional)%2 != 0 {
+		return nil, fmt.Errorf("hybrid: malformed options (expected key:value pairs)")
+	}
+
 	// Parse options: topk feeds similar_to's neighbor count; the rest feed fuse.
 	topk := hybridDefaultTopK
 	var fuseArgs []Arg
@@ -117,11 +141,14 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 	chanBM25 := fmt.Sprintf("%s%d_bm25", hybridVarPrefix, idx)
 	chanVec := fmt.Sprintf("%s%d_vec", hybridVarPrefix, idx)
 
+	// Bound the bm25 channel to the same topk candidate budget as the vector channel
+	// so a broad text query does not score and materialize the entire corpus before
+	// fusion. bm25 honors `first` with WAND top-k early termination.
 	bm25Block := &GraphQuery{
 		Alias: "var",
 		Var:   chanBM25,
 		Func:  &Function{Name: "bm25", Attr: textPred, Args: []Arg{{Value: queryText}}},
-		Args:  map[string]string{},
+		Args:  map[string]string{"first": topk},
 	}
 	simBlock := &GraphQuery{
 		Alias: "var",

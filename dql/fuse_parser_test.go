@@ -176,6 +176,34 @@ func TestParseHybrid_ExpandsToThreeBlocks(t *testing.T) {
 	require.NotContains(t, args, "topk")
 }
 
+func TestParseHybrid_BoundsBM25Channel(t *testing.T) {
+	// The generated bm25 channel must be bounded to topk so a broad text query does
+	// not score the whole corpus before fusion.
+	query := `
+	{
+		f as var(func: hybrid(description, "fox", emb, "[0.1]", topk: 25))
+		result(func: uid(f), orderdesc: val(f)) { uid }
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	for _, q := range res.Query {
+		if q.Func != nil && q.Func.Name == "bm25" {
+			require.Equal(t, "25", q.Args["first"], "bm25 channel should be capped at topk")
+		}
+	}
+}
+
+func TestParseHybrid_MalformedOptions(t *testing.T) {
+	// A trailing option key without a value must be rejected, not silently dropped.
+	query := `
+	{
+		f as var(func: hybrid(description, "fox", emb, "[0.1]", method))
+		result(func: uid(f), orderdesc: val(f)) { uid }
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+}
+
 func TestParseHybrid_DefaultTopK(t *testing.T) {
 	query := `
 	{
