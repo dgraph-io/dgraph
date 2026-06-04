@@ -1383,9 +1383,6 @@ func (sg *SubGraph) valueVarAggregation(doneVars map[string]varValue, path []*Su
 	case sg.Attr == "uid" && sg.Params.DoCount:
 		// This is the count(uid) case.
 		// We will do the computation later while constructing the result.
-	case sg.Attr == "bm25_score":
-		// bm25_score is a pseudo-predicate handled inline during children processing.
-		// Its valueMatrix is already populated. Nothing to aggregate.
 	default:
 		return errors.Errorf("Unhandled pb.node <%v> with parent <%v>", sg.Attr, parent.Attr)
 	}
@@ -1608,6 +1605,31 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
+	case sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(sg.uidMatrix) > 0 &&
+		len(sg.valueMatrix) > 0:
+		// A query-side ranker (BM25) binds its per-document relevance score as a
+		// value variable. We populate BOTH the matched uid set and the uid->score
+		// map so the variable works with uid(var), val(var) and orderdesc: val(var)
+		// — surfacing and ordering by score without a pseudo-predicate or a
+		// ParentVars channel. The valueMatrix is positionally aligned with the
+		// function's returned uidMatrix[0].
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
+		}
+		v.Uids = sg.DestUIDs
+		uids := sg.uidMatrix[0].GetUids()
+		for idx, uid := range uids {
+			if idx >= len(sg.valueMatrix) || len(sg.valueMatrix[idx].Values) == 0 {
+				continue
+			}
+			tv := sg.valueMatrix[idx].Values[0]
+			if len(tv.Val) != 8 {
+				continue
+			}
+			score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+			v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
+		}
+		doneVars[sg.Params.Var] = v
 	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
@@ -2293,30 +2315,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
 
-			// If this is a BM25 root function, extract scores from ValueMatrix
-			// and store them in ParentVars for bm25_score pseudo-predicate children.
-			if sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(result.UidMatrix) > 0 &&
-				len(result.ValueMatrix) > 0 {
-				bm25Scores := types.NewShardedMap()
-				uids := result.UidMatrix[0].GetUids()
-				for i, uid := range uids {
-					if i < len(result.ValueMatrix) && len(result.ValueMatrix[i].Values) > 0 {
-						tv := result.ValueMatrix[i].Values[0]
-						if len(tv.Val) == 8 {
-							score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
-							bm25Scores.Set(uid, types.Val{
-								Tid:   types.FloatID,
-								Value: score,
-							})
-						}
-					}
-				}
-				if sg.Params.ParentVars == nil {
-					sg.Params.ParentVars = make(map[string]varValue)
-				}
-				sg.Params.ParentVars["__bm25_scores__"] = varValue{Vals: bm25Scores}
-			}
-
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
@@ -2415,9 +2413,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// for `has` function when there is no filtering and ordering, we fetch
-		// correct paginated results so no need to apply pagination here.
-		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+		// For `has` and `bm25`, the worker already returns correctly paginated
+		// results (bm25 paginates over score order, which the uid-sorted query-layer
+		// pagination cannot reproduce), so applying pagination again here would
+		// double-apply first/offset. Skip it when there is no filtering/ordering.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil &&
+			(sg.SrcFunc.Name == "has" || sg.SrcFunc.Name == "bm25")) {
 			// There is no ordering. Just apply pagination and return.
 			if err = sg.applyPagination(ctx); err != nil {
 				rch <- err
@@ -2494,27 +2495,6 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
-
-		// Handle bm25_score pseudo-predicate: populate valueMatrix from parent's
-		// BM25 scores. Mark IsInternal so populateUidValVar case 4 (value variable)
-		// fires instead of case 3 (UID variable).
-		if child.Attr == "bm25_score" {
-			if bm25Var, ok := child.Params.ParentVars["__bm25_scores__"]; ok && bm25Var.Vals != nil {
-				child.valueMatrix = make([]*pb.ValueList, len(child.SrcUIDs.GetUids()))
-				for j, uid := range child.SrcUIDs.GetUids() {
-					if val, okv := bm25Var.Vals.Get(uid); okv {
-						child.valueMatrix[j] = &pb.ValueList{
-							Values: []*pb.TaskValue{valToTaskValue(val)},
-						}
-					} else {
-						child.valueMatrix[j] = &pb.ValueList{}
-					}
-				}
-			}
-			child.DestUIDs = &pb.List{}
-			child.Params.IsInternal = true
-			continue
-		}
 
 		if child.IsInternal() {
 			// We dont have to execute these nodes.

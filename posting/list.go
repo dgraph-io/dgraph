@@ -60,8 +60,6 @@ const (
 	BitCompletePosting byte = 0x08
 	// BitEmptyPosting signals that the value stores an empty posting list.
 	BitEmptyPosting byte = 0x10
-	// BitBM25Data signals that the value stores BM25 index data (direct KV, not a posting list).
-	BitBM25Data byte = 0x20
 )
 
 // List stores the in-memory representation of a posting list.
@@ -1629,7 +1627,14 @@ func (l *List) encode(out *rollupOutput, readTs uint64, split bool) error {
 		}
 
 		enc.Add(p.Uid)
-		if p.Facets != nil || p.PostingType != pb.Posting_REF {
+		// Retain the full posting (not just its UID in the Pack) whenever it
+		// carries facets, is not a plain UID reference, or carries a value.
+		// BM25 index postings are REF postings that pack (term-frequency,
+		// doc-length) into Value; without the len(p.Value) > 0 clause that
+		// value would be stripped at rollup, silently losing all term
+		// frequencies. This mirrors how faceted postings already coexist in
+		// both Pack (UID) and Postings (payload).
+		if p.Facets != nil || p.PostingType != pb.Posting_REF || len(p.Value) > 0 {
 			plist.Postings = append(plist.Postings, p)
 		}
 		return nil

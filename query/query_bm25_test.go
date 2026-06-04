@@ -244,12 +244,10 @@ func TestBM25Pagination(t *testing.T) {
 }
 
 func TestBM25ScoreOrdering(t *testing.T) {
-	// Use the bm25_score pseudo-predicate with var block to order results by score.
+	// Bind the bm25 score to a value variable and order results by it via val().
 	query := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score), first: 1) {
 			uid
 			description_bm25
@@ -267,9 +265,7 @@ func TestBM25ScoreOrderingMultiTerm(t *testing.T) {
 	// since it contains both terms.
 	query := `
 	{
-		var(func: bm25(description_bm25, "quick lazy")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "quick lazy"))
 		me(func: uid(score), orderdesc: val(score), first: 1) {
 			uid
 			description_bm25
@@ -285,9 +281,7 @@ func TestBM25ScoreOrderingAllResults(t *testing.T) {
 	// Verify all results are returned in score-descending order via val(score).
 	query := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			description_bm25
@@ -307,9 +301,7 @@ func TestBM25ScoreWithPagination(t *testing.T) {
 	// Use offset with score ordering.
 	query := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score), first: 1, offset: 1) {
 			uid
 			description_bm25
@@ -402,9 +394,7 @@ func TestBM25CorpusStatsAffectIDF(t *testing.T) {
 	// Capture baseline score for "fox" query.
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -511,9 +501,7 @@ func TestBM25DocumentDeletion(t *testing.T) {
 func TestBM25ScoreStabilityAsCorpusGrows(t *testing.T) {
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -601,9 +589,7 @@ func TestBM25LargeCorpus(t *testing.T) {
 	// Pagination: first:10, offset:40 for alpha should return 10 results.
 	js = processQueryNoErr(t, `
 	{
-		var(func: bm25(description_bm25, "alpha")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "alpha"))
 		me(func: uid(score), orderdesc: val(score), first: 10, offset: 40) {
 			uid
 		}
@@ -651,9 +637,7 @@ func TestBM25EdgeCaseLongDocument(t *testing.T) {
 	// Get scores for "fox" query.
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -753,9 +737,7 @@ func TestBM25WithUidFilter(t *testing.T) {
 func TestBM25ScoreValuesAreValidFloats(t *testing.T) {
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "fox")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "fox"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -907,9 +889,7 @@ func TestBM25ExactScoreValues(t *testing.T) {
 	// Query "quasar" with b=0 so score depends only on tf, k, and IDF (not avgDL).
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "quasar", "1.2", "0")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "quasar", "1.2", "0"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -963,9 +943,7 @@ func TestBM25BM15NoLengthNormalization(t *testing.T) {
 	// Query with b=0: length normalization disabled.
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "vortex", "1.2", "0")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "vortex", "1.2", "0"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -989,9 +967,7 @@ func TestBM25BM15NoLengthNormalization(t *testing.T) {
 	// Now verify that with default b=0.75, the shorter doc scores higher.
 	scoreQueryDefault := `
 	{
-		var(func: bm25(description_bm25, "vortex")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "vortex"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)
@@ -1022,9 +998,7 @@ func TestBM25SingleMatchingDocument(t *testing.T) {
 	// Query with b=0 for exact verification.
 	scoreQuery := `
 	{
-		var(func: bm25(description_bm25, "aardvark", "1.2", "0")) {
-			score as bm25_score
-		}
+		score as var(func: bm25(description_bm25, "aardvark", "1.2", "0"))
 		me(func: uid(score), orderdesc: val(score)) {
 			uid
 			val(score)

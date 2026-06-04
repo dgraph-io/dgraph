@@ -30,8 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/v25/algo"
 	"github.com/dgraph-io/dgraph/v25/conn"
 	"github.com/dgraph-io/dgraph/v25/posting"
-	"github.com/dgraph-io/dgraph/v25/posting/bm25enc"
-	// bm25block and bm25wand are used via bm25wand.go in this package.
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	ctask "github.com/dgraph-io/dgraph/v25/task"
@@ -1263,7 +1261,8 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return errors.Errorf("bm25: b must be between 0 and 1, got %v", b)
 	}
 
-	// 2. Tokenize query (deduplicated) using fulltext pipeline.
+	// 2. Tokenize query (deduplicated) using the fulltext pipeline. The returned
+	// tokens already carry the BM25 tokenizer identifier byte.
 	lang := langForFunc(q.Langs)
 	queryTokens, err := tok.GetBM25QueryTokens([]string{queryText}, lang)
 	if err != nil {
@@ -1274,10 +1273,11 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return nil
 	}
 
-	// 3. Read corpus stats.
-	statsKey := x.BM25StatsKey(attr)
-	statsBlob := posting.ReadBM25BlobAt(statsKey, q.ReadTs)
-	docCount, totalTerms := bm25enc.DecodeStats(statsBlob)
+	// 3. Read bucketed corpus stats and derive N and the average document length.
+	docCount, totalTerms, err := posting.ReadBM25Stats(qs.cache.Get, attr, q.ReadTs)
+	if err != nil {
+		return err
+	}
 	if docCount == 0 || totalTerms == 0 {
 		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
 		return nil
@@ -1285,7 +1285,7 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	avgDL := float64(totalTerms) / float64(docCount)
 	N := float64(docCount)
 
-	// Build filter set if used as a filter.
+	// Build a filter set if bm25 is used as a filter (@filter(bm25(...))).
 	var filterSet map[uint64]struct{}
 	if q.UidList != nil && len(q.UidList.Uids) > 0 {
 		filterSet = make(map[uint64]struct{}, len(q.UidList.Uids))
@@ -1294,17 +1294,21 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// 4. Determine top-k: use WAND when first is set and no offset.
-	// When offset is set or first is unset, score all documents.
+	// 4. Use WAND top-k early termination only when first is set without an offset;
+	// otherwise score all matching documents and paginate afterwards.
 	topK := 0
 	if q.First > 0 && q.Offset == 0 {
 		topK = int(q.First)
 	}
 
-	// 5. Run WAND search over block-based posting lists (with Block-Max skipping).
-	results := wandSearch(attr, q.ReadTs, queryTokens, k, b, avgDL, N, topK, filterSet, true)
+	// 5. Run WAND / Block-Max WAND over the standard posting lists.
+	results, err := wandSearch(qs.cache.Get, attr, q.ReadTs, queryTokens, k, b, avgDL, N,
+		topK, filterSet, true)
+	if err != nil {
+		return err
+	}
 
-	// 6. Apply first/offset pagination on score-sorted results.
+	// 6. Paginate score-sorted results when WAND did not already top-k them.
 	if topK <= 0 && (q.First > 0 || q.Offset > 0) {
 		offset := int(q.Offset)
 		if offset > len(results) {
@@ -1316,10 +1320,9 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// 7. Build output: UIDs sorted ascending (required by query pipeline)
-	// and ValueMatrix with aligned scores (for bm25_score pseudo-predicate).
-	// We use a single pre-allocated buffer for all score encodings to reduce
-	// per-result heap allocations.
+	// 7. Emit UIDs ascending (required by the query pipeline) with positionally-
+	// aligned scores in ValueMatrix; the query layer binds these to a value
+	// variable so callers order by and project the score via val().
 	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
 	uids := make([]uint64, len(results))
 	for i, r := range results {
@@ -1327,18 +1330,15 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 	}
 	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
 
-	// Encode scores into ValueMatrix. Each entry in ValueMatrix corresponds
-	// positionally to a UID in UidMatrix[0], enabling the bm25_score
-	// pseudo-predicate in query.go to map UIDs to scores.
 	scoreBuf := make([]byte, len(results)*8)
 	scoreValues := make([]*pb.ValueList, len(results))
 	for i, r := range results {
 		off := i * 8
 		binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(r.score))
-		// Use three-index slice to cap capacity at 8, preventing any downstream
-		// append from corrupting adjacent scores in the shared backing array.
+		// Three-index slice caps capacity at 8 so a downstream append can't corrupt
+		// adjacent scores in the shared backing array.
 		scoreValues[i] = &pb.ValueList{
-			Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_ValType(pb.Posting_FLOAT)}},
+			Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_FLOAT}},
 		}
 	}
 	args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)

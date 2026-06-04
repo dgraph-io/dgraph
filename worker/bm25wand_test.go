@@ -8,9 +8,13 @@ package worker
 import (
 	"container/heap"
 	"math"
+	"math/rand"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/v25/posting"
 )
 
 func TestTopKHeapBasic(t *testing.T) {
@@ -93,4 +97,104 @@ func TestBm25ScoreNaN(t *testing.T) {
 	require.False(t, math.IsNaN(score))
 	require.False(t, math.IsInf(score, 0))
 	require.Greater(t, score, 0.0)
+}
+
+// brute force scores every doc across all cursors (ground truth for WAND).
+func bruteForceTopK(termPostings [][]posting.BM25Posting, idfs []float64,
+	k, b, avgDL float64, topK int) []scoredDoc {
+	scores := map[uint64]float64{}
+	dls := map[uint64]uint32{}
+	for ti, ps := range termPostings {
+		for _, p := range ps {
+			scores[p.Uid] += bm25Score(idfs[ti], float64(p.TF), float64(p.DocLen), avgDL, k, b)
+			dls[p.Uid] = p.DocLen
+		}
+	}
+	out := make([]scoredDoc, 0, len(scores))
+	for uid, s := range scores {
+		out = append(out, scoredDoc{uid: uid, score: s})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].score != out[j].score {
+			return out[i].score > out[j].score
+		}
+		return out[i].uid < out[j].uid
+	})
+	if topK > 0 && len(out) > topK {
+		out = out[:topK]
+	}
+	return out
+}
+
+// TestWandMatchesBruteForce checks that WAND and Block-Max WAND return exactly the
+// same top-k documents and scores as exhaustive scoring, across many randomized
+// posting lists. This is the core correctness guarantee: pruning must never change
+// the result, only the work done.
+func TestWandMatchesBruteForce(t *testing.T) {
+	rng := rand.New(rand.NewSource(42))
+	k, b, avgDL := 1.2, 0.75, 12.0
+
+	for trial := 0; trial < 200; trial++ {
+		numTerms := 1 + rng.Intn(4)
+		termPostings := make([][]posting.BM25Posting, numTerms)
+		idfs := make([]float64, numTerms)
+		for ti := 0; ti < numTerms; ti++ {
+			n := rng.Intn(400) // spans multiple wandBlockSize blocks
+			seen := map[uint64]bool{}
+			var ps []posting.BM25Posting
+			for j := 0; j < n; j++ {
+				uid := uint64(1 + rng.Intn(500))
+				if seen[uid] {
+					continue
+				}
+				seen[uid] = true
+				ps = append(ps, posting.BM25Posting{
+					Uid:    uid,
+					TF:     uint32(1 + rng.Intn(10)),
+					DocLen: uint32(1 + rng.Intn(30)),
+				})
+			}
+			sort.Slice(ps, func(i, j int) bool { return ps[i].Uid < ps[j].Uid })
+			termPostings[ti] = ps
+			// Vary IDF per term so different terms carry different weight.
+			idfs[ti] = 0.5 + rng.Float64()*2
+		}
+
+		topK := 1 + rng.Intn(10)
+		want := bruteForceTopK(termPostings, idfs, k, b, avgDL, topK)
+		// One extra result lets us detect a tie between the cutoff rank and the
+		// first excluded document (a boundary tie outside the top-k window).
+		wantPlus := bruteForceTopK(termPostings, idfs, k, b, avgDL, topK+1)
+
+		build := func() []*termCursor {
+			cs := make([]*termCursor, 0, numTerms)
+			for ti, ps := range termPostings {
+				if len(ps) == 0 {
+					continue
+				}
+				cs = append(cs, newTermCursor(ps, idfs[ti], k, b, avgDL))
+			}
+			return cs
+		}
+
+		for _, useBMW := range []bool{false, true} {
+			got := wandTopK(build(), k, b, avgDL, topK, nil, useBMW)
+			require.Lenf(t, got, len(want), "trial %d bmw=%v len", trial, useBMW)
+			for i := range want {
+				// The score at each rank must match exactly: WAND/BMW pruning must
+				// never change which scores make the top-k, only the work done.
+				require.InEpsilonf(t, want[i].score, got[i].score, 1e-9,
+					"trial %d bmw=%v rank %d score", trial, useBMW, i)
+				// The uid is only guaranteed when this rank's score is not tied with
+				// a neighbor (including the first excluded doc); tied-boundary docs
+				// are interchangeable in the ranking.
+				tied := (i > 0 && wantPlus[i].score == wantPlus[i-1].score) ||
+					(i+1 < len(wantPlus) && wantPlus[i].score == wantPlus[i+1].score)
+				if !tied {
+					require.Equalf(t, want[i].uid, got[i].uid,
+						"trial %d bmw=%v rank %d uid", trial, useBMW, i)
+				}
+			}
+		}
+	}
 }
