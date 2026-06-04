@@ -23,11 +23,18 @@ import (
 // slice avoids the per-query allocation and GC pressure of a map with millions of
 // entries while keeping lookups at O(log n). An empty allow-set rejects everything.
 func uidMembershipFilter(uids []uint64) index.SearchFilter[float32] {
-	// Copy before sorting: the input may alias a shared, sorted-ascending var list
-	// that other goroutines read concurrently; we must not mutate it.
+	// Copy before sorting: the input may alias a shared var list that other goroutines
+	// read concurrently; we must not mutate it. uid variables reach the worker already
+	// sorted ascending (algo.MergeSorted), so the common case skips the O(n log n) sort
+	// — a meaningful saving for whole-tenant scopes (millions of uids per query). We
+	// still sort defensively when the invariant does not hold, since the binary-search
+	// lookup below requires ascending order for correctness.
 	sorted := make([]uint64, len(uids))
 	copy(sorted, uids)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	less := func(i, j int) bool { return sorted[i] < sorted[j] }
+	if !sort.SliceIsSorted(sorted, less) {
+		sort.Slice(sorted, less)
+	}
 
 	return func(_, _ []float32, uid uint64) bool {
 		i := sort.Search(len(sorted), func(i int) bool { return sorted[i] >= uid })
