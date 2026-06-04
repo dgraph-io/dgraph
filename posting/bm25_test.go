@@ -138,3 +138,37 @@ func TestBM25StatsBucketed(t *testing.T) {
 	require.Equal(t, uint64(wantCount-1), dc)
 	require.Equal(t, uint64(wantTerms-20), tt)
 }
+
+// TestBM25StatsAccumulateAcrossTxns verifies that stats accumulate across
+// separately-committed transactions (not just within one). This guards against
+// the read-modify-write reading only the in-memory delta instead of committed
+// disk state, which would make each transaction overwrite its bucket and collapse
+// the corpus document count.
+func TestBM25StatsAccumulateAcrossTxns(t *testing.T) {
+	ctx := context.Background()
+	attr := x.AttrInRootNamespace("bm25statsxtxn")
+
+	// Two documents in the SAME bucket (uid 5 and uid 37 → bucket 5), committed in
+	// two separate transactions.
+	commitDoc := func(startTs, commitTs, uid uint64, docLen int64) {
+		txn := Oracle().RegisterStartTs(startTs)
+		txn.cache = NewLocalCache(startTs)
+		require.NoError(t, txn.updateBM25Stats(ctx, attr, uid, 1, docLen))
+		txn.Update()
+		txn.UpdateCachedKeys(commitTs)
+		writer := NewTxnWriter(pstore)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+	}
+
+	commitDoc(201, 202, 5, 10)
+	commitDoc(203, 204, 37, 6)
+
+	// A fresh reader at a later ts must see BOTH documents (count 2, terms 16),
+	// not just the most recently committed one.
+	get := func(k []byte) (*List, error) { return GetNoStore(k, 205) }
+	dc, tt, err := ReadBM25Stats(get, attr, 205)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), dc, "doc count must accumulate across transactions")
+	require.Equal(t, uint64(16), tt, "total terms must accumulate across transactions")
+}
