@@ -375,8 +375,17 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		var nnUids []uint64
-		// Build optional search options if provided
+		// Pre-filtered ANN: when `similar_to(..., filter: var)` is used, restrict the
+		// search to the allow-set (carried in q.UidList) by applying a membership
+		// filter DURING the HNSW traversal. The search layer grows its candidate
+		// budget to still return k in-scope neighbors, instead of post-filtering a
+		// fixed k and under-returning. An empty scope rejects everything (nothing is in
+		// scope) — it must NOT fall back to a global search. Absent a filter option,
+		// accept all (unchanged behavior, zero overhead).
 		filter := index.AcceptAll[float32]
+		if srcFn.vsHasFilter {
+			filter = uidMembershipFilter(q.UidList.GetUids())
+		}
 		opts := index.VectorIndexOptions[float32]{Filter: filter}
 		if srcFn.vsEfOverride > 0 {
 			opts.EfOverride = srcFn.vsEfOverride
@@ -394,10 +403,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		} else {
 			if srcFn.vectorInfo != nil {
 				nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-					int(numNeighbors), index.AcceptAll[float32])
+					int(numNeighbors), filter)
 			} else {
 				nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-					int(numNeighbors), index.AcceptAll[float32])
+					int(numNeighbors), filter)
 			}
 		}
 
@@ -1835,6 +1844,10 @@ type functionContext struct {
 	// Optional vector search options parsed from a 3rd arg on similar_to
 	vsEfOverride        int
 	vsDistanceThreshold *float64
+	// vsHasFilter is set when similar_to was given a `filter: <var>` option. The
+	// allow-set arrives via the task UidList; this flag distinguishes a requested
+	// filter whose scope is empty (reject all) from no filter at all (accept all).
+	vsHasFilter bool
 }
 
 const (
@@ -2814,6 +2827,10 @@ func parseSimilarToOptions(args []string, fc *functionContext) error {
 			}
 			fc.vsDistanceThreshold = new(float64)
 			*fc.vsDistanceThreshold = f
+		case "filter":
+			// Marker that a pre-filter allow-set (uid variable) is in effect. The set
+			// itself is carried in the task UidList, not here.
+			fc.vsHasFilter = true
 		default:
 			return errors.Errorf("Unknown option in similar_to: %q", k)
 		}
