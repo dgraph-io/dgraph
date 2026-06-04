@@ -151,7 +151,12 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 	docCountDelta, totalTermsDelta int64) error {
 	bucket := int(uid % numBM25StatsBuckets)
 	key := x.BM25StatsKey(attr, bucket)
-	plist, err := txn.cache.GetFromDelta(key)
+	// Stats are maintained by read-modify-write: we must read the committed total
+	// from disk (and merge this transaction's own writes), not just the in-memory
+	// delta. GetFromDelta skips disk and is only safe for write-only index mutations,
+	// so each transaction would otherwise overwrite the bucket instead of
+	// accumulating across transactions. Get reads committed state.
+	plist, err := txn.cache.Get(key)
 	if err != nil {
 		return err
 	}
