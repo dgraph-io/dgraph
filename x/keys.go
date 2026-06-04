@@ -292,47 +292,28 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	return buf
 }
 
-// BM25Prefix is the prefix used for BM25 index keys to prevent collision
-// with regular fulltext index tokens.
-const BM25Prefix = "\x00_bm25_"
-
-// BM25IndexKey generates an index key for a BM25 term posting list.
-func BM25IndexKey(attr string, token string) []byte {
-	return IndexKey(attr, BM25Prefix+token)
+// BM25IndexKey generates the index key for a BM25 term posting list. The
+// encodedToken already carries the BM25 tokenizer identifier byte, so BM25 term
+// postings live at the same standard index key as every other tokenizer —
+// IndexKey(attr, identifier || term) — and inherit rollup, splits, backup, and
+// index-rebuild handling for free. This is a thin alias of IndexKey so the index
+// write path and the query read path share one definition.
+func BM25IndexKey(attr string, encodedToken string) []byte {
+	return IndexKey(attr, encodedToken)
 }
 
-// BM25DocLenKey generates the key for the BM25 document length posting list.
-func BM25DocLenKey(attr string) []byte {
-	return IndexKey(attr, BM25Prefix+"__doclen__")
-}
+// bm25StatsPrefix namespaces the BM25 corpus-statistics keys. These hold the
+// document count and total term count (used to derive the average document
+// length); they are auxiliary metadata, not term postings, so they use a reserved
+// token that cannot collide with any stemmed BM25 term.
+const bm25StatsPrefix = "\x00_bm25stats_"
 
-// BM25StatsKey generates the key for BM25 corpus statistics.
-func BM25StatsKey(attr string) []byte {
-	return IndexKey(attr, BM25Prefix+"__stats__")
-}
-
-// BM25TermDirKey generates the key for a BM25 term's block directory.
-func BM25TermDirKey(attr, term string) []byte {
-	return IndexKey(attr, BM25Prefix+"__dir__"+term)
-}
-
-// BM25TermBlockKey generates the key for an individual BM25 term posting block.
-func BM25TermBlockKey(attr, term string, blockID uint32) []byte {
-	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], blockID)
-	return IndexKey(attr, BM25Prefix+"__blk__"+term+string(buf[:]))
-}
-
-// BM25DocLenDirKey generates the key for the BM25 document-length block directory.
-func BM25DocLenDirKey(attr string) []byte {
-	return IndexKey(attr, BM25Prefix+"__dldir__")
-}
-
-// BM25DocLenBlockKey generates the key for an individual BM25 document-length block.
-func BM25DocLenBlockKey(attr string, segID uint32) []byte {
-	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], segID)
-	return IndexKey(attr, BM25Prefix+"__dlblk__"+string(buf[:]))
+// BM25StatsKey generates the key for one bucket of BM25 corpus statistics. Stats
+// are sharded across buckets (keyed by uid%numBuckets) to spread write contention.
+func BM25StatsKey(attr string, bucket int) []byte {
+	var buf [2]byte
+	binary.BigEndian.PutUint16(buf[:], uint16(bucket))
+	return IndexKey(attr, bm25StatsPrefix+string(buf[:]))
 }
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.
