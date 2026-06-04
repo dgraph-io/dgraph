@@ -39,15 +39,19 @@ func pfSetup(t *testing.T) {
 	`, pfVec, pfGroup))
 
 	var sb strings.Builder
+	// Use small explicit UIDs (well under the zero's default initial lease, as the
+	// sibling vector tests do): higher UIDs would be rejected with
+	// "Uid: [...] cannot be greater than lease".
+	//
 	// Group B: 8 "distractor" vectors hugging the origin (closest to a [0,0] query).
 	for i := 1; i <= 8; i++ {
-		uid := 0x4000 + i
+		uid := 0x10 + i
 		fmt.Fprintf(&sb, "<%d> <%s> \"[%g, 0.0]\" .\n", uid, pfVec, float64(i)*0.01)
 		fmt.Fprintf(&sb, "<%d> <%s> \"B\" .\n", uid, pfGroup)
 	}
 	// Group A: 8 in-scope vectors farther from the origin.
 	for i := 0; i < 8; i++ {
-		uid := 0x4100 + i
+		uid := 0x30 + i
 		fmt.Fprintf(&sb, "<%d> <%s> \"[%g, 0.0]\" .\n", uid, pfVec, 0.5+float64(i)*0.1)
 		fmt.Fprintf(&sb, "<%d> <%s> \"A\" .\n", uid, pfGroup)
 	}
@@ -100,6 +104,29 @@ func TestPreFilterANN_ScopesToFilterVar(t *testing.T) {
 		}
 	}`, pfGroup, pfVec, pfGroup))
 	require.Len(t, filtered, 5, "pre-filter must still return k in-scope results")
+	for _, r := range filtered {
+		require.Equal(t, "A", r.Group, "every result must be in scope (group A)")
+	}
+}
+
+// TestPreFilterANN_ScopesWithoutEfOverride is the same scope restriction as the core
+// test but WITHOUT an explicit `ef:` override. A filtered search must route through
+// the wider max(k, efSearch) candidate budget on its own, so it still returns k
+// in-scope (group A) neighbors even though the nearest vectors are out of scope. With
+// the narrow k-only budget this under-returned.
+func TestPreFilterANN_ScopesWithoutEfOverride(t *testing.T) {
+	pfSetup(t)
+	defer pfTeardown()
+
+	filtered := pfQuery(t, fmt.Sprintf(`
+	{
+		allowed as var(func: eq(%s, "A"))
+		result(func: similar_to(%s, 5, "[0.0, 0.0]", filter: allowed)) {
+			uid
+			%s
+		}
+	}`, pfGroup, pfVec, pfGroup))
+	require.Len(t, filtered, 5, "pre-filter must return k in-scope results without an ef override")
 	for _, r := range filtered {
 		require.Equal(t, "A", r.Group, "every result must be in scope (group A)")
 	}

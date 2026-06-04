@@ -84,3 +84,75 @@ func TestParseSimilarTo_FilterUndefinedVarErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not defined")
 }
+
+// TestParseSimilarTo_FilterPropagatesToGraphQueryNeedsVar guards the dependency
+// edge the whole feature relies on. The parser records the filter var on
+// Func.NeedsVar, but the var-dependency scheduler (collectVars) and newGraph both
+// read the GraphQuery-level NeedsVar — populated for the root func at parse time.
+// If that propagation ever regresses, scheduling would not resolve the var first
+// and the filter would silently see an empty/garbage allow-set, so assert it here.
+func TestParseSimilarTo_FilterPropagatesToGraphQueryNeedsVar(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: allowed)) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+
+	var sim *GraphQuery
+	for _, b := range res.Query {
+		if b.Func != nil && b.Func.Name == "similar_to" {
+			sim = b
+		}
+	}
+	require.NotNil(t, sim)
+
+	found := false
+	for _, nv := range sim.NeedsVar {
+		if nv.Name == "allowed" {
+			require.Equal(t, UidVar, nv.Typ)
+			found = true
+		}
+	}
+	require.True(t, found,
+		"filter var must surface on GraphQuery.NeedsVar so the scheduler resolves it first")
+}
+
+func TestParseSimilarTo_DuplicateFilterErrors(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: allowed, filter: allowed)) {
+			uid
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate key")
+}
+
+func TestParseSimilarTo_FilterNonNameValueErrors(t *testing.T) {
+	// The filter option's value must be a bare uid-variable name. Non-name tokens
+	// ($var, lists, parens) are rejected at the option parser with an explicit
+	// message; string/number literals lex as names and are rejected downstream as
+	// undefined vars. Either way they must not parse into a valid filter.
+	explicit := []string{`$x`, `[1, 2]`, `()`}
+	for _, val := range explicit {
+		query := `{ q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: ` + val + `)) { uid } }`
+		_, err := Parse(Request{Str: query})
+		require.Error(t, err, "filter: %s should be rejected", val)
+		require.Contains(t, err.Error(), "filter option expects a uid variable name",
+			"filter: %s", val)
+	}
+
+	downstream := []string{`"foo"`, `5`}
+	for _, val := range downstream {
+		query := `{ q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: ` + val + `)) { uid } }`
+		_, err := Parse(Request{Str: query})
+		require.Error(t, err, "filter: %s should be rejected", val)
+		require.Contains(t, err.Error(), "not defined", "filter: %s", val)
+	}
+}

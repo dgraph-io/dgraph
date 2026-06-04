@@ -393,7 +393,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if srcFn.vsDistanceThreshold != nil {
 			opts.DistanceThreshold = srcFn.vsDistanceThreshold
 		}
-		hasOptions := opts.EfOverride > 0 || opts.DistanceThreshold != nil
+		// Route through the options path when a filter is active, even without an ef
+		// override: SearchWithOptions uses a max(k, efSearch) bottom-layer candidate
+		// budget, whereas the legacy Search path uses just k. Pre-filtering needs the
+		// wider budget to traverse past out-of-scope nodes and still return k in-scope
+		// neighbors — with the narrow budget a scoped search under-returns.
+		hasOptions := opts.EfOverride > 0 || opts.DistanceThreshold != nil || srcFn.vsHasFilter
 		if o, ok := indexer.(index.OptionalSearchOptions[float32]); ok && hasOptions {
 			if srcFn.vectorInfo != nil {
 				nnUids, err = o.SearchWithOptions(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
