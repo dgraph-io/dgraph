@@ -130,6 +130,10 @@ type params struct {
 	// NeedsVar is the list of variables required by this SubGraph along with their type.
 	NeedsVar []dql.VarContext
 
+	// VectorFilterVar names a uid variable that pre-filters a similar_to ANN search
+	// (the `filter: <var>` option). Its resolved uids become the search allow-set.
+	VectorFilterVar string
+
 	// ParentVars is a map of variables passed down recursively to children of a SubGraph in a query
 	// block. These are used to filter uids defined in a parent using a variable.
 	// TODO (pawan) - This can potentially be simplified to a map[string]*pb.List since we don't
@@ -278,6 +282,10 @@ type SubGraph struct {
 	// SrcUIDs is a list of unique source UIDs. They are always copies of destUIDs
 	// of parent nodes in GraphQL structure.
 	SrcUIDs *pb.List
+	// vectorFilterUids is the resolved allow-set for a pre-filtered similar_to ANN
+	// search (from the `filter: <var>` option). It is carried to the worker via the
+	// task's UidList and does not participate in the normal SrcUIDs/DestUIDs flow.
+	vectorFilterUids *pb.List
 	// SrcFunc specified using func. Should only be non-nil at root. At other levels,
 	// filters are used.
 	SrcFunc *Function
@@ -329,6 +337,7 @@ func (sg *SubGraph) createSrcFunction(gf *dql.Function) {
 		IsValueVar: gf.IsValueVar,
 		IsLenVar:   gf.IsLenVar,
 	}
+	sg.Params.VectorFilterVar = gf.VectorFilterVar
 
 	// type function is just an alias for eq(type, "dgraph.type").
 	if gf.Name == "type" {
@@ -980,6 +989,11 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 
 	if sg.SrcUIDs != nil {
 		out.UidList = sg.SrcUIDs
+	}
+	// A pre-filtered similar_to search ships its allow-set to the worker via UidList.
+	// For a root similar_to, SrcUIDs is nil, so this does not conflict.
+	if sg.vectorFilterUids != nil {
+		out.UidList = sg.vectorFilterUids
 	}
 	return out, nil
 }
@@ -1835,6 +1849,13 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 				srcFuncArgs = append(srcFuncArgs, arg)
 			}
 			sg.SrcFunc.Args = srcFuncArgs
+
+		case v.Name == sg.Params.VectorFilterVar && v.Typ == dql.UidVar &&
+			sg.SrcFunc != nil && sg.SrcFunc.Name == "similar_to":
+			// Pre-filtered ANN: the filter var's uids scope the similar_to search.
+			// Capture them as the allow-set; do NOT merge into DestUIDs (this var
+			// restricts the search, it is not part of the result set).
+			sg.vectorFilterUids = l.Uids
 
 		case (v.Typ == dql.AnyVar || v.Typ == dql.UidVar) && l.Uids != nil:
 			lists = append(lists, l.Uids)
