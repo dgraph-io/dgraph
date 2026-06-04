@@ -385,6 +385,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		var nnUids []uint64
+		var nnScores []float64
 		// Build optional search options if provided
 		filter := index.AcceptAll[float32]
 		opts := index.VectorIndexOptions[float32]{Filter: filter}
@@ -395,27 +396,63 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			opts.DistanceThreshold = srcFn.vsDistanceThreshold
 		}
 		hasOptions := opts.EfOverride > 0 || opts.DistanceThreshold != nil
-		if o, ok := indexer.(index.OptionalSearchOptions[float32]); ok && hasOptions {
-			if srcFn.vectorInfo != nil {
-				nnUids, err = o.SearchWithOptions(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
-			} else {
-				nnUids, err = o.SearchWithUidAndOptions(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+		// Use the scored search path so the per-uid similarity score can be bound to a
+		// value variable (powering native hybrid search / fuse()). The scored variants
+		// mirror their unscored counterparts exactly — SearchScored/SearchWithUidScored
+		// preserve the plain-query neighbor selection, and the *Options* variants are
+		// used only when the query supplies ef/distance-threshold — so adding scoring
+		// does not change which neighbors existing queries return. Indexes that don't
+		// implement scoring fall back to the unscored path (no scores surfaced).
+		if so, ok := indexer.(index.ScoredSearchOptions[float32]); ok {
+			switch {
+			case hasOptions && srcFn.vectorInfo != nil:
+				nnUids, nnScores, err = so.SearchWithOptionsScored(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
+			case hasOptions:
+				nnUids, nnScores, err = so.SearchWithUidAndOptionsScored(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+			case srcFn.vectorInfo != nil:
+				nnUids, nnScores, err = so.SearchScored(ctx, qc, srcFn.vectorInfo, int(numNeighbors), index.AcceptAll[float32])
+			default:
+				nnUids, nnScores, err = so.SearchWithUidScored(ctx, qc, srcFn.vectorUid, int(numNeighbors), index.AcceptAll[float32])
 			}
+		} else if srcFn.vectorInfo != nil {
+			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll[float32])
 		} else {
-			if srcFn.vectorInfo != nil {
-				nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-					int(numNeighbors), index.AcceptAll[float32])
-			} else {
-				nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-					int(numNeighbors), index.AcceptAll[float32])
-			}
+			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+				int(numNeighbors), index.AcceptAll[float32])
 		}
 
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
 			return err
 		}
-		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
+
+		// Emit uids ascending (required by the query pipeline) with positionally
+		// aligned similarity scores in ValueMatrix. The query layer binds these to a
+		// value variable so callers can order by and project the score via val(), and
+		// so vector results can serve as a fuse() channel. Scores are higher-is-better.
+		order := make([]int, len(nnUids))
+		for i := range order {
+			order[i] = i
+		}
+		sort.Slice(order, func(i, j int) bool { return nnUids[order[i]] < nnUids[order[j]] })
+		sortedUids := make([]uint64, len(nnUids))
+		for i, idx := range order {
+			sortedUids[i] = nnUids[idx]
+		}
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: sortedUids})
+
+		if len(nnScores) == len(nnUids) && len(nnScores) > 0 {
+			scoreBuf := make([]byte, len(nnUids)*8)
+			scoreValues := make([]*pb.ValueList, len(nnUids))
+			for i, idx := range order {
+				off := i * 8
+				binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(nnScores[idx]))
+				scoreValues[i] = &pb.ValueList{
+					Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_FLOAT}},
+				}
+			}
+			args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)
+		}
 		return nil
 	}
 

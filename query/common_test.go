@@ -393,6 +393,10 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// BM25 indexing - uses same version gate as ngram for now
 	if ngramSupport {
 		testSchema += "\ndescription_bm25: string @index(bm25) ."
+		// A parallel vector predicate on the same documents enables hybrid-search
+		// (fuse) tests that combine BM25 with vector similarity. Gated together with
+		// BM25 so both channels are always present for those tests.
+		testSchema += "\ndescription_vec: float32vector @index(hnsw(metric:\"euclidean\")) ."
 	}
 
 	setSchema(testSchema)
@@ -1022,6 +1026,21 @@ func populateCluster(dc dgraphapi.Cluster) {
 		<505> <description_bm25> "Dogs are loyal companions to humans and families everywhere" .
 		<506> <description_bm25> "Quick movements help foxes catch their prey in the wild" .
 		<507> <description_bm25> "Brown foxes are quick and agile animals in the forest" .
+	`)
+	x.Panic(err)
+
+	// Vector embeddings on the same documents (dims = [fox, dog, quick, brown]).
+	// Chosen so a "pure fox" query vector [3,0,0,0] ranks 503 first, then the
+	// fox/quick docs (506,507,501,502), and the dog-only docs (504,505) last —
+	// letting hybrid (fuse) tests observe both channels and union semantics.
+	err = addTriplesToCluster(`
+		<501> <description_vec> "[1.0, 1.0, 1.0, 1.0]" .
+		<502> <description_vec> "[1.0, 1.0, 1.0, 1.0]" .
+		<503> <description_vec> "[3.0, 0.0, 0.0, 0.0]" .
+		<504> <description_vec> "[0.0, 2.0, 0.0, 0.0]" .
+		<505> <description_vec> "[0.0, 2.0, 0.0, 0.0]" .
+		<506> <description_vec> "[1.0, 0.0, 1.0, 0.0]" .
+		<507> <description_vec> "[1.0, 0.0, 1.0, 1.0]" .
 	`)
 	x.Panic(err)
 }

@@ -1570,6 +1570,17 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 	var ok bool
 
 	switch {
+	case sg.SrcFunc != nil && sg.SrcFunc.Name == "fuse":
+		// Native hybrid search: fuse() combines several already-scored value
+		// variables (its NeedsVar channels) into one ranked value variable. Fusion is
+		// a coordinator-side operation over resolved variables — the channel blocks
+		// have already populated doneVars by the time this block is scheduled. We bind
+		// both the union uid set (uid(var)) and the uid->fused-score map (val(var)).
+		fv, err := computeFuse(sg.SrcFunc.Args, sg.Params.NeedsVar, doneVars, sgPath)
+		if err != nil {
+			return err
+		}
+		doneVars[sg.Params.Var] = fv
 	case len(sg.counts) > 0:
 		// 1. When count of a predicate is assigned a variable, we store the mapping of uid =>
 		// count(predicate).
@@ -1605,14 +1616,15 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
-	case sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(sg.uidMatrix) > 0 &&
-		len(sg.valueMatrix) > 0:
-		// A query-side ranker (BM25) binds its per-document relevance score as a
-		// value variable. We populate BOTH the matched uid set and the uid->score
-		// map so the variable works with uid(var), val(var) and orderdesc: val(var)
-		// — surfacing and ordering by score without a pseudo-predicate or a
-		// ParentVars channel. The valueMatrix is positionally aligned with the
-		// function's returned uidMatrix[0].
+	case sg.SrcFunc != nil && (sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") &&
+		len(sg.uidMatrix) > 0 && len(sg.valueMatrix) > 0:
+		// A query-side ranker (BM25 relevance or vector similarity) binds its
+		// per-document score as a value variable. We populate BOTH the matched uid set
+		// and the uid->score map so the variable works with uid(var), val(var) and
+		// orderdesc: val(var) — surfacing and ordering by score without a
+		// pseudo-predicate or a ParentVars channel. The valueMatrix is positionally
+		// aligned with the function's returned uidMatrix[0]. For similar_to the score
+		// is a higher-is-better similarity; this also lets vector results feed fuse().
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
 		}
@@ -2999,6 +3011,15 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// vector parameter was a Var and evaluated as empty
 			if sg.SrcFunc != nil && sg.SrcFunc.Name == "similar_to" &&
 				len(sg.SrcFunc.Args) == 1 && len(sg.Params.NeedsVar) > 0 {
+				errChan <- nil
+				continue
+			}
+
+			// fuse() is a coordinator-side fusion over already-resolved value
+			// variables; it is never dispatched to a worker. The fused variable is
+			// produced from doneVars in populateVarMap (the fuse case in
+			// populateUidValVar) once its channel variables are populated.
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "fuse" {
 				errChan <- nil
 				continue
 			}

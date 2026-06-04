@@ -29,7 +29,14 @@ const (
 	countFunc   = "count"
 	uidInFunc   = "uid_in"
 	similarToFn = "similar_to"
+	fuseFunc    = "fuse"
+	hybridFunc  = "hybrid"
 )
+
+// fuseOptionKeys is the set of named options accepted by the fuse() function.
+var fuseOptionKeys = map[string]struct{}{
+	"method": {}, "k": {}, "weights": {}, "normalize": {}, "topk": {},
+}
 
 var (
 	errExpandType = "expand is only compatible with type filters"
@@ -697,6 +704,12 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 			}
 			res.Query = append(res.Query, qu)
 		}
+	}
+
+	// Expand any hybrid() sugar blocks into explicit bm25 + similar_to channel
+	// blocks plus a fuse() block before variable collection and dependency checks.
+	if err := rewriteHybridBlocks(&res); err != nil {
+		return res, err
 	}
 
 	if len(res.Query) != 0 {
@@ -1701,7 +1714,8 @@ func validFuncName(name string) bool {
 
 	switch name {
 	case "regexp", "anyofterms", "allofterms", "alloftext", "anyoftext", "ngram",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25",
+		fuseFunc, hybridFunc:
 		return true
 	}
 	return false
@@ -1748,6 +1762,10 @@ L:
 		var similarToOptSeen map[string]struct{}
 		if function.Name == similarToFn {
 			similarToOptSeen = make(map[string]struct{})
+		}
+		var fuseOptSeen map[string]struct{}
+		if function.Name == fuseFunc || function.Name == hybridFunc {
+			fuseOptSeen = make(map[string]struct{})
 		}
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
@@ -1980,6 +1998,46 @@ L:
 					// Disallow extra positional args after (k, vec). Options must be named.
 					return nil, itemInFunc.Errorf("Expected named parameter in similar_to options (e.g. ef: 64)")
 				}
+
+				// fuse(v1, v2, ..., method: "rrf", k: 60) collects bare value-variable
+				// names as channels (handled by the fuseFunc case in the NeedsVar switch
+				// below) and key:value pairs as named options. An itemName followed by a
+				// colon is an option; otherwise it falls through to bare-name handling.
+				// hybrid() shares the same named options (its positional args are handled
+				// by the generic bare-name path).
+				if itemInFunc.Typ == itemName &&
+					(function.Name == fuseFunc || function.Name == hybridFunc) {
+					next, ok := it.PeekOne()
+					if ok && next.Typ == itemColon {
+						key := strings.ToLower(collectName(it, itemInFunc.Val))
+						if _, valid := fuseOptionKeys[key]; !valid {
+							return nil, itemInFunc.Errorf("Unknown option %q in fuse", key)
+						}
+						if _, exists := fuseOptSeen[key]; exists {
+							return nil, itemInFunc.Errorf("Duplicate key %q in fuse options", key)
+						}
+						fuseOptSeen[key] = struct{}{}
+						if ok := trySkipItemTyp(it, itemColon); !ok {
+							return nil, it.Errorf("Expected colon(:) after %s", key)
+						}
+						if !it.Next() {
+							return nil, it.Errorf("Expected value for %s", key)
+						}
+						valItem := it.Item()
+						if valItem.Typ != itemName {
+							return nil, valItem.Errorf("Expected value for %s", key)
+						}
+						v := strings.Trim(collectName(it, valItem.Val), " \t")
+						uq, err := unquoteIfQuoted(v)
+						if err != nil {
+							return nil, err
+						}
+						function.Args = append(function.Args, Arg{Value: key}, Arg{Value: uq})
+						expectArg = false
+						continue
+					}
+				}
+
 				if itemInFunc.Typ != itemName {
 					return nil, itemInFunc.Errorf("Expected arg after func [%s], but got item %v",
 						function.Name, itemInFunc)
@@ -2029,7 +2087,7 @@ L:
 			// Unlike other functions, uid function has no attribute, everything is args.
 			switch {
 			case len(function.Attr) == 0 && function.Name != uidFunc &&
-				function.Name != typFunc:
+				function.Name != typFunc && function.Name != fuseFunc:
 
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
@@ -2047,7 +2105,7 @@ L:
 				}
 				function.Lang = val
 				expectLang = false
-			case function.Name != uidFunc:
+			case function.Name != uidFunc && function.Name != fuseFunc:
 				// For UID function. we set g.UID
 				function.Args = append(function.Args, Arg{Value: val})
 			}
@@ -2058,6 +2116,12 @@ L:
 
 			expectArg = false
 			switch function.Name {
+			case fuseFunc:
+				// fuse(v1, v2, ...) takes scored value variables as channels.
+				function.NeedsVar = append(function.NeedsVar, VarContext{
+					Name: val,
+					Typ:  ValueVar,
+				})
 			case valueFunc:
 				// E.g. @filter(gt(val(a), 10))
 				function.NeedsVar = append(function.NeedsVar, VarContext{
@@ -2099,8 +2163,13 @@ L:
 		}
 	}
 
-	if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
+	if function.Name != uidFunc && function.Name != typFunc && function.Name != fuseFunc &&
+		len(function.Attr) == 0 {
 		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
+	}
+
+	if function.Name == fuseFunc && len(function.NeedsVar) == 0 {
+		return nil, it.Errorf("fuse function requires at least one value variable channel")
 	}
 
 	if function.Name == typFunc && len(function.Args) != 1 {
