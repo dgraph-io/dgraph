@@ -163,12 +163,12 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 
 	var docCount, totalTerms uint64
 	val, err := plist.Value(txn.StartTs)
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		if data, ok := val.Value.([]byte); ok {
 			docCount, totalTerms = decodeBM25Stats(data)
 		}
-	case err == ErrNoValue:
+	case ErrNoValue:
 		// No stats yet for this bucket; start from zero.
 	default:
 		return err
