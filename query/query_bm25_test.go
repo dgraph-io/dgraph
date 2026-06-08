@@ -14,8 +14,10 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1026,4 +1028,119 @@ func TestBM25SingleMatchingDocument(t *testing.T) {
 		expected, actual, N, idf)
 	require.Greater(t, actual, 0.0, "score must be positive")
 	require.False(t, math.IsInf(actual, 0), "score must be finite")
+}
+
+// TestBM25RebuildOnExistingData loads documents BEFORE a BM25 index exists, then adds
+// @index(bm25) to trigger an index rebuild over the existing data. The streaming
+// rebuild aggregates corpus statistics across many threads; a naive per-thread
+// read-modify-write counter would undercount N/avgDL. This verifies bm25 ranks
+// exactly as if the documents had been indexed live.
+func TestBM25RebuildOnExistingData(t *testing.T) {
+	pred := "bm25_rebuild"
+	t.Cleanup(func() { dropPredicate(pred) })
+
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<920> <%[1]s> "fox fox fox" .
+		<921> <%[1]s> "fox dog" .
+		<922> <%[1]s> "dog cat bird fish" .
+	`, pred)))
+
+	// Add the index now: this rebuilds over the three existing documents.
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	query := fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "fox"))
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`, pred)
+	scores := parseScoresFromJSON(t, processQueryNoErr(t, query))
+
+	require.Len(t, scores, 2, "both documents containing 'fox' must match after rebuild")
+	require.Greater(t, scores[uidHex(t, 920)], scores[uidHex(t, 921)],
+		"the denser, shorter document must rank higher after rebuild")
+	require.Greater(t, scores[uidHex(t, 920)], 0.0, "rebuilt stats must yield a positive score")
+}
+
+// TestBM25DropThenReaddNoDoubleCount verifies that dropping the BM25 index clears its
+// corpus statistics so re-adding it rebuilds from scratch. If the stats survived the
+// drop, the rebuild would accumulate on top of stale counters, inflating N/avgDL and
+// shifting every score.
+func TestBM25DropThenReaddNoDoubleCount(t *testing.T) {
+	pred := "bm25_dropreadd"
+	t.Cleanup(func() { dropPredicate(pred) })
+
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<930> <%[1]s> "alpha alpha beta" .
+		<931> <%[1]s> "alpha gamma" .
+		<932> <%[1]s> "beta gamma delta" .
+	`, pred)))
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	query := fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "alpha"))
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`, pred)
+	before := parseScoresFromJSON(t, processQueryNoErr(t, query))
+	require.NotEmpty(t, before)
+
+	// Drop the index (keeping the data), then re-add it to force a rebuild.
+	setSchema(fmt.Sprintf("%s: string .", pred))
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	after := parseScoresFromJSON(t, processQueryNoErr(t, query))
+
+	require.Equal(t, len(before), len(after), "result set size must be stable across drop/re-add")
+	for uid, score := range before {
+		require.InEpsilon(t, score, after[uid], 1e-9,
+			"score for %s must be identical after drop/re-add (no stale-stats double counting)", uid)
+	}
+}
+
+// TestBM25ConcurrentOverlappingTxns adds documents whose UIDs share BM25 stats buckets
+// from many goroutines at once. Corpus stats are guarded by a value-independent
+// conflict key, so overlapping transactions to the same bucket conflict and one
+// retries rather than silently overwriting the other's contribution. Every document
+// must end up indexed and searchable.
+func TestBM25ConcurrentOverlappingTxns(t *testing.T) {
+	pred := "bm25_concurrent"
+	t.Cleanup(func() { dropPredicate(pred) })
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	ctx := context.Background()
+	// UIDs chosen so several collide on uid%32 (the stats bucket count).
+	uids := []int{1000, 1032, 1064, 1001, 1033, 1065, 1002, 1034}
+
+	var wg sync.WaitGroup
+	for _, uid := range uids {
+		wg.Add(1)
+		go func(uid int) {
+			defer wg.Done()
+			// Retry on conflict, exactly as a client would.
+			for {
+				txn := client.NewTxn()
+				_, err := txn.Mutate(ctx, &api.Mutation{
+					SetNquads: []byte(fmt.Sprintf(
+						`<%d> <%s> "concurrent indexing term doc%d" .`, uid, pred, uid)),
+					CommitNow: true,
+				})
+				_ = txn.Discard(ctx)
+				if err == nil {
+					return
+				}
+			}
+		}(uid)
+	}
+	wg.Wait()
+
+	js := processQueryNoErr(t, fmt.Sprintf(
+		`{ me(func: bm25(%s, "concurrent")) { count(uid) } }`, pred))
+	require.Contains(t, js, fmt.Sprintf(`"count":%d`, len(uids)),
+		"all concurrently-indexed documents must be searchable (no lost stats updates)")
 }

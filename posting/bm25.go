@@ -8,6 +8,7 @@ package posting
 import (
 	"context"
 	"encoding/binary"
+	"sync/atomic"
 
 	ostats "go.opencensus.io/stats"
 
@@ -141,6 +142,57 @@ func (txn *Txn) addBM25TermPosting(ctx context.Context, attr, term string, uid u
 	return nil
 }
 
+// bm25StatsAccum is a concurrency-safe per-bucket accumulator of corpus-statistics
+// deltas. Index rebuild routes its per-document stats updates here (across many
+// goroutines) instead of the read-modify-write counter, then flushes the buckets once
+// as a single writer (see flush). This avoids the undercount that the streaming
+// rebuild's independent per-thread caches and periodic resets would otherwise cause,
+// where last-write-wins on the value posting drops every thread's partial total but
+// one.
+type bm25StatsAccum struct {
+	count [numBM25StatsBuckets]atomic.Int64
+	terms [numBM25StatsBuckets]atomic.Int64
+}
+
+func newBM25StatsAccum() *bm25StatsAccum { return &bm25StatsAccum{} }
+
+// add records a document's contribution in its bucket (uid%numBM25StatsBuckets).
+func (a *bm25StatsAccum) add(uid uint64, docCountDelta, totalTermsDelta int64) {
+	bucket := uid % numBM25StatsBuckets
+	a.count[bucket].Add(docCountDelta)
+	a.terms[bucket].Add(totalTermsDelta)
+}
+
+// flush writes the accumulated absolute totals into the stats posting lists for attr
+// through txn, one SET value posting per non-empty bucket. It is a single-writer
+// operation (one txn writing all buckets), so there is no lost-update window; the
+// caller commits txn. Buckets are written as absolute SETs because a rebuild deletes
+// the prior stats first, so the buckets start empty.
+func (a *bm25StatsAccum) flush(ctx context.Context, txn *Txn, attr string) error {
+	for bucket := 0; bucket < numBM25StatsBuckets; bucket++ {
+		docCount := a.count[bucket].Load()
+		totalTerms := a.terms[bucket].Load()
+		if docCount <= 0 && totalTerms <= 0 {
+			continue
+		}
+		key := x.BM25StatsKey(attr, bucket)
+		plist, err := txn.cache.GetFromDelta(key)
+		if err != nil {
+			return err
+		}
+		edge := &pb.DirectedEdge{
+			Attr:      attr,
+			Value:     encodeBM25Stats(uint64(docCount), uint64(totalTerms)),
+			ValueType: pb.Posting_BINARY,
+			Op:        pb.DirectedEdge_SET,
+		}
+		if err := plist.addMutation(ctx, txn, edge); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // updateBM25Stats applies (docCountDelta, totalTermsDelta) to the bucketed corpus
 // statistics for attr. The bucket is selected by uid%numBM25StatsBuckets. The
 // running totals are stored as a single value posting per bucket; the read at
@@ -149,6 +201,13 @@ func (txn *Txn) addBM25TermPosting(ctx context.Context, attr, term string, uid u
 // accumulate correctly.
 func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 	docCountDelta, totalTermsDelta int64) error {
+	// During index rebuild, accumulate into the shared accumulator rather than the
+	// read-modify-write counter (see Txn.bm25Acc). The rebuild flushes the buckets
+	// once at the end as a single writer.
+	if txn.bm25Acc != nil {
+		txn.bm25Acc.add(uid, docCountDelta, totalTermsDelta)
+		return nil
+	}
 	bucket := int(uid % numBM25StatsBuckets)
 	key := x.BM25StatsKey(attr, bucket)
 	// Stats are maintained by read-modify-write: we must read the committed total

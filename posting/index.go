@@ -753,6 +753,20 @@ type rebuilder struct {
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
+
+	// bm25Acc, when non-nil, collects BM25 corpus statistics across the rebuild's
+	// per-thread transactions so they can be flushed once as a single writer. Set by
+	// rebuildTokIndex when a BM25 tokenizer is being rebuilt. See Txn.bm25Acc.
+	bm25Acc *bm25StatsAccum
+}
+
+// newRebuildTxn creates a transaction for the streaming rebuild, propagating the
+// shared BM25 stats accumulator (nil for non-BM25 rebuilds) so per-thread stats
+// updates are collected rather than lost across cache resets.
+func (r *rebuilder) newRebuildTxn() *Txn {
+	txn := NewTxn(r.startTs)
+	txn.bm25Acc = r.bm25Acc
+	return txn
 }
 
 func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
@@ -1016,7 +1030,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	txns := make([]*Txn, maxThreadIds)
 	for i := range txns {
-		txns[i] = NewTxn(r.startTs)
+		txns[i] = r.newRebuildTxn()
 	}
 
 	stream.FinishThread = func(threadId int) (*bpb.KVList, error) {
@@ -1036,7 +1050,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 			kvs = append(kvs, &kv)
 		}
-		txns[threadId] = NewTxn(r.startTs)
+		txns[threadId] = r.newRebuildTxn()
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 
@@ -1095,7 +1109,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			kvs = append(kvs, &kv)
 		}
 
-		txns[threadId] = NewTxn(r.startTs)
+		txns[threadId] = r.newRebuildTxn()
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 
@@ -1115,6 +1129,25 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	start := time.Now()
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
+	}
+	// Flush the BM25 corpus statistics accumulated across all rebuild threads as a
+	// single writer. They are written into the temp store as ordinary delta postings
+	// so the second phase rolls them up into pstore at r.startTs alongside the term
+	// postings — no separate commit path, and no per-thread last-write-wins loss.
+	if r.bm25Acc != nil {
+		flushTxn := NewTxn(r.startTs)
+		flushTxn.cache = NewLocalCache(r.startTs)
+		if err := r.bm25Acc.flush(ctx, flushTxn, r.attr); err != nil {
+			return err
+		}
+		flushTxn.Update()
+		for key, data := range flushTxn.cache.deltas {
+			counter++
+			e := &badger.Entry{Key: []byte(key), Value: data, UserMeta: BitDeltaPosting}
+			if err := tmpWriter.SetEntryAt(e, counter); err != nil {
+				return errors.Wrap(err, "error writing bm25 stats to temp index")
+			}
+		}
 	}
 	if err := tmpWriter.Flush(); err != nil {
 		return err
@@ -1521,6 +1554,14 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	// BM25 corpus statistics must be aggregated across the rebuild's per-thread
+	// transactions and flushed once; a per-thread read-modify-write counter would
+	// undercount. Route stats through a shared accumulator when rebuilding bm25.
+	for _, tokenizer := range tokenizers {
+		if tokenizer.Identifier() == tok.IdentBM25 {
+			builder.bm25Acc = newBM25StatsAccum()
+		}
+	}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
