@@ -26,8 +26,14 @@ type persistentHNSW[T c.Float] struct {
 	vecEntryKey    string
 	vecKey         string
 	vecDead        string
+	vecQKey        string
 	simType        SimilarityType[T]
 	floatBits      int
+	// quantize is true when this index stores an int8-quantized copy of each
+	// vector in vecQKey and computes distances against the dequantized copy
+	// (opt-in via the "quantize":"int8" index option). The raw float vectors
+	// in pred are left untouched.
+	quantize bool
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for UUID 65443. The result will be a neighboring UUID.
 	nodeAllEdges map[uint64][][]uint64
@@ -56,6 +62,10 @@ func GetPersistantOptions[T c.Float](o opt.Options) string {
 			glog.Errorf("cannot cast %T to SimilarityType", simType)
 		}
 		sb.WriteString(fmt.Sprintf(`"%s":"%s",`, MetricOpt, sim.indexType))
+	}
+
+	if val, ok, _ := opt.GetOpt(o, QuantizeOpt, ""); ok && val != "" {
+		sb.WriteString(fmt.Sprintf(`"%s":"%s",`, QuantizeOpt, val))
 	}
 
 	final := sb.String()
@@ -108,6 +118,21 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 		ph.simType = SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
 			isSimilarityMetric: false}
+	}
+
+	qval, _, err := opt.GetOpt(o, QuantizeOpt, "")
+	if err != nil {
+		return err
+	}
+	if qval != "" {
+		if qval != "int8" {
+			return fmt.Errorf("unsupported %q value %q (only \"int8\" is supported)", QuantizeOpt, qval)
+		}
+		// int8 scalar quantization currently targets 32-bit float vectors.
+		if ph.floatBits != 32 {
+			return fmt.Errorf("%q=int8 requires 32-bit float vectors, got %d-bit", QuantizeOpt, ph.floatBits)
+		}
+		ph.quantize = true
 	}
 	return nil
 }
@@ -571,6 +596,12 @@ func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
 // traversal path and the edges created
 func (ph *persistentHNSW[T]) insertHelper(ctx context.Context, tc *TxnCache,
 	inUuid uint64, inVec []T) ([]persistentHeapElement[T], []*index.KeyValue, error) {
+
+	// Persist the quantized copy of this node's vector first (no-op unless the
+	// index is quantized), so later insertions can read it as a neighbor.
+	if err := ph.writeQuantizedVec(ctx, tc, inUuid, inVec); err != nil {
+		return []persistentHeapElement[T]{}, []*index.KeyValue{}, err
+	}
 
 	// return all the new edges created at all HNSW levels
 	var startVec []T

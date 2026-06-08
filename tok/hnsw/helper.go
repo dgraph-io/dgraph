@@ -30,6 +30,7 @@ const (
 	DotProd              = "dotproduct"
 	EmptyHNSWTreeError   = "HNSW tree has no elements"
 	VecKeyword           = "__vector_"
+	VecQuant             = "__vector_q" // per-node int8-quantized vector (opt-in)
 	visitedVectorsLevel  = "visited_vectors_level_"
 	distanceComputations = "vector_distance_computations"
 	searchTime           = "vector_search_time"
@@ -365,6 +366,23 @@ var emptyVec = []byte{}
 // adds the data corresponding to a uid to the given vec variable in the form of []T
 // this does not allocate memory for vec, so it must be allocated before calling this function
 func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[]T) error {
+	// Quantized index: read the int8 blob from vecQKey and dequantize into the
+	// caller's reused buffer. On a missing/undecodable blob, fall back to the
+	// raw vector (graceful degradation; the build writes vecQKey for every node
+	// so misses are rare and indicate a partial/corrupt index).
+	if ph.quantize {
+		data, err := getDataFromKeyWithCacheType(ph.vecQKey, uid, c)
+		if err != nil && !errors.Is(err, errFetchingPostingList) {
+			return err
+		}
+		if len(data) > 0 {
+			if derr := index.DequantizeInto(data, vec); derr == nil {
+				return nil
+			}
+			// fall through to the raw vector on decode failure.
+		}
+	}
+
 	data, err := getDataFromKeyWithCacheType(ph.pred, uid, c)
 	if err != nil {
 		if errors.Is(err, errFetchingPostingList) {
@@ -381,6 +399,34 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 		return errNilVector
 	}
+}
+
+// writeQuantizedVec stores the int8-quantized copy of inVec at vecQKey[uid].
+// No-op unless the index is quantized. It must be called before uid can be read
+// as a neighbor by a later insertion; since insertHelper calls it up front for
+// the node being inserted, and neighbors are always earlier insertions, the
+// blob is always present by the time it is needed.
+func (ph *persistentHNSW[T]) writeQuantizedVec(
+	ctx context.Context, tc *TxnCache, uid uint64, inVec []T) error {
+	if !ph.quantize || len(inVec) == 0 {
+		return nil
+	}
+	f32 := make([]float32, len(inVec))
+	for i, x := range inVec {
+		f32[i] = float32(x)
+	}
+	blob := index.QuantizeFloat32(f32)
+	if blob == nil {
+		return nil
+	}
+	key := DataKey(ph.vecQKey, uid)
+	tc.txn.LockKey(key)
+	defer tc.txn.UnlockKey(key)
+	return tc.txn.AddMutationWithLockHeld(ctx, key, &index.KeyValue{
+		Entity: uid,
+		Attr:   ph.vecQKey,
+		Value:  blob,
+	})
 }
 
 // chooses whether to create the entry and start nodes based on if it already

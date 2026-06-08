@@ -9,6 +9,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+
+	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 )
 
 // Scalar (uint8) quantization for dense float vectors.
@@ -155,6 +157,28 @@ func DequantizeFloat32(blob []byte, out *[]float32) error {
 	lo64, step64 := float64(lo), float64(step)
 	for _, c := range codes {
 		dst = append(dst, float32(lo64+float64(c)*step64))
+	}
+	*out = dst
+	return nil
+}
+
+// DequantizeInto reconstructs an approximate vector of element type T (float32
+// or float64) from a blob, appending into *out and reusing its capacity. This
+// is the hot-path decoder used by HNSW: callers pass their reused per-vector
+// buffer so no allocation happens once it is warm. The result is sliced to
+// exactly the blob's dimension.
+func DequantizeInto[T c.Float](blob []byte, out *[]T) error {
+	lo, step, codes, err := quantParams(blob)
+	if err != nil {
+		return err
+	}
+	dst := (*out)[:0]
+	if cap(dst) < len(codes) {
+		dst = make([]T, 0, len(codes))
+	}
+	lo64, step64 := float64(lo), float64(step)
+	for _, code := range codes {
+		dst = append(dst, T(lo64+float64(code)*step64))
 	}
 	*out = dst
 	return nil

@@ -21,6 +21,7 @@ const (
 	EfConstructionOpt string = "efConstruction"
 	EfSearchOpt       string = "efSearch"
 	MetricOpt         string = "metric"
+	QuantizeOpt       string = "quantize"
 	Hnsw              string = "hnsw"
 )
 
@@ -66,7 +67,8 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 	retVal.AddIntOption(ExponentOpt).
 		AddIntOption(MaxLevelsOpt).
 		AddIntOption(EfConstructionOpt).
-		AddIntOption(EfSearchOpt)
+		AddIntOption(EfSearchOpt).
+		AddStringOption(QuantizeOpt)
 	getSimFunc := func(optValue string) (any, error) {
 		if optValue != Euclidean && optValue != Cosine && optValue != DotProd {
 			return nil, errors.New(fmt.Sprintf("Can't create a vector index for %s", optValue))
@@ -106,6 +108,7 @@ func (hf *persistentIndexFactory[T]) createWithLock(
 		vecEntryKey:  ConcatStrings(name, VecEntry),
 		vecKey:       ConcatStrings(name, VecKeyword),
 		vecDead:      ConcatStrings(name, VecDead),
+		vecQKey:      ConcatStrings(name, VecQuant),
 		floatBits:    floatBits,
 		nodeAllEdges: map[uint64][][]uint64{},
 	}
