@@ -220,6 +220,33 @@ func (h *topKHeap) sorted() []scoredDoc {
 	return result
 }
 
+// bm25TopK returns how many top-scored documents the WAND search should retain for a
+// first/offset query window. With a first limit it is first+offset (so the offset can
+// be dropped afterward while still bounding work and memory to the window); with no
+// first limit it is 0, meaning every matching document is scored. Returning first+offset
+// rather than 0 whenever an offset is present is what keeps a deep-paginated query from
+// materializing and scoring the entire corpus.
+func bm25TopK(first, offset int) int {
+	if first <= 0 {
+		return 0
+	}
+	return first + offset
+}
+
+// bm25PaginateScored slices score-descending results to the [offset, offset+first)
+// window. first <= 0 means no upper bound. It clamps offset to the slice length so an
+// offset past the end yields an empty result instead of panicking.
+func bm25PaginateScored(results []scoredDoc, first, offset int) []scoredDoc {
+	if offset > len(results) {
+		offset = len(results)
+	}
+	results = results[offset:]
+	if first > 0 && first < len(results) {
+		results = results[:first]
+	}
+	return results
+}
+
 // bm25Score computes the BM25 contribution of a single term occurrence.
 func bm25Score(idf, tf, dl, avgDL, k, b float64) float64 {
 	if avgDL <= 0 {
