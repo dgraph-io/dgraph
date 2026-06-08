@@ -128,6 +128,88 @@ func TestBM25ValueSurvivesRollup(t *testing.T) {
 	}
 }
 
+// TestBM25StatsConflictKeyValueIndependent guards the invariant that makes the
+// corpus-stats read-modify-write counter safe under concurrent live transactions:
+// two overlapping transactions that read the same bucket base and write DIFFERENT
+// resulting totals must still be detected as conflicting (so one retries instead of
+// silently losing an update). This holds because on a scalar (non-list) predicate
+// fingerprintEdge returns MaxUint64 for every untagged value, so all stats writes to
+// a bucket share the conflict key getKey(statsKey, MaxUint64) — independent of the
+// value bytes. It is precisely why @index(bm25) is rejected on list predicates, where
+// fingerprintEdge would become value-dependent and let differing totals slip past
+// conflict detection.
+func TestBM25StatsConflictKeyValueIndependent(t *testing.T) {
+	attr := x.AttrInRootNamespace("bm25statsconflict")
+	key := x.BM25StatsKey(attr, 3)
+	pk, err := x.Parse(key)
+	require.NoError(t, err)
+
+	// Mirror addMutationInternal: a value posting (no ValueId) gets its ValueId set
+	// from fingerprintEdge before the conflict key is computed.
+	mkEdge := func(val []byte) *pb.DirectedEdge {
+		e := &pb.DirectedEdge{Attr: attr, Value: val, ValueType: pb.Posting_BINARY, Op: pb.DirectedEdge_SET}
+		if NewPosting(e).PostingType != pb.Posting_REF {
+			e.ValueId = fingerprintEdge(e)
+		}
+		return e
+	}
+	e1 := mkEdge(encodeBM25Stats(10, 100))
+	e2 := mkEdge(encodeBM25Stats(11, 137)) // different totals
+	require.Equal(t, uint64(math.MaxUint64), e1.ValueId,
+		"scalar untagged stats values must carry the MaxUint64 sentinel ValueId")
+	require.Equal(t, e1.ValueId, e2.ValueId, "stats ValueId must not depend on the value bytes")
+
+	ck1 := GetConflictKey(pk, key, e1)
+	ck2 := GetConflictKey(pk, key, e2)
+	require.NotZero(t, ck1, "stats writes must register a conflict key")
+	require.Equal(t, ck1, ck2,
+		"two writers to the same stats bucket must share a conflict key regardless of the value")
+}
+
+// TestBM25StatsRebuildAccumulator covers the fix for stats undercounting during index
+// rebuild. The streaming rebuild processes documents across many goroutines, each with
+// its own transaction/cache that is periodically reset — so a per-transaction
+// read-modify-write counter loses updates (the last writer's partial total wins on
+// merge). Routing rebuild stats through a shared accumulator and flushing the buckets
+// once (single writer) must reproduce the exact corpus totals. This test models the
+// rebuild by feeding documents (several sharing a bucket) through SEPARATE
+// transactions that all share one accumulator, then flushing and reading back.
+func TestBM25StatsRebuildAccumulator(t *testing.T) {
+	ctx := context.Background()
+	attr := x.AttrInRootNamespace("bm25rebuildacc")
+	acc := newBM25StatsAccum()
+
+	docs := []struct {
+		uid uint64
+		dl  int64
+	}{{1, 10}, {2, 20}, {33, 5}, {65, 7}, {3, 8}, {35, 4}, {97, 9}, {4, 6}}
+	var wantCount, wantTerms int64
+	for _, d := range docs {
+		txn := NewTxn(900)
+		txn.cache = NewLocalCache(900)
+		txn.bm25Acc = acc
+		require.NoError(t, txn.updateBM25Stats(ctx, attr, d.uid, 1, d.dl))
+		wantCount++
+		wantTerms += d.dl
+	}
+
+	// Single-writer finalize: flush the accumulator through one transaction and commit.
+	txn := Oracle().RegisterStartTs(901)
+	txn.cache = NewLocalCache(901)
+	require.NoError(t, acc.flush(ctx, txn, attr))
+	txn.Update()
+	txn.UpdateCachedKeys(902)
+	writer := NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 902))
+	require.NoError(t, writer.Flush())
+
+	get := func(k []byte) (*List, error) { return GetNoStore(k, 903) }
+	dc, tt, err := ReadBM25Stats(get, attr, 903)
+	require.NoError(t, err)
+	require.Equal(t, uint64(wantCount), dc, "rebuilt doc count must equal the total across all transactions")
+	require.Equal(t, uint64(wantTerms), tt, "rebuilt total terms must equal the total across all transactions")
+}
+
 // TestBM25StatsBucketed verifies that bucketed corpus statistics accumulate
 // correctly across documents (including two documents that hash to the same
 // bucket, exercising in-transaction read-your-own-writes) and that deletes
