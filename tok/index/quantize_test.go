@@ -76,6 +76,42 @@ func TestQuantizeEdgeCases(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidQuantBlob)
 }
 
+func TestQuantizeSanitizeAndHeader(t *testing.T) {
+	// NaN/Inf are sanitized at encode time so they never reach a distance.
+	v := []float32{float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1)), 1.0}
+	blob := QuantizeFloat32(v)
+	require.Equal(t, 4, QuantizedDim(blob))
+	var out []float32
+	require.NoError(t, DequantizeFloat32(blob, &out))
+	for _, x := range out {
+		require.False(t, math.IsNaN(float64(x)) || math.IsInf(float64(x), 0), "got non-finite %v", x)
+	}
+	// A distance may legitimately overflow to +Inf for absurd (~MaxFloat32)
+	// inputs, but it must never be NaN — NaN would break HNSW heap ordering,
+	// which is the whole reason we sanitize.
+	q := []float32{0, 0, 0, 0}
+	d, err := AsymSquaredL2Float32(q, blob)
+	require.NoError(t, err)
+	require.False(t, math.IsNaN(float64(d)), "distance must never be NaN")
+
+	// Header validation: bad magic / version / codec / truncated all rejected.
+	good := QuantizeFloat32([]float32{1, 2, 3})
+	bad := append([]byte{}, good...)
+	bad[0] = 0x00 // wrong magic
+	_, _, _, err = quantParams(bad)
+	require.ErrorIs(t, err, ErrInvalidQuantBlob)
+	bad = append([]byte{}, good...)
+	bad[1] = 9 // wrong version
+	_, _, _, err = quantParams(bad)
+	require.ErrorIs(t, err, ErrInvalidQuantBlob)
+	bad = append([]byte{}, good...)
+	bad[2] = 9 // wrong codec
+	_, _, _, err = quantParams(bad)
+	require.ErrorIs(t, err, ErrInvalidQuantBlob)
+	_, _, _, err = quantParams(good[:len(good)-1]) // length != header+dim
+	require.ErrorIs(t, err, ErrInvalidQuantBlob)
+}
+
 func TestAsymDistanceApproxMatchesExact(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 	const dim = 384
