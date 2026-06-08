@@ -197,17 +197,28 @@ func (ph *persistentHNSW[T]) searchPersistentLayer(
 		if !found {
 			continue
 		}
-		var eVec []T
 		improved := false
+		// Batch the neighbor vector reads: collect this candidate's unvisited
+		// neighbors and fetch all their vectors in one MultiGet, instead of a
+		// serial point read per neighbor. The reads are independent for a fixed
+		// candidate; the traversal/heap logic below is otherwise unchanged.
+		toVisit := make([]uint64, 0, len(allLayerEdges[level]))
 		for _, currUid := range allLayerEdges[level] {
 			if r.indexVisited(currUid) {
 				continue
 			}
-			// iterate over candidate's neighbors distances to get
-			// best ones
-			_ = ph.getVecFromUid(currUid, c, &eVec)
-			// intentionally ignoring error -- we catch it
-			// indirectly via eVec == nil check.
+			toVisit = append(toVisit, currUid)
+		}
+		eVecs := ph.getVecsFromUids(toVisit, c)
+		for i, currUid := range toVisit {
+			// Re-check visited to preserve exact semantics if a neighbor list
+			// ever contains a duplicate uid within one batch.
+			if r.indexVisited(currUid) {
+				continue
+			}
+			// candidate's neighbor vector (empty on miss -- caught via the
+			// len(eVec) == 0 check below, as before).
+			eVec := eVecs[i]
 			if len(eVec) == 0 {
 				continue
 			}

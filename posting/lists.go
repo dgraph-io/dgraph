@@ -98,6 +98,31 @@ func (vc *viLocalCache) Get(key []byte) ([]byte, error) {
 	return vc.GetValueFromPostingList(pl)
 }
 
+// MultiGet resolves many keys to their values in one batched read (see
+// LocalCache.MultiGet). vals and errs are aligned with keys; errs[i] is
+// ErrNoValue when keys[i] has no value, matching Get's per-key semantics.
+func (vc *viLocalCache) MultiGet(keys [][]byte) ([][]byte, []error) {
+	vals := make([][]byte, len(keys))
+	errs := make([]error, len(keys))
+	lists, err := vc.delegate.MultiGet(keys)
+	if err != nil {
+		for i := range errs {
+			errs[i] = err
+		}
+		return vals, errs
+	}
+	for i, pl := range lists {
+		if pl == nil {
+			errs[i] = ErrNoValue
+			continue
+		}
+		pl.Lock()
+		vals[i], errs[i] = vc.GetValueFromPostingList(pl)
+		pl.Unlock()
+	}
+	return vals, errs
+}
+
 func (vc *viLocalCache) GetWithLockHeld(key []byte) ([]byte, error) {
 	pl, err := vc.delegate.Get(key)
 	if err != nil {
@@ -388,6 +413,61 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 // Get retrieves the cached version of the list associated with the given key.
 func (lc *LocalCache) Get(key []byte) (*List, error) {
 	return lc.getInternal(key, true, false)
+}
+
+// MultiGet is the batched form of Get(readFromDisk=true): it resolves many keys
+// to their *List in one shared read. Keys already in the per-txn cache (plists)
+// are served from there; the cold remainder is read from disk in a single
+// MemoryLayer.ReadManyData (one badger MultiGet), then has any pending txn delta
+// applied and is interned via SetIfAbsent — mirroring getInternal per key.
+// Returned lists are aligned with keys.
+func (lc *LocalCache) MultiGet(keys [][]byte) ([]*List, error) {
+	lists := make([]*List, len(keys))
+
+	lc.RLock()
+	plistsNil := lc.plists == nil
+	lc.RUnlock()
+
+	var missIdx []int
+	var missKeys [][]byte
+	for i, key := range keys {
+		if !plistsNil {
+			lc.RLock()
+			l, ok := lc.plists[string(key)]
+			lc.RUnlock()
+			if ok {
+				lists[i] = l
+				continue
+			}
+		}
+		missIdx = append(missIdx, i)
+		missKeys = append(missKeys, key)
+	}
+	if len(missKeys) == 0 {
+		return lists, nil
+	}
+
+	fetched, err := MemLayerInstance.ReadManyData(missKeys, pstore, lc.startTs)
+	if err != nil {
+		return nil, err
+	}
+	for j, idx := range missIdx {
+		pl := fetched[j]
+		if plistsNil {
+			// Cache disabled: return the freshly read list directly, exactly as
+			// getInternal's plists==nil path returns getNew without caching.
+			lists[idx] = pl
+			continue
+		}
+		skey := string(missKeys[j])
+		lc.RLock()
+		if delta, ok := lc.deltas[skey]; ok && len(delta) > 0 {
+			pl.setMutation(lc.startTs, delta)
+		}
+		lc.RUnlock()
+		lists[idx] = lc.SetIfAbsent(skey, pl)
+	}
+	return lists, nil
 }
 
 func (lc *LocalCache) GetUids(key []byte) (*List, error) {

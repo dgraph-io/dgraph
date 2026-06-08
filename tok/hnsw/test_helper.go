@@ -159,6 +159,18 @@ func (t *inMemTxn) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	return val, nil
 }
 
+// MultiGet reads many keys; the mock simply loops Get under one lock.
+func (t *inMemTxn) MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error) {
+	tsDbs[t.startTs].readMu.RLock()
+	defer tsDbs[t.startTs].readMu.RUnlock()
+	rvals = make([][]byte, len(keys))
+	rerrs = make([]error, len(keys))
+	for i, key := range keys {
+		rvals[i], rerrs[i] = t.GetWithLockHeld(key)
+	}
+	return rvals, rerrs
+}
+
 // locks the txn and invokes AddMutationWithLockHeld
 func (t *inMemTxn) AddMutation(ctx context.Context, key []byte, t1 *index.KeyValue) error {
 	tsDbs[t.startTs].writeMu.Lock()
@@ -221,6 +233,18 @@ func (c *inMemLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64,
 		}
 	}
 	return 0, nil
+}
+
+// MultiGet reads many keys; the mock simply loops Get under one lock.
+func (c *inMemLocalCache) MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error) {
+	tsDbs[c.readTs].readMu.RLock()
+	defer tsDbs[c.readTs].readMu.RUnlock()
+	rvals = make([][]byte, len(keys))
+	rerrs = make([]error, len(keys))
+	for i, key := range keys {
+		rvals[i], rerrs[i] = c.GetWithLockHeld(key)
+	}
+	return rvals, rerrs
 }
 
 // reads value from the database at c's readTs
