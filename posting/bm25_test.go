@@ -6,6 +6,7 @@
 package posting
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"testing"
@@ -16,6 +17,32 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
+
+// TestBM25DropClearsStats guards against orphaned corpus statistics when the BM25
+// index is dropped or rebuilt. BM25 term postings live under the IdentBM25 token
+// prefix, but the stats buckets live under a separate reserved token prefix. The
+// drop/rebuild machinery deletes by token prefix, so unless the stats prefix is
+// also returned by prefixesToDeleteTokensFor, the stats survive a drop and then
+// double-count when the index is rebuilt on top of them.
+func TestBM25DropClearsStats(t *testing.T) {
+	attr := x.AttrInRootNamespace("bm25dropstats")
+	prefixes, err := prefixesToDeleteTokensFor(attr, "bm25", false)
+	require.NoError(t, err)
+
+	// Every stats bucket key must be covered by one of the deletion prefixes.
+	for bucket := 0; bucket < 3; bucket++ {
+		statsKey := x.BM25StatsKey(attr, bucket)
+		covered := false
+		for _, p := range prefixes {
+			if bytes.HasPrefix(statsKey, p) {
+				covered = true
+				break
+			}
+		}
+		require.Truef(t, covered,
+			"stats bucket %d key not covered by any bm25 deletion prefix (orphaned on drop)", bucket)
+	}
+}
 
 func TestBM25ValueCodecRoundTrip(t *testing.T) {
 	cases := [][2]uint32{{0, 0}, {1, 1}, {3, 12}, {7, 200}, {65535, 1 << 20}, {1 << 24, 1 << 24}}
