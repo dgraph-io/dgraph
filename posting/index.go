@@ -733,6 +733,14 @@ func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]by
 	prefix = append(prefix, tokenizer.Identifier())
 	prefixes = append(prefixes, prefix)
 
+	// BM25 stores corpus statistics under a reserved token prefix separate from its
+	// term-posting (IdentBM25) prefix, so deleting only the tokenizer-identifier
+	// prefix above would orphan the stats and double-count on rebuild. Delete the
+	// stats prefix (and its split variant) alongside the term postings.
+	if tokenizerName == "bm25" {
+		prefixes = append(prefixes, x.BM25StatsPrefix(attr, false), x.BM25StatsPrefix(attr, true))
+	}
+
 	return prefixes, nil
 }
 
