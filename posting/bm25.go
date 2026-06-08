@@ -54,13 +54,31 @@ func ReadBM25TermPostings(getList func(key []byte) (*List, error), attr, encoded
 	return out, nil
 }
 
-// numBM25StatsBuckets is the number of buckets the BM25 corpus statistics (document
-// count and total term count) are sharded across, keyed by uid%numBM25StatsBuckets.
+// NumBM25StatsBuckets is the number of buckets the BM25 corpus statistics (document
+// count and total term count) are sharded across, keyed by uid%NumBM25StatsBuckets.
 // Sharding spreads the read-modify-write contention of stats maintenance across
 // independent posting lists so that concurrent mutations on different documents
 // rarely conflict, while same-bucket updates still conflict (and retry) — avoiding
 // lost updates. A single hot stats key would serialize all writes to the predicate.
-const numBM25StatsBuckets = 32
+// Exported so the bulk loader buckets corpus statistics identically to the live and
+// rebuild paths.
+const NumBM25StatsBuckets = 32
+
+// numBM25StatsBuckets is the unexported alias retained for readability within this
+// package.
+const numBM25StatsBuckets = NumBM25StatsBuckets
+
+// EncodeBM25Value packs a posting's term frequency and document length the same way the
+// live index path does, for the bulk loader to write BM25 term postings in the standard
+// format. See encodeBM25Value.
+func EncodeBM25Value(tf, docLen uint32) []byte { return encodeBM25Value(tf, docLen) }
+
+// EncodeBM25Stats encodes corpus statistics (document count, total term count) for the
+// bulk loader to write the per-bucket stats postings in the standard format. See
+// encodeBM25Stats.
+func EncodeBM25Stats(docCount, totalTerms uint64) []byte {
+	return encodeBM25Stats(docCount, totalTerms)
+}
 
 // encodeBM25Value packs a posting's term frequency and document length into the
 // posting Value as two unsigned varints. Storing the document length alongside the
