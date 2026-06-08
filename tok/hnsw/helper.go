@@ -245,6 +245,10 @@ func (tc *TxnCache) Get(key []byte) (rval []byte, rerr error) {
 	return tc.txn.Get(key)
 }
 
+func (tc *TxnCache) MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error) {
+	return tc.txn.MultiGet(keys)
+}
+
 func (tc *TxnCache) Ts() uint64 {
 	return tc.startTs
 }
@@ -272,6 +276,10 @@ func (qc *QueryCache) Find(prefix []byte, filter func([]byte) bool) (uint64, err
 
 func (qc *QueryCache) Get(key []byte) (rval []byte, rerr error) {
 	return qc.cache.Get(key)
+}
+
+func (qc *QueryCache) MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error) {
+	return qc.cache.MultiGet(keys)
 }
 
 func (qc *QueryCache) Ts() uint64 {
@@ -381,6 +389,35 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 		return errNilVector
 	}
+}
+
+// getVecsFromUids batch-fetches the vectors for uids in a single CacheType
+// MultiGet, returning one []T per uid (aligned with uids). This is the batched
+// counterpart of getVecFromUid: it folds the per-neighbor point reads on the
+// search hot path into one round trip to the store. A missing or unreadable
+// vector yields an empty slice (matching getVecFromUid's empty-on-miss
+// behavior). Each returned slice is a zero-copy view over its own value bytes,
+// so the slices are independent.
+func (ph *persistentHNSW[T]) getVecsFromUids(uids []uint64, c index.CacheType) [][]T {
+	vecs := make([][]T, len(uids))
+	if len(uids) == 0 {
+		return vecs
+	}
+	keys := make([][]byte, len(uids))
+	for i, uid := range uids {
+		keys[i] = DataKey(ph.pred, uid)
+	}
+	vals, errs := c.MultiGet(keys)
+	for i := range uids {
+		var vec []T
+		if errs[i] == nil && len(vals[i]) > 0 {
+			index.BytesAsFloatArray(vals[i], &vec, ph.floatBits)
+		} else {
+			index.BytesAsFloatArray(emptyVec, &vec, ph.floatBits)
+		}
+		vecs[i] = vec
+	}
+	return vecs
 }
 
 // chooses whether to create the entry and start nodes based on if it already

@@ -154,6 +154,10 @@ type Txn interface {
 	StartTs() uint64
 	// Get uses a []byte key to return the Value corresponding to the key
 	Get(key []byte) (rval []byte, rerr error)
+	// MultiGet returns the Values for many keys in one batched read. rvals and
+	// rerrs are aligned with keys; rerrs[i] is non-nil (e.g. ErrNoValue) when
+	// keys[i] has no value.
+	MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error)
 	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
 	GetWithLockHeld(key []byte) (rval []byte, rerr error)
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
@@ -172,6 +176,8 @@ type Txn interface {
 type LocalCache interface {
 	// Get uses a []byte key to return the Value corresponding to the key
 	Get(key []byte) (rval []byte, rerr error)
+	// MultiGet returns the Values for many keys in one batched read (see Txn.MultiGet).
+	MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error)
 	// GetWithLockHeld uses a []byte key to return the Value corresponding to the key with a mutex lock held
 	GetWithLockHeld(key []byte) (rval []byte, rerr error)
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
@@ -180,6 +186,11 @@ type LocalCache interface {
 // CacheType is an interface representation of the cache of a persistent storage system
 type CacheType interface {
 	Get(key []byte) (rval []byte, rerr error)
+	// MultiGet returns the Values for many keys in one batched read. rvals and
+	// rerrs are aligned with keys; rerrs[i] is non-nil when keys[i] has no value.
+	// It lets fan-out readers (e.g. HNSW search) fetch a whole frontier at once
+	// instead of issuing one point read per key.
+	MultiGet(keys [][]byte) (rvals [][]byte, rerrs []error)
 	Ts() uint64
 	Find(prefix []byte, filter func(val []byte) bool) (uint64, error)
 }

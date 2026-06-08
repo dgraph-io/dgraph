@@ -776,6 +776,162 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	return nil
 }
 
+// ReadPostingListFromVersions builds a *List from the version chain of a single
+// key as returned by badger.Txn.MultiGet. It is the batched-read counterpart of
+// ReadPostingList: same folding logic (delta postings layered on top of a
+// complete posting, newest-first, stopping at the first complete/empty/deleted
+// version), but consuming an already-materialized []badger.ItemVersion instead
+// of advancing a live *badger.Iterator.
+func ReadPostingListFromVersions(key []byte, versions []badger.ItemVersion) (*List, error) {
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Multi-part lists must be read via the main key; mirror ReadPostingList.
+		return nil, ErrInvalidKey
+	}
+
+	l := new(List)
+	l.key = key
+	l.plist = new(pb.PostingList)
+	l.mutationMap = newMutableLayer()
+	l.minTs = 0
+
+	deltaCount := 0
+	defer func() {
+		if deltaCount > 0 {
+			if deltaCount > 500 {
+				IncrRollup.addKeyToBatch(key, 0)
+			} else {
+				IncrRollup.addKeyToBatch(key, 1)
+			}
+		}
+	}()
+
+	// versions are newest-first (commit ts descending), exactly the order
+	// ReadPostingList walks the iterator in.
+	for i := range versions {
+		v := &versions[i]
+		l.maxTs = x.Max(l.maxTs, v.Version)
+		if v.IsDeletedOrExpired() {
+			break
+		}
+		switch v.UserMeta {
+		case BitEmptyPosting:
+			return l, nil
+		case BitCompletePosting:
+			if len(v.Value) > 0 {
+				if err := proto.Unmarshal(v.Value, l.plist); err != nil {
+					return nil, err
+				}
+			}
+			l.minTs = v.Version
+			return l, nil
+		case BitDeltaPosting:
+			pl := &pb.PostingList{}
+			if err := proto.Unmarshal(v.Value, pl); err != nil {
+				return nil, err
+			}
+			pl.CommitTs = v.Version
+			l.mutationMap.insertCommittedPostings(pl)
+			deltaCount++
+		case BitSchemaPosting:
+			return nil, errors.Errorf(
+				"Trying to read schema in ReadPostingListFromVersions for key: %s", hex.Dump(key))
+		default:
+			return nil, errors.Errorf(
+				"Unexpected meta: %d for key: %s", v.UserMeta, hex.Dump(key))
+		}
+		if v.DiscardEarlierVersions() {
+			break
+		}
+	}
+	return l, nil
+}
+
+// ReadManyData is the batched counterpart of ReadData: it resolves many keys to
+// their *List in one shot. Keys already warm in the process-global cache are
+// served from there; the cold remainder is fetched from disk with a single
+// badger.Txn.MultiGet (amortizing iterator construction across the batch) and
+// folded via ReadPostingListFromVersions. It mirrors ReadData's two-phase read
+// (full chain at MaxUint64 to populate the cache, then a readTs-bounded re-read
+// only for keys whose complete posting is newer than readTs). Returned lists are
+// aligned with keys.
+func (ml *MemoryLayer) ReadManyData(keys [][]byte, pstore *badger.DB, readTs uint64) ([]*List, error) {
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
+	lists := make([]*List, len(keys))
+
+	// Phase 0: serve warm keys from the global cache.
+	var missIdx []int
+	var missKeys [][]byte
+	for i, key := range keys {
+		if l := ml.readFromCache(key, readTs); l != nil {
+			l.mutationMap.setTs(readTs)
+			lists[i] = l
+			continue
+		}
+		missIdx = append(missIdx, i)
+		missKeys = append(missKeys, key)
+	}
+	if len(missKeys) == 0 {
+		return lists, nil
+	}
+
+	// Phase 1: full version chains at MaxUint64 (so the cached list stays valid
+	// for a range of read timestamps, as ReadData relies on), populate cache.
+	readChains := func(ks [][]byte, ts uint64) ([]*List, error) {
+		txn := pstore.NewTransactionAt(ts, false)
+		defer txn.Discard()
+		results, err := txn.MultiGet(ks)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]*List, len(ks))
+		for j := range ks {
+			l, err := ReadPostingListFromVersions(ks[j], results[j].Versions)
+			if err != nil {
+				return nil, err
+			}
+			out[j] = l
+		}
+		return out, nil
+	}
+
+	full, err := readChains(missKeys, math.MaxUint64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Phase 2: keys whose complete posting is newer than readTs need a
+	// readTs-bounded re-read (mirrors ReadData's second readFromDisk).
+	var reIdx []int
+	var reKeys [][]byte
+	for j, l := range full {
+		ml.saveInCache(missKeys[j], l)
+		if l.minTs == 0 || readTs >= l.minTs {
+			l.mutationMap.setTs(readTs)
+			lists[missIdx[j]] = l
+			continue
+		}
+		reIdx = append(reIdx, j)
+		reKeys = append(reKeys, missKeys[j])
+	}
+	if len(reKeys) > 0 {
+		bounded, err := readChains(reKeys, readTs)
+		if err != nil {
+			return nil, err
+		}
+		for k, l := range bounded {
+			l.mutationMap.setTs(readTs)
+			lists[missIdx[reIdx[k]]] = l
+		}
+	}
+	return lists, nil
+}
+
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64, readUids bool) (*List, error) {
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()

@@ -30,6 +30,15 @@ func (m *memoryCache) Get(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (m *memoryCache) MultiGet(keys [][]byte) ([][]byte, []error) {
+	vals := make([][]byte, len(keys))
+	errs := make([]error, len(keys))
+	for i, key := range keys {
+		vals[i], errs[i] = m.Get(key)
+	}
+	return vals, errs
+}
+
 func (m *memoryCache) Ts() uint64 { return 0 }
 
 func (m *memoryCache) Find([]byte, func([]byte) bool) (uint64, error) { return 0, nil }
