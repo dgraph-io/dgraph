@@ -351,7 +351,8 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		for _, pred := range schema {
 			if pred.Type == "float32vector" && len(pred.IndexSpecs) != 0 {
 				vecPredMap[gid] = append(vecPredMap[gid], pred.Predicate+hnsw.VecEntry,
-					pred.Predicate+hnsw.VecKeyword, pred.Predicate+hnsw.VecDead)
+					pred.Predicate+hnsw.VecKeyword, pred.Predicate+hnsw.VecDead,
+					pred.Predicate+hnsw.VecQuant)
 			}
 		}
 	}

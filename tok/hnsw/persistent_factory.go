@@ -67,16 +67,25 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 	retVal.AddIntOption(ExponentOpt).
 		AddIntOption(MaxLevelsOpt).
 		AddIntOption(EfConstructionOpt).
-		AddIntOption(EfSearchOpt).
-		AddStringOption(QuantizeOpt)
+		AddIntOption(EfSearchOpt)
 	getSimFunc := func(optValue string) (any, error) {
 		if optValue != Euclidean && optValue != Cosine && optValue != DotProd {
 			return nil, errors.New(fmt.Sprintf("Can't create a vector index for %s", optValue))
 		}
 		return GetSimType[T](optValue, hf.floatBits), nil
 	}
-
 	retVal.AddCustomOption(MetricOpt, getSimFunc)
+
+	// quantize is validated at the option layer so a bad value (e.g. "int4")
+	// is rejected when the schema is altered, not at first index build.
+	getQuantFunc := func(optValue string) (any, error) {
+		if optValue != "int8" {
+			return nil, fmt.Errorf("unsupported %q value %q (only \"int8\" is supported)",
+				QuantizeOpt, optValue)
+		}
+		return optValue, nil
+	}
+	retVal.AddCustomOption(QuantizeOpt, getQuantFunc)
 	return retVal
 }
 

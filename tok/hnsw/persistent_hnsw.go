@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
@@ -34,6 +35,11 @@ type persistentHNSW[T c.Float] struct {
 	// (opt-in via the "quantize":"int8" index option). The raw float vectors
 	// in pred are left untouched.
 	quantize bool
+	// dim is the vector dimension, learned lazily from the first materialized
+	// vector. Used to reject a quantized blob whose dimension disagrees
+	// (corruption / stale schema) before its wrong-length slice reaches the
+	// SIMD distance kernels. 0 means "not yet known".
+	dim atomic.Int32
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for UUID 65443. The result will be a neighboring UUID.
 	nodeAllEdges map[uint64][][]uint64

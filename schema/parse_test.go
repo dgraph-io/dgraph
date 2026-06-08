@@ -689,3 +689,26 @@ func TestMain(m *testing.M) {
 	Init(ps)
 	m.Run()
 }
+
+// TestParseVectorQuantizeOption verifies the int8 quantization option is
+// accepted end-to-end through schema parsing (registered as an HNSW factory
+// option) and that an invalid value is rejected at parse time.
+func TestParseVectorQuantizeOption(t *testing.T) {
+	require.NoError(t, ParseBytes([]byte(
+		`vqi: float32vector @index(hnsw(metric:"euclidean", quantize:"int8")) .`+"\n"), 1))
+	su, ok := State().predicate[x.AttrInRootNamespace("vqi")]
+	require.True(t, ok)
+	require.Len(t, su.IndexSpecs, 1)
+	found := false
+	for _, op := range su.IndexSpecs[0].Options {
+		if op.Key == "quantize" {
+			require.Equal(t, "int8", op.Value)
+			found = true
+		}
+	}
+	require.True(t, found, "quantize option must be captured in the vector index spec")
+
+	// An unsupported quantize value must be rejected when the schema is parsed.
+	require.Error(t, ParseBytes([]byte(
+		`vqbad: float32vector @index(hnsw(quantize:"int4")) .`+"\n"), 1))
+}

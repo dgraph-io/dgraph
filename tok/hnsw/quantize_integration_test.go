@@ -7,6 +7,8 @@ package hnsw
 
 import (
 	"context"
+	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,14 @@ import (
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
+
+func float32ArrayAsBytes(v []float32) []byte {
+	b := make([]byte, 4*len(v))
+	for i, f := range v {
+		binary.LittleEndian.PutUint32(b[i*4:], math.Float32bits(f))
+	}
+	return b
+}
 
 // TestQuantizedOptionParsing checks the opt-in plumbing and the float-width guard.
 func TestQuantizedOptionParsing(t *testing.T) {
@@ -83,6 +93,11 @@ func TestQuantizedSearchReadPath(t *testing.T) {
 		// Stored as quantized blobs in __vector_q (what the index reads).
 		data[string(DataKey(ph.vecQKey, uid))] = index.QuantizeFloat32(vec)
 	}
+	// Provide the raw vector for the entry node only: the first read seeds the
+	// index dimension from trusted full-precision data. The neighbors (200, 201,
+	// 100) have NO raw vector, so search MUST use their quantized blobs — this
+	// proves the quantized read path drives traversal/distance.
+	data[string(DataKey(ph.pred, 1))] = float32ArrayAsBytes(vectors[1])
 	data[string(DataKey(ph.vecEntryKey, 1))] = Uint64ToBytes(1)
 	ph.nodeAllEdges[1] = [][]uint64{{}, {200, 201}}
 	ph.nodeAllEdges[200] = [][]uint64{{1}, {1}}
@@ -129,4 +144,55 @@ func TestQuantizedInsertWritesBlob(t *testing.T) {
 	for i := range vec {
 		require.InDelta(t, vec[i], got[i], 0.05, "dim %d", i)
 	}
+}
+
+// TestQuantizedFallbackOnBadBlob verifies that a corrupt or wrong-dimension
+// __vector_q blob does not crash search: getVecFromUid falls back to the raw
+// vector, and search still returns the true nearest neighbor.
+func TestQuantizedFallbackOnBadBlob(t *testing.T) {
+	ctx := context.Background()
+	options := opt.NewOptions()
+	options.SetOpt(MaxLevelsOpt, 2)
+	options.SetOpt(EfSearchOpt, 1)
+	options.SetOpt(MetricOpt, GetSimType[float32](Euclidean, 32))
+	options.SetOpt(QuantizeOpt, "int8")
+	pred := x.NamespaceAttr(x.RootNamespace, "quant_fallback_pred")
+	idx, err := CreateFactory[float32](32).Create(pred, options, 32)
+	require.NoError(t, err)
+	ph := idx.(*persistentHNSW[float32])
+
+	vectors := map[uint64][]float32{
+		1:   {0, 0, 10, 0},
+		100: {0, 0, 0.1, 0},
+		200: {0, 0, 3, 0},
+		201: {0, 0, 3.2, 0},
+	}
+	data := make(map[string][]byte)
+	for uid, vec := range vectors {
+		data[string(DataKey(ph.pred, uid))] = float32ArrayAsBytes(vec)   // raw (fallback)
+		data[string(DataKey(ph.vecQKey, uid))] = index.QuantizeFloat32(vec) // good quant
+	}
+	// Corrupt uid 100's blob (valid header claiming dim 9 but no codes -> length
+	// mismatch -> decode error -> raw fallback).
+	bad := []byte{0x71, 1, 1, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	data[string(DataKey(ph.vecQKey, 100))] = bad
+	// Also corrupt the ENTRY node's blob (uid 1, read first): proves ph.dim is
+	// established from its raw fallback rather than poisoned by a bad first blob.
+	data[string(DataKey(ph.vecQKey, 1))] = bad
+	// Wrong-dimension (valid) blob for uid 201: dim 3 != index dim 4 -> dim
+	// guard rejects it -> raw fallback.
+	data[string(DataKey(ph.vecQKey, 201))] = index.QuantizeFloat32([]float32{1, 2, 3})
+
+	data[string(DataKey(ph.vecEntryKey, 1))] = Uint64ToBytes(1)
+	ph.nodeAllEdges[1] = [][]uint64{{}, {200, 201}}
+	ph.nodeAllEdges[200] = [][]uint64{{1}, {1}}
+	ph.nodeAllEdges[201] = [][]uint64{{1}, {100}}
+	ph.nodeAllEdges[100] = [][]uint64{{201}, {201}}
+
+	cache := &memoryCache{data: data}
+	query := []float32{0, 0, 0.12, 0}
+	res, err := ph.SearchWithOptions(ctx, cache, query, 1,
+		index.VectorIndexOptions[float32]{EfOverride: 4})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{100}, res, "must fall back to raw and find the true NN without crashing")
 }

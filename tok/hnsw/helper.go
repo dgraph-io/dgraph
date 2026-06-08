@@ -377,9 +377,18 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		}
 		if len(data) > 0 {
 			if derr := index.DequantizeInto(data, vec); derr == nil {
-				return nil
+				// Accept only when the decoded length matches the index
+				// dimension. ph.dim is established solely from full-precision
+				// vectors (the raw path below), so a corrupt blob can never
+				// poison it, and a wrong-length slice never reaches the SIMD
+				// distance kernels. When dim is not yet known (d == 0) we fall
+				// back to raw, which both returns a correct-length vector and
+				// sets dim from trusted data.
+				if d := ph.dim.Load(); d != 0 && int(d) == len(*vec) {
+					return nil
+				}
 			}
-			// fall through to the raw vector on decode failure.
+			// fall through to the raw vector on decode failure or dim mismatch.
 		}
 	}
 
@@ -394,10 +403,19 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 	}
 	if data != nil {
 		index.BytesAsFloatArray(data, vec, ph.floatBits)
+		ph.noteDim(len(*vec))
 		return nil
 	} else {
 		index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 		return errNilVector
+	}
+}
+
+// noteDim records the index's vector dimension the first time a vector is
+// materialized. Safe for concurrent use during a multi-goroutine build.
+func (ph *persistentHNSW[T]) noteDim(n int) {
+	if n > 0 {
+		ph.dim.CompareAndSwap(0, int32(n))
 	}
 }
 
@@ -411,9 +429,14 @@ func (ph *persistentHNSW[T]) writeQuantizedVec(
 	if !ph.quantize || len(inVec) == 0 {
 		return nil
 	}
-	f32 := make([]float32, len(inVec))
-	for i, x := range inVec {
-		f32[i] = float32(x)
+	// Fast path: T is already float32 (the only width quantization supports),
+	// so avoid the per-insert copy.
+	f32, ok := any(inVec).([]float32)
+	if !ok {
+		f32 = make([]float32, len(inVec))
+		for i, x := range inVec {
+			f32[i] = float32(x)
+		}
 	}
 	blob := index.QuantizeFloat32(f32)
 	if blob == nil {
