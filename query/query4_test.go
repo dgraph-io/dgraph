@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1899,4 +1900,229 @@ func TestMultiplesSortingOrderWithVarAndPredicate(t *testing.T) {
 	// should return error
 	_, err := processQuery(context.Background(), t, query)
 	require.ErrorContains(t, err, "Val() is not allowed in multiple sorting. Got: [SECTIONS_COUNT]")
+}
+
+// generateCascadeTestTriples generates triples for N nodes with item names in a
+// pseudo-random order to force the sort algorithm to actually sort rather than
+// returning entries in insertion order.
+func generateCascadeTestTriples(numNodes int, uidBase uint64) string {
+	var sb strings.Builder
+	// Generate indices and shuffle them using a simple deterministic shuffle
+	indices := make([]int, numNodes)
+	for i := 0; i < numNodes; i++ {
+		indices[i] = i
+	}
+	// Deterministic "shuffle" to ensure unordered insertion
+	for i := numNodes - 1; i > 0; i-- {
+		j := (i * 2654435761) % (i + 1)
+		indices[i], indices[j] = indices[j], indices[i]
+	}
+
+	for _, idx := range indices {
+		uid := uidBase + uint64(idx)
+		// Format name with zero-padding so alphabetical order is deterministic
+		name := fmt.Sprintf("item_%04d", idx)
+		detail := fmt.Sprintf("detail_%04d", idx)
+		fmt.Fprintf(&sb, "<0x%X> <cascade_test_name> \"%s\" .\n", uid, name)
+		fmt.Fprintf(&sb, "<0x%X> <cascade_test_detail> \"%s\" .\n", uid, detail)
+	}
+	return sb.String()
+}
+
+// TestCascadeWithOrderAndLargeDataSet verifies cascade behavior with order
+// when there are large numbers of nodes (> 1000). It tests:
+//   - Default limit behavior (no explicit first): 900, 1000, 1100, 3000 nodes
+//     expecting 900, 1000, 1000, 1000 respectively
+//   - Explicit first greater than available nodes: ensures all nodes are returned
+func TestCascadeWithOrderAndLargeDataSet(t *testing.T) {
+	// Schema for cascade test type
+	schema := `
+		type CascadeTestItem {
+			item_name: string
+			item_detail: string
+		}
+		cascade_test_name: string @index(exact) .
+		cascade_test_detail: string @index(exact) .
+	`
+
+	t.Run("DefaultLimit", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			expectedCount int
+			uidBase       uint64
+			deleteBase    uint64
+			deleteCount   int
+		}{
+			{"900Nodes_DefaultLimit", 900, 900, 0x10000, 0x10000, 900},
+			{"1000Nodes_DefaultLimit", 1000, 1000, 0x20000, 0x20000, 1000},
+			{"1100Nodes_DefaultLimit", 1100, 1000, 0x30000, 0x30000, 1100},
+			{"3000Nodes_DefaultLimit", 3000, 1000, 0x40000, 0x40000, 3000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_test_name")
+					dropPredicate("cascade_test_detail")
+					setSchema(testSchema)
+				})
+
+				// Insert data in unordered fashion
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with orderasc and @cascade, no explicit first
+				query := `{
+					me(func: type(CascadeTestItem), orderasc: cascade_test_name) @cascade {
+						item_name: cascade_test_name
+						item_detail: cascade_test_detail
+					}
+				}`
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ItemName   string `json:"item_name"`
+							ItemDetail string `json:"item_detail"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d nodes with default limit", tt.expectedCount, tt.numNodes)
+
+				// Verify results are in ascending order
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.GreaterOrEqual(t, response.Data.Me[i].ItemName, response.Data.Me[i-1].ItemName,
+						"Results should be in ascending order at index %d", i)
+				}
+			})
+		}
+	})
+
+	t.Run("ExplicitFirstGreaterThanAvailable", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			first         int
+			expectedCount int
+			uidBase       uint64
+		}{
+			{"1100Nodes_First10000", 1100, 10000, 1100, 0x50000},
+			{"3000Nodes_First10000", 3000, 10000, 3000, 0x60000},
+			{"3000Nodes_First1500", 3000, 1500, 1500, 0x70000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_test_name")
+					dropPredicate("cascade_test_detail")
+					setSchema(testSchema)
+				})
+
+				// Insert data in unordered fashion
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with explicit first > available, orderasc and @cascade
+				query := fmt.Sprintf(`{
+					me(func: type(CascadeTestItem), first: %d, orderasc: cascade_test_name) @cascade {
+						item_name: cascade_test_name
+						item_detail: cascade_test_detail
+					}
+				}`, tt.first)
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ItemName   string `json:"item_name"`
+							ItemDetail string `json:"item_detail"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d nodes with first:%d", tt.expectedCount, tt.numNodes, tt.first)
+
+				// Verify results are in ascending order
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.GreaterOrEqual(t, response.Data.Me[i].ItemName, response.Data.Me[i-1].ItemName,
+						"Results should be in ascending order at index %d", i)
+				}
+			})
+		}
+	})
+
+	t.Run("OrderDescWithLargeDataSet", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			first         int
+			expectedCount int
+			uidBase       uint64
+		}{
+			{"1100Nodes_OrderDesc_First10000", 1100, 10000, 1100, 0x80000},
+			{"3000Nodes_OrderDesc_First10000", 3000, 10000, 3000, 0x90000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_test_name")
+					dropPredicate("cascade_test_detail")
+					setSchema(testSchema)
+				})
+
+				// Insert data in unordered fashion
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with orderdesc, explicit first, and @cascade
+				query := fmt.Sprintf(`{
+					me(func: type(CascadeTestItem), first: %d, orderdesc: cascade_test_name) @cascade {
+						item_name: cascade_test_name
+						item_detail: cascade_test_detail
+					}
+				}`, tt.first)
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ItemName   string `json:"item_name"`
+							ItemDetail string `json:"item_detail"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d nodes with orderdesc first:%d", tt.expectedCount, tt.numNodes, tt.first)
+
+				// Verify results are in descending order
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.LessOrEqual(t, response.Data.Me[i].ItemName, response.Data.Me[i-1].ItemName,
+						"Results should be in descending order at index %d", i)
+				}
+			})
+		}
+	})
 }
