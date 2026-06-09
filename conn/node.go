@@ -84,8 +84,13 @@ type Node struct {
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config,
 	electionTick int) *Node {
 
+	const heartbeatTick = 1 // 100ms per tick
 	if electionTick <= 0 {
 		electionTick = 20
+	}
+	if electionTick <= heartbeatTick {
+		glog.Fatalf("election-tick=%d is invalid: must be greater than heartbeat-tick (%d). "+
+			"Recommended minimum is 10 (1s election timeout).", electionTick, heartbeatTick)
 	}
 
 	snap, err := store.Snapshot()
@@ -98,8 +103,8 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             electionTick, // Default 2s if tick is 100ms.
-			HeartbeatTick:            1,            // 100ms if we call Tick() every 100 ms.
+			ElectionTick:             electionTick,  // Default 2s if tick is 100ms.
+			HeartbeatTick:            heartbeatTick, // 100ms if we call Tick() every 100 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
 			MaxSizePerMsg:            256 << 10, // 256 KB should allow more batching.
