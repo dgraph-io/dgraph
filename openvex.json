@@ -1,0 +1,54 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/dgraph-io/dgraph/blob/main/openvex.json",
+  "author": "Dgraph maintainers",
+  "timestamp": "2026-05-19T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-34976",
+        "name": "CVE-2026-34976"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch (commit 4b9b399dad25, 2026-05-18). The advisory records the fix in release 25.3.1; nightly CI builds embed a Go pseudo-version (v25.0.0-YYYYMMDDHHMMSS-<commit>) that sorts below that tag, causing Trivy to false-positive."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-40173",
+        "name": "CVE-2026-40173"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch. The advisory records the fix in release 25.3.2; nightly CI builds embed a Go pseudo-version that sorts below that tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41327",
+        "name": "CVE-2026-41327"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch. The advisory records the fix in release 25.3.3; nightly CI builds embed a Go pseudo-version that sorts below that tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41328",
+        "name": "CVE-2026-41328"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch. The advisory database has not yet recorded a fixed version, so Trivy cannot determine this by version comparison alone."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41492",
+        "name": "CVE-2026-41492"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch. The advisory database has not yet recorded a fixed version, so Trivy cannot determine this by version comparison alone."
+    }
+  ]
+}
