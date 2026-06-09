@@ -1,6 +1,6 @@
 module github.com/dgraph-io/dgraph/v25
 
-go 1.26.3
+go 1.26.4
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/containerd/errdefs v1.0.0
-	github.com/dgraph-io/badger/v4 v4.9.1
+	github.com/dgraph-io/badger/v4 v4.9.2
 	github.com/dgraph-io/dgo/v250 v250.0.0
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
