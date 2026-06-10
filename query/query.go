@@ -269,6 +269,14 @@ type SubGraph struct {
 	// In graph terms, a list is a slice of outgoing edges from a node.
 	uidMatrix []*pb.List
 
+	// bm25Scores maps a matched document UID to its BM25 relevance score. It is
+	// snapshotted from the (uid-aligned) worker result the moment it arrives, before
+	// filters or pagination can shrink/reorder uidMatrix out of step with valueMatrix.
+	// populateUidValVar binds the score variable from this map keyed by UID, so the
+	// score stays correct even when the bm25 block carries an @filter. nil unless the
+	// source function is bm25.
+	bm25Scores map[uint64]float64
+
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
 	facetsMatrix []*pb.FacetsList
@@ -372,19 +380,6 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 	val := types.ValueForType(vID)
 	val.Value = tv.Val
 	return val, nil
-}
-
-func valToTaskValue(v types.Val) *pb.TaskValue {
-	data := types.ValueForType(types.BinaryID)
-	res := &pb.TaskValue{ValType: v.Tid.Enum(), Val: x.Nilbyte}
-	if v.Value == nil {
-		return res
-	}
-	if err := types.Marshal(v, &data); err != nil {
-		return res
-	}
-	res.Val = data.Value.([]byte)
-	return res
 }
 
 var (
@@ -1605,29 +1600,22 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
-	case sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(sg.uidMatrix) > 0 &&
-		len(sg.valueMatrix) > 0:
+	case sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && sg.bm25Scores != nil:
 		// A query-side ranker (BM25) binds its per-document relevance score as a
 		// value variable. We populate BOTH the matched uid set and the uid->score
 		// map so the variable works with uid(var), val(var) and orderdesc: val(var)
 		// — surfacing and ordering by score without a pseudo-predicate or a
-		// ParentVars channel. The valueMatrix is positionally aligned with the
-		// function's returned uidMatrix[0].
+		// ParentVars channel. Scores are looked up from the uid-keyed snapshot taken
+		// at result time (sg.bm25Scores), so they remain correct even after an
+		// @filter on the bm25 block shrinks DestUIDs.
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
 		}
 		v.Uids = sg.DestUIDs
-		uids := sg.uidMatrix[0].GetUids()
-		for idx, uid := range uids {
-			if idx >= len(sg.valueMatrix) || len(sg.valueMatrix[idx].Values) == 0 {
-				continue
+		for _, uid := range sg.DestUIDs.GetUids() {
+			if score, has := sg.bm25Scores[uid]; has {
+				v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
 			}
-			tv := sg.valueMatrix[idx].Values[0]
-			if len(tv.Val) != 8 {
-				continue
-			}
-			score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
-			v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
 		}
 		doneVars[sg.Params.Var] = v
 	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
@@ -2314,6 +2302,25 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.LangTags = result.LangMatrix
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
+
+			// bm25 returns its per-document scores in valueMatrix positionally aligned
+			// with uidMatrix[0]. Snapshot them into a uid-keyed map now, while the two
+			// are still aligned — later filters/pagination shrink uidMatrix without
+			// touching valueMatrix, which would otherwise misbind scores to UIDs.
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(result.UidMatrix) > 0 {
+				uids := result.UidMatrix[0].GetUids()
+				sg.bm25Scores = make(map[uint64]float64, len(uids))
+				for idx, uid := range uids {
+					if idx >= len(result.ValueMatrix) || len(result.ValueMatrix[idx].Values) == 0 {
+						continue
+					}
+					tv := result.ValueMatrix[idx].Values[0]
+					if len(tv.Val) != 8 {
+						continue
+					}
+					sg.bm25Scores[uid] = math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+				}
+			}
 
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
