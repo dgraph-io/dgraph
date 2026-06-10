@@ -269,6 +269,15 @@ type SubGraph struct {
 	// In graph terms, a list is a slice of outgoing edges from a node.
 	uidMatrix []*pb.List
 
+	// rankerScores maps a matched document UID to its ranker score (BM25 relevance
+	// or vector similarity). It is snapshotted from the (uid-aligned) worker result
+	// the moment it arrives, before filters or pagination can shrink/reorder
+	// uidMatrix out of step with valueMatrix. populateUidValVar binds the score
+	// variable from this map keyed by UID, so the score stays correct even when the
+	// ranker block carries an @filter. nil unless the source function is a ranker
+	// (bm25 / similar_to).
+	rankerScores map[uint64]float64
+
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
 	facetsMatrix []*pb.FacetsList
@@ -1617,29 +1626,24 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
 	case sg.SrcFunc != nil && (sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") &&
-		len(sg.uidMatrix) > 0 && len(sg.valueMatrix) > 0:
+		sg.rankerScores != nil:
 		// A query-side ranker (BM25 relevance or vector similarity) binds its
 		// per-document score as a value variable. We populate BOTH the matched uid set
 		// and the uid->score map so the variable works with uid(var), val(var) and
 		// orderdesc: val(var) — surfacing and ordering by score without a
-		// pseudo-predicate or a ParentVars channel. The valueMatrix is positionally
-		// aligned with the function's returned uidMatrix[0]. For similar_to the score
-		// is a higher-is-better similarity; this also lets vector results feed fuse().
+		// pseudo-predicate or a ParentVars channel. Scores are looked up from the
+		// uid-keyed snapshot taken at result time (sg.rankerScores), so they remain
+		// correct even after an @filter on the ranker block shrinks DestUIDs. For
+		// similar_to the score is a higher-is-better similarity; this also lets vector
+		// results feed fuse().
 		if v, ok = doneVars[sg.Params.Var]; !ok {
 			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
 		}
 		v.Uids = sg.DestUIDs
-		uids := sg.uidMatrix[0].GetUids()
-		for idx, uid := range uids {
-			if idx >= len(sg.valueMatrix) || len(sg.valueMatrix[idx].Values) == 0 {
-				continue
+		for _, uid := range sg.DestUIDs.GetUids() {
+			if score, has := sg.rankerScores[uid]; has {
+				v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
 			}
-			tv := sg.valueMatrix[idx].Values[0]
-			if len(tv.Val) != 8 {
-				continue
-			}
-			score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
-			v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
 		}
 		doneVars[sg.Params.Var] = v
 	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
@@ -2327,6 +2331,27 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
 
+			// bm25 and similar_to return their per-document scores in valueMatrix
+			// positionally aligned with uidMatrix[0]. Snapshot them into a uid-keyed
+			// map now, while the two are still aligned — later filters/pagination
+			// shrink uidMatrix without touching valueMatrix, which would otherwise
+			// misbind scores to UIDs (and feed wrong scores into fuse() channels).
+			if sg.SrcFunc != nil && (sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") &&
+				len(result.UidMatrix) > 0 {
+				uids := result.UidMatrix[0].GetUids()
+				sg.rankerScores = make(map[uint64]float64, len(uids))
+				for idx, uid := range uids {
+					if idx >= len(result.ValueMatrix) || len(result.ValueMatrix[idx].Values) == 0 {
+						continue
+					}
+					tv := result.ValueMatrix[idx].Values[0]
+					if len(tv.Val) != 8 {
+						continue
+					}
+					sg.rankerScores[uid] = math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+				}
+			}
+
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
@@ -2807,7 +2832,8 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext", "ngram",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25",
+		"fuse":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
