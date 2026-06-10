@@ -18,8 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// TestReadManyDataMatchesReadData verifies that the batched MultiGet-backed
-// read path (MemoryLayer.ReadManyData -> ReadPostingListFromVersions) folds a
+// TestReadManyDataMatchesReadData verifies that the batched read path
+// (MemoryLayer.ReadManyData, a shared iterator reusing ReadPostingList) folds a
 // key's version chain identically to the per-key path
 // (NewKeyIterator -> ReadPostingList) over a real on-disk round-trip.
 func TestReadManyDataMatchesReadData(t *testing.T) {

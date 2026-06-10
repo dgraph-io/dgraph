@@ -776,85 +776,12 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	return nil
 }
 
-// ReadPostingListFromVersions builds a *List from the version chain of a single
-// key as returned by badger.Txn.MultiGet. It is the batched-read counterpart of
-// ReadPostingList: same folding logic (delta postings layered on top of a
-// complete posting, newest-first, stopping at the first complete/empty/deleted
-// version), but consuming an already-materialized []badger.ItemVersion instead
-// of advancing a live *badger.Iterator.
-func ReadPostingListFromVersions(key []byte, versions []badger.ItemVersion) (*List, error) {
-	pk, err := x.Parse(key)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
-	}
-	if pk.HasStartUid {
-		// Multi-part lists must be read via the main key; mirror ReadPostingList.
-		return nil, ErrInvalidKey
-	}
-
-	l := new(List)
-	l.key = key
-	l.plist = new(pb.PostingList)
-	l.mutationMap = newMutableLayer()
-	l.minTs = 0
-
-	deltaCount := 0
-	defer func() {
-		if deltaCount > 0 {
-			if deltaCount > 500 {
-				IncrRollup.addKeyToBatch(key, 0)
-			} else {
-				IncrRollup.addKeyToBatch(key, 1)
-			}
-		}
-	}()
-
-	// versions are newest-first (commit ts descending), exactly the order
-	// ReadPostingList walks the iterator in.
-	for i := range versions {
-		v := &versions[i]
-		l.maxTs = x.Max(l.maxTs, v.Version)
-		if v.IsDeletedOrExpired() {
-			break
-		}
-		switch v.UserMeta {
-		case BitEmptyPosting:
-			return l, nil
-		case BitCompletePosting:
-			if len(v.Value) > 0 {
-				if err := proto.Unmarshal(v.Value, l.plist); err != nil {
-					return nil, err
-				}
-			}
-			l.minTs = v.Version
-			return l, nil
-		case BitDeltaPosting:
-			pl := &pb.PostingList{}
-			if err := proto.Unmarshal(v.Value, pl); err != nil {
-				return nil, err
-			}
-			pl.CommitTs = v.Version
-			l.mutationMap.insertCommittedPostings(pl)
-			deltaCount++
-		case BitSchemaPosting:
-			return nil, errors.Errorf(
-				"Trying to read schema in ReadPostingListFromVersions for key: %s", hex.Dump(key))
-		default:
-			return nil, errors.Errorf(
-				"Unexpected meta: %d for key: %s", v.UserMeta, hex.Dump(key))
-		}
-		if v.DiscardEarlierVersions() {
-			break
-		}
-	}
-	return l, nil
-}
-
 // ReadManyData is the batched counterpart of ReadData: it resolves many keys to
-// their *List in one shot. Keys already warm in the process-global cache are
-// served from there; the cold remainder is fetched from disk with a single
-// badger.Txn.MultiGet (amortizing iterator construction across the batch) and
-// folded via ReadPostingListFromVersions. It mirrors ReadData's two-phase read
+// their *List in one shared read. Keys already warm in the process-global cache
+// are served from there; the cold remainder is read from disk by reusing a single
+// transaction and a single AllVersions iterator across the whole batch (amortizing
+// txn/iterator construction over the frontier) and folded by the same
+// ReadPostingList used for single-key reads. It mirrors ReadData's two-phase read
 // (full chain at MaxUint64 to populate the cache, then a readTs-bounded re-read
 // only for keys whose complete posting is newer than readTs). Returned lists are
 // aligned with keys.
@@ -885,13 +812,19 @@ func (ml *MemoryLayer) ReadManyData(keys [][]byte, pstore *badger.DB, readTs uin
 	readChains := func(ks [][]byte, ts uint64) ([]*List, error) {
 		txn := pstore.NewTransactionAt(ts, false)
 		defer txn.Discard()
-		results, err := txn.MultiGet(ks)
-		if err != nil {
-			return nil, err
-		}
+		// One AllVersions iterator reused across the batch amortizes iterator/txn
+		// construction over the whole frontier; ReadPostingList folds each key's
+		// version chain exactly as the single-key disk read (readFromDisk) does.
+		// PrefetchValues is off to match readFromDisk.
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.AllVersions = true
+		iterOpts.PrefetchValues = false
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
 		out := make([]*List, len(ks))
-		for j := range ks {
-			l, err := ReadPostingListFromVersions(ks[j], results[j].Versions)
+		for j, key := range ks {
+			it.Seek(key)
+			l, err := ReadPostingList(key, it)
 			if err != nil {
 				return nil, err
 			}
