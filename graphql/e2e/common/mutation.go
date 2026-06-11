@@ -7245,6 +7245,7 @@ func updateMutationConcurrentUnchangedXID(t *testing.T) {
 	}
 	wg.Wait()
 
+	succeeded := 0
 	for i, r := range responses {
 		for _, gqlErr := range r.Errors {
 			// Transaction aborts are a normal Dgraph MVCC outcome under concurrent writes
@@ -7253,7 +7254,22 @@ func updateMutationConcurrentUnchangedXID(t *testing.T) {
 			require.NotContains(t, gqlErr.Error(), "already exists for field",
 				"goroutine %d: @id conflict error must not occur for unchanged @id", i)
 		}
+		if len(r.Errors) == 0 {
+			var result struct {
+				UpdatePost1 struct {
+					NumUids int
+				}
+			}
+			require.NoError(t, json.Unmarshal(r.Data, &result))
+			if result.UpdatePost1.NumUids == 1 {
+				succeeded++
+			}
+		}
 	}
+	// Guard against a silent regression where every unchanged-@id update fails: even under
+	// MVCC contention, at least one of the n updates must have committed successfully.
+	require.GreaterOrEqual(t, succeeded, 1,
+		"expected at least one unchanged-@id update to succeed with numUids == 1")
 
 	DeleteGqlType(t, "Post1", map[string]interface{}{
 		"id": map[string]interface{}{"eq": "XIDH1-CONC"},
