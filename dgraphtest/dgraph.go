@@ -249,7 +249,11 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 	if c.lowerThanV21 {
 		acmd = append(acmd, `--whitelist=0.0.0.0/0`, "--telemetry=false")
 	} else {
-		acmd = append(acmd, `--security=whitelist=0.0.0.0/0`, "--telemetry=reports=false;")
+		security := `--security=whitelist=0.0.0.0/0`
+		if c.conf.securityToken != "" {
+			security += fmt.Sprintf(`;token=%s`, c.conf.securityToken)
+		}
+		acmd = append(acmd, security, "--telemetry=reports=false;")
 	}
 
 	if c.conf.lambdaURL != "" {

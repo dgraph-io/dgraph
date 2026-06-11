@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/conn"
@@ -22,7 +23,47 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+// extSnapshotArmWait bounds how long a stream handler waits for import mode to be armed before
+// rejecting the stream. It absorbs the brief Raft apply lag a follower can have behind its leader
+// after an authorized UpdateExtSnapshotStreamingState(Start); an un-armed (e.g. unauthenticated)
+// stream simply waits out this window and is then rejected without any destructive work.
+const extSnapshotArmWait = 10 * time.Second
+
+// errExtSnapshotNotArmed is returned when a snapshot stream arrives without import mode having
+// been armed by an authorized UpdateExtSnapshotStreamingState(Start).
+var errExtSnapshotNotArmed = status.Error(codes.FailedPrecondition,
+	"external snapshot streaming is not armed; call UpdateExtSnapshotStreamingState(Start) first")
+
+// waitForExtSnapshotArmed blocks until import mode is armed, the context is cancelled, or a
+// bounded deadline elapses. Import mode is armed cluster-wide by an authorized
+// UpdateExtSnapshotStreamingState(Start) proposal, which every group member applies via Raft
+// (node.applyCommitted), so the flag is set on leader and followers alike — the bounded wait only
+// covers a follower's async-apply lag. It polls rather than sleeping for a fixed duration so it
+// returns as soon as the flag flips.
+func waitForExtSnapshotArmed(ctx context.Context) error {
+	if x.IsExtSnapshotStreamingStateTrue() {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, extSnapshotArmWait)
+	defer cancel()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return errExtSnapshotNotArmed
+		case <-ticker.C:
+			if x.IsExtSnapshotStreamingStateTrue() {
+				return nil
+			}
+		}
+	}
+}
 
 type pubSub struct {
 	sync.RWMutex
@@ -180,13 +221,25 @@ func (ps *pubSub) runLocalSubscriber(ctx context.Context, stream pb.Worker_Strea
 
 	buffer := ps.subscribe()
 	defer ps.unsubscribe(buffer) // ensure publisher won't block on us if we exit
+
+	// Defense in depth: never run the destructive Prepare()/dropAll() unless import mode has been
+	// armed by an authorized UpdateExtSnapshotStreamingState(Start). On a follower receiving a
+	// forwarded stream this may briefly lag the leader's Raft apply, so wait with a bounded
+	// deadline rather than failing instantly.
+	if err := waitForExtSnapshotArmed(ctx); err != nil {
+		glog.Errorf("[import:flush] refusing to write external snapshot: %v", err)
+		return err
+	}
+
 	glog.Infof("[import:flush] flushing external snapshot in badger db")
 
 	sw := pstore.NewStreamWriter()
 	defer sw.Cancel()
-	if err := sw.Prepare(); err != nil {
-		return err
-	}
+
+	// Prepare() calls Badger's dropAll(), which is destructive. Defer it until the first valid
+	// data packet arrives so that a "Done-only" or otherwise empty stream completes as a no-op
+	// and leaves the existing store intact.
+	prepared := false
 
 Loop:
 	for {
@@ -207,12 +260,29 @@ Loop:
 			if kvs.Done {
 				break
 			}
+			if len(kvs.Data) == 0 {
+				continue
+			}
+
+			if !prepared {
+				if err := sw.Prepare(); err != nil {
+					return err
+				}
+				prepared = true
+			}
 
 			buf := z.NewBufferSlice(kvs.Data)
 			if err := sw.Write(buf); err != nil {
 				return err
 			}
 		}
+	}
+
+	if !prepared {
+		// No data packets were received (e.g. a Done-only stream). Nothing was dropped or written,
+		// so skip the flush and post-stream processing and leave the store untouched.
+		glog.Infof("[import:flush] no external snapshot data received; store left intact")
+		return nil
 	}
 
 	if err := sw.Flush(); err != nil {
@@ -268,6 +338,16 @@ func ProposeDrain(ctx context.Context, drainMode *api.UpdateExtSnapshotStreaming
 // there are any issues in the process, such as a broken connection or failure to establish
 // a stream with the leader.
 func InStream(stream api.Dgraph_StreamExtSnapshotServer) error {
+	// Reject the stream unless an authorized UpdateExtSnapshotStreamingState(Start) has armed
+	// import mode. This is the control that holds even when no auth is configured (both auth
+	// gates fail open in that case). The wait absorbs a follower's brief Raft apply lag; a stream
+	// that was never armed waits out the bounded window and is then rejected before any
+	// destructive work runs.
+	if err := waitForExtSnapshotArmed(stream.Context()); err != nil {
+		glog.Errorf("[import] rejecting external snapshot stream: %v", err)
+		return err
+	}
+
 	req, err := stream.Recv()
 	if err != nil {
 		return fmt.Errorf("failed to receive initial stream message: %v", err)

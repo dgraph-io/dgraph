@@ -462,6 +462,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
+		grpc.StreamInterceptor(audit.AuditStreamGRPC),
 	}
 	if tlsCfg != nil {
 		tlsCfg.NextProtos = []string{"h2"}

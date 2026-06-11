@@ -57,6 +57,9 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
+	// AuthToken is the --security auth-token (poor man's auth). When set, it is sent as the
+	// X-Dgraph-AuthToken header so admin requests are accepted on a token-protected cluster.
+	AuthToken     string
 	adminURL      string
 	graphqlURL    string
 	stateURL      string
@@ -259,6 +262,9 @@ func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byt
 
 	if hc.HttpToken != nil {
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+	if hc.AuthToken != "" {
+		req.Header.Add("X-Dgraph-AuthToken", hc.AuthToken)
 	}
 
 	return DoReq(req)

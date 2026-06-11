@@ -110,6 +110,7 @@ type ClusterConfig struct {
 	snapshotAfterDuration time.Duration
 	repoDir               string
 	mcp                   bool
+	securityToken         string
 }
 
 // NewClusterConfig generates a default ClusterConfig
@@ -163,6 +164,12 @@ func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 // WithVerbosity sets the verbosity level for the logs
 func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
 	cc.verbosity = v
+	return cc
+}
+
+// WithSecurityToken sets the --security auth-token (poor man's auth) for admin operations.
+func (cc ClusterConfig) WithSecurityToken(token string) ClusterConfig {
+	cc.securityToken = token
 	return cc
 }
 

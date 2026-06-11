@@ -76,6 +76,24 @@ func AuditRequestGRPC(ctx context.Context, req interface{},
 	return response, err
 }
 
+// AuditStreamGRPC audits streaming RPCs on the public gRPC service, mirroring AuditRequestGRPC
+// for unary calls. Streaming RPCs previously bypassed all interceptors, so any auth or audit had
+// to be wired by hand inside each handler. Routing them through here gives every current and
+// future streaming RPC the same audit treatment by default.
+func AuditStreamGRPC(srv interface{}, ss grpc.ServerStream,
+	info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	skip := func(method string) bool {
+		return skipApis[info.FullMethod[strings.LastIndex(info.FullMethod, "/")+1:]]
+	}
+
+	if atomic.LoadUint32(&auditEnabled) == 0 || skip(info.FullMethod) {
+		return handler(srv, ss)
+	}
+	err := handler(srv, ss)
+	auditGrpc(ss.Context(), "", &grpc.UnaryServerInfo{FullMethod: info.FullMethod})
+	return err
+}
+
 func AuditRequestHttp(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		skip := func(method string) bool {

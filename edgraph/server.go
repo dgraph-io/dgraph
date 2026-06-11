@@ -2004,6 +2004,18 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 		return nil, errors.New("UpdateExtSnapshotStreamingStateRequest must not be nil")
 	}
 
+	// External-snapshot import is a destructive admin operation: it arms import mode and
+	// (via StreamExtSnapshot) replaces a group store. Gate it on both authorization paths so
+	// it is protected under ACL and under an --security auth-token. Each gate fails open when
+	// its feature is unconfigured, so the arming requirement on the stream path backstops the
+	// bare-OSS case.
+	if err := AuthorizeGuardians(ctx); err != nil {
+		return nil, err
+	}
+	if err := hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.Start && req.Finish {
 		return nil, errors.New("UpdateExtSnapshotStreamingStateRequest cannot have both Start and Finish set to true")
 	}
@@ -2021,6 +2033,16 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 
 func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) error {
 	defer x.ExtSnapshotStreamingState(false)
+
+	// Authorize at stream start, before any data is consumed. Stream auth metadata rides on the
+	// stream's context, so the same gates used for the unary entry point apply here.
+	if err := AuthorizeGuardians(stream.Context()); err != nil {
+		return err
+	}
+	if err := hasPoormansAuth(stream.Context()); err != nil {
+		return err
+	}
+
 	if err := worker.InStream(stream); err != nil {
 		glog.Errorf("[import] failed to stream external snapshot: %v", err)
 		return err

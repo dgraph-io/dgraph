@@ -1083,7 +1083,12 @@ func (c *LocalCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
 		return nil, err
 	}
 
-	return dgraphapi.GetHttpClient(alphaUrl, zeroUrl)
+	hc, err := dgraphapi.GetHttpClient(alphaUrl, zeroUrl)
+	if err != nil {
+		return nil, err
+	}
+	hc.AuthToken = c.conf.securityToken
+	return hc, nil
 }
 
 func (c *LocalCluster) GetAlphaHttpClient(alphaID int) (*dgraphapi.HTTPClient, error) {
