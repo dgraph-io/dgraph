@@ -99,6 +99,14 @@ install: jemalloc
 		echo "New SHA256:" `sha256sum $(INSTALL_TARGET) 2>/dev/null | cut -c-64` ; \
 	fi
 
+# jemalloc 5.3.1 source compat patch: libstdc++ 16+ removed
+# std::__throw_bad_alloc from the public ABI, breaking
+# src/jemalloc_cpp.cpp on GCC 16 / libstdc++ 16 toolchains (notably
+# Chainguard go-fips:v1.26.3.1-dev and later). The sed substitution
+# below is a no-op on older libstdc++ (exact-match) and rewrites the
+# legacy call to the standard `throw std::bad_alloc()` idiom on
+# libstdc++ 16+. Drop the sed line once a tagged jemalloc release
+# upstreams the fix and JEMALLOC_URL bumps past it.
 jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
 		mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
@@ -106,6 +114,7 @@ jemalloc:
 		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
 		tar xjf ./jemalloc.tar.bz2 ; \
 		cd jemalloc-5.3.1 ; \
+		sed -i.bak 's|std::__throw_bad_alloc()|throw std::bad_alloc()|g' src/jemalloc_cpp.cpp ; \
 		./configure --with-jemalloc-prefix='je_' --with-malloc-conf='background_thread:true,metadata_thp:auto'; \
 		make ; \
 		if [ "$(USER_ID)" = "0" ]; then \
