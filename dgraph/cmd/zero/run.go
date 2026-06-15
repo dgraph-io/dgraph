@@ -106,8 +106,9 @@ instances to achieve high-availability.
 			`Make this Zero a "learner" node. In learner mode, this Zero will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		Flag("election-tick",
-			"Number of ticks (each 100ms) before a follower starts an election. "+
-				"Default 20 means 2s election timeout. Increase in high-latency networks.").
+			"Number of Raft ticks before a follower starts an election. Each production tick is "+
+				"100ms and Raft randomizes the timeout between N and 2N-1 ticks. Default 20 "+
+				"means ~2s-4s; values below 10 may cause spurious elections under jitter.").
 		String())
 
 	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).

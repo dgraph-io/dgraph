@@ -71,3 +71,63 @@ func TestProposal(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestNormalizeElectionTick(t *testing.T) {
+	tests := []struct {
+		name        string
+		electionTick int
+		wantTick    int
+		wantWarning string
+	}{
+		{
+			name:         "zero defaults silently",
+			electionTick: 0,
+			wantTick:     20,
+			wantWarning:  "",
+		},
+		{
+			name:         "negative defaults with warning",
+			electionTick: -1,
+			wantTick:     20,
+			wantWarning:  "--raft election-tick=-1 is invalid; defaulting to 20. Use 0 or omit the flag to accept the default.",
+		},
+		{
+			name:         "large negative defaults with warning",
+			electionTick: -100,
+			wantTick:     20,
+			wantWarning:  "--raft election-tick=-100 is invalid; defaulting to 20. Use 0 or omit the flag to accept the default.",
+		},
+		{
+			name:         "low valid value warns below recommended",
+			electionTick: 2,
+			wantTick:     2,
+			wantWarning:  "--raft election-tick=2 gives a 200ms minimum election timeout. Values below 10 (1s) may cause spurious leader elections under GC pauses or network jitter.",
+		},
+		{
+			name:         "recommended minimum no warning",
+			electionTick: 10,
+			wantTick:     10,
+			wantWarning:  "",
+		},
+		{
+			name:         "default value no warning",
+			electionTick: 20,
+			wantTick:     20,
+			wantWarning:  "",
+		},
+		{
+			name:         "large value accepted",
+			electionTick: 100,
+			wantTick:     100,
+			wantWarning:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotTick, gotWarning := normalizeElectionTick(tc.electionTick)
+			require.Equal(t, tc.wantTick, gotTick)
+			require.Equal(t, tc.wantWarning, gotWarning)
+		})
+	}
+}

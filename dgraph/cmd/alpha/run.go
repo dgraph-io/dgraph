@@ -165,8 +165,9 @@ they form a Raft group and provide synchronous replication.
 		Flag("pending-proposals",
 			"Number of pending mutation proposals. Useful for rate limiting.").
 		Flag("election-tick",
-			"Number of ticks (each 100ms) before a follower starts an election. "+
-				"Default 20 means 2s election timeout. Increase in high-latency networks.").
+			"Number of Raft ticks before a follower starts an election. Each production tick is "+
+				"100ms and Raft randomizes the timeout between N and 2N-1 ticks. Default 20 "+
+				"means ~2s-4s; values below 10 may cause spurious elections under jitter.").
 		String())
 
 	flag.String("security", worker.SecurityDefaults, z.NewSuperFlagHelp(worker.SecurityDefaults).

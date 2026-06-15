@@ -40,6 +40,34 @@ var (
 	ErrNoNode = errors.Errorf("No node has been set up yet")
 )
 
+const (
+	heartbeatTick           = 1
+	defaultElectionTick     = 20
+	recommendedElectionTick = 10
+)
+
+func normalizeElectionTick(electionTick int) (tick int, warning string) {
+	if electionTick < 0 {
+		return defaultElectionTick, fmt.Sprintf(
+			"--raft election-tick=%d is invalid; defaulting to %d. Use 0 or omit the flag to accept the default.",
+			electionTick, defaultElectionTick)
+	}
+	if electionTick == 0 {
+		return defaultElectionTick, ""
+	}
+	if electionTick <= heartbeatTick {
+		glog.Fatalf("invalid --raft election-tick=%d: must be greater than internal heartbeat tick (%d).",
+			electionTick, heartbeatTick)
+	}
+	if electionTick < recommendedElectionTick {
+		return electionTick, fmt.Sprintf(
+			"--raft election-tick=%d gives a %dms minimum election timeout. Values below %d (1s) "+
+				"may cause spurious leader elections under GC pauses or network jitter.",
+			electionTick, electionTick*100, recommendedElectionTick)
+	}
+	return electionTick, ""
+}
+
 // Node represents a node participating in the RAFT protocol.
 type Node struct {
 	x.SafeMutex
@@ -79,18 +107,16 @@ type Node struct {
 }
 
 // NewNode returns a new Node instance.
-// electionTick controls how many ticks (each 100ms) before an election is triggered.
-// If electionTick <= 0, defaults to 20 (i.e., 2s election timeout).
+// electionTick controls how many Raft Tick() calls pass before election timeout.
+// In production Alpha/Zero, Tick() runs every 100ms and Raft randomizes the timeout.
+// If electionTick <= 0, defaults to 20.
 func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Config,
 	electionTick int) *Node {
 
-	const heartbeatTick = 1 // 100ms per tick
-	if electionTick <= 0 {
-		electionTick = 20
-	}
-	if electionTick <= heartbeatTick {
-		glog.Fatalf("election-tick=%d is invalid: must be greater than heartbeat-tick (%d). "+
-			"Recommended minimum is 10 (1s election timeout).", electionTick, heartbeatTick)
+	var warning string
+	electionTick, warning = normalizeElectionTick(electionTick)
+	if warning != "" {
+		glog.Warningf(warning)
 	}
 
 	snap, err := store.Snapshot()
@@ -103,7 +129,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 		Store:     store,
 		Cfg: &raft.Config{
 			ID:                       rc.Id,
-			ElectionTick:             electionTick,  // Default 2s if tick is 100ms.
+			ElectionTick:             electionTick,
 			HeartbeatTick:            heartbeatTick, // 100ms if we call Tick() every 100 ms.
 			Storage:                  store,
 			MaxInflightMsgs:          256,
