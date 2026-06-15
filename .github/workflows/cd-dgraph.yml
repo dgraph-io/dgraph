@@ -304,7 +304,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.releasetag }}
           files: |
-            dgraph-amd-release-artifacts/dgraph/dgraph-linux-amd64.tar.gz
-            dgraph-amd-release-artifacts/dgraph/dgraph-checksum-linux-amd64.sha256
-            dgraph-arm-release-artifacts/dgraph/dgraph-linux-arm64.tar.gz
-            dgraph-arm-release-artifacts/dgraph/dgraph-checksum-linux-arm64.sha256
+            dgraph-amd-release-artifacts/dgraph-linux-amd64.tar.gz
+            dgraph-amd-release-artifacts/dgraph-checksum-linux-amd64.sha256
+            dgraph-arm-release-artifacts/dgraph-linux-arm64.tar.gz
+            dgraph-arm-release-artifacts/dgraph-checksum-linux-arm64.sha256
