@@ -74,10 +74,10 @@ func TestProposal(t *testing.T) {
 
 func TestNormalizeElectionTick(t *testing.T) {
 	tests := []struct {
-		name        string
+		name         string
 		electionTick int
-		wantTick    int
-		wantWarning string
+		wantTick     int
+		wantWarning  string
 	}{
 		{
 			name:         "zero defaults silently",
