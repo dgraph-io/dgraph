@@ -105,7 +105,7 @@ func TestDiskMetricsConversionOrder(t *testing.T) {
 
 	// The fix: convert both operands to int64 before multiplication
 	result := int64(frsize) * int64(blocks)
-	
+
 	require.Greater(t, result, int64(0), "Result should be positive")
 	require.Equal(t, int64(4096000000000), result, "Calculation should be correct")
 	require.LessOrEqual(t, result, int64(math.MaxInt64), "Result should not overflow")
