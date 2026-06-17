@@ -12,6 +12,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -642,6 +643,108 @@ var aclPredicateMap = map[string]struct{}{
 	"dgraph.rule.predicate":  {},
 	"dgraph.rule.permission": {},
 	"dgraph.acl.rule":        {},
+}
+
+// ReservedNamespace lets a plugin claim ownership of a sub-namespace under the
+// reserved `dgraph.` prefix, so the predicates and types it owns can be created
+// at runtime via Alter even though they are not part of the pre-defined initial
+// schema. Register one from an init() with RegisterReservedNamespace.
+//
+// With no registration the registry is empty and every check below reports
+// false, so a stock build keeps the pristine behavior: nothing under `dgraph.`
+// may be created except the pre-defined names.
+//
+// Ownership is deliberately explicit — a dynamic prefix and/or an exact name
+// allowlist — so registering a namespace cannot be used to admit arbitrary
+// reserved predicates through /alter or /mutate.
+type ReservedNamespace struct {
+	// All names below are bare (no namespace prefix); queries strip the
+	// namespace before matching, as the reserved-predicate checks already do.
+	//
+	// PredicatePrefix admits dynamically-named predicates by prefix (e.g.
+	// "dgraph.acme.rel."). Empty means the namespace owns no dynamic predicates.
+	PredicatePrefix string
+	// Predicates is the exact set of fixed predicate names the namespace owns.
+	Predicates []string
+	// Types is the exact set of type names the namespace owns.
+	Types []string
+	// ValueLocked is the subset of owned predicates whose stored *value* may
+	// only be written by a request whose context carries TrustMarker. Use it
+	// for predicates whose value is authoritative state the owner must control.
+	// Names must be the exact (bare) predicate form, matching how
+	// IsOtherReservedPredicate is consulted on the mutation path.
+	ValueLocked []string
+	// TrustMarker is a context key the owner's trusted in-process caller sets,
+	// via context.WithValue(ctx, TrustMarker, true), to authorize writing
+	// ValueLocked predicates. Required (non-nil) iff ValueLocked is non-empty.
+	TrustMarker any
+}
+
+var (
+	reservedNsMu          sync.RWMutex
+	reservedNsPrefixes    []string
+	reservedNsPredicates  = map[string]struct{}{}
+	reservedNsTypes       = map[string]struct{}{}
+	reservedNsValueLocked = map[string]any{} // bare predicate -> TrustMarker
+)
+
+// RegisterReservedNamespace records a plugin's ownership of names under the
+// reserved `dgraph.` prefix. Call it from an init(); it is safe for concurrent
+// use but is expected to run before the server starts handling requests.
+func RegisterReservedNamespace(ns ReservedNamespace) {
+	reservedNsMu.Lock()
+	defer reservedNsMu.Unlock()
+	if ns.PredicatePrefix != "" {
+		reservedNsPrefixes = append(reservedNsPrefixes, strings.ToLower(ns.PredicatePrefix))
+	}
+	for _, p := range ns.Predicates {
+		reservedNsPredicates[strings.ToLower(p)] = struct{}{}
+	}
+	for _, t := range ns.Types {
+		reservedNsTypes[strings.ToLower(t)] = struct{}{}
+	}
+	for _, p := range ns.ValueLocked {
+		reservedNsValueLocked[p] = ns.TrustMarker
+	}
+}
+
+// IsRegisteredReservedPredicate reports whether pred is owned by a registered
+// ReservedNamespace (by dynamic prefix or exact name). The alter validator and
+// the no-schema mutation guard allow such predicates through even though they
+// are not pre-defined. With no registration it always reports false.
+func IsRegisteredReservedPredicate(pred string) bool {
+	p := strings.ToLower(ParseAttr(pred))
+	reservedNsMu.RLock()
+	defer reservedNsMu.RUnlock()
+	for _, prefix := range reservedNsPrefixes {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	_, ok := reservedNsPredicates[p]
+	return ok
+}
+
+// IsRegisteredReservedType reports whether typ is a type owned by a registered
+// ReservedNamespace. With no registration it always reports false.
+func IsRegisteredReservedType(typ string) bool {
+	t := strings.ToLower(ParseAttr(typ))
+	reservedNsMu.RLock()
+	defer reservedNsMu.RUnlock()
+	_, ok := reservedNsTypes[t]
+	return ok
+}
+
+// ReservedPredicateValueLock reports whether pred's value is locked to a
+// trusted writer and, if so, returns the context key (TrustMarker) that
+// authorizes the write. The mutation-value guard rejects a write of a locked
+// predicate when the request context does not carry that marker. pred is
+// matched in its exact (bare) form, like IsOtherReservedPredicate.
+func ReservedPredicateValueLock(pred string) (marker any, locked bool) {
+	reservedNsMu.RLock()
+	defer reservedNsMu.RUnlock()
+	marker, locked = reservedNsValueLocked[pred]
+	return marker, locked
 }
 
 // TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
