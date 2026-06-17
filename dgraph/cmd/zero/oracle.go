@@ -351,9 +351,25 @@ const (
 	abortReasonPredicateMove = "predicate-move"
 )
 
+// Human-readable details paired with the conflict abort codes.
+const (
+	abortDetailConflict     = "Transaction has been aborted. Please retry"
+	abortDetailStaleStartTs = "Transaction has been aborted due to a leader change. Please retry"
+)
+
 // abortReason builds the wire string the client parses: "<code>: <detail>".
 func abortReason(code, detail string) string {
 	return code + ": " + detail
+}
+
+// conflictAbortReason returns the wire reason for a hasConflict abort, distinguishing a
+// write-write conflict from a stale start timestamp (a txn that predates the current
+// leader's lease, i.e. a leader change rather than a real conflict).
+func conflictAbortReason(stale bool) string {
+	if stale {
+		return abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)
+	}
+	return abortReason(abortReasonConflict, abortDetailConflict)
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
@@ -384,12 +400,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	stale := src.StartTs < s.orc.startTxnTs
 	s.orc.RUnlock()
 	if conflict {
-		if stale {
-			return abortWithReason(abortReason(abortReasonStaleStartTs,
-				"Transaction has been aborted due to a leader change. Please retry"))
-		}
-		return abortWithReason(abortReason(abortReasonConflict,
-			"Transaction has been aborted. Please retry"))
+		return abortWithReason(conflictAbortReason(stale))
 	}
 
 	checkPreds := func() error {
@@ -456,8 +467,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	if aborted {
 		// A late write-write conflict detected at commit time (keyCommit), or a cancelled ctx.
-		return status.Error(codes.Aborted, abortReason(abortReasonConflict,
-			"Transaction has been aborted. Please retry"))
+		return status.Error(codes.Aborted, conflictAbortReason(false))
 	}
 	return nil
 }

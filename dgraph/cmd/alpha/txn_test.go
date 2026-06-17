@@ -311,6 +311,59 @@ func TestConflictAbortReason(t *testing.T) {
 		"abort reason should be categorized as conflict; got %q", st.Message())
 }
 
+// TestPredicateMoveAbortReason proves the "predicate-move" category is surfaced on the
+// gRPC status. Zero's checkPreds aborts a commit whose predicate keys don't match the
+// tablet's serving group (the same code path that rejects commits during a predicate
+// move). We reach it deterministically by committing a real txn context whose Preds have
+// been rewritten to claim a group that doesn't serve the predicate, with conflict Keys
+// cleared so hasConflict passes and checkPreds runs.
+//
+// As with TestConflictAbortReason, it uses the raw CommitOrAbort stub to observe the
+// unflattened status the server sends.
+func TestPredicateMoveAbortReason(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, dg.Alter(context.Background(), op))
+
+	// A normal mutation gives us a valid, fresh TxnContext (real StartTs and Preds).
+	txn := dg.NewTxn()
+	mu := &api.Mutation{SetJson: []byte(`{"name": "Alice"}`)}
+	resp, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	tc := resp.GetTxn()
+	require.NotEmpty(t, tc.GetPreds(), "mutation response must carry predicate keys")
+
+	// Rewrite each predicate key's group id to a group that does not serve it, and drop
+	// the conflict keys so hasConflict is false and the commit reaches checkPreds.
+	doctored := make([]string, 0, len(tc.GetPreds()))
+	for _, p := range tc.GetPreds() {
+		// Preds look like "<gid>-<predicate>"; claim a nonexistent group 100.
+		if idx := strings.IndexByte(p, '-'); idx >= 0 {
+			doctored = append(doctored, "100"+p[idx:])
+		}
+	}
+	require.NotEmpty(t, doctored, "expected parseable predicate keys")
+	tc.Preds = doctored
+	tc.Keys = nil
+
+	conn, err := grpc.NewClient(alphaSockAdd, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	raw := api.NewDgraphClient(conn)
+
+	ctx := metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("accessJwt", hc.AccessJwt))
+	_, err = raw.CommitOrAbort(ctx, tc)
+	require.Error(t, err)
+
+	st := status.Convert(err)
+	require.Equal(t, codes.Aborted, st.Code(),
+		"abort must keep codes.Aborted so existing clients still retry")
+	require.True(t, strings.HasPrefix(st.Message(), "predicate-move: "),
+		"abort reason should be categorized as predicate-move; got %q", st.Message())
+}
+
 func TestConflictTimeout(t *testing.T) {
 	var uid string
 	txn := dg.NewTxn()
