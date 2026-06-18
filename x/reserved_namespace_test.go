@@ -62,3 +62,20 @@ func TestReservedNamespaceRejectsUnregistered(t *testing.T) {
 	_, locked := ReservedPredicateValueLock("dgraph.unregistered.pred")
 	require.False(t, locked)
 }
+
+// TestReservedPredicateValueLockCaseInsensitive guards against bypassing a value
+// lock by changing the case of an owned name: ownership is matched
+// case-insensitively, so the value lock must be too.
+func TestReservedPredicateValueLockCaseInsensitive(t *testing.T) {
+	RegisterReservedNamespace(ReservedNamespace{
+		Predicates:  []string{"dgraph.casetest.Secret"},
+		ValueLocked: []string{"dgraph.casetest.Secret"},
+		TrustMarker: testTrust,
+	})
+
+	for _, p := range []string{"dgraph.casetest.Secret", "dgraph.casetest.secret", "dgraph.casetest.SECRET"} {
+		marker, locked := ReservedPredicateValueLock(p)
+		require.Truef(t, locked, "value lock must hold regardless of case: %q", p)
+		require.Equal(t, testTrust, marker)
+	}
+}
