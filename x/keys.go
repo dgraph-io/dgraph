@@ -671,8 +671,8 @@ type ReservedNamespace struct {
 	// ValueLocked is the subset of owned predicates whose stored *value* may
 	// only be written by a request whose context carries TrustMarker. Use it
 	// for predicates whose value is authoritative state the owner must control.
-	// Names must be the exact (bare) predicate form, matching how
-	// IsOtherReservedPredicate is consulted on the mutation path.
+	// Names are the bare predicate form (no namespace prefix), matched
+	// case-insensitively like Predicates above.
 	ValueLocked []string
 	// TrustMarker is a context key the owner's trusted in-process caller sets,
 	// via context.WithValue(ctx, TrustMarker, true), to authorize writing
@@ -685,7 +685,7 @@ var (
 	reservedNsPrefixes    []string
 	reservedNsPredicates  = map[string]struct{}{}
 	reservedNsTypes       = map[string]struct{}{}
-	reservedNsValueLocked = map[string]any{} // bare predicate -> TrustMarker
+	reservedNsValueLocked = map[string]any{} // lowercased bare predicate -> TrustMarker
 )
 
 // RegisterReservedNamespace records a plugin's ownership of names under the
@@ -704,7 +704,7 @@ func RegisterReservedNamespace(ns ReservedNamespace) {
 		reservedNsTypes[strings.ToLower(t)] = struct{}{}
 	}
 	for _, p := range ns.ValueLocked {
-		reservedNsValueLocked[p] = ns.TrustMarker
+		reservedNsValueLocked[strings.ToLower(p)] = ns.TrustMarker
 	}
 }
 
@@ -738,12 +738,16 @@ func IsRegisteredReservedType(typ string) bool {
 // ReservedPredicateValueLock reports whether pred's value is locked to a
 // trusted writer and, if so, returns the context key (TrustMarker) that
 // authorizes the write. The mutation-value guard rejects a write of a locked
-// predicate when the request context does not carry that marker. pred is
-// matched in its exact (bare) form, like IsOtherReservedPredicate.
+// predicate when the request context does not carry that marker.
+//
+// pred is matched case-insensitively (like the predicate/type lookups above) so
+// a value lock cannot be bypassed by changing the case of an owned name. Unlike
+// those lookups it does not ParseAttr: the guard passes the bare predicate (no
+// namespace separator), matching how IsOtherReservedPredicate is consulted.
 func ReservedPredicateValueLock(pred string) (marker any, locked bool) {
 	reservedNsMu.RLock()
 	defer reservedNsMu.RUnlock()
-	marker, locked = reservedNsValueLocked[pred]
+	marker, locked = reservedNsValueLocked[strings.ToLower(pred)]
 	return marker, locked
 }
 
