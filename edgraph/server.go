@@ -173,7 +173,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	// The schema could be empty if it only has custom types/queries/mutations.
 	if dgraphSchema != "" {
 		op := &api.Operation{Schema: dgraphSchema}
-		if err = validateAlterOperation(ctx, op); err != nil {
+		if err = validateAlterOperation(ctx, op, NeedAuthorize); err != nil {
 			return nil, err
 		}
 		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(ctx, op.Schema); err != nil {
@@ -189,8 +189,12 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	})
 }
 
-// validateAlterOperation validates the given operation for alter.
-func validateAlterOperation(ctx context.Context, op *api.Operation) error {
+// validateAlterOperation validates the given operation for alter. The
+// structural checks (field set, health, drop consistency, mutations-allowed)
+// always run; the admin-IP-whitelist and ACL authorization checks run only
+// when doAuth is NeedAuthorize. doAuth is NoAuthorize for trusted in-process
+// callers (see AlterNoAuth) that run with a context carrying no gRPC peer.
+func validateAlterOperation(ctx context.Context, op *api.Operation, doAuth AuthMode) error {
 	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
 		// Must have at least one field set. This helps users if they attempt
@@ -207,6 +211,10 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
+	}
+
+	if doAuth == NoAuthorize {
+		return nil
 	}
 
 	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
@@ -334,8 +342,29 @@ func InsertDropRecord(ctx context.Context, dropOp string) error {
 	return err
 }
 
-// Alter handles requests to change the schema or remove parts or all of the data.
+// Alter handles requests to change the schema or remove parts or all of the
+// data. It enforces the admin-IP-whitelist and ACL authorization checks.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	return s.alter(ctx, op, NeedAuthorize)
+}
+
+// AlterNoAuth is Alter without the admin-IP-whitelist and ACL authorization
+// checks. It mirrors QueryNoAuth and is intended only for trusted in-process
+// callers that run with a context.Background() and therefore carry no gRPC
+// peer for x.HasWhitelistedIP to inspect — under the regular Alter path such
+// calls are always rejected with "unable to find source ip", regardless of the
+// --security whitelist setting. It must not be exposed to network clients.
+//
+// It is restricted to schema operations: drop requests are refused so that
+// bypassing auth can never be used to remove data.
+func (s *Server) AlterNoAuth(ctx context.Context, op *api.Operation) (*api.Payload, error) {
+	if isDropOperation(op) {
+		return nil, errors.New("AlterNoAuth only supports schema operations, not drops")
+	}
+	return s.alter(ctx, op, NoAuthorize)
+}
+
+func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) (*api.Payload, error) {
 	ctx, span := otel.Tracer("").Start(ctx, "Server.Alter")
 	defer span.End()
 
@@ -346,7 +375,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	glog.Infof("Received ALTER op: %+v", op)
 
 	// check if the operation is valid
-	if err := validateAlterOperation(ctx, op); err != nil {
+	if err := validateAlterOperation(ctx, op, doAuth); err != nil {
 		return nil, err
 	}
 
@@ -2349,6 +2378,12 @@ func isDropAll(op *api.Operation) bool {
 		return true
 	}
 	return false
+}
+
+// isDropOperation reports whether op is any form of drop (all, data, attr, or
+// type) rather than a schema change.
+func isDropOperation(op *api.Operation) bool {
+	return op.DropAll || op.DropOp != api.Operation_NONE || len(op.DropAttr) > 0
 }
 
 func verifyUniqueWithinMutation(qc *queryContext) error {
