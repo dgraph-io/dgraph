@@ -286,8 +286,12 @@ func parseSchemaFromAlterOperation(ctx context.Context, sch string) (
 		// there are pre-defined predicates (subset of reserved predicates), and for them we allow
 		// the schema update to go through if the update is equal to the existing one.
 		// So, here we check if the predicate is reserved but not pre-defined to block users from
-		// creating predicates in reserved namespace.
-		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
+		// creating predicates in reserved namespace. A predicate owned by a registered
+		// ReservedNamespace (see x.RegisterReservedNamespace) is allowed through, so a plugin can
+		// create its own predicates under `dgraph.` at runtime.
+		if x.IsReservedPredicate(update.Predicate) &&
+			!x.IsPreDefinedPredicate(update.Predicate) &&
+			!x.IsRegisteredReservedPredicate(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
 				x.ParseAttr(update.Predicate))
@@ -310,7 +314,10 @@ func parseSchemaFromAlterOperation(ctx context.Context, sch string) (
 
 		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
 		// types for which the update should go through if the update is equal to the existing one.
-		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
+		// A type owned by a registered ReservedNamespace is allowed through like its predicate
+		// counterparts, so a plugin can declare its own types under `dgraph.` at runtime.
+		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) &&
+			!x.IsRegisteredReservedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
 				x.ParseAttr(typ.TypeName))
@@ -1706,7 +1713,7 @@ func parseRequest(ctx context.Context, qc *queryContext) error {
 		// parsing mutations
 		qc.gmuList = make([]*dql.Mutation, 0, len(qc.req.Mutations))
 		for _, mu := range qc.req.Mutations {
-			gmu, err := ParseMutationObject(mu, qc.graphql)
+			gmu, err := ParseMutationObject(ctx, mu)
 			if err != nil {
 				return err
 			}
@@ -2181,7 +2188,7 @@ func hasPoormansAuth(ctx context.Context) error {
 // api.Mutation#SetJson, api.Mutation#SetNquads and api.Mutation#Set are consolidated into the
 // dql.Mutation.Set field. Similarly the 3 fields api.Mutation#DeleteJson, api.Mutation#DelNquads
 // and api.Mutation#Del are merged into the dql.Mutation#Del field.
-func ParseMutationObject(mu *api.Mutation, isGraphql bool) (*dql.Mutation, error) {
+func ParseMutationObject(ctx context.Context, mu *api.Mutation) (*dql.Mutation, error) {
 	res := &dql.Mutation{Cond: mu.Cond}
 
 	if len(mu.SetJson) > 0 {
@@ -2225,7 +2232,7 @@ func ParseMutationObject(mu *api.Mutation, isGraphql bool) (*dql.Mutation, error
 		return nil, err
 	}
 
-	if err := validateNQuads(res.Set, res.Del, isGraphql); err != nil {
+	if err := validateNQuads(res.Set, res.Del, newReservedPredicateGuard(ctx)); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -2252,16 +2259,38 @@ func validateAndConvertFacets(nquads []*api.NQuad) error {
 	return nil
 }
 
-// validateForOtherReserved validate nquads for other reserved predicates
-func validateForOtherReserved(nq *api.NQuad, isGraphql bool) error {
-	// Check whether the incoming predicate is other reserved predicate.
-	if !isGraphql && x.IsOtherReservedPredicate(nq.Predicate) {
-		return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+// reservedPredicateGuard reports an error if nq mutates the value of a reserved
+// predicate the current request is not permitted to write. It is built once per
+// request from the request context; see newReservedPredicateGuard.
+type reservedPredicateGuard func(nq *api.NQuad) error
+
+// newReservedPredicateGuard builds the per-request reserved-value guard. The
+// GraphQL admin path (IsGraphql) owns the dgraph.graphql.* predicates. A
+// registered ReservedNamespace may additionally value-lock predicates to its
+// own trusted writer (see x.RegisterReservedNamespace): such a predicate may be
+// written only when the request context carries the namespace's TrustMarker.
+// Every other caller is blocked.
+func newReservedPredicateGuard(ctx context.Context) reservedPredicateGuard {
+	isGraphql, _ := ctx.Value(IsGraphql).(bool)
+	return func(nq *api.NQuad) error {
+		if !isGraphql && x.IsOtherReservedPredicate(nq.Predicate) {
+			return errors.Errorf("Cannot mutate graphql reserved predicate %s", nq.Predicate)
+		}
+		if marker, locked := x.ReservedPredicateValueLock(nq.Predicate); locked {
+			trusted := false
+			if marker != nil {
+				trusted, _ = ctx.Value(marker).(bool)
+			}
+			if !trusted {
+				return errors.Errorf("Cannot mutate reserved predicate %s outside its "+
+					"owning service", nq.Predicate)
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
-func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
+func validateNQuads(set, del []*api.NQuad, guardReserved reservedPredicateGuard) error {
 	for _, nq := range set {
 		if err := validatePredName(nq.Predicate); err != nil {
 			return err
@@ -2276,7 +2305,7 @@ func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 		if err := validateKeys(nq); err != nil {
 			return errors.Wrapf(err, "key error: %+v", nq)
 		}
-		if err := validateForOtherReserved(nq, isGraphql); err != nil {
+		if err := guardReserved(nq); err != nil {
 			return err
 		}
 	}
@@ -2291,7 +2320,7 @@ func validateNQuads(set, del []*api.NQuad, isGraphql bool) error {
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
-		if err := validateForOtherReserved(nq, isGraphql); err != nil {
+		if err := guardReserved(nq); err != nil {
 			return err
 		}
 		// NOTE: we dont validateKeys() with delete to let users fix existing mistakes
