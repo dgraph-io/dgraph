@@ -79,3 +79,17 @@ func TestReservedPredicateValueLockCaseInsensitive(t *testing.T) {
 		require.Equal(t, testTrust, marker)
 	}
 }
+
+// TestRegisterReservedNamespaceRequiresTrustMarker confirms the invariant is
+// enforced at registration (init time): ValueLocked without a TrustMarker would
+// make the predicate unwritable by everyone, so it panics rather than failing
+// silently at mutation time.
+func TestRegisterReservedNamespaceRequiresTrustMarker(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{
+			Predicates:  []string{"dgraph.nomarker.cfg"},
+			ValueLocked: []string{"dgraph.nomarker.cfg"},
+			// TrustMarker intentionally left nil.
+		})
+	})
+}

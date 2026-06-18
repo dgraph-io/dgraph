@@ -676,7 +676,8 @@ type ReservedNamespace struct {
 	ValueLocked []string
 	// TrustMarker is a context key the owner's trusted in-process caller sets,
 	// via context.WithValue(ctx, TrustMarker, true), to authorize writing
-	// ValueLocked predicates. Required (non-nil) iff ValueLocked is non-empty.
+	// ValueLocked predicates. Required (non-nil) when ValueLocked is non-empty;
+	// RegisterReservedNamespace panics otherwise.
 	TrustMarker any
 }
 
@@ -692,6 +693,10 @@ var (
 // reserved `dgraph.` prefix. Call it from an init(); it is safe for concurrent
 // use but is expected to run before the server starts handling requests.
 func RegisterReservedNamespace(ns ReservedNamespace) {
+	if len(ns.ValueLocked) > 0 && ns.TrustMarker == nil {
+		panic("x.RegisterReservedNamespace: ValueLocked is set but TrustMarker is nil; " +
+			"a value-locked predicate with no TrustMarker is unwritable by everyone, including its owner")
+	}
 	reservedNsMu.Lock()
 	defer reservedNsMu.Unlock()
 	if ns.PredicatePrefix != "" {
