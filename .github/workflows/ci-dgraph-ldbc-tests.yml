@@ -15,13 +15,12 @@ permissions:
   contents: read
 
 jobs:
-  check-changes:
-    uses: ./.github/workflows/check-changes.yml
+  changes:
+    uses: ./.github/workflows/detect-changes.yml
 
   dgraph-ldbc-tests:
-    needs: check-changes
-    if:
-      github.event.pull_request.draft == false && needs.check-changes.outputs.should-skip != 'true'
+    needs: changes
+    if: github.event.pull_request.draft == false && needs.changes.outputs.code == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:

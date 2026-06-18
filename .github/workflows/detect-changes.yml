@@ -1,0 +1,41 @@
+name: Detect Code Changes
+
+on:
+  workflow_call:
+    outputs:
+      code:
+        description: Whether non-doc/asset files changed
+        value: ${{ jobs.changes.outputs.code }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '!**/*.md'
+              - '!**/*.mdc'
+              - '!**/*.txt'
+              - '!**/*.rst'
+              - '!**/*.png'
+              - '!**/*.jpg'
+              - '!**/*.jpeg'
+              - '!**/*.gif'
+              - '!**/*.svg'
+              - '!**/*.ico'
+              - '!**/*.pdf'
+              - '!docs/**'
+              - '!images/**'
+              - '!contrib/**'
+              - '!**/*.mdx'
+              - '!.claude/**'
