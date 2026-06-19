@@ -308,6 +308,8 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		acmd = append(acmd, "--mcp")
 	}
 
+	acmd = append(acmd, c.conf.startupArgs...)
+
 	return acmd
 }
 
