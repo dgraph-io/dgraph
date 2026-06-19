@@ -692,24 +692,58 @@ var (
 // RegisterReservedNamespace records a plugin's ownership of names under the
 // reserved `dgraph.` prefix. Call it from an init(); it is safe for concurrent
 // use but is expected to run before the server starts handling requests.
+//
+// All names must be bare (no namespace separator) and uniquely owned, and a
+// non-empty ValueLocked needs a TrustMarker. It panics on any of these, so a
+// misconfiguration trips at startup rather than silently at mutation time.
 func RegisterReservedNamespace(ns ReservedNamespace) {
 	if len(ns.ValueLocked) > 0 && ns.TrustMarker == nil {
 		panic("x.RegisterReservedNamespace: ValueLocked is set but TrustMarker is nil; " +
 			"a value-locked predicate with no TrustMarker is unwritable by everyone, including its owner")
 	}
+	// Names must be bare (no namespace separator). The membership lookups strip
+	// the namespace from the query, and the value-lock guard matches the bare
+	// predicate the mutation path passes, so a namespace-qualified registration
+	// would never match — silently leaving a value-locked predicate publicly
+	// writable. Reject it at startup instead.
+	for _, group := range [][]string{{ns.PredicatePrefix}, ns.Predicates, ns.Types, ns.ValueLocked} {
+		for _, name := range group {
+			if strings.Contains(name, NsSeparator) {
+				panic(fmt.Sprintf("x.RegisterReservedNamespace: name %q must be bare, "+
+					"without the %q namespace separator", name, NsSeparator))
+			}
+		}
+	}
+
 	reservedNsMu.Lock()
 	defer reservedNsMu.Unlock()
 	if ns.PredicatePrefix != "" {
 		reservedNsPrefixes = append(reservedNsPrefixes, strings.ToLower(ns.PredicatePrefix))
 	}
+	// A reserved name has a single owner. A duplicate registration (two
+	// namespaces, or a re-init) is a programming error, and for value locks it
+	// would silently change which TrustMarker wins by import order — so panic
+	// rather than last-writer-wins.
 	for _, p := range ns.Predicates {
-		reservedNsPredicates[strings.ToLower(p)] = struct{}{}
+		key := strings.ToLower(p)
+		if _, dup := reservedNsPredicates[key]; dup {
+			panic(fmt.Sprintf("x.RegisterReservedNamespace: predicate %q already registered", key))
+		}
+		reservedNsPredicates[key] = struct{}{}
 	}
 	for _, t := range ns.Types {
-		reservedNsTypes[strings.ToLower(t)] = struct{}{}
+		key := strings.ToLower(t)
+		if _, dup := reservedNsTypes[key]; dup {
+			panic(fmt.Sprintf("x.RegisterReservedNamespace: type %q already registered", key))
+		}
+		reservedNsTypes[key] = struct{}{}
 	}
 	for _, p := range ns.ValueLocked {
-		reservedNsValueLocked[strings.ToLower(p)] = ns.TrustMarker
+		key := strings.ToLower(p)
+		if _, dup := reservedNsValueLocked[key]; dup {
+			panic(fmt.Sprintf("x.RegisterReservedNamespace: value-locked predicate %q already registered", key))
+		}
+		reservedNsValueLocked[key] = ns.TrustMarker
 	}
 }
 
