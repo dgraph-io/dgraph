@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,80 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 	return tokens, nil
 }
 
+// updateDeadNodes performs an atomic read-modify-write of the predicate's HNSW
+// dead-node list (the uids of deleted vectors, stored as a JSON array in a
+// single posting at DataKey(deadAttr, 1)). mutate receives the current list and
+// returns the new list plus whether it changed; the write is skipped when
+// unchanged.
+//
+// The whole read-modify-write runs under the posting list's write lock. Several
+// goroutines can share the same txn and touch this single posting concurrently —
+// a multi-edge mutation applies its edges in parallel (worker/draft.go), and the
+// index rebuilder streams with 16 goroutines — so without holding the lock
+// across the read and the write, concurrent record/clear calls would clobber
+// each other (last-writer-wins on the full JSON blob) and silently lose dead
+// uids. Holding the lock serializes them, and the read sees the txn's own
+// pending updates, so the list accumulates correctly.
+func (txn *Txn) updateDeadNodes(ctx context.Context, deadAttr string,
+	mutate func(deadNodes []uint64) ([]uint64, bool)) error {
+	pl, err := txn.Get(x.DataKey(deadAttr, 1))
+	if err != nil {
+		return err
+	}
+	pl.Lock()
+	defer pl.Unlock()
+
+	var deadNodes []uint64
+	val, err := pl.ValueWithLockHeld(txn.StartTs)
+	if err != nil && err != ErrNoValue {
+		return err
+	}
+	if err == nil && val.Value != nil {
+		deadNodes, err = hnsw.ParseEdges(string(val.Value.([]byte)))
+		if err != nil {
+			return err
+		}
+	}
+
+	updated, changed := mutate(deadNodes)
+	if !changed {
+		return nil
+	}
+	b, err := json.Marshal(updated)
+	if err != nil {
+		return err
+	}
+	return pl.addMutationInternal(ctx, txn, &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      deadAttr,
+		Value:     b,
+		ValueType: pb.Posting_ValType(0),
+	})
+}
+
+// recordDeadNode adds uid to the predicate's dead-node list. It is idempotent:
+// a uid already recorded is left as-is, so repeated deletes (or a Raft re-apply)
+// don't grow the list with duplicates.
+func (txn *Txn) recordDeadNode(ctx context.Context, deadAttr string, uid uint64) error {
+	return txn.updateDeadNodes(ctx, deadAttr, func(deadNodes []uint64) ([]uint64, bool) {
+		if slices.Contains(deadNodes, uid) {
+			return deadNodes, false
+		}
+		return append(deadNodes, uid), true
+	})
+}
+
+// clearDeadNode removes uid from the predicate's dead-node list, marking a
+// re-inserted vector live again. It is a no-op when the uid is not recorded.
+func (txn *Txn) clearDeadNode(ctx context.Context, deadAttr string, uid uint64) error {
+	return txn.updateDeadNodes(ctx, deadAttr, func(deadNodes []uint64) ([]uint64, bool) {
+		if !slices.Contains(deadNodes, uid) {
+			return deadNodes, false
+		}
+		return slices.DeleteFunc(deadNodes, func(d uint64) bool { return d == uid }), true
+	})
+}
+
 // addIndexMutations adds mutation(s) for a single term, to maintain the index,
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
@@ -111,44 +186,20 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			return []*pb.DirectedEdge{}, err
 		}
 
-		if info.op == pb.DirectedEdge_DEL &&
-			len(data) > 0 && data[0].Tid == types.VFloatID {
-			// TODO look into better alternatives
-			//      The issue here is that we will create dead nodes in the Vector Index
-			//      assuming an HNSW index type. What we should do instead is invoke
-			//      index.Remove(<key to dead index value>). However, we currently do
-			//      not support this in VectorIndex code!!
-			// if a delete & dealing with vfloats, add this to dead node in persistent store.
-			// What we should do instead is invoke the factory.Remove(key) operation.
+		// A vfloat delete must record the uid in the index's dead-node list so
+		// that removeDeadNodes can strip edges pointing at the now-deleted vector.
+		//
+		// We use info.val (the value being deleted, supplied by the caller) rather
+		// than the re-read `data`: addMutationHelper has already applied the delete
+		// by this point, so AllValues(txn.StartTs) is empty and the node would
+		// never be recorded.
+		//
+		// TODO: replace this with an index.Remove(<dead key>) call once the
+		//       VectorIndex API supports removal directly.
+		if info.op == pb.DirectedEdge_DEL && info.val.Tid == types.VFloatID {
 			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
-			deadKey := x.DataKey(deadAttr, 1)
-			pl, err := txn.Get(deadKey)
-			if err != nil {
+			if err := txn.recordDeadNode(ctx, deadAttr, uid); err != nil {
 				return []*pb.DirectedEdge{}, err
-			}
-			var deadNodes []uint64
-			deadData, _ := pl.Value(txn.StartTs)
-			if deadData.Value == nil {
-				deadNodes = append(deadNodes, uid)
-			} else {
-				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
-				if err != nil {
-					return []*pb.DirectedEdge{}, err
-				}
-				deadNodes = append(deadNodes, uid)
-			}
-			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
-			if marshalErr != nil {
-				return []*pb.DirectedEdge{}, marshalErr
-			}
-			edge := &pb.DirectedEdge{
-				Entity:    1,
-				Attr:      deadAttr,
-				Value:     deadNodesBytes,
-				ValueType: pb.Posting_ValType(0),
-			}
-			if err := pl.addMutation(ctx, txn, edge); err != nil {
-				return nil, err
 			}
 		}
 
@@ -168,6 +219,14 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			}
 			edges, err := indexer.Insert(ctx, tc, uid, inVec)
 			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// The uid is alive again: clear it from the dead-node list. Otherwise a
+			// deleted-then-reinserted (re-embedded) vector stays marked dead, gets
+			// stripped from every neighbour's edge list by removeDeadNodes, and ends
+			// up orphaned from the HNSW graph — present but unreachable in search.
+			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+			if err := txn.clearDeadNode(ctx, deadAttr, uid); err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
 			pbEdges := []*pb.DirectedEdge{}
