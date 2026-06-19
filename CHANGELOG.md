@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [Unreleased]
+
+- **Fixed**
+  - fix(build): detect jemalloc under `/usr/lib64` so a dnf-installed `jemalloc-devel` is found on
+    Fedora/RHEL multilib systems
+  - fix(build): compile the bundled jemalloc 5.3.1 with `--disable-cxx` to avoid the
+    `std::__throw_bad_alloc` build failure on GCC 13+ (e.g. Fedora 44 / GCC 15); dgraph only links
+    jemalloc's C API, so the C++ layer is not needed
+  - fix(build): chain the jemalloc build recipe with `&&` (was `;`) so a failed compile no longer
+    falls through to `make install`, and clear any stale `/tmp/jemalloc-temp` before rebuilding
+  - fix(test): add the Docker CE repo via a downloaded `.repo` file instead of
+    `dnf config-manager --add-repo`, which was removed in DNF5 (Fedora 41+) and broke
+    `make setup` on Fedora
+
+- **Added**
+  - test: add `contrib/smoke-test.sh` to bring up a local zero+alpha and verify
+    schema/mutation/query against a freshly built binary
+
+- **Changed**
+  - build: `linux-dependency` now auto-detects the package manager (apt/dnf/pacman) and installs the
+    C/C++ toolchain + protobuf-compiler, so build prerequisites work on Fedora/RHEL and Arch in
+    addition to Debian/Ubuntu
+
+- **Docs**
+  - docs(contributing): document building Dgraph on Fedora/RHEL
+
 ## [v25.3.4] - 2026-05-11
 
 [v25.3.4]: https://github.com/dgraph-io/dgraph/compare/v25.3.3...v25.3.4
