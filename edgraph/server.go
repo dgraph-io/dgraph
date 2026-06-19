@@ -481,6 +481,23 @@ func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) 
 				" dropped", x.ParseAttr(attr))
 		}
 
+		// A value-locked predicate's stored value is owned by the service that
+		// registered it; dropping the predicate deletes that value, so it needs
+		// the same TrustMarker the mutation-value guard checks. DropAttr builds
+		// its delete edge here and bypasses validateNQuads, so the check is
+		// repeated. The only marker-bearing path is the in-process owner;
+		// external and admin Alter callers carry no marker and are refused.
+		if marker, locked := x.ReservedPredicateValueLock(x.ParseAttr(attr)); locked {
+			trusted := false
+			if marker != nil {
+				trusted, _ = ctx.Value(marker).(bool)
+			}
+			if !trusted {
+				return empty, errors.Errorf("cannot drop value-locked predicate %s outside "+
+					"its owning service", x.ParseAttr(attr))
+			}
+		}
+
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   x.ParseAttr(attr),
@@ -2320,6 +2337,13 @@ func validateNQuads(set, del []*api.NQuad, guardReserved reservedPredicateGuard)
 		if nq.Subject == x.Star || (nq.Predicate == x.Star && !ostar) {
 			return errors.Errorf("Only valid wildcard delete patterns are 'S * *' and 'S P *': %v", nq)
 		}
+		// guardReserved matches a named predicate, so a 'S P *' delete of a
+		// value-locked predicate is caught here. A 'S * *' delete (predicate is
+		// the wildcard) cannot be matched per-predicate: the subject's predicates
+		// aren't known at validation, and the wildcard is expanded post-Raft in
+		// worker where the request's TrustMarker is gone. Bulk subject deletes
+		// that remove a value-locked predicate are outside the value lock's scope
+		// and are gated by ACL predicate-level permissions.
 		if err := guardReserved(nq); err != nil {
 			return err
 		}

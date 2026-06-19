@@ -93,3 +93,27 @@ func TestRegisterReservedNamespaceRequiresTrustMarker(t *testing.T) {
 		})
 	})
 }
+
+// TestRegisterReservedNamespaceRejectsQualifiedName confirms a namespace-qualified
+// name is rejected at registration. The value-lock guard matches the bare
+// predicate, so a qualified entry would never match and the predicate would stay
+// publicly writable — it must fail closed at startup instead.
+func TestRegisterReservedNamespaceRejectsQualifiedName(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{
+			Predicates:  []string{"dgraph.qualtest.secret"},
+			ValueLocked: []string{NamespaceAttr(RootNamespace, "dgraph.qualtest.secret")},
+			TrustMarker: testTrust,
+		})
+	})
+}
+
+// TestRegisterReservedNamespaceRejectsDuplicate confirms a name claimed twice
+// panics rather than silently overwriting (for value locks, last-writer-wins
+// would let import order pick the TrustMarker).
+func TestRegisterReservedNamespaceRejectsDuplicate(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{Predicates: []string{"dgraph.duptest.x"}})
+		RegisterReservedNamespace(ReservedNamespace{Predicates: []string{"dgraph.duptest.x"}})
+	})
+}
