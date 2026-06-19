@@ -8,6 +8,7 @@ package edgraph
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -2194,7 +2195,7 @@ func hasPoormansAuth(ctx context.Context) error {
 	if len(tokens) == 0 {
 		return errNoAuth
 	}
-	if tokens[0] != worker.Config.AuthToken {
+	if subtle.ConstantTimeCompare([]byte(tokens[0]), []byte(worker.Config.AuthToken)) != 1 {
 		return errors.Errorf("Provided auth token [%s] does not match. Permission denied.", tokens[0])
 	}
 	return nil

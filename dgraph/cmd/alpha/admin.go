@@ -6,6 +6,7 @@
 package alpha
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,8 +25,8 @@ type allowedMethods map[string]bool
 // hasPoormansAuth checks if poorman's auth is required and if so whether the given http request has
 // poorman's auth in it or not
 func hasPoormansAuth(r *http.Request) bool {
-	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
-		"X-Dgraph-AuthToken") {
+	if worker.Config.AuthToken != "" && subtle.ConstantTimeCompare(
+		[]byte(worker.Config.AuthToken), []byte(r.Header.Get("X-Dgraph-AuthToken"))) != 1 {
 		return false
 	}
 	return true
