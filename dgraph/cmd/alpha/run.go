@@ -275,6 +275,8 @@ they form a Raft group and provide synchronous replication.
 			"Disabled by default (0). Note: enabling this logs query text which may contain "+
 			"sensitive data; do not enable in deployments with strict data privacy requirements.").
 		String())
+
+	RegisterFlags(flag)
 }
 
 func setupCustomTokenizers() {
@@ -456,13 +458,22 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
 
+	unary := []grpc.UnaryServerInterceptor{audit.AuditRequestGRPC}
+	if zi := ZanzibarUnaryInterceptor(); zi != nil {
+		unary = append(unary, zi)
+	}
+	stream := []grpc.StreamServerInterceptor{audit.AuditStreamGRPC}
+	if zs := ZanzibarStreamInterceptor(); zs != nil {
+		stream = append(stream, zs)
+	}
+
 	opt := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
 		grpc.MaxSendMsgSize(x.GrpcMaxSize),
 		grpc.MaxConcurrentStreams(1000),
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.UnaryInterceptor(audit.AuditRequestGRPC),
-		grpc.StreamInterceptor(audit.AuditStreamGRPC),
+		grpc.ChainUnaryInterceptor(unary...),
+		grpc.ChainStreamInterceptor(stream...),
 	}
 	if tlsCfg != nil {
 		tlsCfg.NextProtos = []string{"h2"}
@@ -473,6 +484,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 	api.RegisterDgraphServer(s, &edgraph.Server{})
 	hapi.RegisterHealthServer(s, health.NewServer())
 	worker.RegisterZeroProxyServer(s)
+	RegisterZanzibar(s)
 
 	err := s.Serve(l)
 	glog.Errorf("GRPC listener canceled: %v\n", err)
