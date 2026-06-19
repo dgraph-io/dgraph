@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
@@ -31,7 +32,21 @@ type persistentHNSW[T c.Float] struct {
 	// nodeAllEdges[65443][1][3] indicates the 3rd neighbor in the first
 	// layer for UUID 65443. The result will be a neighboring UUID.
 	nodeAllEdges map[uint64][][]uint64
-	deadNodes    map[uint64]struct{}
+
+	// deadNodes caches the tombstoned (deleted) vector set — the persisted
+	// vecDead posting — as an immutable snapshot tagged with the read timestamp
+	// it was loaded at, so it is refreshed when the snapshot advances (it used to
+	// be loaded once and never refreshed; see loadDeadNodes). Published
+	// atomically because the index instance is shared across the goroutines that
+	// drive an index rebuild.
+	deadNodes atomic.Pointer[deadSnapshot]
+}
+
+// deadSnapshot is an immutable view of the dead-node set as of a read timestamp.
+// It is never mutated after construction, so readers use set without locking.
+type deadSnapshot struct {
+	ts  uint64
+	set map[uint64]struct{}
 }
 
 func GetPersistantOptions[T c.Float](o opt.Options) string {
