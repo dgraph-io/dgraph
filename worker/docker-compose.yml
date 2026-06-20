@@ -105,7 +105,7 @@ services:
       --zero=zero1:5080,zero2:5080,zero3:5080 --logtostderr -v=2 --raft "idx=6; group=2;
       snapshot-after-entries=100; snapshot-after-duration=1m" --security "whitelist=0.0.0.0/0;"
   jaeger:
-    image: jaegertracing/all-in-one:1.60
+    image: docker.io/jaegertracing/all-in-one:1.60
     environment:
       - SPAN_STORAGE_TYPE=badger
     ports:
