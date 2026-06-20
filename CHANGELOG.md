@@ -8,6 +8,36 @@ as a guide.
 
 ## [Unreleased]
 
+- **Podman / Fedora 44 / RHEL 9+ support for `make test`**
+
+  Docker CE is no longer installable or functional on Fedora 38+ and RHEL 9+ from the official
+  Docker repository. Podman (with `podman-docker` and `podman-compose`) is the supported
+  replacement on those platforms. This release makes the entire test infrastructure
+  runtime-agnostic so that `make test` works with either Docker or Podman transparently.
+
+  Changes by area:
+
+  - **`testutil/runtime.go`** (new): central runtime detection; auto-detects whether Docker or
+    Podman is in use (including `podman-docker` shims), sets `DOCKER_HOST` to the Podman socket
+    so the Docker SDK can communicate with it, and exposes `ContainerRuntime()` and
+    `ContainerComposeCmdPrefix()` helpers used everywhere else
+  - **`t/t.go` and `testutil/bulk.go`**: all hardcoded `docker compose --compatibility`
+    invocations replaced with `ContainerComposeCmdPrefix()`; all `docker logs`, `docker cp`, and
+    `docker exec` calls replaced with `ContainerRuntime()`
+  - **`contrib/Dockerfile`**: pre-creates all `/data/zero*`, `/data/alpha*`, `/data/dg1`, and
+    `/data/dg0.1` directories; Podman's `crun` OCI runtime does not auto-create a container's
+    `working_dir` at startup (unlike Docker's `runc`), which left containers stuck in "Created"
+    state
+  - **`t/Makefile`**: new `install-deps-docker-linux-dnf` target installs
+    `podman podman-docker podman-compose` and enables the Podman socket instead of attempting the
+    broken Docker CE install path on Fedora/RHEL
+  - **`t/scripts/check-deps-docker.sh`**: rewritten to detect and validate Podman on
+    `dnf`-based systems instead of requiring Docker CE
+  - **`t/scripts/check-docker-available-memory.sh`**: reads `/proc/meminfo` directly on Linux
+    (works for both Docker and Podman) rather than calling `docker info`
+  - **`Makefile`** (root): new `$(DOCKER)` variable falls back to `podman` when `docker` is
+    absent, used for image build targets
+
 - **Fixed**
   - fix(build): detect jemalloc under `/usr/lib64` so a dnf-installed `jemalloc-devel` is found on
     Fedora/RHEL multilib systems

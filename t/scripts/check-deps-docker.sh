@@ -5,12 +5,15 @@ set -euo pipefail
 # shellcheck source=checkhelper.sh
 source "$(dirname "${BASH_SOURCE[0]}")/checkhelper.sh"
 
-# ---- thresholds ----
+# ---- version thresholds ----
 MIN_DOCKER_MAJOR=29
 
 MIN_COMPOSE_MAJOR=2
 MIN_COMPOSE_MINOR=40
 MIN_COMPOSE_PATCH=0
+
+MIN_PODMAN_MAJOR=4
+MIN_PODMAN_MINOR=0
 
 MIN_MEM_MB=4
 REC_MEM_MB=8
@@ -25,23 +28,42 @@ semver_ge() {
 	((aPat >= bPat))
 }
 
-# Find docker binary
 find_docker() {
 	command -v docker 2>/dev/null
 }
 
+find_podman() {
+	command -v podman 2>/dev/null
+}
+
+# Returns "docker", "podman", or "none".
+detect_runtime() {
+	if find_docker &>/dev/null; then
+		local ver
+		ver="$(docker --version 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+		if [[ "${ver}" == *"podman"* ]]; then
+			echo "podman"
+		else
+			echo "docker"
+		fi
+	elif find_podman &>/dev/null; then
+		echo "podman"
+	else
+		echo "none"
+	fi
+}
+
+# ---- Docker installation helpers ----
+
 install_docker_linux() {
 	if command -v apt-get &>/dev/null; then
-		# Install prerequisites
 		sudo apt-get update
 		sudo apt-get install -y ca-certificates curl gnupg
 
-		# Add Docker's official GPG key
 		sudo install -m 0755 -d /etc/apt/keyrings
 		curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 		sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-		# Detect distro (works for Ubuntu and Debian)
 		local distro
 		if [[ -f /etc/os-release ]]; then
 			# shellcheck source=/dev/null
@@ -51,25 +73,21 @@ install_docker_linux() {
 			distro="ubuntu"
 		fi
 
-		# Add the repository
 		echo \
 			"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${distro} \
-      $(. /etc/os-release && echo "${VERSION_CODENAME:-$(lsb_release -cs)}") stable" |
+  $(. /etc/os-release && echo "${VERSION_CODENAME:-$(lsb_release -cs)}") stable" |
 			sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
 		sudo apt-get update
 		sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-		# Start and enable Docker service
 		sudo systemctl start docker || true
 		sudo systemctl enable docker || true
 
 	elif command -v dnf &>/dev/null; then
-		sudo dnf -y install dnf-plugins-core
-		sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
-		sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-		sudo systemctl start docker || true
-		sudo systemctl enable docker || true
+		# Fedora 38+ and RHEL 9+ do not support Docker CE from the official
+		# Docker repo. Use Podman with the Docker compatibility layer instead.
+		install_podman_linux
 
 	elif command -v yum &>/dev/null; then
 		sudo yum install -y yum-utils
@@ -88,7 +106,6 @@ install_docker_linux() {
 		exit 1
 	fi
 
-	# Add current user to docker group to avoid needing sudo
 	if [[ -n ${SUDO_USER-} ]]; then
 		sudo usermod -aG docker "${SUDO_USER}" || true
 	elif [[ -n ${USER-} ]] && [[ ${USER} != "root" ]]; then
@@ -105,7 +122,43 @@ install_docker() {
 	run_os_installer install_docker_linux install_docker_macos
 }
 
-print_install_instructions() {
+# ---- Podman installation helpers ----
+
+install_podman_linux() {
+	if command -v dnf &>/dev/null; then
+		# Fedora / RHEL: podman-docker provides the docker CLI shim,
+		# podman-compose provides docker-compose-compatible functionality.
+		sudo dnf install -y podman podman-docker podman-compose
+		# Enable the Podman socket so the Docker SDK can connect to it.
+		systemctl --user enable --now podman.socket 2>/dev/null || true
+
+	elif command -v apt-get &>/dev/null; then
+		sudo apt-get update
+		sudo apt-get install -y podman podman-compose
+		systemctl --user enable --now podman.socket 2>/dev/null || true
+
+	elif command -v pacman &>/dev/null; then
+		sudo pacman -S --noconfirm podman podman-compose
+		systemctl --user enable --now podman.socket 2>/dev/null || true
+
+	else
+		err "no supported package manager found (tried: dnf, apt, pacman)"
+		exit 1
+	fi
+}
+
+install_podman_macos() {
+	ensure_brew || exit 1
+	brew install podman podman-compose
+}
+
+install_podman() {
+	run_os_installer install_podman_linux install_podman_macos
+}
+
+# ---- Install instructions ----
+
+print_docker_install_instructions() {
 	echo ""
 	err "Docker is not installed"
 	echo ""
@@ -114,7 +167,7 @@ print_install_instructions() {
 	case "$(get_os)" in
 	Linux)
 		err "    apt (Ubuntu/Debian): see https://docs.docker.com/engine/install/ubuntu/"
-		err "    dnf (Fedora):        see https://docs.docker.com/engine/install/fedora/"
+		err "    dnf (Fedora/RHEL):   install Podman instead — see print_podman_install_instructions"
 		err "    yum (CentOS/RHEL):   see https://docs.docker.com/engine/install/centos/"
 		err "    pacman (Arch):       sudo pacman -S docker docker-compose"
 		;;
@@ -130,28 +183,50 @@ print_install_instructions() {
 	print_auto_install_hint
 }
 
+print_podman_install_instructions() {
+	echo ""
+	err "Podman is not installed (required on Fedora/RHEL where Docker CE is unavailable)"
+	echo ""
+	err "Please install Podman manually:"
+
+	case "$(get_os)" in
+	Linux)
+		err "    dnf (Fedora/RHEL):   sudo dnf install -y podman podman-docker podman-compose"
+		err "                          systemctl --user enable --now podman.socket"
+		err "    apt (Ubuntu/Debian): sudo apt-get install -y podman podman-compose"
+		err "    pacman (Arch):       sudo pacman -S podman podman-compose"
+		;;
+	Darwin)
+		err "    brew install podman podman-compose"
+		;;
+	*)
+		err "    See: https://podman.io/getting-started/installation"
+		;;
+	esac
+
+	print_auto_install_hint
+}
+
+# ---- Docker requirement checks ----
+
 check_docker_requirements() {
-	# Check jq dependency for version parsing
 	if ! command -v jq &>/dev/null; then
 		err "jq not found in PATH (required for version parsing)"
 		exit 1
 	fi
 
-	# Check Docker daemon is running
 	if ! docker info &>/dev/null; then
 		err "Docker daemon is not running"
 		err "Please start Docker Desktop or the Docker service"
 		exit 1
 	fi
 
-	# Fetch all info in one call
 	local docker_info
 	if ! docker_info="$(docker info --format '{{json .}}' 2>&1)"; then
 		err "failed to get docker info: ${docker_info}"
 		exit 1
 	fi
 
-	# 1) Parse and check Docker version
 	local docker_ver docker_maj docker_min docker_pat
 	docker_ver="$(jq -r '.ServerVersion // empty' <<<"${docker_info}")"
 	if [[ -z ${docker_ver} ]]; then
@@ -166,7 +241,6 @@ check_docker_requirements() {
 		exit 1
 	fi
 
-	# 2) Parse and check Docker Compose version
 	local compose_ver compose_maj compose_min compose_pat
 	compose_ver="$(jq -r '.ClientInfo.Plugins[] | select(.Name == "compose") | .Version // empty' <<<"${docker_info}" | sed 's/^v//')"
 	if [[ -z ${compose_ver} ]]; then
@@ -182,7 +256,6 @@ check_docker_requirements() {
 		exit 1
 	fi
 
-	# 3) Check memory
 	local mem_bytes mem_mb
 	mem_bytes="$(jq -r '.MemTotal // empty' <<<"${docker_info}")"
 	if [[ -z ${mem_bytes} || ! ${mem_bytes} =~ ^[0-9]+$ ]]; then
@@ -200,37 +273,98 @@ check_docker_requirements() {
 	fi
 }
 
-main() {
-	# Check if docker is already available
-	if find_docker &>/dev/null; then
-		check_docker_requirements
-		exit 0
-	fi
+# ---- Podman requirement checks ----
 
-	# Docker not found
-	if [[ ${AUTO_INSTALL-} == "true" ]]; then
-		install_docker
-
-		# Re-check after install
-		if find_docker &>/dev/null; then
-			# On macOS, the daemon might not be running yet after cask install
-			if docker info &>/dev/null; then
-				check_docker_requirements
-			else
-				err "Docker installed but daemon not running yet"
-				err "Please start Docker Desktop and re-run this script"
-				exit 1
-			fi
-			exit 0
-		else
-			err "docker check still failing after installation"
+check_podman_requirements() {
+	# Determine the actual podman binary (might be via docker shim or directly).
+	local podman_bin="podman"
+	if ! command -v podman &>/dev/null; then
+		# docker is a podman shim but podman binary itself isn't in PATH — still OK.
+		if ! docker --version &>/dev/null; then
+			err "Neither podman nor docker (podman shim) found in PATH"
 			exit 1
 		fi
+		podman_bin="docker"
 	fi
 
-	# No auto-install, fail with instructions
-	print_install_instructions
-	exit 1
+	local ver major minor
+	ver="$("${podman_bin}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+	if [[ -z ${ver} ]]; then
+		err "Could not determine Podman version"
+		exit 1
+	fi
+	IFS='.' read -r major minor _ <<<"${ver}"
+
+	if ! semver_ge "${major}" "${minor}" "0" \
+		"${MIN_PODMAN_MAJOR}" "${MIN_PODMAN_MINOR}" "0"; then
+		err "Podman ${ver} is below minimum (need >= ${MIN_PODMAN_MAJOR}.${MIN_PODMAN_MINOR})"
+		exit 1
+	fi
+
+	# Check that compose support is available.
+	if ! podman compose version &>/dev/null 2>&1 &&
+		! command -v podman-compose &>/dev/null; then
+		err "No Podman compose support found."
+		err "Install podman-compose:  sudo dnf install -y podman-compose"
+		err "                    or:  pip3 install podman-compose"
+		exit 1
+	fi
+
+	# Check memory using /proc/meminfo (Podman uses host memory on Linux).
+	local mem_kb mem_mb
+	if [[ -r /proc/meminfo ]]; then
+		mem_kb="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
+		mem_mb=$((mem_kb / 1024))
+		if ((mem_mb < MIN_MEM_MB * 1024)); then
+			err "System memory ${mem_mb}MB is below minimum (need >= $((MIN_MEM_MB * 1024))MB)"
+			exit 1
+		fi
+		if ((mem_mb < REC_MEM_MB * 1024)); then
+			warn "System memory ${mem_mb}MB is below recommended (>= $((REC_MEM_MB * 1024))MB)"
+		fi
+	fi
+}
+
+main() {
+	local runtime
+	runtime="$(detect_runtime)"
+
+	case "${runtime}" in
+	docker)
+		check_docker_requirements
+		exit 0
+		;;
+	podman)
+		check_podman_requirements
+		exit 0
+		;;
+	none)
+		# Neither docker nor podman found.
+		if [[ ${AUTO_INSTALL-} == "true" ]]; then
+			if command -v dnf &>/dev/null; then
+				# Fedora/RHEL: use Podman.
+				install_podman
+				check_podman_requirements
+			else
+				install_docker
+				if find_docker &>/dev/null && docker info &>/dev/null; then
+					check_docker_requirements
+				else
+					err "docker check still failing after installation"
+					exit 1
+				fi
+			fi
+			exit 0
+		fi
+		# No auto-install: decide which instructions to show.
+		if command -v dnf &>/dev/null; then
+			print_podman_install_instructions
+		else
+			print_docker_install_instructions
+		fi
+		exit 1
+		;;
+	esac
 }
 
 main "$@"

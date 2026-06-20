@@ -13,6 +13,9 @@ export GOPATH  ?= $(shell go env GOPATH)
 GOHOSTOS       := $(shell go env GOHOSTOS)
 GOHOSTARCH     := $(shell go env GOHOSTARCH)
 
+# Container runtime: prefer docker, fall back to podman (Fedora/RHEL default).
+DOCKER ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null || echo docker)
+
 # Guard against empty GOPATH, which would resolve paths to root (e.g. /bin)
 ifeq ($(GOPATH),)
     $(error GOPATH is not set. Please set it explicitly, e.g. export GOPATH=$$HOME/go)
@@ -190,7 +193,7 @@ else
 endif
 	@mkdir -p linux
 	@mv ./dgraph/dgraph ./linux/dgraph
-	@docker build -f contrib/Dockerfile -t dgraph/dgraph:local .
+	@$(DOCKER) build -f contrib/Dockerfile -t dgraph/dgraph:local .
 	@rm -r linux
 
 .PHONY: image-local
@@ -207,7 +210,7 @@ clean: ## Clean build artifacts
 docker-image: dgraph ## Build Docker image (dgraph/dgraph:$VERSION)
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+	$(DOCKER) build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 .PHONY: docker-image-standalone
 docker-image-standalone: dgraph docker-image
@@ -219,7 +222,7 @@ docker-image-standalone: dgraph docker-image
 coverage-docker-image: dgraph-coverage
 	@mkdir -p linux
 	@cp ./dgraph/dgraph ./linux/dgraph
-	docker build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
+	$(DOCKER) build -f contrib/Dockerfile -t dgraph/dgraph:$(DGRAPH_VERSION) .
 
 # build and run dependencies for linux (auto-detects apt / dnf / pacman)
 # The bundled jemalloc is compiled from source (see dgraph/Makefile), so a C/C++

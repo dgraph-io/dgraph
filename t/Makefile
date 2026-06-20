@@ -216,8 +216,10 @@ install-deps-docker-linux-apt:
 
 .PHONY: install-deps-docker-linux-dnf
 install-deps-docker-linux-dnf:
-	@sudo curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo && \
-	sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+	@# Fedora 38+ and RHEL 9+ do not support Docker CE from the official Docker repo.
+	@# Use Podman with its Docker compatibility layer (podman-docker + podman-compose) instead.
+	@sudo dnf install -y podman podman-docker podman-compose && \
+	systemctl --user enable --now podman.socket 2>/dev/null || true
 
 .PHONY: install-deps-docker-linux-pacman
 install-deps-docker-linux-pacman:

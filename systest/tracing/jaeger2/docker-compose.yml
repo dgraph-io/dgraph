@@ -24,7 +24,7 @@ services:
       service=alpha1;" --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --security
       "whitelist=0.0.0.0/0;"
   jaeger:
-    image: jaegertracing/jaeger:latest
+    image: docker.io/jaegertracing/jaeger:latest
     environment:
       - JAEGER_LISTEN_HOST=0.0.0.0
     ports:

@@ -64,6 +64,17 @@ cluster.
 func Execute() {
 	initCmds()
 
+	// podman-compose 1.5.0 expands an unset ${COVERAGE_OUTPUT} as a literal
+	// empty-string token, which shlex passes to us as os.Args[1]=="". Strip
+	// any empty-string arguments before cobra sees them; they are never valid.
+	filtered := os.Args[:1]
+	for _, a := range os.Args[1:] {
+		if a != "" {
+			filtered = append(filtered, a)
+		}
+	}
+	os.Args = filtered
+
 	// Convinces glog that Parse() has been called to avoid noisy logs.
 	// https://github.com/kubernetes/kubernetes/issues/17162#issuecomment-225596212
 	x.Check(flag.CommandLine.Parse([]string{}))

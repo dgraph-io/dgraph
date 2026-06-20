@@ -238,7 +238,7 @@ services:
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   minio:
-    image: minio/minio:latest
+    image: docker.io/minio/minio:latest
     env_file:
       - ./minio.env
     working_dir: /data/minio

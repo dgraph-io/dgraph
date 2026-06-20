@@ -110,7 +110,7 @@ services:
       server-cert=/dgraph-tls/node.crt; server-key=/dgraph-tls/node.key; internal-port=true;
       client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;"
   minio:
-    image: minio/minio:latest
+    image: docker.io/minio/minio:latest
     env_file:
       - ../../backup.env
     ports:
