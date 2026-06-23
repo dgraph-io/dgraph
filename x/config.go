@@ -151,6 +151,38 @@ type WorkerOptions struct {
 	// Plumbed via the "feature-flags" superflag as
 	// "mutations-pipeline-threshold".
 	MutationsPipelineThreshold int
+	// MutationsPipelineGoroutines is the global budget of *intra-predicate* worker
+	// goroutines distributed across the predicates in a single mutation batch,
+	// proportionally to each predicate's edge count. A hot/dominant predicate is
+	// granted most of the budget so its data-write and index passes parallelize;
+	// tiny predicates get one worker each. The Go zero value 0 (and any value < 2,
+	// except the -1 sentinel) disables intra-predicate parallelism entirely: every
+	// predicate runs on a single goroutine exactly as the legacy path did, which
+	// keeps unit tests (which never set this) byte-for-byte identical to before.
+	// N>0 is an absolute, fixed budget of N. The special value -1 selects AUTO
+	// mode, where the budget is derived at runtime from GOMAXPROCS and the batch
+	// size (see posting.autoBudget) using MutationsPipelineGoroutinesFraction and
+	// MutationsPipelineMinEdgesPerWorker. Plumbed via the "feature-flags" superflag
+	// as "mutations-pipeline-goroutines"; production default is 30.
+	MutationsPipelineGoroutines int
+	// MutationsPipelineGoroutinesFraction is the fraction of GOMAXPROCS that AUTO
+	// mode (MutationsPipelineGoroutines == -1) may use for one mutation batch. The
+	// apply phase is serial across transactions — a single apply effectively owns
+	// the box — so the default is 1.0 (use all cores). A budget-sweep benchmark on
+	// an 8-core box showed fraction=0.5 leaves ~25% throughput on the table vs
+	// fraction>=1.0, with the peak near 2-3x cores; raise above 1.0 to oversubscribe
+	// or lower it to leave headroom for Badger compaction/queries/GC under heavy
+	// concurrent read load. Inert unless MutationsPipelineGoroutines == -1. Plumbed
+	// via the "feature-flags" superflag as "mutations-pipeline-goroutines-fraction";
+	// default 1.0.
+	MutationsPipelineGoroutinesFraction float64
+	// MutationsPipelineMinEdgesPerWorker is the minimum number of edges per
+	// intra-predicate worker that AUTO mode targets when deriving the budget
+	// (workCap = totalEdges / MutationsPipelineMinEdgesPerWorker). It mirrors
+	// x.DivideAndRule's 256-edge rule. Inert unless MutationsPipelineGoroutines ==
+	// -1. Plumbed via the "feature-flags" superflag as
+	// "mutations-pipeline-min-edges-per-worker"; default 256.
+	MutationsPipelineMinEdgesPerWorker int
 }
 
 // WorkerConfig stores the global instance of the worker package's options.
