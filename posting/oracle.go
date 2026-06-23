@@ -128,6 +128,43 @@ func (txn *Txn) AddDelta(key string, input *pb.PostingList, doSortAndDedup bool,
 	return pl, nil
 }
 
+// AddDeltaConcurrent is the lock-free sibling of AddDelta for the merge-light
+// data-write pass (ProcessSingle), which writes one-to-one <pred,uid> keys with
+// the addToList=false, doSortAndDedup=false shape. Because each such key is
+// written by exactly one worker (disjoint uid sub-ranges within a predicate, and
+// distinct key prefixes across predicates), there is no read-modify-write on the
+// delta map for a given key, so the global txn.cache.Lock() that AddDelta takes
+// can be skipped:
+//
+//   - proto.Marshal runs outside any cache lock — this is the parallel win.
+//   - txn.cache.deltas.AddToDeltas stores into the sharded, per-key-locked delta
+//     map; distinct keys hit distinct shards, so concurrent stores are safe.
+//   - guarantee (c) of AddDelta is preserved: if a List for this key is already
+//     cached, the delta is pushed into it via setMutation (which self-locks the
+//     List) so any holder of that List observes the write. plists is read under
+//     cache.RLock to stay consistent with cache.Lock writers elsewhere.
+//
+// When no List is cached, skipping setMutation is correct: a later reader
+// rebuilds the List via getInternal and re-applies this delta from lc.deltas.
+// Callers needing addToList or sort/dedup must keep using the locked AddDelta.
+func (txn *Txn) AddDeltaConcurrent(key string, input *pb.PostingList) error {
+	newPl, err := proto.Marshal(input)
+	if err != nil {
+		glog.Errorf("Error marshalling posting list: %v", err)
+		return err
+	}
+
+	txn.cache.deltas.AddToDeltas(key, newPl)
+
+	txn.cache.RLock()
+	list, listOk := txn.cache.plists[key]
+	txn.cache.RUnlock()
+	if listOk {
+		list.setMutation(txn.StartTs, newPl)
+	}
+	return nil
+}
+
 func (txn *Txn) LockCache() {
 	txn.cache.Lock()
 }
