@@ -43,7 +43,9 @@ const (
 		`lambda-url=;`
 	CacheDefaults        = `size-mb=4096; percentage=40,40,20; remove-on-update=false`
 	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false; ` +
-		`log-slow-query-threshold=0; mutations-pipeline-threshold=1`
+		`log-slow-query-threshold=0; mutations-pipeline-threshold=1; ` +
+		`mutations-pipeline-goroutines=30; mutations-pipeline-goroutines-fraction=1.0; ` +
+		`mutations-pipeline-min-edges-per-worker=256`
 )
 
 // ServerState holds the state of the Dgraph server.
