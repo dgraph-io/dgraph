@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -106,6 +107,12 @@ type PredicatePipeline struct {
 	edges chan *pb.DirectedEdge
 	wg    *sync.WaitGroup
 	errCh chan error
+	// workers is this predicate's grant from the global intra-predicate budget
+	// (see allocateWorkers). 0 means the budget is disabled/unset: data-write
+	// stays serial and InsertTokenizerIndexes uses the legacy numGo=10 — exactly
+	// the pre-budget behavior. A value k>=1 splits the merge-light passes
+	// (ProcessSingle's data-write, index tokenization) into k goroutines.
+	workers int
 }
 
 func (pp *PredicatePipeline) close() {
@@ -237,7 +244,15 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
+	// Fold the historically-fixed 10-way index tokenization into the global
+	// budget. When the budget is disabled (pipeline.workers == 0) this stays at
+	// the legacy numGo=10, so behavior is byte-identical to before. Index
+	// tokenization is a low-fan-in pass (key <pred,token>), so parallelizing it
+	// is safe; the cache-locked merge below still serializes the final write.
 	numGo := 10
+	if pipeline.workers > 0 {
+		numGo = pipeline.workers
+	}
 	wg.Add(numGo)
 	chMap := make(map[int]chan uint64)
 
@@ -397,22 +412,145 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	dataKey := x.DataKey(pipeline.attr, 0)
 	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
 
-	for uid, pl := range postings {
+	// writeListDataUid emits the forward data-write delta for a single source uid.
+	// The forward key <pred,srcUid> is one-to-one (each source uid is written
+	// exactly once), so — exactly as ProcessSingle's writeDataUid — it is the safe
+	// beneficiary of intra-predicate parallelism: when this predicate is granted
+	// k>1 workers the source-uid space is partitioned into disjoint contiguous
+	// ranges and each range runs this on its own goroutine. scratchKey MUST be
+	// per-worker: the legacy loop reused a single dataKey buffer, which would be a
+	// data race across goroutines. store is the locked AddDelta on the serial path
+	// and the lock-free AddDeltaConcurrent wrapper on the parallel path; for a
+	// given distinct key both write identical bytes and return the same deduped
+	// list, so the result (data bytes and conflict-key set) is store-order-independent.
+	// Lang predicates ride the SAME path: all language postings for one entity fold
+	// into that entity's single <pred,entity> data key (one-to-one by source
+	// entity), so the disjointness invariant holds for them too.
+	writeListDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+		store func(key string, input *pb.PostingList) (*pb.PostingList, error)) error {
 		if len(pl.Postings) == 0 {
-			continue
+			return nil
 		}
 
-		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), pl, info.isUid, true); err != nil {
+		binary.BigEndian.PutUint64(scratchKey[len(scratchKey)-8:], uid)
+		key := baseKey + string(scratchKey[len(scratchKey)-8:])
+
+		newPl, err := store(key, pl)
+		if err != nil {
 			return err
-		} else {
-			if !info.noConflict {
-				mp.txn.addConflictKeyWithUid(dataKey, newPl, info.hasUpsert, info.noConflict)
-			}
 		}
+		if !info.noConflict {
+			mp.txn.addConflictKeyWithUid(scratchKey, newPl, info.hasUpsert, info.noConflict)
+		}
+		return nil
 	}
 
-	return nil
+	// Serial path (budget disabled or a one-worker grant): byte-for-byte the
+	// pre-budget loop, reusing the single dataKey scratch buffer and the locked
+	// AddDelta(..., info.isUid, true).
+	if pipeline.workers <= 1 {
+		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
+			return mp.txn.AddDelta(k, in, info.isUid, true)
+		}
+		for uid, pl := range postings {
+			if err := writeListDataUid(uid, pl, dataKey, serialStore); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Parallel path: split the disjoint <pred,srcUid> forward keys across k
+	// goroutines. Each worker owns a contiguous, non-overlapping slice of the
+	// source-uid snapshot, so no two workers ever write the same data key
+	// (invariant I1) — that disjointness is what makes the lock-free
+	// AddDeltaConcurrent safe. ProcessReverse / the index / count passes have
+	// already run serially above; all workers join here (wg.Wait) before
+	// ProcessList returns, so the legacy MVCC ordering — every delta in place
+	// before the predicate goroutine closes — is preserved.
+	//
+	// concStore reproduces AddDelta(..., info.isUid, true)'s committed bytes
+	// without taking the global cache lock. Two behaviors must be matched exactly:
+	//
+	//   - addToList=true: WITHIN one ProcessList call each source uid is written
+	//     once, but a transaction may apply several mutation proposals on the SAME
+	//     *Txn (worker/draft.go RegisterStartTs reuses it, and txn.Update between
+	//     proposals does not clear txn.cache.deltas), so an EARLIER proposal may
+	//     have left a delta for this key. It must be prepended, exactly as the
+	//     serial AddDelta does — otherwise a later proposal silently drops the
+	//     earlier list/lang postings (forward-list data loss and a forward/reverse
+	//     mismatch, since ProcessReverse stays serial and does merge across
+	//     proposals).
+	//   - info.isUid sort/dedup, applied to the merged list.
+	//
+	// The prior delta is read from the sharded, per-key-locked deltas map ONLY —
+	// never (*Deltas).Get/GetBytes, which also read the plain-Go indexMap that is
+	// only safe under cache.Lock (another predicate's InsertTokenizerIndexes may be
+	// writing it concurrently). A data key never appears in indexMap, so for this
+	// key the sharded read returns byte-for-byte what serial AddDelta observes. The
+	// disjoint-partition guarantee (I1) makes this read-merge-write single-writer
+	// per key, so it is safe without the global lock.
+	concStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
+		merged := new(pb.PostingList)
+		if prevBytes, ok := mp.txn.cache.deltas.deltas.Get(k); ok {
+			prev := &pb.PostingList{}
+			if err := proto.Unmarshal(prevBytes, prev); err != nil {
+				glog.Errorf("Error unmarshalling prior delta for key %x: %v", k, err)
+				return nil, err
+			}
+			merged.Postings = append(merged.Postings, prev.Postings...)
+		}
+		merged.Postings = append(merged.Postings, in.Postings...)
+		if info.isUid {
+			merged.Postings = SortAndDedupPostings(merged.Postings)
+		}
+		if err := mp.txn.AddDeltaConcurrent(k, merged); err != nil {
+			return nil, err
+		}
+		return merged, nil
+	}
+
+	uidList := make([]uint64, 0, len(postings))
+	for uid := range postings {
+		uidList = append(uidList, uid)
+	}
+	if len(uidList) == 0 {
+		return nil
+	}
+	k := pipeline.workers
+	if k > len(uidList) {
+		k = len(uidList)
+	}
+	width := (len(uidList) + k - 1) / k // ceil(len/k), DivideAndRule-style
+
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+	for w := 0; w < k; w++ {
+		start := w * width
+		if start >= len(uidList) {
+			break
+		}
+		end := start + width
+		if end > len(uidList) {
+			end = len(uidList)
+		}
+		wg.Add(1)
+		go func(sub []uint64) {
+			defer wg.Done()
+			// Per-worker scratch buffer: sharing dataKey across goroutines races.
+			localKey := x.DataKey(pipeline.attr, 0)
+			for _, uid := range sub {
+				if err := writeListDataUid(uid, postings[uid], localKey,
+					concStore); err != nil {
+					once.Do(func() { firstErr = err })
+					return
+				}
+			}
+		}(uidList[start:end])
+	}
+	wg.Wait()
+	return firstErr
 }
 
 func findSingleValueInPostingList(pb *pb.PostingList) *pb.Posting {
@@ -884,24 +1022,34 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	// is removed, mirroring the legacy isSingleUidUpdate explicit DEL.
 	stripSyntheticDel := info.index
 
-	for uid, pl := range postings {
+	// writeDataUid emits the data-write delta for a single source uid. The key
+	// <pred,uid> is one-to-one with no fan-in, so it is the primary (and safest)
+	// beneficiary of intra-predicate parallelism: when this predicate is granted
+	// k>1 workers the uid space is partitioned into disjoint contiguous ranges
+	// and each range runs this on its own goroutine. scratchKey MUST be
+	// per-worker — the legacy loop reused a single dataKey buffer, which would be
+	// a data race across goroutines. store is AddDelta on the serial path and the
+	// lock-free AddDeltaConcurrent on the parallel path; for a given distinct key
+	// both write identical bytes, so the result is store-order-independent.
+	writeDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+		store func(string, *pb.PostingList) error) error {
 		// An empty PostingList means nothing was accumulated for this uid (e.g.
 		// a DEL whose value did not match the committed value, or a same-value
 		// SET-after-handleOldDeleteForSingle no-op). Writing an empty delta
-		// would call AddDelta → setMutation on the cached List with empty bytes,
-		// which resets the mutable layer's currentEntries to empty for this
-		// txn's startTs. A subsequent read through the same cached List then
-		// surfaces an empty data list. CommitToDisk skips empty deltas at the
-		// badger level, but the in-memory side effect on the cached List has
-		// already corrupted any concurrent reader holding that List. Skip the
-		// no-op uid entirely — matches the legacy per-edge path which simply
-		// does nothing when a DEL value does not match committed.
+		// would call setMutation on the cached List with empty bytes, which
+		// resets the mutable layer's currentEntries to empty for this txn's
+		// startTs. A subsequent read through the same cached List then surfaces
+		// an empty data list. CommitToDisk skips empty deltas at the badger
+		// level, but the in-memory side effect on the cached List has already
+		// corrupted any concurrent reader holding that List. Skip the no-op uid
+		// entirely — matches the legacy per-edge path which simply does nothing
+		// when a DEL value does not match committed.
 		if len(pl.Postings) == 0 {
-			continue
+			return nil
 		}
 
-		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
-		key := baseKey + string(dataKey[len(dataKey)-8:])
+		binary.BigEndian.PutUint64(scratchKey[len(scratchKey)-8:], uid)
+		key := baseKey + string(scratchKey[len(scratchKey)-8:])
 
 		if !info.noConflict {
 			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
@@ -928,12 +1076,73 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			}
 		}
 
-		if _, err := mp.txn.AddDelta(key, writePl, false, false); err != nil {
-			return err
-		}
+		return store(key, writePl)
 	}
 
-	return nil
+	// Serial path (budget disabled or a one-worker grant): byte-for-byte the
+	// pre-budget loop, reusing the single dataKey scratch buffer and the locked
+	// AddDelta.
+	if pipeline.workers <= 1 {
+		for uid, pl := range postings {
+			if err := writeDataUid(uid, pl, dataKey,
+				func(k string, wpl *pb.PostingList) error {
+					_, err := mp.txn.AddDelta(k, wpl, false, false)
+					return err
+				}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Parallel path: split the disjoint <pred,uid> keys across k goroutines. Each
+	// worker owns a contiguous, non-overlapping slice of the uid snapshot, so no
+	// two workers ever write the same data key (invariant I1) — that disjointness
+	// is what makes the lock-free AddDeltaConcurrent safe. All workers join here
+	// (via wg.Wait) before ProcessSingle returns, so the MVCC ordering of the
+	// legacy path — every delta in place before the predicate goroutine closes —
+	// is preserved.
+	uidList := make([]uint64, 0, len(postings))
+	for uid := range postings {
+		uidList = append(uidList, uid)
+	}
+	if len(uidList) == 0 {
+		return nil
+	}
+	k := pipeline.workers
+	if k > len(uidList) {
+		k = len(uidList)
+	}
+	width := (len(uidList) + k - 1) / k // ceil(len/k), DivideAndRule-style
+
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+	for w := 0; w < k; w++ {
+		start := w * width
+		if start >= len(uidList) {
+			break
+		}
+		end := start + width
+		if end > len(uidList) {
+			end = len(uidList)
+		}
+		wg.Add(1)
+		go func(sub []uint64) {
+			defer wg.Done()
+			// Per-worker scratch buffer: sharing dataKey across goroutines races.
+			localKey := x.DataKey(pipeline.attr, 0)
+			for _, uid := range sub {
+				if err := writeDataUid(uid, postings[uid], localKey,
+					mp.txn.AddDeltaConcurrent); err != nil {
+					once.Do(func() { firstErr = err })
+					return
+				}
+			}
+		}(uidList[start:end])
+	}
+	wg.Wait()
+	return firstErr
 }
 
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
@@ -1142,6 +1351,167 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	return nil
 }
 
+// allocateWorkers distributes a fixed global goroutine budget across the
+// predicates present in one mutation batch, proportionally to each predicate's
+// edge count, so a hot/dominant predicate is granted most of the budget while
+// tiny predicates get one worker each. The grant feeds back into each
+// PredicatePipeline.workers and controls the within-predicate split of the
+// merge-light passes (data-write, index tokenization).
+//
+// edgeCounts maps predicate attr -> number of (non-star-delete) edges for that
+// predicate in the batch; budget is x.WorkerConfig.MutationsPipelineGoroutines.
+// Returns nil when the budget is disabled (budget < 2) or there are no
+// predicates. A nil result — and any attr missing from the result — is treated
+// by callers as workers=0, i.e. the legacy one-goroutine-per-predicate path.
+//
+// Apportionment is Hamilton / largest-remainder with a floor of 1:
+//   - If P := len(edgeCounts) >= budget, the batch already saturates the budget
+//     with one worker each, so every predicate gets exactly 1.
+//   - Otherwise (P < budget), with E := sum(e_p):
+//     quota_p   = budget * e_p / E            (real-valued ideal share)
+//     workers_p = max(1, floor(quota_p))      (floor, but never below 1)
+//     deficit   = budget - sum(workers_p)
+//     If deficit > 0, hand the leftover units out one at a time to the predicates
+//     with the largest fractional remainder (quota_p - floor(quota_p)). If
+//     deficit < 0 (the floor-of-1 pushed the sum over budget because many tiny
+//     predicates rounded up from 0), reclaim units one at a time from predicates
+//     with workers_p > 1, smallest remainder first. Ties broken by attr string
+//     (ascending) for determinism.
+//
+// Invariants: every workers_p >= 1; no predicate exceeds budget; and when
+// P < budget, sum(workers_p) == budget.
+func allocateWorkers(edgeCounts map[string]int, budget int) map[string]int {
+	P := len(edgeCounts)
+	if budget < 2 || P == 0 {
+		return nil
+	}
+
+	// Deterministic predicate order so the remainder tie-break is stable.
+	attrs := make([]string, 0, P)
+	total := 0
+	for attr, c := range edgeCounts {
+		attrs = append(attrs, attr)
+		total += c
+	}
+	sort.Strings(attrs)
+
+	out := make(map[string]int, P)
+
+	// Batch saturates (or oversaturates) the budget: one worker each. This
+	// documents the apportionment edge case where there are at least as many
+	// predicates as the budget — there is nothing left to split with.
+	if P >= budget || total == 0 {
+		for _, attr := range attrs {
+			out[attr] = 1
+		}
+		return out
+	}
+
+	type rem struct {
+		attr      string
+		remainder float64
+	}
+	rems := make([]rem, 0, P)
+	assigned := 0
+	for _, attr := range attrs {
+		quota := float64(budget) * float64(edgeCounts[attr]) / float64(total)
+		w := int(math.Floor(quota))
+		if w < 1 {
+			w = 1
+		}
+		out[attr] = w
+		assigned += w
+		rems = append(rems, rem{attr: attr, remainder: quota - math.Floor(quota)})
+	}
+
+	deficit := budget - assigned
+	switch {
+	case deficit > 0:
+		// Distribute leftover units to the largest fractional remainders first.
+		// deficit < P here, so there are always enough predicates to receive them.
+		sort.SliceStable(rems, func(i, j int) bool {
+			if rems[i].remainder != rems[j].remainder {
+				return rems[i].remainder > rems[j].remainder
+			}
+			return rems[i].attr < rems[j].attr
+		})
+		for i := 0; i < len(rems) && deficit > 0; i++ {
+			out[rems[i].attr]++
+			deficit--
+		}
+	case deficit < 0:
+		// The floor-of-1 oversubscribed the budget. Reclaim units from predicates
+		// with more than one worker, smallest remainder first, so the hot
+		// predicate keeps the most. Since P < budget, the excess above the
+		// per-predicate floor always exceeds the deficit, so this terminates with
+		// sum == budget.
+		sort.SliceStable(rems, func(i, j int) bool {
+			if rems[i].remainder != rems[j].remainder {
+				return rems[i].remainder < rems[j].remainder
+			}
+			return rems[i].attr < rems[j].attr
+		})
+		for deficit < 0 {
+			progressed := false
+			for i := 0; i < len(rems) && deficit < 0; i++ {
+				if out[rems[i].attr] > 1 {
+					out[rems[i].attr]--
+					deficit++
+					progressed = true
+				}
+			}
+			if !progressed {
+				// Defensive: cannot happen when P < budget. Avoid an infinite loop.
+				break
+			}
+		}
+	}
+
+	return out
+}
+
+// mutationsPipelineGoroutinesAuto is the sentinel value of
+// x.WorkerConfig.MutationsPipelineGoroutines that selects AUTO mode: instead of a
+// fixed absolute budget, the per-batch budget is derived at runtime from the
+// machine and the batch size by autoBudget. 0 still disables the budget and any
+// N>0 is still an absolute budget.
+const mutationsPipelineGoroutinesAuto = -1
+
+// autoBudget derives the per-batch intra-predicate goroutine budget at runtime
+// (AUTO mode, mutations-pipeline-goroutines=-1). It is a pure, deterministic
+// function of its inputs — independent of the real GOMAXPROCS — so the formula
+// can be unit-tested directly.
+//
+//	machineCap = max(1, round(gomaxprocs * fraction))
+//	workCap    = max(1, totalEdges / minEdgesPerWorker)
+//	budget     = min(machineCap, workCap)
+//
+// fraction is < 1 by default (0.5) on purpose: the apply phase is serial across
+// transactions, so a single apply effectively owns the whole box, and we want to
+// leave headroom for Badger compaction, concurrent queries, and the GC rather
+// than pin every core to one mutation. workCap mirrors x.DivideAndRule's 256-edge
+// rule — there is no point spinning up a worker per <256 edges. A computed budget
+// of 1 (or anything < 2) feeds into allocateWorkers, which returns nil for
+// budget < 2, so the caller transparently falls back to the legacy
+// one-goroutine-per-predicate path.
+func autoBudget(gomaxprocs, totalEdges int, fraction float64, minEdgesPerWorker int) int {
+	machineCap := int(math.Round(float64(gomaxprocs) * fraction))
+	if machineCap < 1 {
+		machineCap = 1
+	}
+	if minEdgesPerWorker < 1 {
+		minEdgesPerWorker = 1 // defensive: avoid divide-by-zero on misconfig
+	}
+	workCap := totalEdges / minEdgesPerWorker
+	if workCap < 1 {
+		workCap = 1
+	}
+	if machineCap < workCap {
+		return machineCap
+	}
+	return workCap
+}
+
 // Process is the entry point for the mutation pipeline. It fans out one goroutine per
 // predicate so mutations for different predicates are parallelized, while all edges
 // for the same predicate are serialized through a single channel to a single goroutine.
@@ -1172,6 +1542,35 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	// build a star-delete won't generate the index Del entries for the prior
 	// value, leaving stale uids in the index permanently.
 	ctx = schema.GetWriteContext(ctx)
+
+	// Pre-pass: count edges per predicate so the global goroutine budget can be
+	// apportioned proportionally before any predicate goroutine starts. Star-delete
+	// edges are excluded — they are handled inline below and never reach a
+	// predicate goroutine. allocateWorkers returns nil when the budget is disabled
+	// (budget < 2), in which case every pred.workers stays 0 and the pipeline
+	// behaves exactly as the legacy one-goroutine-per-predicate path.
+	edgeCounts := make(map[string]int)
+	totalEdges := 0
+	for _, edge := range edges {
+		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
+			continue
+		}
+		edgeCounts[edge.Attr]++
+		totalEdges++
+	}
+	// Resolve the budget. 0 (or any value < 2) disables the pipeline budget; N>0 is
+	// an absolute budget; the -1 sentinel selects AUTO, where the budget is derived
+	// once per call from GOMAXPROCS and the batch size before apportionment. AUTO
+	// only chooses the integer fed into allocateWorkers — the apportionment and the
+	// whole downstream path are identical to a fixed budget of that value.
+	budget := x.WorkerConfig.MutationsPipelineGoroutines
+	if budget == mutationsPipelineGoroutinesAuto {
+		budget = autoBudget(runtime.GOMAXPROCS(0), totalEdges,
+			x.WorkerConfig.MutationsPipelineGoroutinesFraction,
+			x.WorkerConfig.MutationsPipelineMinEdgesPerWorker)
+	}
+	workerAlloc := allocateWorkers(edgeCounts, budget)
+
 	predicates := map[string]*PredicatePipeline{}
 	var wg sync.WaitGroup
 	numWg := 0
@@ -1194,9 +1593,10 @@ sendLoop:
 		pred, ok := predicates[edge.Attr]
 		if !ok {
 			pred = &PredicatePipeline{
-				attr:  edge.Attr,
-				edges: make(chan *pb.DirectedEdge, 1000),
-				wg:    &wg,
+				attr:    edge.Attr,
+				edges:   make(chan *pb.DirectedEdge, 1000),
+				wg:      &wg,
+				workers: workerAlloc[edge.Attr], // 0 when the budget is disabled
 			}
 			predicates[edge.Attr] = pred
 			wg.Add(1)

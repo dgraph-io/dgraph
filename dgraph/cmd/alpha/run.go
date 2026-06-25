@@ -284,6 +284,29 @@ they form a Raft group and provide synchronous replication.
 				"goroutine spin-up cost, so tiny mutations are slightly slower on it; "+
 				"bulk multi-predicate mutations are faster (crossover ~100 edges in "+
 				"benchmarks here).").
+		Flag("mutations-pipeline-goroutines",
+			"Global budget of intra-predicate worker goroutines distributed "+
+				"across the predicates in a single mutation batch, proportionally to "+
+				"each predicate's edge count. A hot/dominant predicate is granted most "+
+				"of the budget so its data-write and index passes parallelize; tiny "+
+				"predicates get one worker each. 0 (or any value < 2) disables "+
+				"intra-predicate parallelism — every predicate runs on a single "+
+				"goroutine, exactly the legacy behavior. N>0 is an absolute budget. "+
+				"-1 = auto (derive from GOMAXPROCS*fraction, capped by "+
+				"edges/min-edges-per-worker). Default 30.").
+		Flag("mutations-pipeline-goroutines-fraction",
+			"AUTO mode only (mutations-pipeline-goroutines=-1): fraction of "+
+				"GOMAXPROCS one mutation batch may use. The apply phase is serial "+
+				"across transactions, so a single apply effectively owns the box; "+
+				"default 1.0 uses all cores. Raise above 1.0 to oversubscribe "+
+				"(benchmarks show the throughput peak near 2-3x cores) or lower it "+
+				"to leave headroom for Badger compaction/queries/GC under heavy "+
+				"concurrent read load. Default 1.0.").
+		Flag("mutations-pipeline-min-edges-per-worker",
+			"AUTO mode only (mutations-pipeline-goroutines=-1): minimum edges per "+
+				"intra-predicate worker the derived budget targets "+
+				"(workCap = totalEdges / this). Mirrors the 256-edge DivideAndRule "+
+				"rule. Default 256.").
 		String())
 }
 
@@ -807,6 +830,9 @@ func run() {
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
 	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
 	x.WorkerConfig.MutationsPipelineThreshold = int(featureFlagsConf.GetInt64("mutations-pipeline-threshold"))
+	x.WorkerConfig.MutationsPipelineGoroutines = int(featureFlagsConf.GetInt64("mutations-pipeline-goroutines"))
+	x.WorkerConfig.MutationsPipelineGoroutinesFraction = featureFlagsConf.GetFloat64("mutations-pipeline-goroutines-fraction")
+	x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = int(featureFlagsConf.GetInt64("mutations-pipeline-min-edges-per-worker"))
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
