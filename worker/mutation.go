@@ -20,7 +20,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -908,6 +910,16 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 	tctx, err := zc.CommitOrAbort(ctx, tc)
 
 	if err != nil {
+		// Zero signals a server-decided abort as a codes.Aborted status carrying a categorized
+		// reason (e.g. "conflict: ...", "predicate-move: ..."). Record the abort metric and
+		// forward the reason rather than treating it as a generic transport error or flattening
+		// it to the reasonless dgo.ErrAborted.
+		if status.Code(err) == codes.Aborted {
+			if !clientDiscard {
+				ostats.Record(ctx, x.TxnAborts.M(1))
+			}
+			return 0, err
+		}
 		span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
 			attribute.String("error", err.Error())))
 		return 0, err

@@ -700,6 +700,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		if err == dgo.ErrAborted {
 			err = status.Error(codes.Aborted, err.Error())
 			resp.Txn.Aborted = true
+		} else if status.Code(err) == codes.Aborted {
+			// Server-decided abort carrying a categorized reason; err is already a codes.Aborted
+			// status (e.g. "conflict: ...", "predicate-move: ...") — surface it unchanged.
+			resp.Txn.Aborted = true
 		}
 
 		return err
@@ -2138,6 +2142,12 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		}
 
 		return tctx, status.Error(codes.Aborted, err.Error())
+	}
+	if status.Code(err) == codes.Aborted {
+		// Server-decided abort carrying a categorized reason; err is already a codes.Aborted
+		// status (e.g. "conflict: ...", "predicate-move: ...") — surface it unchanged.
+		tctx.Aborted = true
+		return tctx, err
 	}
 	tctx.StartTs = tc.StartTs
 	tctx.CommitTs = commitTs

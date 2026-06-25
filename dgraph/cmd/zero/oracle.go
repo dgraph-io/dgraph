@@ -18,6 +18,8 @@ import (
 	"go.opentelemetry.io/otel"
 	attribute "go.opentelemetry.io/otel/attribute"
 	trace "go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -338,21 +340,67 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	return nil
 }
 
+// Abort-reason codes. When Zero decides to abort a transaction it surfaces the category to the
+// client as the prefix of a codes.Aborted gRPC status message, formatted as "<code>: <detail>".
+// api.TxnContext (external dgo module) has no field for the reason, so it rides on the error;
+// the status code stays codes.Aborted, so existing abort handling is unaffected. The dgraph4j
+// client parses these prefixes into TxnConflictException.AbortReason — keep the two in sync.
+const (
+	abortReasonConflict      = "conflict"
+	abortReasonStaleStartTs  = "stale-startts"
+	abortReasonPredicateMove = "predicate-move"
+)
+
+// Human-readable details paired with the conflict abort codes.
+const (
+	abortDetailConflict     = "Transaction has been aborted. Please retry"
+	abortDetailStaleStartTs = "Transaction has been aborted due to a leader change. Please retry"
+)
+
+// abortReason builds the wire string the client parses: "<code>: <detail>".
+func abortReason(code, detail string) string {
+	return code + ": " + detail
+}
+
+// conflictAbortReason returns the wire reason for a hasConflict abort, distinguishing a
+// write-write conflict from a stale start timestamp (a txn that predates the current
+// leader's lease, i.e. a leader change rather than a real conflict).
+func conflictAbortReason(stale bool) string {
+	if stale {
+		return abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)
+	}
+	return abortReason(abortReasonConflict, abortDetailConflict)
+}
+
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(attribute.Int64("startTs", int64(src.StartTs)))
 	if src.Aborted {
+		// Client-initiated discard (txn.Discard); not a server-decided abort, so no reason.
 		return s.proposeTxn(ctx, src)
+	}
+
+	// abortWithReason marks the txn aborted, proposes it (advancing the watermark exactly as the
+	// previous code did), and then surfaces the categorized reason to the caller as a gRPC
+	// Aborted status. proposeTxn still runs identically — only the post-propose return changes.
+	abortWithReason := func(reason string) error {
+		span.SetAttributes(attribute.Bool("abort", true))
+		src.Aborted = true
+		if err := s.proposeTxn(ctx, src); err != nil {
+			return err
+		}
+		return status.Error(codes.Aborted, reason)
 	}
 
 	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
 	s.orc.RLock()
 	conflict := s.orc.hasConflict(src)
+	// A txn whose startTs predates this leader's lease is aborted by hasConflict, but it's a
+	// leader change rather than a write-write conflict — report it distinctly.
+	stale := src.StartTs < s.orc.startTxnTs
 	s.orc.RUnlock()
 	if conflict {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
+		return abortWithReason(conflictAbortReason(stale))
 	}
 
 	checkPreds := func() error {
@@ -385,9 +433,9 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return nil
 	}
 	if err := checkPreds(); err != nil {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
+		// checkPreds builds rich messages, e.g. "Commits on predicate %s are blocked due to
+		// predicate move" — forward them instead of swallowing the reason.
+		return abortWithReason(abortReason(abortReasonPredicateMove, err.Error()))
 	}
 
 	num := pb.Num{Val: 1, Type: pb.Num_TXN_TS}
@@ -402,16 +450,26 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span.SetAttributes(attribute.Int64("nodeId", int64(s.Node.Id)))
 	span.AddEvent(fmt.Sprintf("TXN Context: %+v", src))
 
+	aborted := false
 	if err := s.orc.commit(src); err != nil {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
+		aborted = true
 	}
 	if err := ctx.Err(); err != nil {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
+		aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
-	return s.proposeTxn(ctx, src)
+	if err := s.proposeTxn(ctx, src); err != nil {
+		return err
+	}
+	if aborted {
+		// A late write-write conflict detected at commit time (keyCommit), or a cancelled ctx.
+		return status.Error(codes.Aborted, conflictAbortReason(false))
+	}
+	return nil
 }
 
 // CommitOrAbort either commits a transaction or aborts it.

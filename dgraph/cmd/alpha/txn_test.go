@@ -21,6 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -246,6 +251,117 @@ func TestConflict(t *testing.T) {
 		log.Fatalf("Error while running query: %v\n", err)
 	}
 	require.True(t, bytes.Equal(resp.Json, []byte("{\"me\":[{\"name\":\"Manish\"}]}")))
+}
+
+// TestConflictAbortReason proves the server emits the categorized abort reason on the
+// gRPC status of a write-write conflict: the code stays codes.Aborted (so existing
+// clients keep retrying) and the message is prefixed with "conflict: ". This is exactly
+// the unflattened status a gRPC client such as dgraph4j receives and parses into
+// TxnConflictException.AbortReason.
+//
+// It must inspect the raw CommitOrAbort response rather than dgo's high-level
+// Txn.Commit, because dgo intentionally replaces any codes.Aborted error with the
+// static dgo.ErrAborted (txn.go), discarding the reason for the Go client.
+func TestConflictAbortReason(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, dg.Alter(context.Background(), op))
+
+	// First transaction creates a node with a name.
+	txn := dg.NewTxn()
+	mu := &api.Mutation{}
+	mu.SetJson = []byte(`{"name": "Manish"}`)
+	assigned, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.Len(t, assigned.Uids, 1)
+	var uid string
+	for _, u := range assigned.Uids {
+		uid = u
+	}
+
+	// Second transaction writes the same predicate on the same uid -> conflicts.
+	txn2 := dg.NewTxn()
+	mu = &api.Mutation{}
+	mu.SetJson = []byte(fmt.Sprintf(`{"uid": %q, "name": "Manish"}`, uid))
+	resp2, err := txn2.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp2.GetTxn().GetKeys(), "mutation response must carry conflict keys")
+
+	// First commit wins; its commitTs is now greater than txn2's startTs.
+	require.NoError(t, txn.Commit(context.Background()))
+
+	// Commit the loser via the raw gRPC stub so we observe the unflattened status the
+	// server sends (dgo's Txn.Commit would replace it with the reasonless ErrAborted).
+	conn, err := grpc.NewClient(alphaSockAdd, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	raw := api.NewDgraphClient(conn)
+
+	// TestMain enables ACL, so the raw stub (unlike the logged-in dg client) must
+	// carry the access JWT; CommitOrAbort goes through the same auth interceptor.
+	ctx := metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("accessJwt", hc.AccessJwt))
+	_, err = raw.CommitOrAbort(ctx, resp2.GetTxn())
+	require.Error(t, err)
+
+	st := status.Convert(err)
+	require.Equal(t, codes.Aborted, st.Code(),
+		"abort must keep codes.Aborted so existing clients still retry")
+	require.True(t, strings.HasPrefix(st.Message(), "conflict: "),
+		"abort reason should be categorized as conflict; got %q", st.Message())
+}
+
+// TestPredicateMoveAbortReason proves the "predicate-move" category is surfaced on the
+// gRPC status. Zero's checkPreds aborts a commit whose predicate keys don't match the
+// tablet's serving group (the same code path that rejects commits during a predicate
+// move). We reach it deterministically by committing a real txn context whose Preds have
+// been rewritten to claim a group that doesn't serve the predicate, with conflict Keys
+// cleared so hasConflict passes and checkPreds runs.
+//
+// As with TestConflictAbortReason, it uses the raw CommitOrAbort stub to observe the
+// unflattened status the server sends.
+func TestPredicateMoveAbortReason(t *testing.T) {
+	op := &api.Operation{}
+	op.DropAll = true
+	require.NoError(t, dg.Alter(context.Background(), op))
+
+	// A normal mutation gives us a valid, fresh TxnContext (real StartTs and Preds).
+	txn := dg.NewTxn()
+	mu := &api.Mutation{SetJson: []byte(`{"name": "Alice"}`)}
+	resp, err := txn.Mutate(context.Background(), mu)
+	require.NoError(t, err)
+
+	tc := resp.GetTxn()
+	require.NotEmpty(t, tc.GetPreds(), "mutation response must carry predicate keys")
+
+	// Rewrite each predicate key's group id to a group that does not serve it, and drop
+	// the conflict keys so hasConflict is false and the commit reaches checkPreds.
+	doctored := make([]string, 0, len(tc.GetPreds()))
+	for _, p := range tc.GetPreds() {
+		// Preds look like "<gid>-<predicate>"; claim a nonexistent group 100.
+		if idx := strings.IndexByte(p, '-'); idx >= 0 {
+			doctored = append(doctored, "100"+p[idx:])
+		}
+	}
+	require.NotEmpty(t, doctored, "expected parseable predicate keys")
+	tc.Preds = doctored
+	tc.Keys = nil
+
+	conn, err := grpc.NewClient(alphaSockAdd, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	raw := api.NewDgraphClient(conn)
+
+	ctx := metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("accessJwt", hc.AccessJwt))
+	_, err = raw.CommitOrAbort(ctx, tc)
+	require.Error(t, err)
+
+	st := status.Convert(err)
+	require.Equal(t, codes.Aborted, st.Code(),
+		"abort must keep codes.Aborted so existing clients still retry")
+	require.True(t, strings.HasPrefix(st.Message(), "predicate-move: "),
+		"abort reason should be categorized as predicate-move; got %q", st.Message())
 }
 
 func TestConflictTimeout(t *testing.T) {
