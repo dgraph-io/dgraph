@@ -8,7 +8,6 @@ package hooks
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -51,12 +50,8 @@ func (m *mockZeroHooks) ApplyMutations(ctx context.Context, mut *pb.Mutations) (
 }
 
 func resetGlobalState() {
-	mu.Lock()
-	defer mu.Unlock()
-	enabled.Store(false)
 	globalConfig.Store(nil)
-	// Store a true nil by using a new atomic.Value (zero value has nil)
-	defaultZeroHooks = atomic.Value{}
+	defaultZeroHooks.Store(nil)
 }
 
 func TestEnableDisable(t *testing.T) {

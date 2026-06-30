@@ -7,7 +7,6 @@ package hooks
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -66,41 +65,36 @@ type Config struct {
 	ZeroHooks ZeroHooks
 }
 
+// defaultHooksHolder wraps a ZeroHooks so it can live in an atomic.Pointer.
+// An interface can't be stored in atomic.Pointer directly, and atomic.Value would
+// panic if two implementations with different concrete types were ever registered.
+type defaultHooksHolder struct {
+	hooks ZeroHooks
+}
+
 var (
-	// globalConfig holds the current embedded configuration
+	// globalConfig holds the active embedded configuration. A nil value means
+	// embedded mode is off, so embedded state is derived from this single pointer.
 	globalConfig atomic.Pointer[Config]
 
-	defaultZeroHooks atomic.Value
-
-	// enabled tracks whether embedded mode is active
-	enabled atomic.Bool
-
-	// mu protects initialization
-	mu sync.Mutex
+	// defaultZeroHooks holds the fallback hooks registered by the worker package.
+	defaultZeroHooks atomic.Pointer[defaultHooksHolder]
 )
 
 // Enable activates embedded mode with the given configuration.
 // This must be called before any Dgraph operations.
 func Enable(cfg *Config) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	globalConfig.Store(cfg)
-	enabled.Store(true)
 }
 
 // Disable deactivates embedded mode.
 func Disable() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	enabled.Store(false)
 	globalConfig.Store(nil)
 }
 
 // IsEnabled returns true if embedded mode is currently active.
 func IsEnabled() bool {
-	return enabled.Load()
+	return globalConfig.Load() != nil
 }
 
 // GetConfig returns the current embedded configuration, or nil if not enabled.
@@ -111,18 +105,17 @@ func GetConfig() *Config {
 // SetDefaultZeroHooks registers the fallback ZeroHooks used when embedded mode is
 // disabled or Config.ZeroHooks is nil. The worker package calls this from its init.
 func SetDefaultZeroHooks(h ZeroHooks) {
-	defaultZeroHooks.Store(h)
+	defaultZeroHooks.Store(&defaultHooksHolder{hooks: h})
 }
 
 // GetHooks returns the active Zero hooks.
 // If embedded mode is not enabled, it returns the default hooks implementation.
 func GetHooks() ZeroHooks {
-	cfg := globalConfig.Load()
-	if cfg != nil && cfg.ZeroHooks != nil {
+	if cfg := globalConfig.Load(); cfg != nil && cfg.ZeroHooks != nil {
 		return cfg.ZeroHooks
 	}
 	if h := defaultZeroHooks.Load(); h != nil {
-		return h.(ZeroHooks)
+		return h.hooks
 	}
 	panic("no ZeroHooks configured - ensure worker package is imported or hooks.Enable() is called")
 }
