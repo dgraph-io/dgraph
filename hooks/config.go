@@ -14,6 +14,13 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
+// ZeroHooks abstracts the Zero-coordinated operations the worker depends on:
+// UID/namespace/timestamp assignment, transaction commit, and mutation application.
+// The default implementation talks to a Zero cluster over the network; embedded
+// deployments supply their own via Config.ZeroHooks.
+//
+// The worker entry points set pb.Num.Type before calling AssignUIDs and AssignNsIDs,
+// so implementations receive a fully-typed request and need not set it themselves.
 type ZeroHooks interface {
 	AssignUIDs(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error)
 	AssignTimestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error)
@@ -22,6 +29,8 @@ type ZeroHooks interface {
 	ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error)
 }
 
+// ZeroHooksFns adapts a set of plain functions into a ZeroHooks implementation,
+// letting callers override individual operations without declaring a new type.
 type ZeroHooksFns struct {
 	AssignUIDsFn       func(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error)
 	AssignTimestampsFn func(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error)
@@ -52,14 +61,9 @@ func (h ZeroHooksFns) ApplyMutations(ctx context.Context, m *pb.Mutations) (*api
 
 // Config holds the configuration for embedded mode operation.
 type Config struct {
-	// Hooks for bypassing Zero operations
+	// ZeroHooks overrides the Zero operations the worker performs. When nil, the
+	// default network-backed hooks registered by the worker package are used.
 	ZeroHooks ZeroHooks
-
-	// DataDir is the directory where data files are stored
-	DataDir string
-
-	// CacheSizeMB is the size of the in-memory cache in megabytes
-	CacheSizeMB int64
 }
 
 var (
@@ -104,6 +108,8 @@ func GetConfig() *Config {
 	return globalConfig.Load()
 }
 
+// SetDefaultZeroHooks registers the fallback ZeroHooks used when embedded mode is
+// disabled or Config.ZeroHooks is nil. The worker package calls this from its init.
 func SetDefaultZeroHooks(h ZeroHooks) {
 	defaultZeroHooks.Store(h)
 }

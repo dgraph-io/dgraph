@@ -598,6 +598,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 // AssignNsIdsOverNetwork sends a request to assign Namespace IDs to the current zero leader.
 func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	h := hooks.GetHooks()
+	num.Type = pb.Num_NS_ID
 	return h.AssignNsIDs(ctx, num)
 }
 
@@ -614,10 +615,14 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 	return h.AssignTimestamps(ctx, num)
 }
 
+// embeddedDefaultGroup is the group id reported for transactions in embedded mode.
+// Embedded deployments run a single group and have no Zero-driven membership, so
+// groups().groupId() is not meaningful; group 1 is the lone data group.
+const embeddedDefaultGroup uint32 = 1
+
 func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		// In embedded mode, use group 1 as the default
-		gid := uint32(1)
+		gid := embeddedDefaultGroup
 		if !hooks.IsEnabled() {
 			gid = groups().groupId()
 		}
@@ -627,11 +632,10 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	// start ts is sufficient to wait for, to achieve lin reads.
 }
 
-// proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
-// the leader of the group gid for proposing.
-func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
+// proposeOrSend applies the mutation through the active hooks. The default implementation
+// proposes locally if this node serves m.GroupId, otherwise forwards to that group's leader.
+func proposeOrSend(ctx context.Context, m *pb.Mutations, chr chan res) {
 	res := res{}
-
 	h := hooks.GetHooks()
 	res.ctx, res.err = h.ApplyMutations(ctx, m)
 	chr <- res
@@ -727,7 +731,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
-		go proposeOrSend(ctx, gid, mu, resCh)
+		go proposeOrSend(ctx, mu, resCh)
 	}
 
 	// Wait for all the goroutines to reply back.

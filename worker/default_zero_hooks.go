@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,9 +24,7 @@ func init() {
 }
 
 func (defaultZeroHooks) AssignUIDs(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	if num.Type == 0 {
-		num.Type = pb.Num_UID
-	}
+	// num.Type is set by the caller (AssignUidsOverNetwork).
 
 	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
@@ -53,8 +51,7 @@ func (defaultZeroHooks) AssignTimestamps(ctx context.Context, num *pb.Num) (*pb.
 }
 
 func (defaultZeroHooks) AssignNsIDs(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	num.Type = pb.Num_NS_ID
-
+	// num.Type is set by the caller (AssignNsIdsOverNetwork).
 	pl := groups().Leader(0)
 	if pl == nil {
 		return nil, conn.ErrNoConnection

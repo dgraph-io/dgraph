@@ -66,16 +66,15 @@ func TestEnableDisable(t *testing.T) {
 	require.False(t, IsEnabled(), "should start disabled")
 	require.Nil(t, GetConfig(), "config should be nil when disabled")
 
+	mock := &mockZeroHooks{}
 	cfg := &Config{
-		DataDir:     "/tmp/test",
-		CacheSizeMB: 128,
+		ZeroHooks: mock,
 	}
 	Enable(cfg)
 
 	require.True(t, IsEnabled(), "should be enabled after Enable()")
 	require.NotNil(t, GetConfig(), "config should not be nil after Enable()")
-	require.Equal(t, "/tmp/test", GetConfig().DataDir)
-	require.Equal(t, int64(128), GetConfig().CacheSizeMB)
+	require.Equal(t, mock, GetConfig().ZeroHooks, "config should round-trip the hooks")
 
 	Disable()
 
@@ -190,14 +189,10 @@ func TestConcurrentEnableDisable(t *testing.T) {
 	// Concurrent enables
 	for i := 0; i < iterations; i++ {
 		wg.Add(1)
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			cfg := &Config{
-				DataDir:     "/tmp/test",
-				CacheSizeMB: int64(i),
-			}
-			Enable(cfg)
-		}(i)
+			Enable(&Config{ZeroHooks: &mockZeroHooks{}})
+		}()
 	}
 
 	// Concurrent disables
