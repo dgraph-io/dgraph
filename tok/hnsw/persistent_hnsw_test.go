@@ -920,3 +920,25 @@ func TestSearchReturnsCorrectOrderForAllMetrics(t *testing.T) {
 		})
 	}
 }
+
+// TestAddPathNodeNonPositiveMaxResults is a regression test for a crash reachable
+// from an unvalidated similar_to number-of-neighbors argument. A non-positive
+// maxResults made effectiveMaxLen negative and panicked addPathNode: a negative
+// slice bound (slr.neighbors[:-1]) for a negative value, and an empty-slice index
+// (slr.neighbors[0]) once the neighbors were truncated to zero. Both must now be
+// handled without panicking.
+func TestAddPathNodeNonPositiveMaxResults(t *testing.T) {
+	simType := GetSimType[float64](Euclidean, 64)
+	for _, maxResults := range []int{-1, 0} {
+		slr := newLayerResult[float64](0)
+		slr.setFirstPathNode(persistentHeapElement[float64]{value: 0.1, index: 1})
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("addPathNode panicked with maxResults=%d: %v", maxResults, r)
+				}
+			}()
+			slr.addPathNode(persistentHeapElement[float64]{value: 0.2, index: 2}, simType, maxResults)
+		}()
+	}
+}
