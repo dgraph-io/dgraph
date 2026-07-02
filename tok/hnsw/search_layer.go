@@ -57,11 +57,16 @@ func (slr *searchLayerResult[T]) addPathNode(
 		slr.filtered++
 	}
 	effectiveMaxLen := maxResults + slr.filtered
+	// A non-positive maxResults would make effectiveMaxLen negative and panic the
+	// slice expression below; clamp it so the truncation degrades to an empty set.
+	if effectiveMaxLen < 0 {
+		effectiveMaxLen = 0
+	}
 	if len(slr.neighbors) > effectiveMaxLen {
 		slr.neighbors = slr.neighbors[:effectiveMaxLen]
 	}
 
-	if slr.neighbors[0].index == n.index {
+	if len(slr.neighbors) > 0 && slr.neighbors[0].index == n.index {
 		slr.path = append(slr.path, slr.neighbors[0].index)
 	}
 }
