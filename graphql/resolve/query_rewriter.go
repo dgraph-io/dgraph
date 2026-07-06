@@ -2346,7 +2346,13 @@ func buildUnionFilter(typ schema.Type, filter map[string]interface{}) (*dql.Filt
 func maybeQuoteArg(fn string, arg interface{}) string {
 	switch arg := arg.(type) {
 	case string: // dateTime also parsed as string
-		if fn == "regexp" {
+		// A regexp argument is a /.../ literal, so it can't be %q-quoted like
+		// other operators — it's written into the DQL query verbatim. Only pass
+		// it through raw when it is a single, self-contained regexp literal;
+		// otherwise fall through and quote it, which contains an injection
+		// payload as an ordinary string arg. See isValidRegexArg
+		// (GHSA-33p8-wc97-5qcj, CWE-943).
+		if fn == "regexp" && isValidRegexArg(arg) {
 			return arg
 		}
 		return fmt.Sprintf("%q", arg)
@@ -2355,6 +2361,53 @@ func maybeQuoteArg(fn string, arg interface{}) string {
 	default:
 		return fmt.Sprintf("%v", arg)
 	}
+}
+
+// isValidRegexArg reports whether s is a single, self-contained DQL regexp
+// literal — a leading '/', a pattern terminated by the first following
+// unescaped '/', and then only regexp flag characters ([a-zA-Z]). This mirrors
+// dql.lexRegex, which decides how the value is tokenized once it reaches
+// Dgraph: anything after the closing '/' that is not a flag would lex into
+// additional DQL tokens.
+//
+// The GraphQL rewriter writes regexp arguments into the DQL query string
+// verbatim. Without this check a crafted value such as `/x/) OR has(pred`
+// closes the regexp() call and appends attacker-controlled DQL, letting an
+// unauthenticated caller bypass the intended filter and read every node of the
+// type (GHSA-33p8-wc97-5qcj, CWE-943). Callers quote the value when this
+// returns false, containing it as an ordinary string argument.
+func isValidRegexArg(s string) bool {
+	if len(s) < 2 || s[0] != '/' {
+		return false
+	}
+	// Find the closing '/', honoring backslash escapes, exactly as dql.lexRegex.
+	closed := false
+	i := 1
+	for i < len(s) {
+		switch s[i] {
+		case '\\':
+			i += 2 // skip the escaped character
+			continue
+		case '/':
+			i++
+			closed = true
+		}
+		if closed {
+			break
+		}
+		i++
+	}
+	if !closed {
+		return false // unclosed regexp
+	}
+	// Everything after the closing '/' must be a regexp flag; anything else
+	// would tokenize into additional DQL.
+	for ; i < len(s); i++ {
+		if c := s[i]; !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
 }
 
 // first returns the first element it finds in a map - we bump into lots of one-element

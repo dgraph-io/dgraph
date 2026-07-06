@@ -72,6 +72,41 @@ func TestQueryRewriting(t *testing.T) {
 	}
 }
 
+// TestRegexpFilterInjectionIsContained is a regression guard for
+// GHSA-33p8-wc97-5qcj (CWE-943). A `regexp` filter argument is written into the
+// DQL query verbatim (it is a /.../ literal, not a %q-quotable string). A value
+// crafted to close the regexp() call and append boolean DQL must NOT reach the
+// query as raw text, or an unauthenticated caller can bypass the intended
+// filter and read every node of the type. Country.name is
+// @search(by: ["trigram"]), so it exposes a regexp filter.
+func TestRegexpFilterInjectionIsContained(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+	testRewriter := NewQueryRewriter()
+
+	// The payload closes the regexp literal and the regexp() call, then ORs in
+	// has(Country.name) so the filter matches every Country.
+	const gqlQuery = `query {
+  queryCountry(filter: { name: { regexp: "/x/) OR has(Country.name" }}) {
+    name
+  }
+}`
+
+	op, err := gqlSchema.Operation(&schema.Request{Query: gqlQuery})
+	require.NoError(t, err)
+	q := test.GetQuery(t, op)
+
+	dgQuery, _, err := testRewriter.Rewrite(context.Background(), q)
+	require.NoError(t, err)
+	got := dgraph.AsString(dgQuery)
+
+	// Vulnerable rewriting emits the payload raw, turning it into executable DQL.
+	require.NotContains(t, got, "regexp(Country.name, /x/) OR has(Country.name)",
+		"regexp argument emitted as raw DQL — injection breakout is possible:\n%s", got)
+	// Fixed rewriting contains the payload as a single quoted argument.
+	require.Contains(t, got, `regexp(Country.name, "/x/) OR has(Country.name")`,
+		"regexp argument should be quoted and contained:\n%s", got)
+}
+
 type HTTPRewritingCase struct {
 	Name             string
 	GQLQuery         string
