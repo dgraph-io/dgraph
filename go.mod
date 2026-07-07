@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/containerd/errdefs v1.0.0
-	github.com/dgraph-io/badger/v4 v4.9.3
+	github.com/dgraph-io/badger/v4 v4.9.4-0.20260707183933-83d7d79c35d6
 	github.com/dgraph-io/dgo/v250 v250.0.0
 	github.com/dgraph-io/gqlgen v0.13.2
 	github.com/dgraph-io/gqlparser/v2 v2.2.2
