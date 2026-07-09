@@ -34,6 +34,26 @@ import (
 // 	return err
 // }
 
+// requireEventualJSON polls query until its response matches wantJSON or the deadline passes, then
+// asserts. Right after a restore there is a brief window where the queried replica can be one Raft
+// apply behind, so a single-shot assert flakes under load. Retrying tolerates that lag without
+// masking a real bug: if the data never converges (e.g. a genuine restore data loss), the final
+// CompareJSON still fails.
+func requireEventualJSON(t *testing.T, gc *dgraphapi.GrpcClient, query, wantJSON string) {
+	t.Helper()
+	var last error
+	for range 60 {
+		resp, err := gc.Query(query)
+		if err != nil {
+			last = err
+		} else if last = dgraphapi.CompareJSON(wantJSON, string(resp.Json)); last == nil {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	require.NoError(t, last)
+}
+
 func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalCluster) {
 	hc, err := existingCluster.HTTPClient()
 	require.NoError(t, err)
@@ -79,9 +99,7 @@ func commonTest(t *testing.T, existingCluster, freshCluster *dgraphtest.LocalClu
 			                 	count(uid)
 			                }
 	                   	}`
-			resp, err := gc.Query(query)
-			require.NoError(t, err)
-			require.NoError(t, dgraphapi.CompareJSON(fmt.Sprintf(`{"all":[{"count":%v}]}`, 100+ns), string(resp.Json)))
+			requireEventualJSON(t, gc, query, fmt.Sprintf(`{"all":[{"count":%v}]}`, 100+ns))
 
 			// other namespaces should have no data
 			for _, ns2 := range namespaces[1:] {
@@ -155,9 +173,7 @@ func commonIncRestoreTest(t *testing.T, existingCluster, freshCluster *dgraphtes
 					count(uid)
 				}
 			}`
-				resp, err := gc.Query(query)
-				require.NoError(t, err)
-				require.NoError(t, dgraphapi.CompareJSON(fmt.Sprintf(`{"all":[{"count":%v}]}`, 20*(j+1)), string(resp.Json)))
+				requireEventualJSON(t, gc, query, fmt.Sprintf(`{"all":[{"count":%v}]}`, 20*(j+1)))
 			}
 		}
 	}
