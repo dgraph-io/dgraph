@@ -59,6 +59,32 @@ func TestTopKHeapTieBreaking(t *testing.T) {
 	require.Equal(t, uint64(15), sorted[2].uid)
 }
 
+// TestTopKHeapTieBreakEviction pins the boundary case the randomized brute-force
+// tests deliberately skip (they treat tied-boundary uids as interchangeable). Docs
+// arrive UID-ascending, as the WAND pivot advances. With k=2, two docs tied at score
+// 1.0 (uid 3, uid 4) then a strictly higher doc (uid 5), the correct top-2 by
+// (score desc, UID asc) is {5, 3}: among the tied pair uid3 (lower) outranks uid4,
+// matching the no-limit scoreAllDocs path. A score-only heap evicts the lowest-UID
+// root and wrongly returns {5, 4}.
+func TestTopKHeapTieBreakEviction(t *testing.T) {
+	h := &topKHeap{k: 2}
+	heap.Init(h)
+	h.tryPush(3, 1.0)
+	h.tryPush(4, 1.0)
+	h.tryPush(5, 2.0)
+
+	sorted := h.sorted()
+	uids := make([]uint64, len(sorted))
+	for i, d := range sorted {
+		uids[i] = d.uid
+	}
+	require.Equal(t, []uint64{5, 3}, uids,
+		"WAND top-k must keep the lowest UID among score ties, matching scoreAllDocs")
+
+	// The eviction threshold must remain the true minimum score after the tie-break.
+	require.InEpsilon(t, 1.0, h.threshold(), 1e-9)
+}
+
 func TestBm25TopK(t *testing.T) {
 	// No first limit: score every matching document (0 means "no early termination").
 	require.Equal(t, 0, bm25TopK(0, 0))

@@ -175,8 +175,19 @@ type topKHeap struct {
 	k    int
 }
 
-func (h *topKHeap) Len() int           { return len(h.docs) }
-func (h *topKHeap) Less(i, j int) bool { return h.docs[i].score < h.docs[j].score }
+func (h *topKHeap) Len() int { return len(h.docs) }
+func (h *topKHeap) Less(i, j int) bool {
+	if h.docs[i].score != h.docs[j].score {
+		return h.docs[i].score < h.docs[j].score
+	}
+	// Among equal scores, treat the higher UID as "smaller" so it sits at the root and
+	// is the eviction victim first. This keeps the lowest UID on score ties, matching
+	// the (score desc, UID asc) order that sorted() and scoreAllDocs produce, so a
+	// first:k WAND query returns the same set as the exhaustive path. Primary ordering
+	// stays score-ascending, so threshold() still reports the true minimum score and
+	// WAND pivot pruning is unaffected.
+	return h.docs[i].uid > h.docs[j].uid
+}
 func (h *topKHeap) Swap(i, j int)      { h.docs[i], h.docs[j] = h.docs[j], h.docs[i] }
 func (h *topKHeap) Push(x interface{}) { h.docs = append(h.docs, x.(scoredDoc)) }
 func (h *topKHeap) Pop() interface{} {
