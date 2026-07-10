@@ -408,11 +408,20 @@ func (ph *persistentHNSW[T]) getVecsFromUids(uids []uint64, c index.CacheType) [
 		keys[i] = DataKey(ph.pred, uid)
 	}
 	vals, errs := c.MultiGet(keys)
-	for i := range uids {
+	for i, uid := range uids {
 		var vec []T
-		if errs[i] == nil && len(vals[i]) > 0 {
+		switch {
+		case errs[i] == nil && len(vals[i]) > 0:
 			index.BytesAsFloatArray(vals[i], &vec, ph.floatBits)
-		} else {
+		case errs[i] != nil:
+			// A batch read error is broadcast to every key by the MultiGet wrapper, so
+			// one unreadable neighbor would otherwise blank the entire frontier and
+			// silently drop recall. Retry this uid with an isolated single read to match
+			// getVecFromUid's per-neighbor fault tolerance (empty vector on its own error).
+			if err := ph.getVecFromUid(uid, c, &vec); err != nil {
+				index.BytesAsFloatArray(emptyVec, &vec, ph.floatBits)
+			}
+		default:
 			index.BytesAsFloatArray(emptyVec, &vec, ph.floatBits)
 		}
 		vecs[i] = vec

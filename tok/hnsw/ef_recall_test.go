@@ -8,6 +8,7 @@ package hnsw
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"math"
 	"testing"
 
@@ -217,4 +218,50 @@ func TestHNSWDistanceThreshold_Cosine(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, []uint64{1}, res)
+}
+
+// brokenBatchCache serves single Get normally but reports a per-key error from
+// MultiGet — simulating the MultiGet wrappers broadcasting one unreadable key's
+// batch failure to every key in the frontier.
+type brokenBatchCache struct{ data map[string][]byte }
+
+func (b *brokenBatchCache) Get(key []byte) ([]byte, error) { return b.data[string(key)], nil }
+
+func (b *brokenBatchCache) MultiGet(keys [][]byte) ([][]byte, []error) {
+	vals := make([][]byte, len(keys))
+	errs := make([]error, len(keys))
+	for i := range keys {
+		errs[i] = errors.New("batch read failed")
+	}
+	return vals, errs
+}
+
+func (b *brokenBatchCache) Ts() uint64 { return 0 }
+
+func (b *brokenBatchCache) Find([]byte, func([]byte) bool) (uint64, error) { return 0, nil }
+
+// TestGetVecsFromUidsFallsBackOnBatchError verifies that when a batched MultiGet
+// reports errors (as the wrappers do when one neighbor in the frontier is
+// unreadable), getVecsFromUids recovers each uid via an isolated single read rather
+// than blanking the whole frontier — matching getVecFromUid's per-neighbor fault
+// tolerance and preventing silent recall loss.
+func TestGetVecsFromUidsFallsBackOnBatchError(t *testing.T) {
+	ph := &persistentHNSW[float64]{pred: x.NamespaceAttr(x.RootNamespace, "vec"), floatBits: 64}
+	uids := []uint64{1, 2, 3}
+	want := map[uint64][]float64{
+		1: {1, 0, 0},
+		2: {0, 1, 0},
+		3: {0, 0, 1},
+	}
+	cache := &brokenBatchCache{data: map[string][]byte{}}
+	for uid, v := range want {
+		cache.data[string(DataKey(ph.pred, uid))] = float64ArrayAsBytes(v)
+	}
+
+	vecs := ph.getVecsFromUids(uids, cache)
+	require.Len(t, vecs, len(uids))
+	for i, uid := range uids {
+		require.Equalf(t, want[uid], vecs[i],
+			"uid %d must be recovered via single-read fallback despite the MultiGet error", uid)
+	}
 }
