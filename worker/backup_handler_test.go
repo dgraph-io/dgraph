@@ -13,6 +13,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCleanRelPath(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"dot", ".", ""},
+		{"dot dot", "..", ""},
+		{"only dot dot segments", "../../..", ""},
+		{"leading dot segment", "./a/b", filepath.FromSlash("a/b")},
+		{"internal dot dot resolved", "a/../b", "b"},
+		{"internal dot dot contained", "a/../../b", "b"},
+		{"leading dot dot", "../../etc/passwd", filepath.FromSlash("etc/passwd")},
+		{"absolute path anchored", "/etc/hosts", filepath.FromSlash("etc/hosts")},
+		{"absolute root", "/", ""},
+		{"trailing separator", "a/b/", filepath.FromSlash("a/b")},
+		{"duplicate separators", "a//b///c", filepath.FromSlash("a/b/c")},
+		{"legitimate backup path unchanged",
+			"dgraph.20260101.120000.000/r42-g1.backup",
+			filepath.FromSlash("dgraph.20260101.120000.000/r42-g1.backup")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, cleanRelPath(tc.in))
+		})
+	}
+}
+
 // escapesRoot reports whether target is outside base.
 func escapesRoot(t *testing.T, base, target string) bool {
 	t.Helper()
