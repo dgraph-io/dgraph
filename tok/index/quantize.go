@@ -101,9 +101,14 @@ func QuantizeFloat32(v []float32) []byte {
 		// Constant vector: all codes 0, dequantize back to lo.
 		return out
 	}
-	inv := 1.0 / step
+	// Encode in float64: doing (raw-lo)*inv in float32 can overflow to ±Inf (huge
+	// sanitized spans) or produce 0*Inf=NaN (subnormal step), after which
+	// int32(math.Round(±Inf/NaN)) is architecture-defined in Go and diverges across
+	// amd64/arm64 — unacceptable for a replicated store. float64 keeps it finite and
+	// deterministic; the result is bounded to ~[0,255] by construction.
+	loF64, invF64 := float64(lo), 1.0/float64(step)
 	for i, raw := range v {
-		c := int32(math.Round(float64((sanitize(raw) - lo) * inv)))
+		c := int32(math.Round((float64(sanitize(raw)) - loF64) * invF64))
 		if c < 0 {
 			c = 0
 		} else if c > 255 {
@@ -129,6 +134,14 @@ func quantParams(blob []byte) (lo, step float32, codes []byte, err error) {
 	}
 	lo = math.Float32frombits(binary.LittleEndian.Uint32(blob[6:10]))
 	step = math.Float32frombits(binary.LittleEndian.Uint32(blob[10:14]))
+	// The length check above guards the dimension, but not the decoded values: a
+	// bit-corrupt blob can carry a NaN/Inf/negative lo or step that would dequantize
+	// to non-finite vectors and poison the SIMD distance kernels. Reject it so the
+	// caller falls back to the raw vector.
+	if math.IsNaN(float64(lo)) || math.IsInf(float64(lo), 0) ||
+		math.IsNaN(float64(step)) || math.IsInf(float64(step), 0) || step < 0 {
+		return 0, 0, nil, ErrInvalidQuantBlob
+	}
 	codes = blob[quantHeaderSize:]
 	return lo, step, codes, nil
 }
