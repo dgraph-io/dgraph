@@ -85,6 +85,38 @@ func TestTopKHeapTieBreakEviction(t *testing.T) {
 	require.InEpsilon(t, 1.0, h.threshold(), 1e-9)
 }
 
+// TestWandTieBreakEndToEndMatchesFullScan exercises the full retrieval path (not just
+// the heap) on a score tie that triggers eviction. Single term: uid10 and uid20 tie at
+// a lower score (same tf/docLen), uid30 scores higher (larger tf). Processed
+// UID-ascending, the two ties fill a k=2 heap, then uid30 evicts one — and it must
+// evict the higher-UID tie (uid20), so first:2 returns {30, 10}, exactly the
+// exhaustive scoreAllDocs top-2. This is the boundary TestWandMatchesBruteForce skips.
+func TestWandTieBreakEndToEndMatchesFullScan(t *testing.T) {
+	uidsOf := func(ds []scoredDoc) []uint64 {
+		out := make([]uint64, len(ds))
+		for i, d := range ds {
+			out[i] = d.uid
+		}
+		return out
+	}
+	ps := []posting.BM25Posting{
+		{Uid: 10, TF: 2, DocLen: 5},
+		{Uid: 20, TF: 2, DocLen: 5}, // ties with uid10
+		{Uid: 30, TF: 8, DocLen: 5}, // strictly higher score
+	}
+	k, b, avgDL, idf := 1.2, 0.75, 5.0, 1.5
+	build := func() []*termCursor { return []*termCursor{newTermCursor(ps, idf, k, b, avgDL)} }
+
+	full := scoreAllDocs(build(), k, b, avgDL, nil)
+	require.Equal(t, []uint64{30, 10, 20}, uidsOf(full), "full scan: score desc, uid asc")
+
+	for _, useBMW := range []bool{false, true} {
+		got := wandTopK(build(), k, b, avgDL, 2, nil, useBMW)
+		require.Equalf(t, []uint64{30, 10}, uidsOf(got),
+			"bmw=%v: first:k WAND must keep the same docs as full-scan top-k on ties", useBMW)
+	}
+}
+
 func TestBm25TopK(t *testing.T) {
 	// No first limit: score every matching document (0 means "no early termination").
 	require.Equal(t, 0, bm25TopK(0, 0))
