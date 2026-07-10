@@ -377,14 +377,22 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		var nnUids []uint64
 		// Pre-filtered ANN: when `similar_to(..., filter: var)` is used, restrict the
 		// search to the allow-set (carried in q.UidList) by applying a membership
-		// filter DURING the HNSW traversal. The search layer grows its candidate
-		// budget to still return k in-scope neighbors, instead of post-filtering a
-		// fixed k and under-returning. An empty scope rejects everything (nothing is in
-		// scope) — it must NOT fall back to a global search. Absent a filter option,
-		// accept all (unchanged behavior, zero overhead).
+		// filter DURING the HNSW traversal, using a wider (max(k, efSearch)) bottom-layer
+		// candidate budget so traversal can move past out-of-scope nodes. Note the budget
+		// is fixed, not adaptive to selectivity: a very selective scope may still return
+		// fewer than k in-scope neighbors (raise ef if that matters). An empty scope
+		// rejects everything (nothing is in scope) — it must NOT fall back to a global
+		// search. Absent a filter option, accept all (unchanged behavior, zero overhead).
 		filter := index.AcceptAll[float32]
 		if srcFn.vsHasFilter {
-			filter = uidMembershipFilter(q.UidList.GetUids())
+			allowed := q.UidList.GetUids()
+			if len(allowed) == 0 {
+				// Empty scope matches nothing; short-circuit instead of running a full
+				// HNSW traversal that would reject every visited node.
+				args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+				return nil
+			}
+			filter = uidMembershipFilter(allowed)
 		}
 		opts := index.VectorIndexOptions[float32]{Filter: filter}
 		if srcFn.vsEfOverride > 0 {

@@ -6,17 +6,17 @@
 package worker
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 )
 
 // uidMembershipFilter builds a SearchFilter that accepts only uids present in the
 // given allow-set. It powers pre-filtered ANN: the filter is applied during the HNSW
-// traversal (not after it), so a scoped similar_to search explores enough of the
-// graph to return k in-scope neighbors instead of post-filtering a fixed k and
-// returning fewer. The query and candidate vectors are irrelevant to membership, so
-// only the uid is examined.
+// traversal (not after it), so a scoped similar_to search explores past out-of-scope
+// nodes rather than post-filtering a fixed k (though a very selective scope may still
+// return fewer than k, since the traversal budget is fixed). The query and candidate
+// vectors are irrelevant to membership, so only the uid is examined.
 //
 // Membership uses a sorted copy of the uids plus binary search rather than a hash
 // set: the allow-set can be large (whole-tenant scopes), and a compact 8-bytes/uid
@@ -31,13 +31,12 @@ func uidMembershipFilter(uids []uint64) index.SearchFilter[float32] {
 	// lookup below requires ascending order for correctness.
 	sorted := make([]uint64, len(uids))
 	copy(sorted, uids)
-	less := func(i, j int) bool { return sorted[i] < sorted[j] }
-	if !sort.SliceIsSorted(sorted, less) {
-		sort.Slice(sorted, less)
+	if !slices.IsSorted(sorted) {
+		slices.Sort(sorted)
 	}
 
 	return func(_, _ []float32, uid uint64) bool {
-		i := sort.Search(len(sorted), func(i int) bool { return sorted[i] >= uid })
-		return i < len(sorted) && sorted[i] == uid
+		_, found := slices.BinarySearch(sorted, uid)
+		return found
 	}
 }
