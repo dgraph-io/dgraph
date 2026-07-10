@@ -169,7 +169,7 @@ func TestQuantizedFallbackOnBadBlob(t *testing.T) {
 	}
 	data := make(map[string][]byte)
 	for uid, vec := range vectors {
-		data[string(DataKey(ph.pred, uid))] = float32ArrayAsBytes(vec)   // raw (fallback)
+		data[string(DataKey(ph.pred, uid))] = float32ArrayAsBytes(vec)      // raw (fallback)
 		data[string(DataKey(ph.vecQKey, uid))] = index.QuantizeFloat32(vec) // good quant
 	}
 	// Corrupt uid 100's blob (valid header claiming dim 9 but no codes -> length
