@@ -383,19 +383,6 @@ func getValue(tv *pb.TaskValue) (types.Val, error) {
 	return val, nil
 }
 
-func valToTaskValue(v types.Val) *pb.TaskValue {
-	data := types.ValueForType(types.BinaryID)
-	res := &pb.TaskValue{ValType: v.Tid.Enum(), Val: x.Nilbyte}
-	if v.Value == nil {
-		return res
-	}
-	if err := types.Marshal(v, &data); err != nil {
-		return res
-	}
-	res.Val = data.Value.([]byte)
-	return res
-}
-
 var (
 	// ErrEmptyVal is returned when a value is empty.
 	ErrEmptyVal = errors.New("Query: harmless error, e.g. task.Val is nil")
