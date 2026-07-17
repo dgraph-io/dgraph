@@ -116,6 +116,12 @@ func TestNormalizeElectionTick(t *testing.T) {
 			wantWarning:  "",
 		},
 		{
+			name:         "election tick 1 coerces to default with warning",
+			electionTick: 1,
+			wantTick:     20,
+			wantWarning:  "--raft election-tick=1 is invalid (must be > heartbeat tick 1); defaulting to 20.",
+		},
+		{
 			name:         "large value accepted",
 			electionTick: 100,
 			wantTick:     100,

@@ -56,8 +56,9 @@ func normalizeElectionTick(electionTick int) (tick int, warning string) {
 		return defaultElectionTick, ""
 	}
 	if electionTick <= heartbeatTick {
-		glog.Fatalf("invalid --raft election-tick=%d: must be greater than internal heartbeat tick (%d).",
-			electionTick, heartbeatTick)
+		return defaultElectionTick, fmt.Sprintf(
+			"--raft election-tick=%d is invalid (must be > heartbeat tick %d); defaulting to %d.",
+			electionTick, heartbeatTick, defaultElectionTick)
 	}
 	if electionTick < recommendedElectionTick {
 		return electionTick, fmt.Sprintf(
@@ -116,7 +117,7 @@ func NewNode(rc *pb.RaftContext, store *raftwal.DiskStorage, tlsConfig *tls.Conf
 	var warning string
 	electionTick, warning = normalizeElectionTick(electionTick)
 	if warning != "" {
-		glog.Warningf(warning)
+		glog.Warning(warning)
 	}
 
 	snap, err := store.Snapshot()
