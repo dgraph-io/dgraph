@@ -316,6 +316,20 @@ func BM25StatsKey(attr string, bucket int) []byte {
 	return IndexKey(attr, bm25StatsPrefix+string(buf[:]))
 }
 
+// BM25StatsPrefix returns the key prefix covering every BM25 corpus-statistics
+// bucket for attr. Stats live under a reserved token prefix that is distinct from
+// the IdentBM25 term-posting prefix, so dropping/rebuilding the BM25 index must
+// delete this prefix too — otherwise the stale stats survive a drop and
+// double-count when the index is rebuilt on top of them. The split argument
+// selects the ByteSplit-prefixed variant used by multi-part lists.
+func BM25StatsPrefix(attr string, split bool) []byte {
+	prefix := IndexKey(attr, bm25StatsPrefix)
+	if split {
+		prefix[0] = ByteSplit
+	}
+	return prefix
+}
+
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
 	Attr        string

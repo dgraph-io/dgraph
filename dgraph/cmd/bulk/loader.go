@@ -33,6 +33,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/enc"
 	"github.com/dgraph-io/dgraph/v25/filestore"
 	gqlSchema "github.com/dgraph-io/dgraph/v25/graphql/schema"
+	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -433,6 +434,12 @@ func (ld *loader) mapStage() {
 	close(ld.readerChunkCh)
 	mapperWg.Wait()
 
+	// Flush BM25 corpus statistics accumulated across all mappers as one posting per
+	// bucket, before the mappers are released. Stats must be summed (not unioned like
+	// postings), so this single merge-and-write avoids the per-mapper double counting a
+	// union would produce.
+	ld.flushBM25Stats()
+
 	// Allow memory to GC before the reduce phase.
 	for i := range ld.mappers {
 		ld.mappers[i] = nil
@@ -442,6 +449,75 @@ func (ld *loader) mapStage() {
 		x.Check(db.Close())
 	}
 	ld.xids = nil
+}
+
+// mergeBM25Stats combines every mapper's per-predicate corpus-statistics partials into
+// per-predicate bucket totals. Summing across mappers is what makes the final per-bucket
+// counts correct; emitting each mapper's partial as its own posting would be unioned (or
+// collapsed last-write-wins) at reduce time and undercount.
+func mergeBM25Stats(mappers []*mapper) map[string]*bm25StatEntry {
+	merged := make(map[string]*bm25StatEntry)
+	for _, m := range mappers {
+		if m == nil {
+			continue
+		}
+		for attr, e := range m.bm25Stats {
+			me := merged[attr]
+			if me == nil {
+				me = &bm25StatEntry{}
+				merged[attr] = me
+			}
+			for i := 0; i < posting.NumBM25StatsBuckets; i++ {
+				me.count[i] += e.count[i]
+				me.terms[i] += e.terms[i]
+			}
+		}
+	}
+	return merged
+}
+
+// flushBM25Stats writes the merged BM25 corpus statistics as one value posting per
+// non-empty bucket into the same map shard as the predicate's term postings (keyed by
+// shardFor(attr)), so they co-locate through shard merge and land in the predicate's
+// output DB. Exactly one posting is written per bucket, so the reduce produces a single
+// value posting per bucket — the same format the live and rebuild paths store.
+func (ld *loader) flushBM25Stats() {
+	merged := mergeBM25Stats(ld.mappers)
+	if len(merged) == 0 {
+		return
+	}
+
+	// A fresh mapper supplies clean shard buffers; the running mappers have already
+	// flushed and released theirs.
+	writer := newMapper(ld.state)
+	for attr, e := range merged {
+		shard := ld.shards.shardFor(attr)
+		for b := 0; b < posting.NumBM25StatsBuckets; b++ {
+			if e.count[b] == 0 && e.terms[b] == 0 {
+				continue
+			}
+			writer.addMapEntry(
+				x.BM25StatsKey(attr, b),
+				&pb.Posting{
+					Uid:         math.MaxUint64,
+					PostingType: pb.Posting_VALUE,
+					ValType:     pb.Posting_BINARY,
+					Value:       posting.EncodeBM25Stats(uint64(e.count[b]), uint64(e.terms[b])),
+				},
+				shard,
+			)
+		}
+	}
+
+	for i := range writer.shards {
+		sh := &writer.shards[i]
+		if sh.cbuf.LenNoPadding() > 0 {
+			sh.mu.Lock() // writeMapEntriesToFile unlocks and releases the buffer.
+			writer.writeMapEntriesToFile(sh.cbuf, i)
+		} else if err := sh.cbuf.Release(); err != nil {
+			glog.Warningf("error releasing bm25 stats buffer: %v", err)
+		}
+	}
 }
 
 func parseGqlSchema(s string) map[uint64]string {

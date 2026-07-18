@@ -59,6 +59,102 @@ func TestTopKHeapTieBreaking(t *testing.T) {
 	require.Equal(t, uint64(15), sorted[2].uid)
 }
 
+// TestTopKHeapTieBreakEviction pins the boundary case the randomized brute-force
+// tests deliberately skip (they treat tied-boundary uids as interchangeable). Docs
+// arrive UID-ascending, as the WAND pivot advances. With k=2, two docs tied at score
+// 1.0 (uid 3, uid 4) then a strictly higher doc (uid 5), the correct top-2 by
+// (score desc, UID asc) is {5, 3}: among the tied pair uid3 (lower) outranks uid4,
+// matching the no-limit scoreAllDocs path. A score-only heap evicts the lowest-UID
+// root and wrongly returns {5, 4}.
+func TestTopKHeapTieBreakEviction(t *testing.T) {
+	h := &topKHeap{k: 2}
+	heap.Init(h)
+	h.tryPush(3, 1.0)
+	h.tryPush(4, 1.0)
+	h.tryPush(5, 2.0)
+
+	sorted := h.sorted()
+	uids := make([]uint64, len(sorted))
+	for i, d := range sorted {
+		uids[i] = d.uid
+	}
+	require.Equal(t, []uint64{5, 3}, uids,
+		"WAND top-k must keep the lowest UID among score ties, matching scoreAllDocs")
+
+	// The eviction threshold must remain the true minimum score after the tie-break.
+	require.InEpsilon(t, 1.0, h.threshold(), 1e-9)
+}
+
+// TestWandTieBreakEndToEndMatchesFullScan exercises the full retrieval path (not just
+// the heap) on a score tie that triggers eviction. Single term: uid10 and uid20 tie at
+// a lower score (same tf/docLen), uid30 scores higher (larger tf). Processed
+// UID-ascending, the two ties fill a k=2 heap, then uid30 evicts one — and it must
+// evict the higher-UID tie (uid20), so first:2 returns {30, 10}, exactly the
+// exhaustive scoreAllDocs top-2. This is the boundary TestWandMatchesBruteForce skips.
+func TestWandTieBreakEndToEndMatchesFullScan(t *testing.T) {
+	uidsOf := func(ds []scoredDoc) []uint64 {
+		out := make([]uint64, len(ds))
+		for i, d := range ds {
+			out[i] = d.uid
+		}
+		return out
+	}
+	ps := []posting.BM25Posting{
+		{Uid: 10, TF: 2, DocLen: 5},
+		{Uid: 20, TF: 2, DocLen: 5}, // ties with uid10
+		{Uid: 30, TF: 8, DocLen: 5}, // strictly higher score
+	}
+	k, b, avgDL, idf := 1.2, 0.75, 5.0, 1.5
+	build := func() []*termCursor { return []*termCursor{newTermCursor(ps, idf, k, b, avgDL)} }
+
+	full := scoreAllDocs(build(), k, b, avgDL, nil)
+	require.Equal(t, []uint64{30, 10, 20}, uidsOf(full), "full scan: score desc, uid asc")
+
+	for _, useBMW := range []bool{false, true} {
+		got := wandTopK(build(), k, b, avgDL, 2, nil, useBMW)
+		require.Equalf(t, []uint64{30, 10}, uidsOf(got),
+			"bmw=%v: first:k WAND must keep the same docs as full-scan top-k on ties", useBMW)
+	}
+}
+
+func TestBm25TopK(t *testing.T) {
+	// No first limit: score every matching document (0 means "no early termination").
+	require.Equal(t, 0, bm25TopK(0, 0))
+	require.Equal(t, 0, bm25TopK(0, 100))
+
+	// With a first limit, WAND must retain first+offset documents so the offset can be
+	// dropped afterward — NOT 0 (which would fall back to scoring the entire corpus
+	// just because an offset was supplied, the memory blow-up this guards against).
+	require.Equal(t, 10, bm25TopK(10, 0))
+	require.Equal(t, 15, bm25TopK(10, 5))
+	require.Equal(t, 1001, bm25TopK(1, 1000))
+}
+
+func TestBm25PaginateScored(t *testing.T) {
+	mk := func(uids ...uint64) []scoredDoc {
+		out := make([]scoredDoc, len(uids))
+		for i, u := range uids {
+			out[i] = scoredDoc{uid: u, score: float64(len(uids) - i)} // already score-descending
+		}
+		return out
+	}
+	ids := func(ds []scoredDoc) []uint64 {
+		out := make([]uint64, len(ds))
+		for i, d := range ds {
+			out[i] = d.uid
+		}
+		return out
+	}
+
+	full := mk(1, 2, 3, 4, 5)
+	require.Equal(t, []uint64{1, 2, 3, 4, 5}, ids(bm25PaginateScored(full, 0, 0)))
+	require.Equal(t, []uint64{1, 2}, ids(bm25PaginateScored(mk(1, 2, 3, 4, 5), 2, 0)))
+	require.Equal(t, []uint64{3, 4}, ids(bm25PaginateScored(mk(1, 2, 3, 4, 5), 2, 2)))
+	require.Equal(t, []uint64{4, 5}, ids(bm25PaginateScored(mk(1, 2, 3, 4, 5), 10, 3)))
+	// Offset past the end yields nothing rather than panicking.
+	require.Empty(t, bm25PaginateScored(mk(1, 2, 3), 2, 10))
+}
+
 func TestBm25ScoreFunction(t *testing.T) {
 	k, b := 1.2, 0.75
 	avgDL := 10.0
@@ -99,15 +195,24 @@ func TestBm25ScoreNaN(t *testing.T) {
 	require.Greater(t, score, 0.0)
 }
 
-// brute force scores every doc across all cursors (ground truth for WAND).
+// brute force scores every doc across all cursors (ground truth for WAND). When
+// filterSet is non-nil, only documents in it are scored — mirroring @filter(bm25(...)).
 func bruteForceTopK(termPostings [][]posting.BM25Posting, idfs []float64,
 	k, b, avgDL float64, topK int) []scoredDoc {
+	return bruteForceTopKFiltered(termPostings, idfs, k, b, avgDL, topK, nil)
+}
+
+func bruteForceTopKFiltered(termPostings [][]posting.BM25Posting, idfs []float64,
+	k, b, avgDL float64, topK int, filterSet map[uint64]struct{}) []scoredDoc {
 	scores := map[uint64]float64{}
-	dls := map[uint64]uint32{}
 	for ti, ps := range termPostings {
 		for _, p := range ps {
+			if filterSet != nil {
+				if _, ok := filterSet[p.Uid]; !ok {
+					continue
+				}
+			}
 			scores[p.Uid] += bm25Score(idfs[ti], float64(p.TF), float64(p.DocLen), avgDL, k, b)
-			dls[p.Uid] = p.DocLen
 		}
 	}
 	out := make([]scoredDoc, 0, len(scores))
@@ -124,6 +229,91 @@ func bruteForceTopK(termPostings [][]posting.BM25Posting, idfs []float64,
 		out = out[:topK]
 	}
 	return out
+}
+
+// TestWandFilteredMatchesBruteForce checks that WAND/Block-Max WAND and the
+// score-all path honor a filter set identically to exhaustive filtered scoring. The
+// filter must never change which documents or scores are produced (only which are
+// considered), so WAND pruning driven by a threshold built from filtered-in documents
+// must still be sound.
+func TestWandFilteredMatchesBruteForce(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	k, b, avgDL := 1.2, 0.75, 9.0
+
+	for trial := 0; trial < 200; trial++ {
+		numTerms := 1 + rng.Intn(4)
+		termPostings := make([][]posting.BM25Posting, numTerms)
+		idfs := make([]float64, numTerms)
+		allUids := map[uint64]bool{}
+		for ti := 0; ti < numTerms; ti++ {
+			n := rng.Intn(400)
+			seen := map[uint64]bool{}
+			var ps []posting.BM25Posting
+			for j := 0; j < n; j++ {
+				uid := uint64(1 + rng.Intn(500))
+				if seen[uid] {
+					continue
+				}
+				seen[uid] = true
+				ps = append(ps, posting.BM25Posting{
+					Uid:    uid,
+					TF:     uint32(1 + rng.Intn(10)),
+					DocLen: uint32(1 + rng.Intn(30)),
+				})
+				allUids[uid] = true
+			}
+			sort.Slice(ps, func(i, j int) bool { return ps[i].Uid < ps[j].Uid })
+			termPostings[ti] = ps
+			idfs[ti] = 0.5 + rng.Float64()*2
+		}
+
+		// Random filter subset (may be empty).
+		filterSet := map[uint64]struct{}{}
+		for uid := range allUids {
+			if rng.Intn(2) == 0 {
+				filterSet[uid] = struct{}{}
+			}
+		}
+
+		build := func() []*termCursor {
+			cs := make([]*termCursor, 0, numTerms)
+			for ti, ps := range termPostings {
+				if len(ps) == 0 {
+					continue
+				}
+				cs = append(cs, newTermCursor(ps, idfs[ti], k, b, avgDL))
+			}
+			return cs
+		}
+
+		// score-all path with filter must reproduce the full filtered ranking exactly.
+		wantAll := bruteForceTopKFiltered(termPostings, idfs, k, b, avgDL, 0, filterSet)
+		gotAll := scoreAllDocs(build(), k, b, avgDL, filterSet)
+		require.Lenf(t, gotAll, len(wantAll), "trial %d filtered score-all len", trial)
+		for i := range wantAll {
+			require.InEpsilonf(t, wantAll[i].score, gotAll[i].score, 1e-9,
+				"trial %d filtered score-all rank %d score", trial, i)
+		}
+
+		// top-k WAND/BMW with filter must match the filtered top-k scores.
+		topK := 1 + rng.Intn(8)
+		want := bruteForceTopKFiltered(termPostings, idfs, k, b, avgDL, topK, filterSet)
+		wantPlus := bruteForceTopKFiltered(termPostings, idfs, k, b, avgDL, topK+1, filterSet)
+		for _, useBMW := range []bool{false, true} {
+			got := wandTopK(build(), k, b, avgDL, topK, filterSet, useBMW)
+			require.Lenf(t, got, len(want), "trial %d filtered bmw=%v len", trial, useBMW)
+			for i := range want {
+				require.InEpsilonf(t, want[i].score, got[i].score, 1e-9,
+					"trial %d filtered bmw=%v rank %d score", trial, useBMW, i)
+				tied := (i > 0 && wantPlus[i].score == wantPlus[i-1].score) ||
+					(i+1 < len(wantPlus) && wantPlus[i].score == wantPlus[i+1].score)
+				if !tied {
+					require.Equalf(t, want[i].uid, got[i].uid,
+						"trial %d filtered bmw=%v rank %d uid", trial, useBMW, i)
+				}
+			}
+		}
+	}
 }
 
 // TestWandMatchesBruteForce checks that WAND and Block-Max WAND return exactly the

@@ -1331,12 +1331,12 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		}
 	}
 
-	// 4. Use WAND top-k early termination only when first is set without an offset;
-	// otherwise score all matching documents and paginate afterwards.
-	topK := 0
-	if q.First > 0 && q.Offset == 0 {
-		topK = int(q.First)
-	}
+	// 4. Use WAND top-k early termination whenever a first limit is set, retaining
+	// first+offset documents so the offset can be dropped afterward. This bounds work
+	// and memory to the requested window instead of scoring (and materializing) every
+	// matching document just because an offset was supplied. With no first limit,
+	// topK is 0 and every match is scored (the caller explicitly asked for all results).
+	topK := bm25TopK(int(q.First), int(q.Offset))
 
 	// 5. Run WAND / Block-Max WAND over the standard posting lists.
 	results, err := wandSearch(qs.cache.Get, attr, q.ReadTs, queryTokens, k, b, avgDL, N,
@@ -1345,17 +1345,10 @@ func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error
 		return err
 	}
 
-	// 6. Paginate score-sorted results when WAND did not already top-k them.
-	if topK <= 0 && (q.First > 0 || q.Offset > 0) {
-		offset := int(q.Offset)
-		if offset > len(results) {
-			offset = len(results)
-		}
-		results = results[offset:]
-		if q.First > 0 && int(q.First) < len(results) {
-			results = results[:int(q.First)]
-		}
-	}
+	// 6. Apply the first/offset window over the score-descending results. wandSearch
+	// returns results sorted by score (descending), whether or not it top-k'd them, so
+	// the same slice is correct for both the top-k and score-all paths.
+	results = bm25PaginateScored(results, int(q.First), int(q.Offset))
 
 	// 7. Emit UIDs ascending (required by the query pipeline) with positionally-
 	// aligned scores in ValueMatrix; the query layer binds these to a value
