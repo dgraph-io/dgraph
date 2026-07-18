@@ -44,7 +44,13 @@ type linearNormalize int
 
 const (
 	// normalizeMax divides each channel's scores by that channel's maximum absolute
-	// score, bringing heterogeneous scales onto a comparable [-1,1]-ish range.
+	// score and clamps the result to [0,1]. Clamping matters under the union's
+	// missing-uid=0 convention: a signed metric (cosine/dot) can retrieve a document
+	// with a negative similarity, and without the clamp that document would fuse below
+	// a document the channel never retrieved at all (which contributes 0). Clamping
+	// negative similarities to 0 makes "retrieved but dissimilar" tie with "not
+	// retrieved" instead of ranking beneath it. BM25 and euclidean (1/(1+d)) scores are
+	// already >=0, so they are unaffected.
 	normalizeMax linearNormalize = iota
 	// normalizeNone uses raw scores as-is (the caller asserts comparability).
 	normalizeNone
@@ -186,6 +192,11 @@ func fuseLinear(channels []fuseChannel, normalize linearNormalize) map[uint64]fl
 					norm = 0
 				} else {
 					norm = s / denom
+				}
+				// Clamp negatives to the missing-uid baseline (0) so a retrieved but
+				// dissimilar document never fuses below one the channel never retrieved.
+				if norm < 0 {
+					norm = 0
 				}
 			}
 			fused[uid] += c.weight * norm

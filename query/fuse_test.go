@@ -166,6 +166,30 @@ func TestFuseLinear_ZeroMaxChannelContributesZero(t *testing.T) {
 	require.InDelta(t, 0.0, got[2], 1e-9)
 }
 
+func TestFuseLinear_NegativeSimilarityNotBelowMissing(t *testing.T) {
+	// A signed vector channel (cosine/dot) can retrieve a document with negative
+	// similarity. Under the union's missing-uid=0 convention, that document must not
+	// fuse BELOW a document the channel never retrieved (which contributes 0). uid3 is
+	// retrieved by vec with a negative cosine; uid2 is absent from vec entirely.
+	text := fuseChannel{scores: map[uint64]float64{1: 10.0}, weight: 1.0}
+	vec := fuseChannel{scores: map[uint64]float64{1: 0.9, 3: -0.4}, weight: 1.0}
+
+	res := fuseChannels([]fuseChannel{text, vec},
+		fuseOpts{method: fusionLinear, normalize: normalizeMax})
+	got := asMap(res)
+
+	// uid3's negative similarity is clamped to 0, so it ties the missing baseline
+	// rather than going negative.
+	require.InDelta(t, 0.0, got[3], 1e-9)
+	// uid2 is absent from every channel, so it is not in the union at all.
+	require.NotContains(t, got, uint64(2))
+	// A retrieved-but-dissimilar doc (uid3, score 0) is never ranked below a doc that
+	// would only appear via a negative contribution — no fused score is negative.
+	for uid, s := range got {
+		require.GreaterOrEqual(t, s, 0.0, "uid %d fused below the missing baseline", uid)
+	}
+}
+
 func TestFuse_TopKTruncation(t *testing.T) {
 	a := ch(map[uint64]float64{1: 9, 2: 8, 3: 7, 4: 6, 5: 5})
 	res := fuseChannels([]fuseChannel{a}, fuseOpts{method: fusionRRF, k: 60, topk: 3})
