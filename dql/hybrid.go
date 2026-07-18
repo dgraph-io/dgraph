@@ -7,6 +7,7 @@ package dql
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -101,6 +102,13 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 		return nil, fmt.Errorf("hybrid must be assigned to a variable, e.g. " +
 			"`x as var(func: hybrid(textPred, \"query\", vecPred, $vec))`")
 	}
+	// The rewrite builds fresh channel/fuse blocks and discards everything else on the
+	// original hybrid block, so silently accepting modifiers here would drop them.
+	// Reject them explicitly: apply @filter/order/cascade on the outer uid(var) block.
+	if qu.Filter != nil || len(qu.Children) > 0 || len(qu.Order) > 0 || len(qu.Cascade) > 0 {
+		return nil, fmt.Errorf("hybrid: @filter, ordering, cascade, and child blocks are not " +
+			"supported on a hybrid() block; bind it to a variable and apply them on the uid(var) block")
+	}
 	fn := qu.Func
 	textPred := fn.Attr
 	if textPred == "" {
@@ -115,7 +123,10 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 		return nil, fmt.Errorf("hybrid requires textPred, \"query text\", vecPred and a "+
 			"query vector; got %d positional arguments", len(fn.Args)+1)
 	}
-	queryText := fn.Args[0].Value
+	// Keep the whole Arg (not just its Value) so a parameterized text query keeps its
+	// IsDQLVar flag and gets substituted — just like the vector arg below. Taking only
+	// .Value would send the literal "$var" to bm25.
+	queryArg := fn.Args[0]
 	vecPred := fn.Args[1].Value
 	vecArg := fn.Args[2]
 
@@ -138,6 +149,12 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 		fuseArgs = append(fuseArgs, Arg{Value: key}, val)
 	}
 
+	// topk feeds similar_to's neighbor count and bm25's `first`; a non-positive value
+	// reaches HNSW as expectedNeighbors<=0 and panics the search. Reject it up front.
+	if n, err := strconv.Atoi(topk); err != nil || n <= 0 {
+		return nil, fmt.Errorf("hybrid: topk must be a positive integer, got %q", topk)
+	}
+
 	chanBM25 := fmt.Sprintf("%s%d_bm25", hybridVarPrefix, idx)
 	chanVec := fmt.Sprintf("%s%d_vec", hybridVarPrefix, idx)
 
@@ -147,7 +164,7 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 	bm25Block := &GraphQuery{
 		Alias: "var",
 		Var:   chanBM25,
-		Func:  &Function{Name: "bm25", Attr: textPred, Args: []Arg{{Value: queryText}}},
+		Func:  &Function{Name: "bm25", Attr: textPred, Args: []Arg{queryArg}},
 		Args:  map[string]string{"first": topk},
 	}
 	simBlock := &GraphQuery{
