@@ -226,6 +226,12 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 		txn.bm25Acc.add(uid, docCountDelta, totalTermsDelta)
 		return nil
 	}
+	// Serialize the whole read-modify-write against sibling goroutines applying
+	// other edges of the SAME transaction (see Txn.bm25StatsMu): their entities can
+	// share this uid%32 bucket, and concurrent RMWs would drop deltas.
+	txn.bm25StatsMu.Lock()
+	defer txn.bm25StatsMu.Unlock()
+
 	bucket := int(uid % numBM25StatsBuckets)
 	key := x.BM25StatsKey(attr, bucket)
 	// Stats are maintained by read-modify-write: we must read the committed total
