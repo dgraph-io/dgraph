@@ -316,6 +316,209 @@ func TestWandFilteredMatchesBruteForce(t *testing.T) {
 	}
 }
 
+// TestWandTieHeavyDifferentialWindows (Q3) is a randomized differential over
+// tie-heavy multi-term corpora: wandTopK (BMW on and off, varying topK, with and
+// without a filterSet) must return exactly the first-topK window of the scoreAllDocs
+// total order (score desc, uid asc) — same uids in the same order, bit-identical
+// scores. wandTopK accumulates a document's score doc-major over cursors ordered by
+// an unstable sort while scoreAllDocs accumulates term-major, so the corpus is built
+// so that every per-term contribution is an exact dyadic float: k=1 and b=0 make
+// bm25Score(idf, tf, ...) = idf*2*tf/(1+tf), which with TF in {1,3} and power-of-two
+// IDFs yields contributions in {idf, 1.5*idf} — small multiples of 0.25 whose sums
+// are exact in ANY addition order. Score ties are therefore EXACT and plentiful, and
+// any window mismatch is a genuine heap/pruning defect, not float-grouping noise.
+// (Whether last-ulp grouping differences on non-dyadic ties can flip page boundaries
+// is an open semantics question covered by the integration-level pagination tests,
+// not decidable in a deterministic unit test.)
+func TestWandTieHeavyDifferentialWindows(t *testing.T) {
+	rng := rand.New(rand.NewSource(1234))
+	k, b, avgDL := 1.0, 0.0, 10.0
+	idfChoices := []float64{0.5, 1.0, 2.0}
+	tfChoices := []uint32{1, 3}
+
+	for trial := 0; trial < 150; trial++ {
+		numTerms := 2 + rng.Intn(3)   // 2..4 terms
+		numDocs := 60 + rng.Intn(440) // up to ~300 postings/term: spans >1 block
+		termPostings := make([][]posting.BM25Posting, numTerms)
+		idfs := make([]float64, numTerms)
+		for ti := 0; ti < numTerms; ti++ {
+			var ps []posting.BM25Posting
+			for i := 0; i < numDocs; i++ {
+				if rng.Intn(10) >= 6 { // ~60% of docs match each term: heavy overlap
+					continue
+				}
+				ps = append(ps, posting.BM25Posting{
+					Uid:    uint64(i + 1), // built ascending, as real posting lists are
+					TF:     tfChoices[rng.Intn(len(tfChoices))],
+					DocLen: uint32(1 + rng.Intn(30)), // inert with b=0; exercises block bounds
+				})
+			}
+			termPostings[ti] = ps
+			idfs[ti] = idfChoices[rng.Intn(len(idfChoices))]
+		}
+
+		build := func() []*termCursor {
+			cs := make([]*termCursor, 0, numTerms)
+			for ti, ps := range termPostings {
+				if len(ps) == 0 {
+					continue
+				}
+				cs = append(cs, newTermCursor(ps, idfs[ti], k, b, avgDL))
+			}
+			return cs
+		}
+
+		// Random filter subset, exercised alongside the unfiltered run.
+		filterSet := map[uint64]struct{}{}
+		for i := 0; i < numDocs; i++ {
+			if rng.Intn(2) == 0 {
+				filterSet[uint64(i+1)] = struct{}{}
+			}
+		}
+
+		for _, fs := range []map[uint64]struct{}{nil, filterSet} {
+			full := scoreAllDocs(build(), k, b, avgDL, fs)
+			for _, topK := range []int{1, 2, 3, 7, 20, len(full), len(full) + 5} {
+				if topK <= 0 {
+					continue
+				}
+				want := full
+				if topK < len(want) {
+					want = want[:topK]
+				}
+				for _, useBMW := range []bool{false, true} {
+					got := wandTopK(build(), k, b, avgDL, topK, fs, useBMW)
+					require.Lenf(t, got, len(want),
+						"trial %d filtered=%v bmw=%v topK=%d len", trial, fs != nil, useBMW, topK)
+					for i := range want {
+						require.Equalf(t, want[i].uid, got[i].uid,
+							"trial %d filtered=%v bmw=%v topK=%d rank %d uid",
+							trial, fs != nil, useBMW, topK, i)
+						require.Equalf(t,
+							math.Float64bits(want[i].score), math.Float64bits(got[i].score),
+							"trial %d filtered=%v bmw=%v topK=%d rank %d score bits",
+							trial, fs != nil, useBMW, topK, i)
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestWandFreshBoundsDifferential (Q14) pins that WAND/BMW block upper bounds are
+// recomputed from the live postings on every search — nothing is persisted or cached
+// across queries, so mutations between searches can never leave stale bounds that
+// prune a new top scorer. Tie-free corpus; after each mutation the cursors are
+// rebuilt (as wandSearch does per query) and BMW must stay byte-identical to the
+// exhaustive path. Guards against a future change that caches block maxima.
+func TestWandFreshBoundsDifferential(t *testing.T) {
+	k, b, avgDL := 1.2, 0.75, 15.0
+	idfs := []float64{1.7, 0.9}
+	const topK = 10
+
+	// Two overlapping terms, term0 spanning multiple wandBlockSize blocks. Distinct
+	// (TF, DocLen) mixes make summed scores strictly distinct (asserted below), so
+	// the top-k uid list is unambiguous.
+	term0 := make([]posting.BM25Posting, 0, 300)
+	term1 := make([]posting.BM25Posting, 0, 150)
+	for i := 0; i < 300; i++ {
+		uid := uint64(i + 1)
+		term0 = append(term0, posting.BM25Posting{
+			Uid: uid, TF: uint32(1 + (i*7)%13), DocLen: uint32(5 + i),
+		})
+		if i%2 == 0 {
+			term1 = append(term1, posting.BM25Posting{
+				Uid: uid, TF: uint32(1 + (i*5)%9), DocLen: uint32(5 + i),
+			})
+		}
+	}
+	termPostings := [][]posting.BM25Posting{term0, term1}
+
+	build := func() []*termCursor {
+		cs := make([]*termCursor, 0, len(termPostings))
+		for ti, ps := range termPostings {
+			if len(ps) == 0 {
+				continue
+			}
+			cs = append(cs, newTermCursor(ps, idfs[ti], k, b, avgDL))
+		}
+		return cs
+	}
+
+	// checkDifferential rebuilds cursors from the CURRENT postings (fresh bounds,
+	// exactly as wandSearch does per query) and asserts WAND and BMW byte-identical
+	// to exhaustive scoring. Returns the full ranking for the next mutation step.
+	checkDifferential := func(phase string) []scoredDoc {
+		full := scoreAllDocs(build(), k, b, avgDL, nil)
+		require.NotEmpty(t, full, "%s: corpus must not be empty", phase)
+		for i := 1; i < len(full); i++ {
+			require.NotEqualf(t, full[i-1].score, full[i].score,
+				"%s: corpus must stay tie-free (ranks %d/%d)", phase, i-1, i)
+		}
+		want := full
+		if topK < len(want) {
+			want = want[:topK]
+		}
+		for _, useBMW := range []bool{false, true} {
+			got := wandTopK(build(), k, b, avgDL, topK, nil, useBMW)
+			require.Lenf(t, got, len(want), "%s bmw=%v len", phase, useBMW)
+			for i := range want {
+				require.Equalf(t, want[i].uid, got[i].uid, "%s bmw=%v rank %d uid",
+					phase, useBMW, i)
+				require.Equalf(t,
+					math.Float64bits(want[i].score), math.Float64bits(got[i].score),
+					"%s bmw=%v rank %d score bits", phase, useBMW, i)
+			}
+		}
+		return full
+	}
+
+	full := checkDifferential("baseline")
+
+	// Mutation 1: delete the top-scored document (the doc setting its block's max
+	// bound) from every term. Recomputed bounds must reflect the deletion — the uid
+	// must vanish and the differential must still hold exactly.
+	topUID := full[0].uid
+	for ti, ps := range termPostings {
+		kept := make([]posting.BM25Posting, 0, len(ps))
+		for _, p := range ps {
+			if p.Uid != topUID {
+				kept = append(kept, p)
+			}
+		}
+		termPostings[ti] = kept
+	}
+	full = checkDifferential("after-delete-top")
+	for _, d := range full {
+		require.NotEqual(t, topUID, d.uid, "deleted doc must not be returned")
+	}
+
+	// Mutation 2: promote a low-ranked doc to the top scorer by boosting its TF far
+	// above every block's previous max (and shrinking DocLen) in BOTH terms — BM25
+	// saturates at idf*(k+1) per term, so only a doc matching both terms can beat
+	// docs that match both. Stale cached bounds would prune it; fresh bounds must
+	// rank it first.
+	var promoted uint64
+	for i := len(full) - 1; i >= 0; i-- {
+		if (full[i].uid-1)%2 == 0 { // uid = i+1 with even i: present in term1 too
+			promoted = full[i].uid
+			break
+		}
+	}
+	require.NotZero(t, promoted, "corpus must contain a low-ranked doc in both terms")
+	for ti := range termPostings {
+		for i := range termPostings[ti] {
+			if termPostings[ti][i].Uid == promoted {
+				termPostings[ti][i].TF = 200
+				termPostings[ti][i].DocLen = 1
+			}
+		}
+	}
+	full = checkDifferential("after-promote-bottom")
+	require.Equal(t, promoted, full[0].uid,
+		"promoted doc must be the new top scorer under freshly computed bounds")
+}
+
 // TestWandMatchesBruteForce checks that WAND and Block-Max WAND return exactly the
 // same top-k documents and scores as exhaustive scoring, across many randomized
 // posting lists. This is the core correctness guarantee: pruning must never change

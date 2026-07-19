@@ -371,6 +371,13 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
+		// HNSW panics on expectedNeighbors <= 0 (searchLayerResult truncates its
+		// neighbor slice to zero length and dereferences neighbors[0]); reject the
+		// value before it reaches the index rather than crashing the alpha.
+		if numNeighbors <= 0 {
+			return fmt.Errorf("similar_to requires a positive number of neighbors, got %d",
+				numNeighbors)
+		}
 		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
 		if err != nil {
 			return err
@@ -2345,6 +2352,16 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
+		}
+		// Reject non-finite query-vector components up front: a NaN poisons every
+		// distance comparison inside HNSW (undefined ordering, arbitrary neighbors)
+		// and would surface as silently wrong similarity scores.
+		for _, f := range fc.vectorInfo {
+			if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
+				return nil, errors.Errorf(
+					"Function '%s' requires a finite query vector; got a NaN/Inf component",
+					q.SrcFunc.Name)
+			}
 		}
 		if len(q.SrcFunc.Args) > 2 {
 			if err := parseSimilarToOptions(q.SrcFunc.Args[2:], fc); err != nil {

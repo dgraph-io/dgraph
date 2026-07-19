@@ -2335,7 +2335,16 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					if len(tv.Val) != 8 {
 						continue
 					}
-					sg.rankerScores[uid] = math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+					score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+					// Drop non-finite scores at the source: a NaN here would reach the
+					// value-var sort comparator (undefined order) and val() output.
+					// fuse() already drops them per-channel; direct consumers must be
+					// protected the same way. The uid stays matched — it just carries
+					// no score (same as fuse's convention).
+					if math.IsNaN(score) || math.IsInf(score, 0) {
+						continue
+					}
+					sg.rankerScores[uid] = score
 				}
 			}
 
@@ -2564,14 +2573,54 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 
 	sg.updateUidMatrix()
-	for i := range sg.uidMatrix {
-		// Apply the offsets.
-		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
-		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+	if sg.rankerScores != nil && sg.Params.Count >= 0 && sg.SrcFunc != nil &&
+		(sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") {
+		// A ranker root's page is defined by score order. The worker paginates by
+		// score itself when there is no @filter (First is only pushed down then);
+		// with a filter, pagination happens here after filtering — and slicing the
+		// uid-ascending matrix would silently return the lowest-uid page instead of
+		// the top-scored one. Select the [offset, offset+count) window by
+		// (score desc, uid asc) from the snapshot, then restore ascending uid order
+		// for the pipeline. Presentation order still comes from orderdesc: val(var).
+		for i := range sg.uidMatrix {
+			sg.uidMatrix[i].Uids = pageByScore(sg.uidMatrix[i].Uids, sg.rankerScores,
+				sg.Params.Count, sg.Params.Offset)
+		}
+	} else {
+		for i := range sg.uidMatrix {
+			// Apply the offsets.
+			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
+			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		}
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
 	return nil
+}
+
+// pageByScore returns the [offset, offset+count) window of uids ranked by
+// (score desc, uid asc), re-sorted to ascending uid order. count <= 0 means no
+// limit. Uids missing from scores (cannot happen for a ranker root, where every
+// matched uid is snapshotted) rank last at score 0.
+func pageByScore(uids []uint64, scores map[uint64]float64, count, offset int) []uint64 {
+	ranked := make([]uint64, len(uids))
+	copy(ranked, uids)
+	sort.Slice(ranked, func(i, j int) bool {
+		si, sj := scores[ranked[i]], scores[ranked[j]]
+		if si != sj {
+			return si > sj
+		}
+		return ranked[i] < ranked[j]
+	})
+	if offset > len(ranked) {
+		offset = len(ranked)
+	}
+	ranked = ranked[offset:]
+	if count > 0 && count < len(ranked) {
+		ranked = ranked[:count]
+	}
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i] < ranked[j] })
+	return ranked
 }
 
 // applyOrderAndPagination orders each posting list by a given attribute

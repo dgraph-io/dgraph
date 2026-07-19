@@ -303,7 +303,16 @@ func computeFuse(args []dql.Arg, needsVar []dql.VarContext,
 			// therefore signals an internal invariant violation rather than an empty
 			// result — surface it instead of silently degrading the fusion.
 			return varValue{}, errors.Errorf("fuse: channel %q was not produced", nv.Name)
-		case v.Vals == nil || v.Vals.IsEmpty():
+		// Note: ShardedMap.IsEmpty() only detects nil (a fresh NewShardedMap has 30
+		// empty shards), so entry-count emptiness must use Len() == 0.
+		case v.Vals == nil || v.Vals.Len() == 0:
+			// A uid variable carries matched uids but no scores. Treating it as an
+			// empty channel would silently drop its uids from the fused ranking, so
+			// reject it explicitly — fusion needs scored channels.
+			if v.Uids != nil && len(v.Uids.GetUids()) > 0 {
+				return varValue{}, errors.Errorf("fuse: channel %q is a uid variable "+
+					"without scores; use a ranker such as bm25 or similar_to", nv.Name)
+			}
 			// A channel that ran but matched nothing is a valid empty channel: it
 			// contributes nothing but must not drop the other channels' results.
 			channels[i] = fuseChannel{scores: map[uint64]float64{}, weight: 1.0}

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1143,4 +1144,391 @@ func TestBM25ConcurrentOverlappingTxns(t *testing.T) {
 		`{ me(func: bm25(%s, "concurrent")) { count(uid) } }`, pred))
 	require.Contains(t, js, fmt.Sprintf(`"count":%d`, len(uids)),
 		"all concurrently-indexed documents must be searchable (no lost stats updates)")
+}
+
+// parseUIDScoreRows extracts (uid, val(score)) rows in response order, decoding the
+// hex uid strings to uint64. The score map is keyed by uid; blocks without val(score)
+// simply yield zero-valued scores that callers ignore.
+func parseUIDScoreRows(t *testing.T, js string) ([]uint64, map[uint64]float64) {
+	t.Helper()
+	var resp struct {
+		Data struct {
+			Me []struct {
+				UID   string  `json:"uid"`
+				Score float64 `json:"val(score)"`
+			} `json:"me"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(js), &resp))
+	uids := make([]uint64, 0, len(resp.Data.Me))
+	scores := make(map[uint64]float64, len(resp.Data.Me))
+	for _, item := range resp.Data.Me {
+		uid, err := strconv.ParseUint(strings.TrimPrefix(item.UID, "0x"), 16, 64)
+		require.NoError(t, err, "uid %q must be a hex uid", item.UID)
+		uids = append(uids, uid)
+		scores[uid] = item.Score
+	}
+	return uids, scores
+}
+
+// setupBM25FilterCorpus indexes a small corpus where the top-scored document for the
+// query term "fox" has the HIGHEST uid, so a uid-ordered truncation of the result set
+// is distinguishable from a score-ordered one. Every doc also carries an int predicate
+// for @filter(ge(...)): the two top-scored docs get negative values so ge(pop, 0) can
+// drop the entire unfiltered top of the ranking.
+//
+// Score order for "fox" (avgDL = 12/5 = 2.4): 300006 (tf=3, dl=3) > 300004 (tf=2,
+// dl=2) > 300001 (tf=1, dl=2) > 300002 (tf=1, dl=3). Uid order of the matches is the
+// exact opposite of score order for the top two.
+// ensureBM25UidLease extends zero's uid lease to cover the 300001-350013 range these
+// tests hardcode (TestMain only leases 65536; AssignUids advances maxLeasedUID).
+var bm25UidLeaseOnce sync.Once
+
+func ensureBM25UidLease(t *testing.T) {
+	t.Helper()
+	bm25UidLeaseOnce.Do(func() {
+		require.NoError(t, dc.AssignUids(client.Dgraph, 400000))
+	})
+}
+
+func setupBM25FilterCorpus(t *testing.T, textPred, popPred string) {
+	t.Helper()
+	ensureBM25UidLease(t)
+	t.Cleanup(func() {
+		dropPredicate(textPred)
+		dropPredicate(popPred)
+	})
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .\n%s: int @index(int) .", textPred, popPred))
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<300001> <%[1]s> "fox dog" .
+		<300002> <%[1]s> "fox cat bird" .
+		<300003> <%[1]s> "dog cat" .
+		<300004> <%[1]s> "fox fox" .
+		<300006> <%[1]s> "fox fox fox" .
+		<300001> <%[2]s> "1" .
+		<300002> <%[2]s> "2" .
+		<300003> <%[2]s> "3" .
+		<300004> <%[2]s> "-5" .
+		<300006> <%[2]s> "-7" .
+	`, textPred, popPred)))
+}
+
+// KNOWN-FAILING (Q1): bm25 + @filter + first returns the N lowest-uid matches instead of the N highest-scored.
+//
+// With a non-uid @filter present, First is not pushed to the worker and the
+// coordinator guard that skips applyPagination for bm25 roots only fires when there
+// are no filters, so first:N is applied by x.PageRange over the uid-sorted uidMatrix
+// — silently flipping the page from score order to uid order.
+func TestBM25FilterThenFirstPreservesScoreOrder(t *testing.T) {
+	textPred, popPred := "bm25_q1_text", "bm25_q1_pop"
+	setupBM25FilterCorpus(t, textPred, popPred)
+
+	js := processQueryNoErr(t, fmt.Sprintf(`
+	{
+		me(func: bm25(%s, "fox"), first: 2) @filter(ge(%s, -100)) {
+			uid
+		}
+	}`, textPred, popPred))
+	uids, _ := parseUIDScoreRows(t, js)
+	require.ElementsMatch(t, []uint64{300006, 300004}, uids,
+		"first:2 with an all-passing filter must return the top-2 by score "+
+			"(300006 'fox fox fox' and 300004 'fox fox'), not the 2 lowest-uid matches")
+}
+
+// KNOWN-FAILING (Q1): bm25 + @filter + first/offset windows the uid-sorted matrix, not the score ranking.
+//
+// Companion to TestBM25FilterThenFirstPreservesScoreOrder: the offset:1 window must
+// slice the score-descending ranking (score ranks 2..3), not the uid-ascending one.
+func TestBM25FilterThenFirstOffsetWindowIsScoreRanked(t *testing.T) {
+	textPred, popPred := "bm25_q1o_text", "bm25_q1o_pop"
+	setupBM25FilterCorpus(t, textPred, popPred)
+
+	js := processQueryNoErr(t, fmt.Sprintf(`
+	{
+		me(func: bm25(%s, "fox"), first: 2, offset: 1) @filter(ge(%s, -100)) {
+			uid
+		}
+	}`, textPred, popPred))
+	uids, _ := parseUIDScoreRows(t, js)
+	require.ElementsMatch(t, []uint64{300004, 300001}, uids,
+		"first:2 offset:1 with an all-passing filter must return score ranks 2..3 "+
+			"(300004 'fox fox' and 300001 'fox dog')")
+}
+
+// TestBM25FilterDroppingTopKeepsDeeperMatches pins that the worker stays UNWINDOWED
+// when a filter is present: a filter that removes the entire unfiltered top of the
+// ranking must still surface the deeper matches. If a fix for Q1 ever pushes First
+// down alongside a filter, the worker would retain only the (later filtered-out)
+// top-2 and this page would come back empty. Passes today.
+func TestBM25FilterDroppingTopKeepsDeeperMatches(t *testing.T) {
+	textPred, popPred := "bm25_q1d_text", "bm25_q1d_pop"
+	setupBM25FilterCorpus(t, textPred, popPred)
+
+	// ge(pop, 0) drops 300006 and 300004 — the two top-scored fox docs.
+	js := processQueryNoErr(t, fmt.Sprintf(`
+	{
+		me(func: bm25(%s, "fox"), first: 2) @filter(ge(%s, 0)) {
+			uid
+		}
+	}`, textPred, popPred))
+	uids, _ := parseUIDScoreRows(t, js)
+	require.ElementsMatch(t, []uint64{300001, 300002}, uids,
+		"when the filter drops the entire unfiltered top-2, the deeper matches "+
+			"300001 and 300002 must still be returned (worker must not pre-window)")
+}
+
+// TestBM25TieStormPaginationPartition walks a page window over a corpus of
+// byte-identical documents (every score is an exact tie) and asserts the pages form a
+// clean partition of the deterministic total order (score desc, uid asc — which under
+// a full tie is just uid asc), with bit-identical scores everywhere and identical
+// output on repeated walks.
+//
+// Q3 pin: the tie semantics (higher uid is the eviction victim, ties resolve uid-asc)
+// is the current documented design of topKHeap; this test pins that behavior
+// end-to-end. Any page overlap/gap or cross-walk score bit-difference decides Q3 to
+// VULNERABLE (float-addition grouping differing between the per-page WAND paths).
+func TestBM25TieStormPaginationPartition(t *testing.T) {
+	ensureBM25UidLease(t)
+	pred := "bm25_tiestorm"
+	t.Cleanup(func() { dropPredicate(pred) })
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	const (
+		docBase     = 310001
+		numDocs     = 300
+		pageSize    = 20
+		walkRepeats = 30
+	)
+
+	// 300 byte-identical docs matching a 3-term query.
+	for start := 0; start < numDocs; start += 100 {
+		var b strings.Builder
+		for i := start; i < start+100; i++ {
+			fmt.Fprintf(&b, "<%d> <%s> \"zephyrite quillon marblewood\" .\n", docBase+i, pred)
+		}
+		require.NoError(t, addTriplesToCluster(b.String()))
+	}
+
+	pageQuery := fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "zephyrite quillon marblewood"), first: %d, offset: %%d)
+		me(func: uid(score)) {
+			uid
+			val(score)
+		}
+	}`, pred, pageSize)
+
+	walk := func() ([]uint64, map[uint64]float64) {
+		var all []uint64
+		scores := make(map[uint64]float64, numDocs)
+		for offset := 0; offset < numDocs; offset += pageSize {
+			uids, pageScores := parseUIDScoreRows(t,
+				processQueryNoErr(t, fmt.Sprintf(pageQuery, offset)))
+			require.Len(t, uids, pageSize, "page at offset %d must be full", offset)
+			all = append(all, uids...)
+			for uid, s := range pageScores {
+				scores[uid] = s
+			}
+		}
+		return all, scores
+	}
+
+	firstWalk, firstScores := walk()
+
+	// The pages must partition the corpus exactly: under a full score tie the total
+	// order is uid ascending, so the concatenated pages are the uid-sorted corpus
+	// with no duplicate and no missing uid.
+	expected := make([]uint64, numDocs)
+	for i := range expected {
+		expected[i] = uint64(docBase + i)
+	}
+	require.Equal(t, expected, firstWalk,
+		"tie-storm pages must partition the corpus in (score desc, uid asc) order "+
+			"with no duplicated or missing uid")
+
+	// Byte-identical documents must produce bit-identical scores on every page.
+	plateau := firstScores[docBase]
+	for uid, s := range firstScores {
+		require.Equal(t, plateau, s,
+			"uid %d: byte-identical docs must have bit-identical scores across pages", uid)
+	}
+
+	// Repeated walks must be byte-for-byte deterministic.
+	for r := 1; r < walkRepeats; r++ {
+		uids, scores := walk()
+		require.Equal(t, firstWalk, uids, "walk %d: page partition must be deterministic", r)
+		require.Equal(t, firstScores, scores, "walk %d: scores must be bit-identical", r)
+	}
+}
+
+// TestBM25TieStormDeepOffset asserts a deep page (first:10, offset:10000) over an
+// ~11k all-tie corpus returns exactly the true rank-10000..10009 documents. The
+// worker sizes its top-k heap at first+offset for windowed queries; under a full tie
+// the true ranks are uid-ascending, so the page is exactly uids at positions
+// 10000..10009. Q3 pin — passes if the tie eviction boundary is exact at depth.
+func TestBM25TieStormDeepOffset(t *testing.T) {
+	ensureBM25UidLease(t)
+	pred := "bm25_deepoffset"
+	t.Cleanup(func() { dropPredicate(pred) })
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	const (
+		docBase = 320001
+		numDocs = 11000
+	)
+	for start := 0; start < numDocs; start += 1000 {
+		var b strings.Builder
+		for i := start; i < start+1000; i++ {
+			fmt.Fprintf(&b, "<%d> <%s> \"abyssalite trenchwork lumenstone\" .\n", docBase+i, pred)
+		}
+		require.NoError(t, addTriplesToCluster(b.String()))
+	}
+
+	js := processQueryNoErr(t, fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "abyssalite trenchwork lumenstone"), first: 10, offset: 10000)
+		me(func: uid(score)) {
+			uid
+			val(score)
+		}
+	}`, pred))
+	uids, _ := parseUIDScoreRows(t, js)
+
+	expected := make([]uint64, 10)
+	for i := range expected {
+		expected[i] = uint64(docBase + 10000 + i)
+	}
+	require.Equal(t, expected, uids,
+		"first:10 offset:10000 must return exactly the true rank-10000..10009 uids")
+}
+
+// TestBM25StatsIntegrityUnderResetChurn pins that idempotent re-SETs and value
+// updates keep corpus stats exact: every SET is paired with a DEL of the found old
+// value, so churn nets zero drift. Uses small single-doc transactions (isolating this
+// from any intra-proposal batching race) on two uids congruent mod 32, so both docs
+// share one stats bucket. After each phase the observed bm25 score must equal the
+// closed-form value computed from the exact live-corpus (docCount, totalTerms).
+// Q13 regression pin — passes today; any drift indicates a new unpaired-DEL path.
+func TestBM25StatsIntegrityUnderResetChurn(t *testing.T) {
+	ensureBM25UidLease(t)
+	pred := "bm25_churn"
+	t.Cleanup(func() { dropPredicate(pred) })
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	// 340010 % 32 == 340042 % 32 == 10: both docs live in the same stats bucket.
+	const uidA, uidB = 340010, 340042
+
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<%d> <%s> "kraken kraken kraken" .
+	`, uidA, pred)))
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<%d> <%s> "kraken squid" .
+	`, uidB, pred)))
+
+	// Closed-form BM25 with default k=1.2, b=0.75 for the single query term
+	// "kraken", which both docs always contain (df=2).
+	closedForm := func(tf, dl, docCount, totalTerms float64) float64 {
+		const k, b, df = 1.2, 0.75, 2.0
+		idf := math.Log1p((docCount - df + 0.5) / (df + 0.5))
+		avgDL := totalTerms / docCount
+		return idf * (k + 1) * tf / (k*(1-b+b*dl/avgDL) + tf)
+	}
+
+	scoreQuery := fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "kraken"))
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`, pred)
+
+	assertScores := func(phase string, expA, expB float64) {
+		t.Helper()
+		_, scores := parseUIDScoreRows(t, processQueryNoErr(t, scoreQuery))
+		require.Len(t, scores, 2, "%s: both docs must match 'kraken'", phase)
+		require.InEpsilon(t, expA, scores[uidA], 1e-9,
+			"%s: doc A score must match closed-form from exact (docCount, totalTerms)", phase)
+		require.InEpsilon(t, expB, scores[uidB], 1e-9,
+			"%s: doc B score must match closed-form from exact (docCount, totalTerms)", phase)
+	}
+
+	// Baseline: docCount=2, totalTerms=5 (dl 3 + 2).
+	assertScores("baseline", closedForm(3, 3, 2, 5), closedForm(1, 2, 2, 5))
+
+	// Phase 1: re-SET the identical triple 10x in single-doc transactions.
+	for i := 0; i < 10; i++ {
+		require.NoError(t, addTriplesToCluster(fmt.Sprintf(
+			`<%d> <%s> "kraken kraken kraken" .`, uidA, pred)))
+	}
+	assertScores("after idempotent re-SETs", closedForm(3, 3, 2, 5), closedForm(1, 2, 2, 5))
+
+	// Phase 2: update doc B 10x, alternating lengths, ending on "kraken squid ink"
+	// (dl=3): docCount=2, totalTerms=6.
+	for i := 0; i < 10; i++ {
+		content := "kraken squid"
+		if i%2 == 1 {
+			content = "kraken squid ink"
+		}
+		require.NoError(t, addTriplesToCluster(fmt.Sprintf(
+			`<%d> <%s> %q .`, uidB, pred, content)))
+	}
+	assertScores("after update churn", closedForm(3, 3, 2, 6), closedForm(1, 3, 2, 6))
+}
+
+// Q27: bm25 has no @lang semantics — lang-tagged values are indexed under
+// lang-qualified keys that bm25() cannot query (empirically: the tagged value is
+// stored and readable via pred@de, but invisible to bm25() and its stats are
+// asymmetric on 'S P *' delete, which re-tokenizes with the default analyzer). The
+// schema combination is therefore rejected outright (schema/parse.go), matching the
+// existing @noconflict and list-predicate rejections. This test pins the rejection;
+// if bm25 ever grows real @lang support, replace it with the symmetric index/delete
+// battery (see the Q27 verdict in the testing report).
+func TestBM25LangSchemaRejected(t *testing.T) {
+	pred := "bm25_langdel"
+	t.Cleanup(func() { dropPredicate(pred) })
+	err := client.Alter(context.Background(),
+		&api.Operation{Schema: fmt.Sprintf("%s: string @lang @index(bm25) .", pred)})
+	require.Error(t, err, "@lang + @index(bm25) must be rejected at schema time")
+	require.Contains(t, err.Error(), "bm25 does not support language-qualified values")
+}
+
+// TestBM25EmojiOnlyValueStatsSymmetry pins the symmetric-safe zero-token path (Q27
+// companion): a value that tokenizes to zero terms contributes nothing to corpus
+// stats on SET and nothing on DEL — the docLen==0 skip applies to both directions —
+// so every other document's score is untouched by its whole lifecycle. Passes today.
+func TestBM25EmojiOnlyValueStatsSymmetry(t *testing.T) {
+	ensureBM25UidLease(t)
+	pred := "bm25_emoji"
+	t.Cleanup(func() { dropPredicate(pred) })
+	setSchema(fmt.Sprintf("%s: string @index(bm25) .", pred))
+
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(`
+		<350011> <%[1]s> "gondola gondola" .
+		<350012> <%[1]s> "gondola vellum" .
+	`, pred)))
+
+	scoreQuery := fmt.Sprintf(`
+	{
+		score as var(func: bm25(%s, "gondola"))
+		me(func: uid(score), orderdesc: val(score)) {
+			uid
+			val(score)
+		}
+	}`, pred)
+	_, baseline := parseUIDScoreRows(t, processQueryNoErr(t, scoreQuery))
+	baseScore, ok := baseline[350011]
+	require.True(t, ok, "control doc 350011 must be in the baseline results")
+
+	// An emoji-only value tokenizes to zero terms and must be a stats no-op.
+	require.NoError(t, addTriplesToCluster(fmt.Sprintf(
+		`<350013> <%s> "🦊🐈🦄" .`, pred)))
+	_, afterSet := parseUIDScoreRows(t, processQueryNoErr(t, scoreQuery))
+	require.Equal(t, baseScore, afterSet[350011],
+		"an emoji-only (zero-token) SET must not change corpus stats")
+
+	deleteTriplesInCluster(fmt.Sprintf(`<350013> <%s> * .`, pred))
+	_, afterDel := parseUIDScoreRows(t, processQueryNoErr(t, scoreQuery))
+	require.Equal(t, baseScore, afterDel[350011],
+		"deleting an emoji-only (zero-token) value must not change corpus stats")
 }

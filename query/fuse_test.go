@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/v25/dql"
 	"github.com/dgraph-io/dgraph/v25/types"
 )
 
@@ -250,4 +251,137 @@ func TestFuse_Determinism(t *testing.T) {
 		again := fuseChannels([]fuseChannel{a, b}, fuseOpts{method: fusionRRF, k: 60})
 		require.Equal(t, first, again)
 	}
+}
+
+func TestFuseLinear_WindowDependentNormalization(t *testing.T) {
+	// SEMANTICS-OPEN (Q9): max-normalization divides by channelMaxAbs computed over
+	// whatever scores the channel var happened to retrieve (its window), not over any
+	// global corpus maximum — no global max exists anywhere in the pipeline. The SAME
+	// raw score for the SAME uid therefore normalizes differently depending on which
+	// other documents share its retrieval window (e.g. a bm25 channel with first:N vs
+	// unbounded). This test demonstrates and pins that window dependence; whether the
+	// denominator should instead be window-invariant is an open design decision.
+	const raw = 2.0
+
+	// Window 1: the channel also retrieved a doc scoring 10.0, so max is 10.0.
+	wide := fuseChannel{scores: map[uint64]float64{1: 10.0, 2: raw}, weight: 1.0}
+	res := fuseChannels([]fuseChannel{wide},
+		fuseOpts{method: fusionLinear, normalize: normalizeMax})
+	require.InDelta(t, 0.2, asMap(res)[2], 1e-9, "raw 2.0 under window max 10.0")
+
+	// Window 2 (e.g. a deeper offset window): raw 2.0 is now the window max.
+	narrow := fuseChannel{scores: map[uint64]float64{2: raw, 3: 1.0}, weight: 1.0}
+	res = fuseChannels([]fuseChannel{narrow},
+		fuseOpts{method: fusionLinear, normalize: normalizeMax})
+	require.InDelta(t, 1.0, asMap(res)[2], 1e-9, "same raw 2.0 under window max 2.0")
+}
+
+func TestFuseRRF_MassTiePlateau(t *testing.T) {
+	// SEMANTICS-OPEN (Q9): channelRanks assigns 1-based POSITIONAL ranks with a uid
+	// tie-break, so a plateau of identical scores receives ranks 1..n and RRF
+	// contributions ranging from 1/(k+1) down to 1/(k+n) — equal-relevance documents
+	// get very different fused scores purely by uid order. Dense ranking (all tied
+	// docs sharing one rank) is not implemented; this pins the positional choice
+	// until that decision is made.
+	const n = 1000
+	scores := make(map[uint64]float64, n)
+	for uid := uint64(1); uid <= n; uid++ {
+		scores[uid] = 5.0
+	}
+	res := fuseChannels([]fuseChannel{ch(scores)}, fuseOpts{method: fusionRRF, k: 60})
+	require.Len(t, res, n)
+	got := asMap(res)
+
+	const k = 60.0
+	require.InDelta(t, 1/(k+1), got[1], 1e-12, "first tied uid gets rank 1")
+	require.InDelta(t, 1/(k+n), got[n], 1e-12, "last tied uid gets rank n")
+	// The spread across a single tie plateau: (k+n)/(k+1) = 1060/61 ≈ 17.4x.
+	require.Greater(t, got[1]/got[n], 10.0,
+		"positional ranking spreads identical-score docs by >10x under k=60")
+	// Output order across the plateau is uid ascending (rank order == uid order).
+	require.Equal(t, uint64(1), res[0].uid)
+	require.Equal(t, uint64(n), res[n-1].uid)
+}
+
+func TestParseFuseOpts_NegativeWeights(t *testing.T) {
+	// SEMANTICS-OPEN (Q9): parseFuseOpts rejects only NaN/Inf weights — negative and
+	// zero weights are ACCEPTED today, even though fuseLinear's clamp-then-weight
+	// order means negative weights produce fused scores outside any documented
+	// range (see TestFuseLinear_NegativeWeightOutput). Whether to reject them is an
+	// open decision; this pins the current accept behavior.
+	args := func(spec string) []dql.Arg {
+		return []dql.Arg{{Value: "weights"}, {Value: spec}}
+	}
+
+	_, weights, err := parseFuseOpts(args("-1,1"), 2)
+	require.NoError(t, err, "negative weight is currently accepted")
+	require.Equal(t, []float64{-1, 1}, weights)
+
+	_, weights, err = parseFuseOpts(args("0,1"), 2)
+	require.NoError(t, err, "zero weight is currently accepted")
+	require.Equal(t, []float64{0, 1}, weights)
+
+	// Non-finite weights are rejected (strconv.ParseFloat accepts these spellings,
+	// so the explicit IsNaN/IsInf guard is what fires).
+	for _, bad := range []string{"NaN,1", "Inf,1", "+Inf,1", "-Infinity,1"} {
+		_, _, err := parseFuseOpts(args(bad), 2)
+		require.Error(t, err, "weight spec %q must be rejected", bad)
+		require.Contains(t, err.Error(), "invalid weight")
+	}
+}
+
+func TestFuseLinear_NegativeWeightOutput(t *testing.T) {
+	// SEMANTICS-OPEN (Q9): with an accepted negative weight, fuseLinear emits
+	// negative fused scores — outside the [0, sum(weights)] range that max-normalized
+	// non-negative weights would guarantee. Pin the exact arithmetic so any future
+	// rejection (or re-ranged) fix consciously changes this test.
+	a := fuseChannel{scores: map[uint64]float64{1: 4.0, 2: 2.0}, weight: -1.0}
+	b := fuseChannel{scores: map[uint64]float64{2: 3.0}, weight: 1.0}
+	res := fuseChannels([]fuseChannel{a, b},
+		fuseOpts{method: fusionLinear, normalize: normalizeMax})
+	got := asMap(res)
+
+	// uid1: -1*(4/4) = -1.0 (a negative fused score escapes into the ranking).
+	require.InDelta(t, -1.0, got[1], 1e-9)
+	// uid2: -1*(2/4) + 1*(3/3) = 0.5
+	require.InDelta(t, 0.5, got[2], 1e-9)
+	require.Equal(t, uint64(2), res[0].uid, "negatively-fused doc sinks below the positive one")
+}
+
+func TestFuseLinear_ClampBeforeWeight(t *testing.T) {
+	// Pin (Q9): the negative-similarity clamp applies to the NORMALIZED score BEFORE
+	// the channel weight multiplies in. A negative raw score under a negative weight
+	// must therefore contribute exactly 0 (clamp(-0.5)=0, then -1*0=0) — never a
+	// positive contribution, which weighting-before-clamping would produce
+	// (-1 * -0.5 = +0.5).
+	c := fuseChannel{scores: map[uint64]float64{1: -0.5, 2: 1.0}, weight: -1.0}
+	res := fuseChannels([]fuseChannel{c},
+		fuseOpts{method: fusionLinear, normalize: normalizeMax})
+	got := asMap(res)
+
+	require.InDelta(t, 0.0, got[1], 1e-9, "clamped-to-zero norm stays 0 under any weight")
+	require.InDelta(t, -1.0, got[2], 1e-9, "positive norm 1.0 weighted by -1")
+}
+
+func TestFuseRRF_WeightSemanticsDeviateFromStandardRRF(t *testing.T) {
+	// INTENTIONAL DEVIATION (Q9): standard RRF (Cormack et al. 2009) is the
+	// unweighted sum over channels of 1/(k+rank). This implementation multiplies each
+	// channel's reciprocal-rank term by that channel's weight — weight * 1/(k+rank) —
+	// so that fuse(..., weights:) biases channels under method:rrf instead of
+	// silently ignoring the option. With the default weight 1.0 it reduces to
+	// standard RRF (see TestFuseRRF_DefaultWeightIsStandardRRF). Pin the exact
+	// weighted math on a case standard RRF would score as a dead tie.
+	a := fuseChannel{scores: map[uint64]float64{1: 9.0, 2: 5.0}, weight: 0.25}
+	b := fuseChannel{scores: map[uint64]float64{2: 9.0, 1: 5.0}, weight: 4.0}
+	res := fuseChannels([]fuseChannel{a, b}, fuseOpts{method: fusionRRF, k: 60})
+	got := asMap(res)
+
+	const k = 60.0
+	// uid1: rank1 in a, rank2 in b. uid2: mirror image.
+	require.InDelta(t, 0.25/(k+1)+4.0/(k+2), got[1], 1e-12)
+	require.InDelta(t, 0.25/(k+2)+4.0/(k+1), got[2], 1e-12)
+	// Standard (unweighted) RRF would tie uid1 and uid2 exactly; the weights break
+	// the tie in favor of the heavier channel's top document.
+	require.Equal(t, uint64(2), res[0].uid)
+	require.Greater(t, got[2], got[1])
 }

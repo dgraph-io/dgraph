@@ -711,6 +711,12 @@ func ParseWithNeedVars(r Request, needVars []string) (res Result, rerr error) {
 	if err := rewriteHybridBlocks(&res); err != nil {
 		return res, err
 	}
+	// fuse() executes coordinator-side and never reaches ProcessGraph, so block
+	// modifiers (@filter, ordering, pagination, children) would be silently ignored.
+	// Reject them, and reject duplicate channels, instead of degrading silently.
+	if err := validateFuseBlocks(&res); err != nil {
+		return res, err
+	}
 
 	if len(res.Query) != 0 {
 		res.QueryVars = make([]*Vars, 0, len(res.Query))

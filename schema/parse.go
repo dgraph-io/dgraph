@@ -443,6 +443,17 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			if !has {
 				return errors.Errorf("Invalid tokenizer %s", t)
 			}
+			if schema.Lang && tokenizer.Name() == "bm25" {
+				// Lang-tagged values are indexed under lang-qualified keys and are only
+				// searchable through a pred@lang qualifier, which bm25() does not
+				// support. Allowing the combination silently makes every tagged value
+				// unsearchable (and its corpus-stats contribution asymmetric). Reject it
+				// until bm25 defines @lang semantics.
+				return errors.Errorf(
+					"Tokenizer bm25 cannot be used with @lang on predicate %s: "+
+						"bm25 does not support language-qualified values",
+					x.ParseAttr(schema.Predicate))
+			}
 			if schema.NoConflict && tokenizer.Name() == "bm25" {
 				// BM25 maintains corpus statistics (doc count, total terms) via a
 				// read-modify-write that relies on transaction conflict detection to

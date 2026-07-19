@@ -79,6 +79,38 @@ func rewriteHybridBlocks(res *Result) error {
 	return nil
 }
 
+// validateFuseBlocks rejects fuse() blocks whose modifiers would be silently
+// ignored. fuse() is computed coordinator-side from resolved value variables and is
+// skipped by ProcessGraph, so an @filter, ordering, pagination, cascade, or child
+// selection on the fuse block itself never executes. It must also be bound to a
+// variable (that is the only way its result is consumed), and its channel list must
+// not repeat a variable (a duplicate would double that channel's contribution).
+func validateFuseBlocks(res *Result) error {
+	for _, qu := range res.Query {
+		if qu == nil || qu.Func == nil || qu.Func.Name != fuseFunc {
+			continue
+		}
+		if qu.Var == "" {
+			return fmt.Errorf("fuse must be assigned to a variable, e.g. " +
+				"`f as var(func: fuse(a, b))`; consume it with uid(f) / val(f)")
+		}
+		if qu.Filter != nil || len(qu.Order) > 0 || len(qu.Cascade) > 0 ||
+			len(qu.Children) > 0 || qu.Args["first"] != "" || qu.Args["offset"] != "" {
+			return fmt.Errorf("fuse: @filter, ordering, pagination, cascade, and child " +
+				"blocks are not supported on a fuse() block; apply them on the " +
+				"consuming uid(var) block (use topk: to bound fused results)")
+		}
+		seen := make(map[string]bool, len(qu.Func.NeedsVar))
+		for _, nv := range qu.Func.NeedsVar {
+			if seen[nv.Name] {
+				return fmt.Errorf("fuse: duplicate channel variable %q", nv.Name)
+			}
+			seen[nv.Name] = true
+		}
+	}
+	return nil
+}
+
 // findReservedHybridVar walks a query block and its children for any variable using
 // the reserved hybrid prefix, returning the first one found.
 func findReservedHybridVar(qu *GraphQuery) (string, bool) {
@@ -105,9 +137,11 @@ func expandHybridBlock(qu *GraphQuery, idx int) ([]*GraphQuery, error) {
 	// The rewrite builds fresh channel/fuse blocks and discards everything else on the
 	// original hybrid block, so silently accepting modifiers here would drop them.
 	// Reject them explicitly: apply @filter/order/cascade on the outer uid(var) block.
-	if qu.Filter != nil || len(qu.Children) > 0 || len(qu.Order) > 0 || len(qu.Cascade) > 0 {
-		return nil, fmt.Errorf("hybrid: @filter, ordering, cascade, and child blocks are not " +
-			"supported on a hybrid() block; bind it to a variable and apply them on the uid(var) block")
+	if qu.Filter != nil || len(qu.Children) > 0 || len(qu.Order) > 0 || len(qu.Cascade) > 0 ||
+		qu.Args["first"] != "" || qu.Args["offset"] != "" {
+		return nil, fmt.Errorf("hybrid: @filter, ordering, pagination, cascade, and child " +
+			"blocks are not supported on a hybrid() block; bind it to a variable and apply " +
+			"them on the uid(var) block (use topk: to bound the fused candidate set)")
 	}
 	fn := qu.Func
 	textPred := fn.Attr
