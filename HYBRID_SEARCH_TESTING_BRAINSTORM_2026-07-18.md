@@ -108,8 +108,46 @@ Predictions that did NOT survive testing: count-var sentinel phantom uid (passes
 groupby crash unreachable via DQL (parser rejects; defensive guard added anyway),
 Q20 crash-mid-rebuild (refuted by falsification pass).
 
-Remaining: Wave 2 (LocalCluster lifecycle: Q16 rebuild-undercount, Q17/Q19
-multi-group, Q22-Q24) and Wave 3 (benchmarks Q31-Q35).
+## Wave-2 outcome (commit 53caacf20)
+
+New `systest/bm25lifecycle` package (LocalCluster harness, `integration2` tag), all
+green by default; run gated acceptance tests with `BM25_KNOWN_FAILING=1`.
+
+- **Fixed: intra-proposal stats race** (Q15/Q19 family) — ≥512-edge proposals apply in
+  parallel goroutines that never share a data key but DO share uid%32 stats buckets;
+  the unserialized RMW dropped deltas (heavy-txn oracle diverged). `Txn.bm25StatsMu`
+  serializes the stats RMW; empirically verified fixed.
+- **Confirmed + gated: Q16 rebuild-vs-live undercount** — live write between DropPrefix
+  and the rebuild's absolute flush RMWs from an empty bucket and shadows the flush via
+  MVCC (uid 0x5b: 0.0062 vs closed-form 4.137). Fix design: Zero-mediated conflicting
+  flush or delta-merged stats. Gated test is the acceptance gate.
+- **Confirmed + gated: Q23 bulk duplicate triples** — mapper counts stats per nquad,
+  reduce dedupes postings (implied docCount 1050 vs 1000). Fix: once-per-(pred,uid)
+  stats at reduce. Clean-parity (dedup'd data) asserted green by default.
+- **Empirically SAFE**: Q17 multi-group parity (bm25 bit-parity; HNSW cross-topology
+  divergence bounded to boundary ranks — approximate-index contract documented in the
+  test), Q19 replica catch-up + leader failover, Q20 crash-mid-rebuild recovery,
+  Q22 HNSW lifecycle (no ghosts / stale scores / restart divergence).
+
+## Wave-3 outcome (benchmarks)
+
+- **WAND effectiveness** (`worker/bm25wand_bench_test.go`): topK=10 multi-term ≈ 64×
+  exhaustive (774/60k docs scored); single high-df term only ~11×; **topK≥100
+  collapses to exhaustive**; deep offset (first:10, offset:10000 → heap 10010) ≈ 43×
+  slower than offset:0 — degrades to exhaustive by design. BMW == WAND on interleaved
+  corpora (block-max bounds collapse) — BMW currently buys nothing.
+- **Fusion overhead** (`query/fuse_bench_test.go`): RRF 3.5-4× linear; `channelRanks`
+  sort+alloc is ~70% of 8-channel RRF at 100k/channel (581ms, 75MB); `topk` does NOT
+  bound work (truncation after full sort). Optimization targets: rank computation
+  without full map materialization; pre-fusion channel caps.
+- **Stats read floor** (`posting/bm25_bench_test.go`): every bm25 query pays ~33µs /
+  1100 allocs reading 32 buckets uncached (~9× a warm re-read) — per-predicate stats
+  snapshot cache is the obvious lever. Codec: decode 5.5ns/0 allocs (healthy).
+- Q34 scored-HNSW overhead: deferred (needs populated index harness; the `WantScores`
+  fix is protoc-blocked anyway).
+
+Note: benchmarks run on a jemalloc-free build; absolute numbers shift with jemalloc,
+relative comparisons hold.
 
 ## Evidence that would change this ranking
 - If Q1's fix is trivial and unblocks pushdown+rescore, suite 1 shrinks to regression pins.
