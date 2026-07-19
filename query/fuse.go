@@ -6,6 +6,7 @@
 package query
 
 import (
+	"container/heap"
 	"math"
 	"sort"
 	"strconv"
@@ -96,38 +97,99 @@ func fuseChannels(channels []fuseChannel, opts fuseOpts) []scoredUid {
 		fused = fuseRRF(channels, opts.k)
 	}
 
+	if opts.topk > 0 && len(fused) > opts.topk {
+		return topKFused(fused, opts.topk)
+	}
 	out := make([]scoredUid, 0, len(fused))
 	for uid, s := range fused {
 		out = append(out, scoredUid{uid: uid, score: s})
 	}
+	sortFusedDesc(out)
+	return out
+}
+
+// sortFusedDesc sorts by score descending, ties broken by uid ascending.
+func sortFusedDesc(out []scoredUid) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].score != out[j].score {
 			return out[i].score > out[j].score
 		}
 		return out[i].uid < out[j].uid
 	})
-	if opts.topk > 0 && len(out) > opts.topk {
-		out = out[:opts.topk]
+}
+
+// fusedHeap is a worst-at-root heap of scoredUid under (score desc, uid asc)
+// ranking: the root is the entry that would be evicted first.
+type fusedHeap []scoredUid
+
+func (h fusedHeap) Len() int { return len(h) }
+func (h fusedHeap) Less(i, j int) bool {
+	// Root must be the WORST entry: lower score first; among equal scores the
+	// higher uid is worse (uid asc wins ties in the final ranking).
+	if h[i].score != h[j].score {
+		return h[i].score < h[j].score
 	}
+	return h[i].uid > h[j].uid
+}
+func (h fusedHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
+func (h *fusedHeap) Push(x interface{}) { *h = append(*h, x.(scoredUid)) }
+func (h *fusedHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[:n-1]
+	return x
+}
+
+// topKFused selects the topk entries by (score desc, uid asc) without sorting the
+// whole fused map: a size-bounded worst-at-root heap makes selection
+// O(n log topk) instead of O(n log n), and the n-sized output slice is never
+// allocated.
+func topKFused(fused map[uint64]float64, topk int) []scoredUid {
+	h := make(fusedHeap, 0, topk)
+	heap.Init(&h)
+	for uid, s := range fused {
+		cand := scoredUid{uid: uid, score: s}
+		if len(h) < topk {
+			heap.Push(&h, cand)
+			continue
+		}
+		// Replace the root if the candidate outranks the current worst.
+		if root := h[0]; cand.score > root.score ||
+			(cand.score == root.score && cand.uid < root.uid) {
+			h[0] = cand
+			heap.Fix(&h, 0)
+		}
+	}
+	out := []scoredUid(h)
+	sortFusedDesc(out)
 	return out
 }
 
-// channelRanks returns the 1-based rank of every uid in a channel, computed by
-// sorting on score descending and tie-breaking by uid ascending. The tie-break
+// channelOrder returns the channel's uids sorted by score descending, tie-broken
+// by uid ascending — the 1-based rank of a uid is its index+1. The tie-break
 // matches the deterministic ordering used elsewhere in the codebase (bm25/HNSW
-// sorted()), so equal-scored uids rank stably by uid.
-func channelRanks(c fuseChannel) map[uint64]int {
-	uids := make([]uint64, 0, len(c.scores))
-	for uid := range c.scores {
-		uids = append(uids, uid)
+// sorted()), so equal-scored uids rank stably by uid. Scores are copied out of
+// the map once so the sort comparator does slice reads, not map lookups (two map
+// probes per comparison dominated the sort's cost at 100k+ uids).
+func channelOrder(c fuseChannel) []uint64 {
+	pairs := make([]scoredUid, 0, len(c.scores))
+	for uid, s := range c.scores {
+		pairs = append(pairs, scoredUid{uid: uid, score: s})
 	}
-	sort.Slice(uids, func(i, j int) bool {
-		si, sj := c.scores[uids[i]], c.scores[uids[j]]
-		if si != sj {
-			return si > sj
-		}
-		return uids[i] < uids[j]
-	})
+	sortFusedDesc(pairs)
+	uids := make([]uint64, len(pairs))
+	for i, p := range pairs {
+		uids[i] = p.uid
+	}
+	return uids
+}
+
+// channelRanks returns the 1-based rank of every uid in a channel. Retained for
+// callers that genuinely need random-access ranks; fusion itself iterates
+// channelOrder directly to avoid materializing this map.
+func channelRanks(c fuseChannel) map[uint64]int {
+	uids := channelOrder(c)
 	ranks := make(map[uint64]int, len(uids))
 	for i, uid := range uids {
 		ranks[uid] = i + 1
@@ -138,15 +200,17 @@ func channelRanks(c fuseChannel) map[uint64]int {
 // fuseRRF computes (weighted) Reciprocal Rank Fusion over the channels. Each
 // channel contributes weight * 1/(k+rank); with the default weight of 1.0 this is
 // standard RRF, and per-channel weights let callers bias channels under either
-// fusion method rather than silently ignoring weights for rrf.
+// fusion method rather than silently ignoring weights for rrf. Ranks come from
+// iterating the sorted order positionally — the intermediate uid->rank map was a
+// measured hotspot (~70% of 8-channel RRF wall time at 100k uids/channel).
 func fuseRRF(channels []fuseChannel, k float64) map[uint64]float64 {
 	if k <= 0 || math.IsNaN(k) || math.IsInf(k, 0) {
 		k = defaultRRFK
 	}
 	fused := make(map[uint64]float64)
 	for _, c := range channels {
-		for uid, rank := range channelRanks(c) {
-			fused[uid] += c.weight * (1.0 / (k + float64(rank)))
+		for i, uid := range channelOrder(c) {
+			fused[uid] += c.weight * (1.0 / (k + float64(i+1)))
 		}
 	}
 	return fused

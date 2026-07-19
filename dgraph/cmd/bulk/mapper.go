@@ -44,18 +44,6 @@ type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
 
-	// bm25Stats accumulates per-predicate corpus statistics (document count and total
-	// term count, bucketed by uid) as documents are mapped. BM25 stats must be summed,
-	// not unioned like postings, so each mapper accumulates locally and the loader
-	// merges all mappers and flushes one stats posting per bucket after the map phase
-	// (see loader.flushBM25Stats). Keyed by namespaced predicate.
-	bm25Stats map[string]*bm25StatEntry
-}
-
-// bm25StatEntry holds one predicate's bucketed corpus-statistics partials for a mapper.
-type bm25StatEntry struct {
-	count [posting.NumBM25StatsBuckets]int64
-	terms [posting.NumBM25StatsBuckets]int64
 }
 
 type shardState struct {
@@ -79,9 +67,8 @@ func newMapper(st *state) *mapper {
 		shards[i].cbuf = newMapperBuffer(st.opt)
 	}
 	return &mapper{
-		state:     st,
-		shards:    shards,
-		bm25Stats: make(map[string]*bm25StatEntry),
+		state:  st,
+		shards: shards,
 	}
 }
 
@@ -534,12 +521,21 @@ func (m *mapper) addBM25IndexMapEntries(attr string, lang string, de *pb.Directe
 		)
 	}
 
-	entry := m.bm25Stats[attr]
-	if entry == nil {
-		entry = &bm25StatEntry{}
-		m.bm25Stats[attr] = entry
-	}
-	bucket := uid % posting.NumBM25StatsBuckets
-	entry.count[bucket]++
-	entry.terms[bucket] += int64(docLen)
+	// Emit the document's corpus-statistics contribution as a PER-DOCUMENT posting
+	// on the final stats bucket key: (docCount=1, totalTerms=docLen). Duplicate
+	// nquads for the same (attr, uid) collapse in the reducer's same-uid dedup —
+	// exactly like the term postings above — so duplicates cannot inflate the
+	// stats (mapper-side pre-aggregation counted once per nquad and did). The
+	// reducer folds each bucket's per-doc postings into the single aggregate
+	// posting the live/rebuild paths store (see reduce.go appendToList).
+	m.addMapEntry(
+		x.BM25StatsKey(attr, int(uid%posting.NumBM25StatsBuckets)),
+		&pb.Posting{
+			Uid:         uid,
+			PostingType: pb.Posting_REF,
+			ValType:     pb.Posting_BINARY,
+			Value:       posting.EncodeBM25Stats(1, uint64(docLen)),
+		},
+		shard,
+	)
 }

@@ -811,6 +811,54 @@ func (r *reducer) toList(req *encodeRequest, vi *vectorIndexer) {
 		enc := codec.Encoder{BlockSize: 256, Alloc: alloc}
 		var lastUid uint64
 		var slice []byte
+
+		// BM25 corpus-statistics bucket: the mapper emits one (docCount=1,
+		// totalTerms=docLen) posting PER DOCUMENT on the bucket key, so duplicate
+		// nquads for the same (attr, uid) collapse in the same-uid dedup below —
+		// they cannot inflate the stats the way mapper-side pre-aggregation did
+		// (it counted once per nquad). Fold the deduped per-doc postings into the
+		// single aggregate value posting the live/rebuild paths store.
+		if pk.IsBM25Stats() {
+			var docCount, totalTerms uint64
+			var p pb.Posting
+			lastUid = 0
+			next := start
+			for next >= 0 && (next < end || end == -1) {
+				slice, next = cbuf.Slice(next)
+				me := MapEntry(slice)
+				uid := me.Uid()
+				if uid == lastUid {
+					continue
+				}
+				lastUid = uid
+				if pbuf := me.Plist(); len(pbuf) > 0 {
+					p.Reset()
+					x.Check(proto.Unmarshal(pbuf, &p))
+					c, terms := posting.DecodeBM25Stats(p.Value)
+					docCount += c
+					totalTerms += terms
+				}
+			}
+			if docCount == 0 && totalTerms == 0 {
+				return
+			}
+			enc.Add(math.MaxUint64)
+			pl.Postings = append(pl.Postings, &pb.Posting{
+				Uid:         math.MaxUint64,
+				PostingType: pb.Posting_VALUE,
+				ValType:     pb.Posting_BINARY,
+				Value:       posting.EncodeBM25Stats(docCount, totalTerms),
+			})
+			pl.Pack = enc.Done()
+			kv := posting.MarshalPostingList(pl, nil)
+			kv.Key = y.Copy(currentKey)
+			kv.Version = writeVersionTs
+			kv.StreamId = r.streamIdFor(pk.Attr)
+			badger.KVToBuffer(kv, kvBuf)
+			pl.Reset()
+			return
+		}
+
 		next := start
 		for next >= 0 && (next < end || end == -1) {
 			slice, next = cbuf.Slice(next)

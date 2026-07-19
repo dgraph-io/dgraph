@@ -316,6 +316,13 @@ func BM25StatsKey(attr string, bucket int) []byte {
 	return IndexKey(attr, bm25StatsPrefix+string(buf[:]))
 }
 
+// IsBM25Stats reports whether p is a BM25 corpus-statistics bucket key (the
+// reserved-token index keys written by BM25StatsKey). The bulk reducer uses this
+// to fold per-document stats postings into the single aggregate bucket posting.
+func (p ParsedKey) IsBM25Stats() bool {
+	return p.IsIndex() && strings.HasPrefix(p.Term, bm25StatsPrefix)
+}
+
 // BM25StatsPrefix returns the key prefix covering every BM25 corpus-statistics
 // bucket for attr. Stats live under a reserved token prefix that is distinct from
 // the IdentBM25 term-posting prefix, so dropping/rebuilding the BM25 index must

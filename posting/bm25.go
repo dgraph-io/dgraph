@@ -80,6 +80,12 @@ func EncodeBM25Stats(docCount, totalTerms uint64) []byte {
 	return encodeBM25Stats(docCount, totalTerms)
 }
 
+// DecodeBM25Stats decodes a stats posting value written by EncodeBM25Stats. The bulk
+// reducer uses it to fold per-document stats postings into bucket totals.
+func DecodeBM25Stats(b []byte) (docCount, totalTerms uint64) {
+	return decodeBM25Stats(b)
+}
+
 // encodeBM25Value packs a posting's term frequency and document length into the
 // posting Value as two unsigned varints. Storing the document length alongside the
 // term frequency makes scoring read (tf, docLen) in a single posting access — no

@@ -239,27 +239,24 @@ func deriveBM25Stats(s1, tf1, dl1, s2, tf2, dl2, df float64) (docCount, avgDL fl
 // re-SETs those triples and delete+reinserts uids 901..910) into a bulk-loaded
 // cluster and a live-mutated cluster, then asserts:
 //  1. the live cluster's scores match the in-test closed-form oracle to 1e-9,
-//  2. the bulk cluster's scores match the same oracle (FAILS today: the bulk
-//     mapper counts stats once per nquad while reduce dedupes postings, so the
-//     duplicated triples inflate docCount by 50 and totalTerms accordingly),
+//  2. the bulk cluster's scores match the same oracle (regression pin: the bulk
+//     mapper used to count stats once per nquad while reduce deduped postings,
+//     inflating docCount by the duplicate count — fixed by per-doc stats
+//     postings folded in the reducer),
 //  3. both clusters' score-annotated result lists agree to 1e-9,
 //  4. (docCount, avgDL) derived closed-form from the probe-term scores equal
 //     ground truth on both clusters.
 func TestBM25BulkLiveParity(t *testing.T) {
 	corpus := buildParityCorpus(t)
-	// KNOWN-FAILING (Q23), gated: with duplicate triples in the bulk RDF the
-	// mapper counts stats once per nquad while reduce dedupes postings, inflating
-	// docCount by the duplicate count (empirically: implied docCount=1050 for
-	// truth 1000). Until the bulk pipeline counts stats once per (pred, uid) at
-	// reduce time, the default run bulk-loads the deduplicated file and pins the
-	// clean-parity contract; set BM25_KNOWN_FAILING=1 to run the duplicate
-	// variant as the acceptance gate for the fix.
-	var dupUids map[uint64]bool
-	if os.Getenv("BM25_KNOWN_FAILING") != "" {
-		dupUids = make(map[uint64]bool)
-		for i := uint64(1); i <= 50; i++ {
-			dupUids[i] = true
-		}
+	// Q23 regression (fixed): the bulk mapper used to count stats once per nquad
+	// while reduce deduped postings, so duplicate triples inflated docCount
+	// (empirically 1050 for truth 1000). The mapper now emits per-document stats
+	// postings on the bucket keys and the reducer folds them after the same-uid
+	// dedup, so duplicates cannot inflate stats. Duplicates are therefore part of
+	// the DEFAULT corpus here, pinning the fix.
+	dupUids := make(map[uint64]bool)
+	for i := uint64(1); i <= 50; i++ {
+		dupUids[i] = true
 	}
 
 	battery := []string{
