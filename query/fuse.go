@@ -146,12 +146,17 @@ func (h *fusedHeap) Pop() interface{} {
 // O(n log topk) instead of O(n log n), and the n-sized output slice is never
 // allocated.
 func topKFused(fused map[uint64]float64, topk int) []scoredUid {
+	// Fill phase appends directly (heap.Push would box each scoredUid through
+	// interface{}, one allocation per element); a single Init establishes the
+	// heap invariant once the buffer is full.
 	h := make(fusedHeap, 0, topk)
-	heap.Init(&h)
 	for uid, s := range fused {
 		cand := scoredUid{uid: uid, score: s}
 		if len(h) < topk {
-			heap.Push(&h, cand)
+			h = append(h, cand)
+			if len(h) == topk {
+				heap.Init(&h)
+			}
 			continue
 		}
 		// Replace the root if the candidate outranks the current worst.
@@ -183,18 +188,6 @@ func channelOrder(c fuseChannel) []uint64 {
 		uids[i] = p.uid
 	}
 	return uids
-}
-
-// channelRanks returns the 1-based rank of every uid in a channel. Retained for
-// callers that genuinely need random-access ranks; fusion itself iterates
-// channelOrder directly to avoid materializing this map.
-func channelRanks(c fuseChannel) map[uint64]int {
-	uids := channelOrder(c)
-	ranks := make(map[uint64]int, len(uids))
-	for i, uid := range uids {
-		ranks[uid] = i + 1
-	}
-	return ranks
 }
 
 // fuseRRF computes (weighted) Reciprocal Rank Fusion over the channels. Each

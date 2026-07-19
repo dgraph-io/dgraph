@@ -199,6 +199,26 @@ func TestFuse_TopKTruncation(t *testing.T) {
 	require.Equal(t, uint64(3), res[2].uid)
 }
 
+func TestFuse_TopKHeapTieBreakEviction(t *testing.T) {
+	// Pins topKFused's tie-break eviction: with topk=2 and three uids tied at the
+	// same fused score, the kept pair must be the two LOWEST uids ({1, 2}), the
+	// same (score desc, uid asc) order the full-sort path produces. A score-only
+	// heap would keep whichever pair the map iteration happened to visit — this
+	// exercises the (cand.score == root.score && cand.uid < root.uid) replacement
+	// branch, which is NOT dead code.
+	a := ch(map[uint64]float64{1: 5.0, 2: 5.0, 3: 5.0})
+	res := fuseChannels([]fuseChannel{a}, fuseOpts{method: fusionLinear, normalize: normalizeNone, topk: 2})
+	require.Len(t, res, 2)
+	require.Equal(t, uint64(1), res[0].uid)
+	require.Equal(t, uint64(2), res[1].uid)
+
+	// And the heap path must agree with the full-sort path on a mixed corpus.
+	b := ch(map[uint64]float64{7: 1.0, 8: 3.0, 9: 3.0, 10: 2.0, 11: 3.0})
+	full := fuseChannels([]fuseChannel{b}, fuseOpts{method: fusionLinear, normalize: normalizeNone})
+	topped := fuseChannels([]fuseChannel{b}, fuseOpts{method: fusionLinear, normalize: normalizeNone, topk: 3})
+	require.Equal(t, full[:3], topped, "heap top-k must equal the full-sort prefix")
+}
+
 func TestFuse_SingleChannelPassthroughOrder(t *testing.T) {
 	a := ch(map[uint64]float64{1: 1, 2: 9, 3: 5})
 	res := fuseChannels([]fuseChannel{a}, fuseOpts{method: fusionRRF, k: 60})

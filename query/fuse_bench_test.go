@@ -108,20 +108,20 @@ func BenchmarkFuseChannels(b *testing.B) {
 	}
 }
 
-// BenchmarkChannelRanks isolates the per-channel rank computation used by RRF:
+// BenchmarkChannelOrder isolates the per-channel rank computation used by RRF:
 // one full sort of the channel's uids plus a fresh map[uint64]int allocation
 // per call (the suspected allocation hotspot inside fuseRRF's channel loop).
-func BenchmarkChannelRanks(b *testing.B) {
+func BenchmarkChannelOrder(b *testing.B) {
 	for _, size := range []int{1000, 10000, 100000} {
 		channels := buildFuseBenchChannels(1, size, 0)
 		c := channels[0]
 		b.Run(fmt.Sprintf("sz=%d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			var ranks map[uint64]int
+			var order []uint64
 			for i := 0; i < b.N; i++ {
-				ranks = channelRanks(c)
+				order = channelOrder(c)
 			}
-			b.ReportMetric(float64(len(ranks)), "ranks/op")
+			b.ReportMetric(float64(len(order)), "ranks/op")
 		})
 	}
 }

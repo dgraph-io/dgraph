@@ -443,6 +443,17 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			if !has {
 				return errors.Errorf("Invalid tokenizer %s", t)
 			}
+			if schema.GetList() && tokenizer.Name() == "bm25" {
+				// BM25 scores a single document (one value) per UID: document length
+				// and corpus statistics are not well-defined for a list predicate, and
+				// the bulk loader's per-(attr, uid) stats dedup would silently collapse
+				// distinct list values. The live path also rejects this combination in
+				// worker.ValidateSchema; enforcing it here covers every schema ingest
+				// path (alter, bulk, live loader).
+				return errors.Errorf(
+					"Tokenizer 'bm25' cannot be applied to list predicate: %s",
+					x.ParseAttr(schema.Predicate))
+			}
 			if schema.Lang && tokenizer.Name() == "bm25" {
 				// Lang-tagged values are indexed under lang-qualified keys and are only
 				// searchable through a pred@lang qualifier, which bm25() does not
