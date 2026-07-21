@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,14 +20,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250"
 	"github.com/dgraph-io/dgo/v250/protos/api"
-	"github.com/dgraph-io/dgraph/v25/conn"
+	"github.com/dgraph-io/dgraph/v25/hooks"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -598,90 +597,47 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 
 // AssignNsIdsOverNetwork sends a request to assign Namespace IDs to the current zero leader.
 func AssignNsIdsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().Leader(0)
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	h := hooks.GetHooks()
 	num.Type = pb.Num_NS_ID
-	return c.AssignIds(ctx, num)
+	return h.AssignNsIDs(ctx, num)
 }
 
 // AssignUidsOverNetwork sends a request to assign UIDs from the current zero leader.
 func AssignUidsOverNetwork(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	// Pass on the incoming metadata to the zero. Namespace from the metadata is required by zero.
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		ctx = metadata.NewOutgoingContext(ctx, md)
-	}
-	pl := groups().Leader(0)
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
+	h := hooks.GetHooks()
 	num.Type = pb.Num_UID
-	return c.AssignIds(ctx, num)
+	return h.AssignUIDs(ctx, num)
 }
 
 // Timestamps sends a request to assign startTs for a new transaction to the current zero leader.
 func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
-	pl := groups().connToZeroLeader()
-	if pl == nil {
-		return nil, conn.ErrNoConnection
-	}
-
-	con := pl.Get()
-	c := pb.NewZeroClient(con)
-	return c.Timestamps(ctx, num)
+	h := hooks.GetHooks()
+	return h.AssignTimestamps(ctx, num)
 }
+
+// embeddedDefaultGroup is the group id reported for transactions in embedded mode.
+// Embedded deployments run a single group and have no Zero-driven membership, so
+// groups().groupId() is not meaningful; group 1 is the lone data group.
+const embeddedDefaultGroup uint32 = 1
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64, isErrored bool) {
 	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
-		txn.FillContext(tctx, groups().groupId(), isErrored)
+		gid := embeddedDefaultGroup
+		if !hooks.IsEnabled() {
+			gid = groups().groupId()
+		}
+		txn.FillContext(tctx, gid, isErrored)
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
 	// start ts is sufficient to wait for, to achieve lin reads.
 }
 
-// proposeOrSend either proposes the mutation if the node serves the group gid or sends it to
-// the leader of the group gid for proposing.
-func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
+// proposeOrSend applies the mutation through the active hooks. The default implementation
+// proposes locally if this node serves m.GroupId, otherwise forwards to that group's leader.
+func proposeOrSend(ctx context.Context, m *pb.Mutations, chr chan res) {
 	res := res{}
-	if groups().ServesGroup(gid) {
-		res.ctx = &api.TxnContext{}
-		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
-		chr <- res
-		return
-	}
-
-	pl := groups().Leader(gid)
-	if pl == nil {
-		res.err = conn.ErrNoConnection
-		chr <- res
-		return
-	}
-
-	var tc *api.TxnContext
-	c := pb.NewWorkerClient(pl.Get())
-
-	ch := make(chan error, 1)
-	go func() {
-		var err error
-		tc, err = c.Mutate(ctx, m)
-		ch <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		res.err = ctx.Err()
-		res.ctx = nil
-	case err := <-ch:
-		res.err = err
-		res.ctx = tc
-	}
+	h := hooks.GetHooks()
+	res.ctx, res.err = h.ApplyMutations(ctx, m)
 	chr <- res
 }
 
@@ -775,7 +731,7 @@ func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, e
 			return tctx, errNonExistentTablet
 		}
 		mu.StartTs = m.StartTs
-		go proposeOrSend(ctx, gid, mu, resCh)
+		go proposeOrSend(ctx, mu, resCh)
 	}
 
 	// Wait for all the goroutines to reply back.
@@ -895,18 +851,8 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		clientDiscard = true
 	}
 
-	pl := groups().Leader(0)
-	if pl == nil {
-		return 0, conn.ErrNoConnection
-	}
-
-	// Do de-duplication before sending the request to zero.
-	tc.Keys = x.Unique(tc.Keys)
-	tc.Preds = x.Unique(tc.Preds)
-
-	zc := pb.NewZeroClient(pl.Get())
-	tctx, err := zc.CommitOrAbort(ctx, tc)
-
+	h := hooks.GetHooks()
+	tctx, err := h.CommitOrAbort(ctx, tc)
 	if err != nil {
 		span.AddEvent("Error in CommitOrAbort", trace.WithAttributes(
 			attribute.String("error", err.Error())))
@@ -918,7 +864,6 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 
 	if tctx.Aborted || tctx.CommitTs == 0 {
 		if !clientDiscard {
-			// The server aborted the txn (not the client)
 			ostats.Record(ctx, x.TxnAborts.M(1))
 		}
 		return 0, dgo.ErrAborted

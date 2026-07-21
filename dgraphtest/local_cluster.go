@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -868,18 +868,21 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		return errors.Wrap(err, "error creating http client while graphql health check")
 	}
 	if c.conf.acl {
-		for range 5 {
+		for attempt := range 10 {
 			if err = hc.LoginIntoNamespace(dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace); err == nil {
 				break
 			}
-			time.Sleep(1 * time.Second)
+			if attempt > 5 {
+				log.Printf("[WARNING] problem trying to login during graphql health check: %v", err)
+			}
+			time.Sleep(waitDurBeforeRetry)
 		}
 		if err != nil {
 			return errors.Wrap(err, "error during login while graphql health check")
 		}
 	}
 
-	for range 10 {
+	for attempt := range 10 {
 		// Sleep for a second before retrying
 		time.Sleep(waitDurBeforeRetry)
 		// we do this because before v21, we used to propose the initial schema to the cluster.
@@ -889,6 +892,9 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		if err == nil {
 			log.Printf("[INFO] graphql health check succeeded for %v", c.conf.prefix)
 			return nil
+		}
+		if attempt > 5 {
+			log.Printf("[WARNING] problem during graphql health check: %v", err)
 		}
 	}
 	return errors.Wrap(err, "error during graphql health check")
@@ -1083,7 +1089,12 @@ func (c *LocalCluster) HTTPClient() (*dgraphapi.HTTPClient, error) {
 		return nil, err
 	}
 
-	return dgraphapi.GetHttpClient(alphaUrl, zeroUrl)
+	hc, err := dgraphapi.GetHttpClient(alphaUrl, zeroUrl)
+	if err != nil {
+		return nil, err
+	}
+	hc.AuthToken = c.conf.securityToken
+	return hc, nil
 }
 
 func (c *LocalCluster) GetAlphaHttpClient(alphaID int) (*dgraphapi.HTTPClient, error) {

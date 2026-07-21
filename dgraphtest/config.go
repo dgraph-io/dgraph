@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -106,10 +106,12 @@ type ClusterConfig struct {
 	lambdaURL             string
 	featureFlags          []string
 	customPlugins         bool
+	startupArgs           []string
 	snapShotAfterEntries  uint64
 	snapshotAfterDuration time.Duration
 	repoDir               string
 	mcp                   bool
+	securityToken         string
 }
 
 // NewClusterConfig generates a default ClusterConfig
@@ -163,6 +165,12 @@ func (cc ClusterConfig) WithReplicas(n int) ClusterConfig {
 // WithVerbosity sets the verbosity level for the logs
 func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
 	cc.verbosity = v
+	return cc
+}
+
+// WithSecurityToken sets the --security auth-token (poor man's auth) for admin operations.
+func (cc ClusterConfig) WithSecurityToken(token string) ClusterConfig {
+	cc.securityToken = token
 	return cc
 }
 
@@ -240,6 +248,13 @@ func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 // WithGraphqlLambdaURL sets the graphql lambda url for alpha
 func (cc ClusterConfig) WithGraphqlLambdaURL(url string) ClusterConfig {
 	cc.lambdaURL = url
+	return cc
+}
+
+// WithStartupArg appends an extra flag to the Alpha startup command in the form
+// --arg=value. It may be called multiple times to accumulate additional flags.
+func (cc ClusterConfig) WithStartupArg(arg, value string) ClusterConfig {
+	cc.startupArgs = append(cc.startupArgs, fmt.Sprintf("--%s=%s", arg, value))
 	return cc
 }
 
