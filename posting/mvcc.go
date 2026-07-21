@@ -539,7 +539,7 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
 
 				if EnableDetailedMetrics {
-					x.NumPostingListCacheSave.M(ml.cache.numCacheRead.Load())
+					x.NumPostingListCacheSave.M(ml.cache.numCacheSave.Load())
 					x.NumPostingListCacheRead.M(ml.cache.numCacheRead.Load())
 					x.NumPostingListCacheReadFail.M(ml.cache.numCacheReadFails.Load())
 				}
@@ -709,8 +709,12 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			}
 
 			l.minTs = item.Version()
+			if l.mutationMap == nil {
+				l.mutationMap = newMutableLayer()
+			}
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
+			l.calculateUids()
 			return l, nil
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
