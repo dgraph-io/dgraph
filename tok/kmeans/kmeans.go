@@ -16,15 +16,20 @@ const (
 )
 
 type Kmeans[T c.Float] struct {
-	floatBits int
-	numPasses int
-	centroids *vectorCentroids[T]
+	floatBits   int
+	numPasses   int
+	numClusters int
+	numProbes   int
+	centroids   *vectorCentroids[T]
 }
 
-func CreateKMeans[T c.Float](floatBits int, pred string, distFunc func(a, b []T, floatBits int) (T, error)) index.VectorPartitionStrat[T] {
+func CreateKMeans[T c.Float](floatBits int, pred string, numClusters, numProbes int,
+	distFunc func(a, b []T, floatBits int) (T, error)) index.VectorPartitionStrat[T] {
 	return &Kmeans[T]{
-		floatBits: floatBits,
-		numPasses: 5,
+		floatBits:   floatBits,
+		numPasses:   5,
+		numClusters: numClusters,
+		numProbes:   numProbes,
 		centroids: &vectorCentroids[T]{
 			distFunc:  distFunc,
 			floatBits: floatBits,
@@ -69,10 +74,16 @@ func (km *Kmeans[T]) NumPasses() int {
 
 func (km *Kmeans[T]) SetNumPasses(n int) {
 	km.numPasses = n
+	if n == 0 {
+		// Zero passes means k-means will never run (fewer vectors than
+		// seeds). Clear the seed centroids so the degenerate index persists
+		// an empty centroid set and routing consistently uses cluster 0.
+		km.centroids.clear()
+	}
 }
 
 func (km *Kmeans[T]) NumSeedVectors() int {
-	return 1000
+	return km.numClusters
 }
 
 func (km *Kmeans[T]) StartBuildPass() {
@@ -86,6 +97,11 @@ func (km *Kmeans[T]) EndBuildPass() {
 }
 
 type vectorCentroids[T c.Float] struct {
+	// mu guards centroids and the derived fields below. Build passes take the
+	// write lock; routing (findCentroid, findNClosestCentroids) takes the
+	// read lock, so a long-lived index can serve concurrent lookups.
+	mu sync.RWMutex
+
 	dimension  int
 	numCenters int
 	pred       string
@@ -99,7 +115,24 @@ type vectorCentroids[T c.Float] struct {
 	floatBits int
 }
 
+func (vc *vectorCentroids[T]) clear() {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	vc.centroids = nil
+	vc.counts = nil
+	vc.weights = nil
+	vc.mutexs = nil
+	vc.numCenters = 0
+	vc.dimension = 0
+}
+
 func (vc *vectorCentroids[T]) findCentroid(input []T) (int, error) {
+	vc.mu.RLock()
+	defer vc.mu.RUnlock()
+	return vc.findCentroidWithLockHeld(input)
+}
+
+func (vc *vectorCentroids[T]) findCentroidWithLockHeld(input []T) (int, error) {
 	minIdx := 0
 	minDist := math.MaxFloat32
 	for i, centroid := range vc.centroids {
@@ -195,6 +228,8 @@ func (vc *vectorCentroids[T]) addVector(vec []T) error {
 }
 
 func (vc *vectorCentroids[T]) updateCentroids() {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	x.AssertTrue(len(vc.centroids) == vc.numCenters)
 	x.AssertTrue(len(vc.counts) == vc.numCenters)
 	x.AssertTrue(len(vc.weights) == vc.numCenters)
@@ -218,6 +253,8 @@ func (vc *vectorCentroids[T]) updateCentroids() {
 }
 
 func (vc *vectorCentroids[T]) randomInit() {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	vc.dimension = len(vc.centroids[0])
 	for i := range vc.centroids {
 		x.AssertTrue(len(vc.centroids[i]) == vc.dimension)
@@ -234,5 +271,7 @@ func (vc *vectorCentroids[T]) randomInit() {
 }
 
 func (vc *vectorCentroids[T]) addSeedCentroid(vec []T) {
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
 	vc.centroids = append(vc.centroids, vec)
 }
