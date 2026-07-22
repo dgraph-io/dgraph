@@ -42,10 +42,22 @@ func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
 	ph.vectorDimension, _, _ = opt.GetOpt(o, vectorDimension, -1)
 	ph.partitionStrat, _, _ = opt.GetOpt(o, PartitionStratOpt, "kmeans")
 
+	if ph.numClusters < 1 {
+		return errors.New("numClusters must be at least 1")
+	}
 	if ph.partitionStrat != "kmeans" {
 		return errors.New("partition strategy must be kmeans")
 	}
-	ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, hnsw.EuclideanDistanceSq[T])
+
+	// numProbes is how many clusters a search visits (IVF nprobe). More
+	// probes cost latency and buy recall. Default: a small slice of the
+	// clusters, but never fewer than 4 (or all of them if numClusters < 4).
+	defaultProbes := max(4, ph.numClusters/25)
+	numProbes, _, _ := opt.GetOpt(o, NumProbesOpt, defaultProbes)
+	numProbes = max(1, min(numProbes, ph.numClusters))
+
+	ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, ph.numClusters, numProbes,
+		hnsw.EuclideanDistanceSq[T])
 
 	ph.buildPass = 0
 	ph.numPasses = 10

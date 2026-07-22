@@ -18,6 +18,7 @@ import (
 
 const (
 	NumClustersOpt    string = "numClusters"
+	NumProbesOpt      string = "numProbes"
 	vectorDimension   string = "vectorDimension"
 	PartitionStratOpt string = "partitionStratOpt"
 	PartitionedHNSW   string = "partionedhnsw"
@@ -61,6 +62,7 @@ func (hf *partitionedHNSWIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 		AddIntOption(hnsw.EfConstructionOpt).
 		AddIntOption(hnsw.EfSearchOpt).
 		AddIntOption(NumClustersOpt).
+		AddIntOption(NumProbesOpt).
 		AddStringOption(PartitionStratOpt).AddIntOption(vectorDimension)
 	getSimFunc := func(optValue string) (any, error) {
 		if optValue != hnsw.Euclidean && optValue != hnsw.Cosine && optValue != hnsw.DotProd {
