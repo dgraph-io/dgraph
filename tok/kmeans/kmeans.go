@@ -50,20 +50,31 @@ func (km *Kmeans[T]) GetCentroids() [][]T {
 	return km.centroids.centroids
 }
 
-func (km *Kmeans[T]) FindIndexForSearch(vec []T) ([]int, error) {
+func (km *Kmeans[T]) FindIndexForSearch(c index.CacheType, vec []T) ([]int, error) {
 	if km.NumPasses() == 0 {
 		return []int{0}, nil
 	}
-	res := make([]int, km.NumSeedVectors())
-	for i := range res {
-		res[i] = i
+	if err := km.centroids.maybeHydrate(c); err != nil {
+		return nil, err
+	}
+	res, err := km.centroids.findNClosestCentroids(vec, km.numProbes)
+	if err != nil {
+		return nil, err
+	}
+	if len(res) == 0 {
+		// No centroids (the index was never built): everything lives in
+		// cluster 0, so that is the only shard worth probing.
+		return []int{0}, nil
 	}
 	return res, nil
 }
 
-func (km *Kmeans[T]) FindIndexForInsert(vec []T) (int, error) {
+func (km *Kmeans[T]) FindIndexForInsert(c index.CacheType, vec []T) (int, error) {
 	if km.NumPasses() == 0 {
 		return 0, nil
+	}
+	if err := km.centroids.maybeHydrate(c); err != nil {
+		return 0, err
 	}
 	return km.centroids.findCentroid(vec)
 }
@@ -113,6 +124,10 @@ type vectorCentroids[T c.Float] struct {
 	weights   [][]T
 	mutexs    []*sync.Mutex
 	floatBits int
+
+	// hydrated records that a disk load was attempted, so a predicate whose
+	// index was never built doesn't re-read badger on every routing call.
+	hydrated bool
 }
 
 func (vc *vectorCentroids[T]) clear() {
@@ -148,32 +163,50 @@ func (vc *vectorCentroids[T]) findCentroidWithLockHeld(input []T) (int, error) {
 	return minIdx, nil
 }
 
-func (vc *vectorCentroids[T]) getCentroids(txn index.CacheType) ([][]T, error) {
-	if len(vc.centroids) > 0 {
-		return vc.centroids, nil
+// maybeHydrate loads the persisted centroid set from disk into memory on
+// first use. A freshly created index (mutation/query path, or any instance
+// after an alpha restart) has no centroids in memory even though a build may
+// have persisted them; without this load, every insert would route to
+// cluster 0 and every search would probe the wrong shards. A nil CacheType
+// (build path) skips hydration — the build populates centroids itself.
+func (vc *vectorCentroids[T]) maybeHydrate(c index.CacheType) error {
+	if c == nil {
+		return nil
 	}
+	vc.mu.RLock()
+	done := vc.hydrated || len(vc.centroids) > 0
+	vc.mu.RUnlock()
+	if done {
+		return nil
+	}
+
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+	if vc.hydrated || len(vc.centroids) > 0 {
+		return nil
+	}
+	vc.hydrated = true
+
 	indexCountAttr := hnsw.ConcatStrings(vc.pred, CentroidPrefix)
 	key := x.DataKey(indexCountAttr, 1)
-	centroidsMarshalled, err := txn.Get(key)
-	if err != nil {
-		return nil, err
+	centroidsMarshalled, err := c.Get(key)
+	if err != nil || len(centroidsMarshalled) == 0 {
+		// No persisted centroids (the index was never built): stay in
+		// cluster-0 mode until the next rebuild replaces this instance.
+		return nil
 	}
 
 	centroids := [][]T{}
-	err = json.Unmarshal(centroidsMarshalled, &centroids)
-	if err != nil {
-		return nil, err
+	if err := json.Unmarshal(centroidsMarshalled, &centroids); err != nil {
+		return err
 	}
-
 	vc.centroids = centroids
-	return vc.centroids, nil
+	return nil
 }
 
-func (vc *vectorCentroids[T]) findNClosestCentroids(input []T, n int, txn index.CacheType) ([]int, error) {
-	cNS, err := vc.getCentroids(txn)
-	if err != nil {
-		return nil, err
-	}
+func (vc *vectorCentroids[T]) findNClosestCentroids(input []T, n int) ([]int, error) {
+	vc.mu.RLock()
+	defer vc.mu.RUnlock()
 	if n <= 0 || len(vc.centroids) == 0 {
 		return []int{}, nil
 	}
@@ -186,9 +219,8 @@ func (vc *vectorCentroids[T]) findNClosestCentroids(input []T, n int, txn index.
 	}
 	res := []int{}
 	resDist := []float64{}
-	// get centroids
 
-	for i, centroid := range cNS {
+	for i, centroid := range vc.centroids {
 		dist, err := vc.distFunc(centroid, input, vc.floatBits)
 		if err != nil {
 			return nil, err
