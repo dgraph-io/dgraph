@@ -521,7 +521,7 @@ func (ph *persistentHNSW[T]) MergeResults(ctx context.Context, c index.CacheType
 
 	uids := []uint64{}
 	for i := range maxResults {
-		if i > len(result) {
+		if i >= len(result) {
 			break
 		}
 		uids = append(uids, result[i].uid)

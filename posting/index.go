@@ -1459,7 +1459,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		indexer.SetDimension(rb.CurrentSchema, dimension)
 	}
 
-	fmt.Println("Selecting vector dimension to be:", dimension)
+	glog.V(1).Infof("Rebuilding vector index for predicate %s: selected dimension %d", rb.Attr, dimension)
 
 	norm := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 	norm.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
@@ -1567,7 +1567,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	}
 
 	for pass_idx := range indexer.NumBuildPasses() {
-		fmt.Println("Building pass", pass_idx)
+		glog.V(1).Infof("Rebuilding vector index for predicate %s: build pass %d", rb.Attr, pass_idx)
 
 		indexer.StartBuild(caches)
 
@@ -1582,7 +1582,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			if len(inVec) != dimension {
 				return []*pb.DirectedEdge{}, nil
 			}
-			indexer.BuildInsert(ctx, uid, inVec)
+			if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
 			return []*pb.DirectedEdge{}, nil
 		}
 
@@ -1621,7 +1623,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	}
 
 	for pass_idx := range numIndexPasses {
-		fmt.Println("Indexing pass", pass_idx)
+		glog.V(1).Infof("Rebuilding vector index for predicate %s: index pass %d", rb.Attr, pass_idx)
 
 		indexer.StartBuild(caches)
 
@@ -1640,7 +1642,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 				return []*pb.DirectedEdge{}, nil
 			}
 
-			indexer.BuildInsert(ctx, uid, inVec)
+			if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
 
 			return []*pb.DirectedEdge{}, nil
 		}
