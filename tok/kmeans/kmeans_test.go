@@ -6,12 +6,45 @@
 package kmeans
 
 import (
+	"encoding/json"
+	"errors"
 	"math"
 	"math/rand"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
+
+// fakeCache is a minimal index.CacheType serving a fixed key/value map.
+type fakeCache struct {
+	data map[string][]byte
+	gets int
+}
+
+func (f *fakeCache) Get(key []byte) ([]byte, error) {
+	f.gets++
+	if v, ok := f.data[string(key)]; ok {
+		return v, nil
+	}
+	return nil, errors.New("no value found")
+}
+
+func (f *fakeCache) Ts() uint64 { return 1 }
+
+func (f *fakeCache) Find([]byte, func([]byte) bool) (uint64, error) {
+	return 0, errors.New("not implemented")
+}
+
+func centroidCacheFor(t *testing.T, pred string, centroids [][]float32) *fakeCache {
+	t.Helper()
+	data, err := json.Marshal(centroids)
+	if err != nil {
+		t.Fatalf("marshal centroids: %v", err)
+	}
+	key := x.DataKey(hnsw.ConcatStrings(pred, CentroidPrefix), 1)
+	return &fakeCache{data: map[string][]byte{string(key): data}}
+}
 
 func newTestKmeans(seeds [][]float32) *Kmeans[float32] {
 	km := CreateKMeans[float32](32, "0-pred", len(seeds), 1,
@@ -90,7 +123,7 @@ func TestNumSeedVectorsMatchesNumClusters(t *testing.T) {
 		km.EndBuildPass()
 		for range 20 {
 			vec := []float32{rng.Float32() * 100, rng.Float32() * 100}
-			idx, err := km.FindIndexForInsert(vec)
+			idx, err := km.FindIndexForInsert(nil, vec)
 			if err != nil {
 				t.Fatalf("numClusters=%d: FindIndexForInsert: %v", n, err)
 			}
@@ -157,6 +190,105 @@ func TestKmeansConvergesOnBlobs(t *testing.T) {
 			t.Fatalf("two centroids converged to the same blob %d: %v", best, centroids)
 		}
 		used[best] = true
+	}
+}
+
+// TestRoutingHydratesFromDisk pins the restart path: a fresh Kmeans instance
+// with no in-memory centroids must load the persisted set through the cache
+// and route searches and inserts by it — not fall back to cluster 0.
+func TestRoutingHydratesFromDisk(t *testing.T) {
+	centroids := [][]float32{{0, 0}, {50, 50}, {100, 0}}
+	cache := centroidCacheFor(t, "0-pred", centroids)
+
+	km := CreateKMeans[float32](32, "0-pred", 3, 2,
+		hnsw.EuclideanDistanceSq[float32]).(*Kmeans[float32])
+
+	// Insert routing: nearest centroid wins.
+	idx, err := km.FindIndexForInsert(cache, []float32{99, 1})
+	if err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if idx != 2 {
+		t.Fatalf("expected insert routed to cluster 2, got %d", idx)
+	}
+
+	// Search routing: numProbes=2 nearest clusters, must include the best one.
+	probes, err := km.FindIndexForSearch(cache, []float32{1, 1})
+	if err != nil {
+		t.Fatalf("FindIndexForSearch: %v", err)
+	}
+	if len(probes) != 2 {
+		t.Fatalf("expected 2 probes (numProbes=2), got %v", probes)
+	}
+	found := false
+	for _, p := range probes {
+		if p == 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("probes %v do not include the nearest cluster 0", probes)
+	}
+
+	// Hydration happens once: further routing calls must not re-read disk.
+	gets := cache.gets
+	if _, err := km.FindIndexForInsert(cache, []float32{1, 2}); err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if cache.gets != gets {
+		t.Fatalf("expected no further cache reads after hydration, got %d extra", cache.gets-gets)
+	}
+}
+
+// TestRoutingWithoutPersistedCentroids pins cluster-0 mode: when nothing was
+// ever built for the predicate, inserts go to cluster 0 and searches probe
+// only cluster 0 — consistently.
+func TestRoutingWithoutPersistedCentroids(t *testing.T) {
+	cache := &fakeCache{data: map[string][]byte{}}
+	km := CreateKMeans[float32](32, "0-pred", 8, 3,
+		hnsw.EuclideanDistanceSq[float32]).(*Kmeans[float32])
+
+	idx, err := km.FindIndexForInsert(cache, []float32{5, 5})
+	if err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if idx != 0 {
+		t.Fatalf("expected cluster-0 mode for unbuilt index, got %d", idx)
+	}
+	probes, err := km.FindIndexForSearch(cache, []float32{5, 5})
+	if err != nil {
+		t.Fatalf("FindIndexForSearch: %v", err)
+	}
+	if len(probes) != 1 || probes[0] != 0 {
+		t.Fatalf("expected probes [0] for unbuilt index, got %v", probes)
+	}
+	// The miss is cached: no disk read storm on every call.
+	gets := cache.gets
+	if _, err := km.FindIndexForInsert(cache, []float32{5, 5}); err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if cache.gets != gets {
+		t.Fatalf("expected the hydration miss to be cached, got %d extra reads", cache.gets-gets)
+	}
+}
+
+// TestFindNClosestCentroids pins the top-n selection used for search routing.
+func TestFindNClosestCentroids(t *testing.T) {
+	centroids := [][]float32{{0, 0}, {10, 0}, {20, 0}, {30, 0}}
+	cache := centroidCacheFor(t, "0-pred", centroids)
+	km := CreateKMeans[float32](32, "0-pred", 4, 2,
+		hnsw.EuclideanDistanceSq[float32]).(*Kmeans[float32])
+
+	probes, err := km.FindIndexForSearch(cache, []float32{11, 0})
+	if err != nil {
+		t.Fatalf("FindIndexForSearch: %v", err)
+	}
+	got := map[int]bool{}
+	for _, p := range probes {
+		got[p] = true
+	}
+	if len(probes) != 2 || !got[1] || !got[2] {
+		t.Fatalf("expected the two nearest clusters {1,2}, got %v", probes)
 	}
 }
 

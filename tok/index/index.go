@@ -91,8 +91,14 @@ type OptionalIndexSupport[T c.Float] interface {
 }
 
 type VectorPartitionStrat[T c.Float] interface {
-	FindIndexForSearch(vec []T) ([]int, error)
-	FindIndexForInsert(vec []T) (int, error)
+	// FindIndexForSearch returns the partitions a search for vec should
+	// probe. The CacheType lets the strategy load persisted routing state
+	// (centroids) on first use; it may be nil during an index build, when
+	// that state is already in memory.
+	FindIndexForSearch(c CacheType, vec []T) ([]int, error)
+	// FindIndexForInsert returns the partition vec belongs to. See
+	// FindIndexForSearch for the CacheType semantics.
+	FindIndexForInsert(c CacheType, vec []T) (int, error)
 	NumPasses() int
 	SetNumPasses(int)
 	NumSeedVectors() int
