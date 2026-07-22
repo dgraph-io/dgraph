@@ -42,13 +42,10 @@ func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
 	ph.vectorDimension, _, _ = opt.GetOpt(o, vectorDimension, -1)
 	ph.partitionStrat, _, _ = opt.GetOpt(o, PartitionStratOpt, "kmeans")
 
-	if ph.partitionStrat != "kmeans" && ph.partitionStrat != "query" {
-		return errors.New("partition strategy must be kmeans or query")
+	if ph.partitionStrat != "kmeans" {
+		return errors.New("partition strategy must be kmeans")
 	}
-
-	if ph.partitionStrat == "kmeans" {
-		ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, hnsw.EuclideanDistanceSq[T])
-	}
+	ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, hnsw.EuclideanDistanceSq[T])
 
 	ph.buildPass = 0
 	ph.numPasses = 10
@@ -172,12 +169,12 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 }
 
 func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) ([]*index.KeyValue, error) {
-	if len(vec) == 0 {
+	if ph.vectorDimension <= 0 {
 		ph.vectorDimension = len(vec)
 	}
 
 	if len(vec) != ph.vectorDimension {
-		return nil, fmt.Errorf("connot insert vector length of %d vector lenth should be %d", len(vec), ph.vectorDimension)
+		return nil, fmt.Errorf("cannot insert vector of length %d, vector length should be %d", len(vec), ph.vectorDimension)
 	}
 
 	index, err := ph.partition.FindIndexForInsert(vec)
