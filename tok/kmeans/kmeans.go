@@ -2,7 +2,6 @@ package kmeans
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"sync"
 
@@ -200,16 +199,22 @@ func (vc *vectorCentroids[T]) updateCentroids() {
 	x.AssertTrue(len(vc.counts) == vc.numCenters)
 	x.AssertTrue(len(vc.weights) == vc.numCenters)
 	for i := 0; i < vc.numCenters; i++ {
+		if vc.counts[i] == 0 {
+			// No vectors were assigned to this cluster this pass. Keep the
+			// previous centroid instead of dividing by zero into NaNs.
+			for j := 0; j < vc.dimension; j++ {
+				vc.weights[i][j] = 0
+			}
+			continue
+		}
 		for j := 0; j < vc.dimension; j++ {
 			x.AssertTrue(len(vc.centroids[i]) == vc.dimension)
 			x.AssertTrue(len(vc.weights[i]) == vc.dimension)
 			vc.centroids[i][j] = vc.weights[i][j] / T(vc.counts[i])
 			vc.weights[i][j] = 0
 		}
-		fmt.Printf("%d, ", vc.counts[i])
 		vc.counts[i] = 0
 	}
-	fmt.Println()
 }
 
 func (vc *vectorCentroids[T]) randomInit() {
