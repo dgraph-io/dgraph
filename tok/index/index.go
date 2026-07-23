@@ -181,6 +181,14 @@ type VectorIndexOptions[T c.Float] struct {
 	Filter SearchFilter[T]
 }
 
+// VectorDeadListResolver is implemented by indexes that shard their
+// dead-node bookkeeping across multiple aux predicates. DeadAttrForVector
+// returns the attr of the dead-node list that covers vec, so a delete lands
+// in the list the covering shard actually reads.
+type VectorDeadListResolver[T c.Float] interface {
+	DeadAttrForVector(c CacheType, vec []T) (string, error)
+}
+
 // OptionalSearchOptions adds per-call search controls without breaking existing APIs.
 // Implementations that support these may choose to ignore unsupported fields.
 type OptionalSearchOptions[T c.Float] interface {
