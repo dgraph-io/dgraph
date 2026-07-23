@@ -8,6 +8,7 @@ package partitioned_hnsw
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
@@ -42,8 +43,34 @@ func CreateFactory[T c.Float](floatBits int) index.IndexFactory[T] {
 // Implements NamedFactory interface for use as a plugin.
 func (hf *partitionedHNSWIndexFactory[T]) Name() string { return PartitionedHNSW }
 
+// GetOptions returns the option string that participates in the factory
+// spec's identity (used by needsVectorIndexEdgesRebuild to decide whether a
+// schema change requires a rebuild). numClusters and partitionStratOpt
+// change the on-disk layout, so they must be part of the identity.
+// vectorDimension is deliberately excluded — SetDimension auto-appends it to
+// the stored schema during a rebuild, so including it would make every
+// re-apply of the user's original schema look like a change and trigger
+// spurious rebuilds. numProbes is query-time tuning only.
 func (hf *partitionedHNSWIndexFactory[T]) GetOptions(o opt.Options) string {
-	return hnsw.GetPersistantOptions[T](o)
+	base := hnsw.GetPersistantOptions[T](o)
+
+	sb := strings.Builder{}
+	if val, ok, _ := opt.GetOpt(o, NumClustersOpt, 1000); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, NumClustersOpt, val))
+	}
+	if val, ok, _ := opt.GetOpt(o, PartitionStratOpt, "kmeans"); ok {
+		sb.WriteString(fmt.Sprintf(`"%s":"%s",`, PartitionStratOpt, val))
+	}
+	extra := sb.String()
+	if len(extra) == 0 {
+		return base
+	}
+	extra = extra[:len(extra)-1]
+	if len(base) > 1 {
+		// base looks like "(...)": splice the extra options in.
+		return base[:len(base)-1] + "," + extra + ")"
+	}
+	return "(" + extra + ")"
 }
 
 func (hf *partitionedHNSWIndexFactory[T]) isNameAvailableWithLock(name string) bool {
