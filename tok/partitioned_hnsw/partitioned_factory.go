@@ -112,6 +112,23 @@ func (hf *partitionedHNSWIndexFactory[T]) createWithLock(
 	return retVal, nil
 }
 
+// FindOrCreate returns the index registered under name, creating it when
+// absent. The existing instance is preserved so its hydrated centroids keep
+// serving routing decisions across mutations and queries.
+func (hf *partitionedHNSWIndexFactory[T]) FindOrCreate(
+	name string,
+	o opt.Options,
+	floatBits int) (index.VectorIndex[T], error) {
+	hf.mu.Lock()
+	defer hf.mu.Unlock()
+	if vi, err := hf.findWithLock(name); err != nil {
+		return nil, err
+	} else if vi != nil {
+		return vi, nil
+	}
+	return hf.createWithLock(name, o, floatBits)
+}
+
 // Find is an implementation of the IndexFactory interface function, invoked by an persistentIndexFactory
 // instance. It returns the VectorIndex corresponding with a string name using the in memory map.
 func (hf *partitionedHNSWIndexFactory[T]) Find(name string) (index.VectorIndex[T], error) {
