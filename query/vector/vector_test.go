@@ -485,6 +485,63 @@ func TestSimilarToOptionsIntegration(t *testing.T) {
 	})
 }
 
+// TestSimilarToNonPositiveNeighbors is the end-to-end guard for a crash reachable
+// from an unvalidated similar_to number-of-neighbors argument. A count <= 0 used to
+// panic the query goroutine and take down the Alpha; the worker/task.go boundary
+// check must now turn it into an ordinary query error while the server keeps serving.
+func TestSimilarToNonPositiveNeighbors(t *testing.T) {
+	const pred = "vnonpos"
+	dropPredicate(pred)
+	t.Cleanup(func() { dropPredicate(pred) })
+
+	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+
+	rdf := `<0x1> <vnonpos> "[0,0]" .
+	<0x2> <vnonpos> "[1,0]" .
+	<0x3> <vnonpos> "[2,0]" .`
+	require.NoError(t, addTriplesToCluster(rdf))
+
+	// Both k=0 and k=-1 parse fine through DQL, so they reach the worker guard.
+	for _, k := range []int{0, -1} {
+		query := fmt.Sprintf(`{
+			results(func: similar_to(%s, %d, "[0,0]")) {
+				uid
+			}
+		}`, pred, k)
+		_, err := processQuery(context.Background(), t, query)
+		require.Errorf(t, err, "similar_to with k=%d should return an error, not crash", k)
+		require.ErrorContains(t, err, "number of neighbors")
+	}
+
+	// The load-bearing assertion: a valid query after the bad ones must succeed.
+	// On the pre-fix code the first non-positive query panics and crashes the
+	// Alpha, so this only passes if the server stayed up.
+	query := fmt.Sprintf(`{
+		results(func: similar_to(%s, 3, "[0,0]")) {
+			uid
+		}
+	}`, pred)
+	resp := processQueryNoErr(t, query)
+
+	var result struct {
+		Data struct {
+			Results []struct {
+				UID string `json:"uid"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(resp), &result))
+	require.Len(t, result.Data.Results, 3)
+
+	expected := map[string]struct{}{"0x1": {}, "0x2": {}, "0x3": {}}
+	for _, r := range result.Data.Results {
+		_, ok := expected[r.UID]
+		require.Truef(t, ok, "unexpected uid %s", r.UID)
+		delete(expected, r.UID)
+	}
+	require.Empty(t, expected)
+}
+
 func TestVectorInQueryArgument(t *testing.T) {
 	dropPredicate("vtest")
 	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
