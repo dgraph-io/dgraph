@@ -13,7 +13,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -34,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	tokIndex "github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -1519,7 +1522,14 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 
 	count := 0
 
-	if indexer.NumSeedVectors() > 0 {
+	if numSeeds := indexer.NumSeedVectors(); numSeeds > 0 {
+		// Reservoir-sample the seeds over one full scan: taking the first N
+		// vectors would seed k-means with whatever happens to sort first in
+		// badger, biasing the initial centroids to one corner of the data.
+		// Seeded with StartTs so a retry of the same rebuild picks the same
+		// seeds.
+		seedRng := rand.New(rand.NewSource(int64(rb.StartTs)))
+		seeds := make([][]float32, 0, numSeeds)
 		err := MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
 			Prefix:      pk.DataPrefix(),
 			ReadTs:      rb.StartTs,
@@ -1554,9 +1564,10 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 					return fmt.Errorf("vector dimension mismatch expected dimension %d but got %d", dimension, len(inVec))
 				}
 				count += 1
-				indexer.AddSeedVector(inVec)
-				if count == indexer.NumSeedVectors() {
-					return ErrStopIteration
+				if len(seeds) < numSeeds {
+					seeds = append(seeds, inVec)
+				} else if j := seedRng.Intn(count); j < numSeeds {
+					seeds[j] = inVec
 				}
 				return nil
 			},
@@ -1564,6 +1575,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		})
 		if err != nil {
 			return err
+		}
+		for _, seed := range seeds {
+			indexer.AddSeedVector(seed)
 		}
 	}
 
@@ -1992,6 +2006,36 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 	return indexDelete
 }
 
+// partitionedClusterCounts collects the numClusters of every partitioned
+// index spec in the old and current schema, so dropping index data covers
+// the per-cluster keyspaces of both the outgoing and the incoming layout
+// (including a numClusters change in either direction).
+func partitionedClusterCounts(rb *IndexRebuild) []int {
+	counts := []int{}
+	collect := func(su *pb.SchemaUpdate) {
+		if su == nil {
+			return
+		}
+		for _, spec := range su.IndexSpecs {
+			if spec.Name != partitioned_hnsw.PartitionedHNSW {
+				continue
+			}
+			numClusters := 1000 // must match applyOptions' default
+			for _, opt := range spec.Options {
+				if opt.Key == partitioned_hnsw.NumClustersOpt {
+					if n, err := strconv.Atoi(opt.Value); err == nil {
+						numClusters = n
+					}
+				}
+			}
+			counts = append(counts, numClusters)
+		}
+	}
+	collect(rb.OldSchema)
+	collect(rb.CurrentSchema)
+	return counts
+}
+
 // This needs to be moved to the implementation of vector-indexer API
 func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
@@ -2006,6 +2050,22 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 
 	for i := range hnsw.VectorIndexMaxLevels {
 		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
+	}
+
+	// A partitioned index shards its aux data into per-cluster attrs
+	// (pred__vector_entry_<i> etc.). Attrs are length-prefixed in badger
+	// keys, so the unsplit prefixes above do NOT cover them — enumerate them
+	// for every cluster count seen in the old or current schema, plus the
+	// persisted centroid set.
+	for _, numClusters := range partitionedClusterCounts(rb) {
+		for i := range numClusters {
+			prefixes = append(prefixes,
+				x.PredicatePrefix(hnsw.SplitEntryAttr(rb.Attr, i)),
+				x.PredicatePrefix(hnsw.SplitVecAttr(rb.Attr, i)),
+				x.PredicatePrefix(hnsw.SplitDeadAttr(rb.Attr, i)))
+		}
+		prefixes = append(prefixes,
+			x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, kmeans.CentroidPrefix)))
 	}
 
 	return prefixes
