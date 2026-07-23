@@ -1642,6 +1642,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		if err := txn.CommitToDisk(writer, rb.StartTs); err != nil {
 			return err
 		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
 	}
 
 	numIndexPasses := indexer.NumIndexPasses()
@@ -1686,7 +1689,10 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			txns[idx].Update()
 			writer := NewTxnWriter(pstore)
 
-			x.ExponentialRetry(int(x.Config.MaxRetries),
+			// MaxRetries can be zero (unset) outside a running alpha;
+			// ExponentialRetry with zero attempts would silently skip the
+			// commit and lose the whole cluster's graph.
+			if err := x.ExponentialRetry(max(1, int(x.Config.MaxRetries)),
 				20*time.Millisecond, func() error {
 					err := txns[idx].CommitToDisk(writer, rb.StartTs)
 					if err == badger.ErrBannedKey {
@@ -1694,7 +1700,12 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 						return nil
 					}
 					return err
-				})
+				}); err != nil {
+				return err
+			}
+			if err := writer.Flush(); err != nil {
+				return err
+			}
 
 			txns[idx].cache.plists = nil
 			txns[idx] = nil
