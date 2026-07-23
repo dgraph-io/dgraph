@@ -164,7 +164,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-			indexer, err := info.factorySpecs[0].CreateIndex(attr)
+			indexer, err := info.factorySpecs[0].FindOrCreateIndex(attr)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
