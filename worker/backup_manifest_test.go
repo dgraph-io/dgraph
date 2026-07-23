@@ -7,6 +7,7 @@ package worker
 
 import (
 	"encoding/json"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 )
 
 func TestParseBackupTime(t *testing.T) {
@@ -403,4 +406,79 @@ func TestListBackupManifests_EmptyLocation(t *testing.T) {
 	// No manifest files — getConsolidatedManifest returns empty MasterManifest
 	_, err := ListBackupManifests(tmpDir, nil, false)
 	require.NoError(t, err)
+}
+
+// TestRestorePathContainmentEndToEnd drives the restore-side flow over a real
+// backup layout: the master manifest is read back from the backup location and
+// its "path" field feeds getManifestsToRestore and the handler reads. A
+// manifest planted with a traversal path must not make the handler see or
+// stream files outside its root, while a legitimate layout must restore
+// unchanged.
+func TestRestorePathContainmentEndToEnd(t *testing.T) {
+	req := &pb.RestoreRequest{}
+
+	t.Run("planted traversal manifest is contained", func(t *testing.T) {
+		base := t.TempDir()
+		backupRoot := filepath.Join(base, "backups")
+		outside := filepath.Join(base, "outside")
+		require.NoError(t, os.MkdirAll(backupRoot, 0755))
+		require.NoError(t, os.MkdirAll(outside, 0755))
+
+		// Plant the target where "../outside" used to resolve before containment.
+		outsideFile := filepath.Join(outside, backupName(5, 1))
+		require.NoError(t, os.WriteFile(outsideFile, []byte("outside-data"), 0644))
+
+		evil := &Manifest{
+			ManifestBase: ManifestBase{
+				Type: "full", BackupId: "evil", BackupNum: 1,
+				Path: "../outside", ReadTs: 5, Version: 2105,
+			},
+			Groups: map[uint32][]string{1: {"name"}},
+		}
+		writeMasterManifestToDir(t, backupRoot, []*Manifest{evil})
+
+		h, uri := testFileHandlerForDir(t, backupRoot)
+		manifests, err := getManifestsToRestore(h, uri, req)
+		require.NoError(t, err)
+		require.Empty(t, manifests)
+
+		// The planted file exists on disk, but the handler must not reach it.
+		require.FileExists(t, outsideFile)
+		file := filepath.Join(evil.Path, backupName(5, 1))
+		require.False(t, h.FileExists(file))
+		_, err = h.Stream(file)
+		require.Error(t, err)
+	})
+
+	t.Run("legitimate backup restores unchanged", func(t *testing.T) {
+		base := t.TempDir()
+		backupRoot := filepath.Join(base, "backups")
+		backupDir := "dgraph.20260101.000000.000"
+		require.NoError(t, os.MkdirAll(filepath.Join(backupRoot, backupDir), 0755))
+
+		backupFile := filepath.Join(backupRoot, backupDir, backupName(5, 1))
+		require.NoError(t, os.WriteFile(backupFile, []byte("backup-data"), 0644))
+
+		good := &Manifest{
+			ManifestBase: ManifestBase{
+				Type: "full", BackupId: "ok", BackupNum: 1,
+				Path: backupDir, ReadTs: 5, Version: 2105,
+			},
+			Groups: map[uint32][]string{1: {"name"}},
+		}
+		writeMasterManifestToDir(t, backupRoot, []*Manifest{good})
+
+		h, uri := testFileHandlerForDir(t, backupRoot)
+		manifests, err := getManifestsToRestore(h, uri, req)
+		require.NoError(t, err)
+		require.Len(t, manifests, 1)
+
+		m := manifests[0]
+		rc, err := h.Stream(filepath.Join(m.Path, backupName(m.ValidReadTs(), 1)))
+		require.NoError(t, err)
+		defer func() { require.NoError(t, rc.Close()) }()
+		data, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		require.Equal(t, "backup-data", string(data))
+	})
 }
