@@ -643,6 +643,111 @@ func (vsuite *VectorTestSuite) TestPartitionedHNSWIndex() {
 	})
 }
 
+// TestPartitionedPipelines drives the four supported partitioned-hnsw
+// pipelines end to end on one cluster: index build (schema alter over
+// existing data), query routing, live mutations and deletes after the build,
+// alpha restart (centroid re-hydration from disk), and a numClusters change
+// (rebuild with a different layout).
+func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
+	t := vsuite.T()
+	if !vsuite.isForPartitionedIndex {
+		t.Skip("Skipping TestPartitionedPipelines for non partitioned index")
+	}
+
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	defer cleanup()
+	require.NoError(t, err)
+
+	const (
+		dim                = 16
+		numVectors         = 1200
+		schemaWithoutIndex = `project_description_v: float32vector .`
+		indexSchema        = `project_description_v: float32vector @index(partionedhnsw` +
+			`(numClusters: "32", numProbes: "8", partitionStratOpt: "kmeans", metric: "euclidean")) .`
+		reindexSchema = `project_description_v: float32vector @index(partionedhnsw` +
+			`(numClusters: "8", numProbes: "4", partitionStratOpt: "kmeans", metric: "euclidean")) .`
+	)
+
+	// A vector must always find itself: insert and query routing use the
+	// same centroids, so top-1 of similar_to(v) is v regardless of how well
+	// the clusters fit the data.
+	requireSelfRecall := func(t *testing.T, vecs [][]float32, step int) {
+		for i := 0; i < len(vecs); i += step {
+			similar, err := gc.QueryMultipleVectorsUsingSimilarTo(vecs[i], pred, 1)
+			require.NoError(t, err)
+			require.Lenf(t, similar, 1, "vector %d: no result", i)
+			require.Equalf(t, vecs[i], similar[0], "vector %d did not find itself", i)
+		}
+	}
+
+	require.NoError(t, gc.DropAll())
+	require.NoError(t, gc.SetupSchema(schemaWithoutIndex))
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, dim, pred)
+	_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
+	require.NoError(t, err)
+	require.NoError(t, gc.SetupSchema(indexSchema))
+
+	t.Run("build then query", func(t *testing.T) {
+		requireSelfRecall(t, vectors, 40)
+	})
+
+	var liveVectors [][]float32
+	t.Run("live inserts after build", func(t *testing.T) {
+		var liveRdfs string
+		liveRdfs, liveVectors = dgraphapi.GenerateRandomVectors(numVectors, numVectors+50, dim, pred)
+		_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(liveRdfs), CommitNow: true})
+		require.NoError(t, err)
+		requireSelfRecall(t, liveVectors, 5)
+	})
+
+	t.Run("deletes disappear from results", func(t *testing.T) {
+		triple := strings.Split(rdfs, "\n")[0]
+		uid := strings.Split(triple, " ")[0]
+		delNquad := fmt.Sprintf("%s <%s> * .", uid, pred)
+		_, err := gc.Mutate(&api.Mutation{DelNquads: []byte(delNquad), CommitNow: true})
+		require.NoError(t, err)
+
+		similar, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 5)
+		require.NoError(t, err)
+		require.NotContainsf(t, similar, vectors[0],
+			"deleted vector still returned by similar_to")
+	})
+
+	t.Run("alpha restart rehydrates routing", func(t *testing.T) {
+		require.NoError(t, c.StopAlpha(0))
+		require.NoError(t, c.StartAlpha(0))
+		require.NoError(t, c.HealthCheck(false))
+
+		gcr, cleanup2, err := c.Client()
+		defer cleanup2()
+		require.NoError(t, err)
+		gc = gcr
+
+		// Search routing must come back from the persisted centroids.
+		requireSelfRecall(t, vectors[1:], 40)
+
+		// Insert routing must too: new vectors land in the cluster their
+		// searches probe.
+		postRdfs, postVectors := dgraphapi.GenerateRandomVectors(
+			numVectors+50, numVectors+100, dim, pred)
+		_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(postRdfs), CommitNow: true})
+		require.NoError(t, err)
+		requireSelfRecall(t, postVectors, 5)
+	})
+
+	t.Run("numClusters change rebuilds", func(t *testing.T) {
+		require.NoError(t, gc.SetupSchema(reindexSchema))
+		requireSelfRecall(t, vectors[1:], 40)
+		requireSelfRecall(t, liveVectors, 10)
+	})
+}
+
 type VectorTestSuite struct {
 	suite.Suite
 	schema                string
