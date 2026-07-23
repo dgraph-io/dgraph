@@ -14,6 +14,7 @@ import (
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )
 
@@ -932,13 +933,18 @@ func TestAddPathNodeNonPositiveMaxResults(t *testing.T) {
 	for _, maxResults := range []int{-1, 0} {
 		slr := newLayerResult[float64](0)
 		slr.setFirstPathNode(persistentHeapElement[float64]{value: 0.1, index: 1})
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("addPathNode panicked with maxResults=%d: %v", maxResults, r)
-				}
-			}()
+
+		require.NotPanicsf(t, func() {
 			slr.addPathNode(persistentHeapElement[float64]{value: 0.2, index: 2}, simType, maxResults)
-		}()
+		}, "addPathNode panicked with maxResults=%d", maxResults)
+
+		// A non-positive limit clamps effectiveMaxLen to 0, so the neighbor set
+		// truncates to empty and the bottom-of-path append is skipped. Pin that
+		// resulting state, not just the absence of a panic: neighbors is empty and
+		// the path is left exactly as setFirstPathNode set it.
+		require.Emptyf(t, slr.neighbors,
+			"neighbors should truncate to empty for maxResults=%d", maxResults)
+		require.Equalf(t, []uint64{1}, slr.path,
+			"path should be unchanged for maxResults=%d", maxResults)
 	}
 }
