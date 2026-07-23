@@ -123,6 +123,20 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			// if a delete & dealing with vfloats, add this to dead node in persistent store.
 			// What we should do instead is invoke the factory.Remove(key) operation.
 			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+			indexer, err := info.factorySpecs[0].FindOrCreateIndex(attr)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// A partitioned index shards its dead lists: the delete must be
+			// recorded in the list of the cluster that indexed this vector.
+			if resolver, ok := indexer.(tokIndex.VectorDeadListResolver[float32]); ok {
+				delVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+				tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+				deadAttr, err = resolver.DeadAttrForVector(tc, delVec)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+			}
 			deadKey := x.DataKey(deadAttr, 1)
 			pl, err := txn.Get(deadKey)
 			if err != nil {
