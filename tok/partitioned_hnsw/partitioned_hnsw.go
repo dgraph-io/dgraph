@@ -198,7 +198,29 @@ func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, u
 	if err != nil {
 		return nil, err
 	}
-	return ph.clusterMap[index].Insert(ctx, txn, uid, vec)
+	subIndex, err := ph.subIndex(index)
+	if err != nil {
+		return nil, err
+	}
+	return subIndex.Insert(ctx, txn, uid, vec)
+}
+
+// subIndex builds a fresh persistentHNSW view over cluster i's keyspace.
+// Mutation and query paths intentionally get a new sub-index per call:
+// persistentHNSW caches graph edges and dead nodes in per-instance maps
+// scoped to one transaction's view, so sharing instances across concurrent
+// operations would race and leak state between transactions. The long-lived
+// state of a partitioned index is only the kmeans routing centroids.
+func (ph *partitionedHNSW[T]) subIndex(i int) (index.VectorIndex[T], error) {
+	factory := hnsw.CreateFactory[T](ph.floatBits)
+	vi, err := factory.Create(ph.pred, ph.hnswOptions, ph.floatBits)
+	if err != nil {
+		return nil, err
+	}
+	if err := hnsw.UpdateIndexSplit(vi, i); err != nil {
+		return nil, err
+	}
+	return vi, nil
 }
 
 // isEmptyClusterErr reports whether a per-shard search failed only because
@@ -221,7 +243,11 @@ func (ph *partitionedHNSW[T]) searchShards(ctx context.Context, indexes []int,
 	eg.SetLimit(min(len(indexes), 2*runtime.GOMAXPROCS(0)))
 	for _, index := range indexes {
 		eg.Go(func() error {
-			ids, err := search(ph.clusterMap[index])
+			subIndex, err := ph.subIndex(index)
+			if err != nil {
+				return err
+			}
+			ids, err := search(subIndex)
 			if err != nil {
 				if isEmptyClusterErr(err) {
 					return nil
@@ -256,7 +282,7 @@ func (ph *partitionedHNSW[T]) Search(ctx context.Context, txn index.CacheType, q
 		return res, nil
 	}
 
-	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
+	return ph.MergeResults(ctx, txn, res, query, maxResults, filter)
 }
 
 func (ph *partitionedHNSW[T]) SearchWithPath(ctx context.Context, txn index.CacheType, query []T, maxResults int, filter index.SearchFilter[T]) (*index.SearchPathResult, error) {
@@ -266,7 +292,11 @@ func (ph *partitionedHNSW[T]) SearchWithPath(ctx context.Context, txn index.Cach
 	if err != nil {
 		return nil, err
 	}
-	return ph.clusterMap[idx].SearchWithPath(ctx, txn, query, maxResults, filter)
+	subIndex, err := ph.subIndex(idx)
+	if err != nil {
+		return nil, err
+	}
+	return subIndex.SearchWithPath(ctx, txn, query, maxResults, filter)
 }
 
 func (ph *partitionedHNSW[T]) SearchWithUid(ctx context.Context, txn index.CacheType, queryUid uint64, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
@@ -309,7 +339,13 @@ func (ph *partitionedHNSW[T]) SearchWithUid(ctx context.Context, txn index.Cache
 }
 
 func (ph *partitionedHNSW[T]) MergeResults(ctx context.Context, txn index.CacheType, list []uint64, query []T, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
-	return ph.clusterMap[0].MergeResults(ctx, txn, list, query, maxResults, filter)
+	// MergeResults only reads vectors through the cache; any sub-index view
+	// can serve it (the data keys are on the unsplit predicate).
+	subIndex, err := ph.subIndex(0)
+	if err != nil {
+		return nil, err
+	}
+	return subIndex.MergeResults(ctx, txn, list, query, maxResults, filter)
 }
 
 // SearchWithOptions implements index.OptionalSearchOptions by fanning the
@@ -342,7 +378,7 @@ func (ph *partitionedHNSW[T]) SearchWithOptions(ctx context.Context, txn index.C
 		return res, nil
 	}
 
-	return ph.clusterMap[0].MergeResults(ctx, txn, res, query, maxResults, filter)
+	return ph.MergeResults(ctx, txn, res, query, maxResults, filter)
 }
 
 // SearchWithUidAndOptions implements index.OptionalSearchOptions for the

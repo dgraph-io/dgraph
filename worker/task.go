@@ -371,7 +371,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			args.q.ReadTs,
 		)
 
-		indexer, err := cspec.CreateIndex(args.q.Attr)
+		indexer, err := cspec.FindOrCreateIndex(args.q.Attr)
 		if err != nil {
 			return err
 		}

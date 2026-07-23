@@ -178,3 +178,14 @@ func (hf *persistentIndexFactory[T]) CreateOrReplace(
 	}
 	return hf.createWithLock(name, o, floatBits)
 }
+
+// FindOrCreate for the plain hnsw index deliberately keeps the historical
+// fresh-instance-per-call semantics of CreateOrReplace: persistentHNSW uses
+// per-instance maps (nodeAllEdges, deadNodes) as transaction-scoped caches,
+// which are only correct because each caller gets its own instance.
+func (hf *persistentIndexFactory[T]) FindOrCreate(
+	name string,
+	o opt.Options,
+	floatBits int) (index.VectorIndex[T], error) {
+	return hf.CreateOrReplace(name, o, floatBits)
+}
