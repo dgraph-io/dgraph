@@ -58,6 +58,14 @@ type IndexFactory[T c.Float] interface {
 	// function -- if it does not yet exist, otherwise, it will replace any
 	// index with the given name.
 	CreateOrReplace(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
+
+	// FindOrCreate returns the VectorIndex registered under name, creating
+	// it when absent. Unlike CreateOrReplace it preserves the existing
+	// instance and any in-memory state it holds (e.g. partition routing
+	// state), so mutation and query paths share one long-lived index per
+	// predicate. Index builds keep using CreateOrReplace, which doubles as
+	// the invalidation point: the rebuilt instance replaces the shared one.
+	FindOrCreate(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
 }
 
 // SearchFilter defines a predicate function that we will use to determine
