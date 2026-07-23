@@ -552,6 +552,13 @@ func AttachRemoteIP(ctx context.Context, r *http.Request) context.Context {
 	return ctx
 }
 
+// IsIpWhitelisted checks if the given ipString is a loopback address or within one of the
+// configured whitelisted IP ranges. It is the exported entry point used by HTTP handlers that
+// need to authorize a request by its source IP (gRPC handlers should use HasWhitelistedIP).
+func IsIpWhitelisted(ipString string) bool {
+	return isIpWhitelisted(ipString)
+}
+
 // isIpWhitelisted checks if the given ipString is within the whitelisted ip range
 func isIpWhitelisted(ipString string) bool {
 	ip := net.ParseIP(ipString)
@@ -570,6 +577,76 @@ func isIpWhitelisted(ipString string) bool {
 		}
 	}
 	return false
+}
+
+// GetIPsFromString parses a --security "whitelist=..." style value into a list of IP ranges.
+// The value is a comma-separated list where each entry is a single IP or hostname, a
+// "lower:upper" IP range, or a CIDR block. An empty string yields an empty (non-nil) list.
+func GetIPsFromString(str string) ([]IPRange, error) {
+	if str == "" {
+		return []IPRange{}, nil
+	}
+
+	var ipRanges []IPRange
+	rangeStrings := strings.Split(str, ",")
+
+	for _, s := range rangeStrings {
+		isIPv6 := strings.Contains(s, "::")
+		tuple := strings.Split(s, ":")
+		switch {
+		case isIPv6 || len(tuple) == 1:
+			if !strings.Contains(s, "/") {
+				// string is hostname like host.docker.internal,
+				// or IPv4 address like 144.124.126.254,
+				// or IPv6 address like fd03:b188:0f3c:9ec4::babe:face
+				ipAddr := net.ParseIP(s)
+				if ipAddr != nil {
+					ipRanges = append(ipRanges, IPRange{Lower: ipAddr, Upper: ipAddr})
+				} else {
+					ipAddrs, err := net.LookupIP(s)
+					if err != nil {
+						return nil, errors.Errorf("invalid IP address or hostname: %s", s)
+					}
+
+					for _, addr := range ipAddrs {
+						ipRanges = append(ipRanges, IPRange{Lower: addr, Upper: addr})
+					}
+				}
+			} else {
+				// string is CIDR block like 192.168.0.0/16 or fd03:b188:0f3c:9ec4::/64
+				rangeLo, network, err := net.ParseCIDR(s)
+				if err != nil {
+					return nil, errors.Errorf("invalid CIDR block: %s", s)
+				}
+
+				addrLen, maskLen := len(rangeLo), len(network.Mask)
+				rangeHi := make(net.IP, len(rangeLo))
+				copy(rangeHi, rangeLo)
+				for i := 1; i <= maskLen; i++ {
+					rangeHi[addrLen-i] |= ^network.Mask[maskLen-i]
+				}
+
+				ipRanges = append(ipRanges, IPRange{Lower: rangeLo, Upper: rangeHi})
+			}
+		case len(tuple) == 2:
+			// string is range like a.b.c.d:w.x.y.z
+			rangeLo := net.ParseIP(tuple[0])
+			rangeHi := net.ParseIP(tuple[1])
+			switch {
+			case rangeLo == nil:
+				return nil, errors.Errorf("invalid IP address: %s", tuple[0])
+			case rangeHi == nil:
+				return nil, errors.Errorf("invalid IP address: %s", tuple[1])
+			case bytes.Compare(rangeLo, rangeHi) > 0:
+				return nil, errors.Errorf("inverted IP address range: %s", s)
+			}
+			ipRanges = append(ipRanges, IPRange{Lower: rangeLo, Upper: rangeHi})
+		default:
+			return nil, errors.Errorf("invalid IP address range: %s", s)
+		}
+	}
+
+	return ipRanges, nil
 }
 
 // HasWhitelistedIP checks whether the source IP in ctx is whitelisted or not.

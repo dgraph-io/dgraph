@@ -107,6 +107,17 @@ instances to achieve high-availability.
 				"in Raft elections. This can be used to achieve a read-only replica.").
 		String())
 
+	flag.String("security", worker.SecurityDefaults, z.NewSuperFlagHelp(worker.SecurityDefaults).
+		Head("Security options").
+		Flag("token",
+			"If set, all requests to Zero's administrative HTTP endpoints must present this token "+
+				"in the X-Dgraph-AuthToken header.").
+		Flag("whitelist",
+			"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames that are "+
+				"allowed to reach Zero's administrative HTTP endpoints (loopback is always allowed). "+
+				`e.g. --security "whitelist=127.0.0.1,192.168.0.0/16,host.docker.internal".`).
+		String())
+
 	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
 		Head("Audit options").
 		Flag("output",
@@ -232,6 +243,16 @@ func run() {
 	glog.Infof("Setting Config to: %+v", opts)
 	x.WorkerConfig.Parse(Zero.Conf)
 
+	// Protect Zero's administrative HTTP endpoints. Unlike Alpha, Zero previously registered
+	// these routes with no authentication at all; a reachable HTTP port (default 6080) exposed
+	// destructive control-plane operations to any unauthenticated caller.
+	security := z.NewSuperFlag(Zero.Conf.GetString("security")).MergeAndCheckDefault(
+		worker.SecurityDefaults)
+	worker.Config.AuthToken = security.GetString("token")
+	ips, err := x.GetIPsFromString(security.GetString("whitelist"))
+	x.Check(err)
+	x.WorkerConfig.WhiteListedIPRanges = ips
+
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
 			opts.numReplicas)
@@ -293,12 +314,17 @@ func run() {
 	http.Handle("/", audit.AuditRequestHttp(baseMux))
 
 	baseMux.HandleFunc("/health", st.pingResponse)
-	// the following endpoints are disabled only if the flag is explicitly set to true
+	// the following endpoints are disabled only if the flag is explicitly set to true.
+	// They are guarded by adminAuthHandler because they expose control-plane operations;
+	// without the guard any caller able to reach the HTTP port could invoke them. The
+	// destructive endpoints (/removeNode, /moveTablet) are always guarded (strict); the
+	// informational and allocation endpoints (/state, /assign) enforce auth only once a token
+	// or whitelist is configured via --security.
 	if !limit.GetBool("disable-admin-http") {
-		baseMux.HandleFunc("/state", st.getState)
-		baseMux.HandleFunc("/removeNode", st.removeNode)
-		baseMux.HandleFunc("/moveTablet", st.moveTablet)
-		baseMux.HandleFunc("/assign", st.assign)
+		baseMux.Handle("/state", adminAuthHandler(false, http.HandlerFunc(st.getState)))
+		baseMux.Handle("/assign", adminAuthHandler(false, http.HandlerFunc(st.assign)))
+		baseMux.Handle("/removeNode", adminAuthHandler(true, http.HandlerFunc(st.removeNode)))
+		baseMux.Handle("/moveTablet", adminAuthHandler(true, http.HandlerFunc(st.moveTablet)))
 	}
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	http.DefaultServeMux.Handle("/debug/z", zpages.NewTracezHandler(zpages.NewSpanProcessor()))
