@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 
+	"github.com/golang/glog"
+
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
@@ -193,8 +195,11 @@ func (vc *vectorCentroids[T]) maybeHydrate(c index.CacheType) error {
 	if err != nil || len(centroidsMarshalled) == 0 {
 		// No persisted centroids (the index was never built): stay in
 		// cluster-0 mode until the next rebuild replaces this instance.
+		glog.V(1).Infof("vector index %s: no persisted centroids (err: %v), "+
+			"routing everything to cluster 0", vc.pred, err)
 		return nil
 	}
+	glog.V(1).Infof("vector index %s: hydrated %d bytes of centroids", vc.pred, len(centroidsMarshalled))
 
 	centroids := [][]T{}
 	if err := json.Unmarshal(centroidsMarshalled, &centroids); err != nil {
