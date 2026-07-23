@@ -78,14 +78,30 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 	return retVal
 }
 
+// SplitEntryAttr, SplitVecAttr and SplitDeadAttr name the aux predicates a
+// partitioned sub-index with the given split reads and writes. Anything that
+// must address a specific cluster's keyspace (delete routing, index drops)
+// derives the names from here.
+func SplitEntryAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecEntry, split))
+}
+
+func SplitVecAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecKeyword, split))
+}
+
+func SplitDeadAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecDead, split))
+}
+
 func UpdateIndexSplit[T c.Float](vi index.VectorIndex[T], split int) error {
 	hnsw, ok := vi.(*persistentHNSW[T])
 	if !ok {
 		return errors.New("index is not a persistent HNSW index")
 	}
-	hnsw.vecEntryKey = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecEntry, split))
-	hnsw.vecKey = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecKeyword, split))
-	hnsw.vecDead = ConcatStrings(hnsw.pred, fmt.Sprintf("%s_%d", VecDead, split))
+	hnsw.vecEntryKey = SplitEntryAttr(hnsw.pred, split)
+	hnsw.vecKey = SplitVecAttr(hnsw.pred, split)
+	hnsw.vecDead = SplitDeadAttr(hnsw.pred, split)
 	return nil
 }
 
