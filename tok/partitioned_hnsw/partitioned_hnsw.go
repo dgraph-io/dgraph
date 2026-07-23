@@ -348,6 +348,19 @@ func (ph *partitionedHNSW[T]) MergeResults(ctx context.Context, txn index.CacheT
 	return subIndex.MergeResults(ctx, txn, list, query, maxResults, filter)
 }
 
+// DeadAttrForVector implements index.VectorDeadListResolver: a deleted
+// vector's uid must be recorded in the dead list of the cluster that indexed
+// it, or the shard's searches will keep returning it. Routing is
+// deterministic for a fixed centroid set, so the delete lands where the
+// insert did.
+func (ph *partitionedHNSW[T]) DeadAttrForVector(c index.CacheType, vec []T) (string, error) {
+	idx, err := ph.partition.FindIndexForInsert(c, vec)
+	if err != nil {
+		return "", err
+	}
+	return hnsw.SplitDeadAttr(ph.pred, idx), nil
+}
+
 // SearchWithOptions implements index.OptionalSearchOptions by fanning the
 // per-call tuning parameters (ef, distance threshold) out to the routed
 // shards. Without this, worker/task.go would silently drop the options for
