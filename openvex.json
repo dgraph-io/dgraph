@@ -2,8 +2,8 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/dgraph-io/dgraph/blob/main/openvex.json",
   "author": "Dgraph maintainers",
-  "timestamp": "2026-05-19T00:00:00Z",
-  "version": 1,
+  "timestamp": "2026-07-23T00:00:00Z",
+  "version": 2,
   "statements": [
     {
       "vulnerability": {
@@ -49,6 +49,33 @@
       "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
       "status": "fixed",
       "impact_statement": "Fix is present in the main branch. The advisory database has not yet recorded a fixed version, so Trivy cannot determine this by version comparison alone."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-44840",
+        "name": "CVE-2026-44840"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch (commit cee702c93, 2026-05-11). The advisory records the fix in release 25.3.4; nightly CI builds embed a Go pseudo-version that sorts below that tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-54061",
+        "name": "CVE-2026-54061"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch (commit aba579ace, 2026-06-11). The advisory records the fix in release 25.3.5; nightly CI builds embed a Go pseudo-version that sorts below that tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-63637",
+        "name": "CVE-2026-63637"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch (commit aaff09ab9, 2026-07-06). The advisory database has not yet recorded a fixed version, so Trivy cannot determine this by version comparison alone."
     }
   ]
 }
