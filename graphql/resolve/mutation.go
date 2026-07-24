@@ -127,9 +127,10 @@ type DgraphExecutor interface {
 // The node types is a blank node name -> Type mapping of nodes that could
 // be created by the upsert.
 type UpsertMutation struct {
-	Query     []*dql.GraphQuery
-	Mutations []*dgoapi.Mutation
-	NewNodes  map[string]schema.Type
+	Query         []*dql.GraphQuery
+	Mutations     []*dgoapi.Mutation
+	NewNodes      map[string]schema.Type
+	AffectedNodes map[string]schema.Type
 }
 
 // DgraphExecutorFunc is an adapter that allows us to compose dgraph execution and
@@ -403,6 +404,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	result := make(map[string]interface{})
 	newNodes := make(map[string]schema.Type)
+	affectedNodes := make(map[string]schema.Type)
 
 	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()
@@ -471,12 +473,20 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 
 		copyTypeMap(upsert.NewNodes, newNodes)
+		copyAffectedNodeMap(upsert.AffectedNodes, affectedNodes)
 	}
 	mutationTimer.Stop()
 
 	authErr := authorizeNewNodes(ctx, mutation, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
+	}
+
+	if mutation.MutationType() == schema.AddMutation {
+		authErr = authorizeAffectedNodes(ctx, mutation, affectedNodes, mr.executor, mutResp.Txn)
+		if authErr != nil {
+			return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
+		}
 	}
 
 	var dgQuery []*dql.GraphQuery
@@ -603,21 +613,7 @@ func authorizeNewNodes(
 	queryExecutor DgraphExecutor,
 	txn *dgoapi.TxnContext) error {
 
-	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
-	if err != nil {
-		return schema.GQLWrapf(err, "authorization failed")
-	}
-	authVariables := customClaims.AuthVariables
-	newRw := &authRewriter{
-		authVariables: authVariables,
-		varGen:        NewVariableGenerator(),
-		selector:      addAuthSelector,
-		hasAuthRules:  true,
-	}
-
-	// Collect all the newly created nodes in type groups
-
-	newByType := make(map[string][]uint64)
+	byType := make(map[string][]uint64)
 	namesToType := make(map[string]schema.Type)
 	for nodeName, nodeTyp := range newNodeTypes {
 		if uidStr, created := uids[nodeName]; created {
@@ -629,22 +625,75 @@ func authorizeNewNodes(
 				nodeTyp = nodeTyp.ListType()
 			}
 			namesToType[nodeTyp.Name()] = nodeTyp
-			newByType[nodeTyp.Name()] = append(newByType[nodeTyp.Name()], uid)
+			byType[nodeTyp.Name()] = append(byType[nodeTyp.Name()], uid)
 		}
 	}
 
-	// sort to get a consistent query rewriting
-	var createdTypes []string
-	for typeName := range newByType {
-		createdTypes = append(createdTypes, typeName)
-	}
-	sort.Strings(createdTypes)
+	return authorizeNodesByType(ctx, m, byType, namesToType, addAuthSelector, queryExecutor, txn)
+}
 
-	// Write auth queries for each set of node types
+// authorizeAffectedNodes checks update authorization rules on existing nodes that were
+// modified by nested insertions linking through @hasInverse. When a new child references
+// an existing parent, the inverse edge mutates the parent without creating a new UID for
+// it, so authorizeNewNodes never sees the parent.
+func authorizeAffectedNodes(
+	ctx context.Context,
+	m schema.Mutation,
+	affectedNodeTypes map[string]schema.Type,
+	queryExecutor DgraphExecutor,
+	txn *dgoapi.TxnContext) error {
+
+	if len(affectedNodeTypes) == 0 {
+		return nil
+	}
+
+	byType := make(map[string][]uint64)
+	namesToType := make(map[string]schema.Type)
+	for uidStr, nodeTyp := range affectedNodeTypes {
+		uid, err := strconv.ParseUint(uidStr, 0, 64)
+		if err != nil {
+			return schema.GQLWrapf(err, "authorization failed")
+		}
+		if nodeTyp.ListType() != nil {
+			nodeTyp = nodeTyp.ListType()
+		}
+		namesToType[nodeTyp.Name()] = nodeTyp
+		byType[nodeTyp.Name()] = append(byType[nodeTyp.Name()], uid)
+	}
+
+	return authorizeNodesByType(ctx, m, byType, namesToType, updateAuthSelector, queryExecutor, txn)
+}
+
+func authorizeNodesByType(
+	ctx context.Context,
+	m schema.Mutation,
+	nodesByType map[string][]uint64,
+	namesToType map[string]schema.Type,
+	authSelector func(schema.Type) *schema.RuleNode,
+	queryExecutor DgraphExecutor,
+	txn *dgoapi.TxnContext) error {
+
+	customClaims, err := m.GetAuthMeta().ExtractCustomClaims(ctx)
+	if err != nil {
+		return schema.GQLWrapf(err, "authorization failed")
+	}
+	authVariables := customClaims.AuthVariables
+	newRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      authSelector,
+		hasAuthRules:  true,
+	}
+
+	var typeNames []string
+	for typeName := range nodesByType {
+		typeNames = append(typeNames, typeName)
+	}
+	sort.Strings(typeNames)
 
 	var needsAuth []string
 	authQrys := make(map[string][]*dql.GraphQuery)
-	for _, typeName := range createdTypes {
+	for _, typeName := range typeNames {
 		typ := namesToType[typeName]
 		varName := newRw.varGen.Next(typ, "", "", false)
 		newRw.varName = varName
@@ -666,13 +715,6 @@ func authorizeNewNodes(
 			continue
 		}
 
-		// Generate query blocks like this for each node type
-		//
-		// Todo(func: uid(Todo1)) @filter(uid(Todo2) AND uid(Todo3)) { uid }
-		// Todo1 as var(func: uid(...new uids of this type...) )
-		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
-		// Todo3 as var(func: uid(Todo1)) @cascade { ...auth query 2... }
-
 		typQuery := &dql.GraphQuery{
 			Attr: typ.Name(),
 			Func: &dql.Function{
@@ -681,7 +723,7 @@ func authorizeNewNodes(
 			Filter:   authFilter,
 			Children: []*dql.GraphQuery{{Attr: "uid"}}}
 
-		nodes := newByType[typeName]
+		nodes := nodesByType[typeName]
 		sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
 		varQry := &dql.GraphQuery{
 			Var:  varName,
@@ -694,15 +736,12 @@ func authorizeNewNodes(
 
 		needsAuth = append(needsAuth, typeName)
 		authQrys[typeName] = append([]*dql.GraphQuery{typQuery, varQry}, authQueries...)
-
 	}
 
 	if len(needsAuth) == 0 {
-		// no auth to apply
 		return nil
 	}
 
-	// create the query in order so we get a stable query
 	sort.Strings(needsAuth)
 	var qs []*dql.GraphQuery
 	for _, typeName := range needsAuth {
@@ -726,12 +765,6 @@ func authorizeNewNodes(
 	for _, typeName := range needsAuth {
 		check, ok := authResult[typeName]
 		if !ok || check == nil {
-			// We needed auth on this type, but it wasn't even in the response.  That
-			// means Dgraph found no matching nodes and returned nothing for this field.
-			// So all the nodes failed auth.
-
-			// FIXME: what do we actually want to return to users when auth failed?
-			// Is this too much?
 			return x.GqlErrorf("authorization failed")
 		}
 
@@ -740,14 +773,10 @@ func authorizeNewNodes(
 			return x.GqlErrorf("authorization failed")
 		}
 
-		if len(newByType[typeName]) != len(foundUIDs) {
-			// Some of the created nodes passed auth and some failed.
+		if len(nodesByType[typeName]) != len(foundUIDs) {
 			return x.GqlErrorf("authorization failed")
 		}
 	}
-
-	// By now either there were no types that needed auth, or all nodes passed the
-	// auth checks.  So the mutation as a whole passed authorization.
 
 	return nil
 }
