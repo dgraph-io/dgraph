@@ -88,6 +88,24 @@ func (h *priorityQueue) Pop() interface{} {
 	return val
 }
 
+// removeMax removes the highest-cost item from the priority queue.
+// In a min-heap, the max can be anywhere, so we do a linear scan.
+// This is used to evict the least promising node when the frontier
+// exceeds its size limit, preserving the lowest-cost nodes needed
+// for shortest paths.
+func (h *priorityQueue) removeMax() {
+	if len(*h) == 0 {
+		return
+	}
+	maxIdx := 0
+	for i := 1; i < len(*h); i++ {
+		if (*h)[i].cost > (*h)[maxIdx].cost {
+			maxIdx = i
+		}
+	}
+	heap.Remove(h, maxIdx)
+}
+
 type mapItem struct {
 	attr  string
 	cost  float64
@@ -405,10 +423,10 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				hop:  item.hop + 1,
 				path: route{route: curPath},
 			}
-			if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-				pq.Pop()
-			}
 			heap.Push(&pq, node)
+			if sg.Params.MaxFrontierSize > 0 && int64(pq.Len()) > sg.Params.MaxFrontierSize {
+				pq.removeMax()
+			}
 		}
 		// Return the popped nodes path to pool.
 		pathPool.Put(item.path.route)
@@ -561,10 +579,10 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					cost: nodeCost,
 					hop:  item.hop + 1,
 				}
-				if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-					pq.Pop()
-				}
 				heap.Push(&pq, node)
+				if sg.Params.MaxFrontierSize > 0 && int64(pq.Len()) > sg.Params.MaxFrontierSize {
+					pq.removeMax()
+				}
 			} else {
 				// We've already seen this node. So, just update the cost
 				// and fix the priority in the heap and map.
