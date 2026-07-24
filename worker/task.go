@@ -224,6 +224,7 @@ const (
 	customIndexFn
 	matchFn
 	similarToFn
+	bm25SearchFn
 	standardFn = 100
 )
 
@@ -266,6 +267,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return uidInFn, f
 	case "similar_to":
 		return similarToFn, f
+	case "bm25":
+		return bm25SearchFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -292,6 +295,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		return true
 	case similarToFn:
 		return true
+	case bm25SearchFn:
+		return true
 	}
 	return false
 }
@@ -314,7 +319,7 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case aggregatorFn, passwordFn, similarToFn:
+	case aggregatorFn, passwordFn, similarToFn, bm25SearchFn:
 		return true, nil
 	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
@@ -351,9 +356,13 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, bm25SearchFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == bm25SearchFn {
+		return qs.handleBM25Search(ctx, args)
 	}
 
 	if srcFn.fnType == similarToFn {
@@ -2165,6 +2174,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	case hasFn:
 		if err = ensureArgsCount(q.SrcFunc, 0); err != nil {
 			return nil, err
+		}
+		checkRoot(q, fc)
+	case bm25SearchFn:
+		// bm25(pred, "query text") or bm25(pred, "query text", "k", "b")
+		if len(q.SrcFunc.Args) < 1 || len(q.SrcFunc.Args) > 3 {
+			return nil, errors.Errorf("Function 'bm25' requires 1-3 arguments (query [, k, b]), but got %d",
+				len(q.SrcFunc.Args))
+		}
+		required, found := verifyStringIndex(ctx, attr, fnType)
+		if !found {
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
 		}
 		checkRoot(q, fc)
 	case similarToFn:
