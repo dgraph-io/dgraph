@@ -1,0 +1,2378 @@
+{
+  q(func: type(Genre), orderasc: name@en) @filter(gt(count(~genre), 0)) {
+    name@en
+    n_films: count(~genre)
+  }
+}
+---
+{
+  "q": [
+    {
+      "name@en": "/m/04rlf",
+      "n_films": 2
+    },
+    {
+      "name@en": "3D film",
+      "n_films": 4
+    },
+    {
+      "name@en": "Abstract animation",
+      "n_films": 6
+    },
+    {
+      "name@en": "Absurdism",
+      "n_films": 74
+    },
+    {
+      "name@en": "Acid Western",
+      "n_films": 8
+    },
+    {
+      "name@en": "Action",
+      "n_films": 48
+    },
+    {
+      "name@en": "Action",
+      "n_films": 1
+    },
+    {
+      "name@en": "Action Comedy",
+      "n_films": 149
+    },
+    {
+      "name@en": "Action Film",
+      "n_films": 17719
+    },
+    {
+      "name@en": "Action Thriller",
+      "n_films": 588
+    },
+    {
+      "name@en": "Action/Adventure",
+      "n_films": 5731
+    },
+    {
+      "name@en": "Adevnture",
+      "n_films": 1
+    },
+    {
+      "name@en": "Adult",
+      "n_films": 5
+    },
+    {
+      "name@en": "Adventure",
+      "n_films": 20
+    },
+    {
+      "name@en": "Adventure Comedy",
+      "n_films": 123
+    },
+    {
+      "name@en": "Adventure Film",
+      "n_films": 9367
+    },
+    {
+      "name@en": "Adventure game",
+      "n_films": 57
+    },
+    {
+      "name@en": "Adventure Travel",
+      "n_films": 8
+    },
+    {
+      "name@en": "African-American Comedies",
+      "n_films": 1
+    },
+    {
+      "name@en": "Ages 0-2",
+      "n_films": 2
+    },
+    {
+      "name@en": "Ages 2-4",
+      "n_films": 1
+    },
+    {
+      "name@en": "Ages 5-7",
+      "n_films": 1
+    },
+    {
+      "name@en": "Airplanes and airports",
+      "n_films": 30
+    },
+    {
+      "name@en": "Albinism in popular culture",
+      "n_films": 11
+    },
+    {
+      "name@en": "Alien Film",
+      "n_films": 97
+    },
+    {
+      "name@en": "Alien invasion",
+      "n_films": 4
+    },
+    {
+      "name@en": "Alien Sci-Fi",
+      "n_films": 2
+    },
+    {
+      "name@en": "Alternate history",
+      "n_films": 4
+    },
+    {
+      "name@en": "Alternative Health",
+      "n_films": 4
+    },
+    {
+      "name@en": "Amateur film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Ambiance",
+      "n_films": 11
+    },
+    {
+      "name@en": "Animal",
+      "n_films": 54
+    },
+    {
+      "name@en": "Animal Picture",
+      "n_films": 193
+    },
+    {
+      "name@en": "Animated cartoon",
+      "n_films": 132
+    },
+    {
+      "name@en": "Animated documentary",
+      "n_films": 9
+    },
+    {
+      "name@en": "Animated Musical",
+      "n_films": 42
+    },
+    {
+      "name@en": "Animation",
+      "n_films": 12799
+    },
+    {
+      "name@en": "Anime",
+      "n_films": 1106
+    },
+    {
+      "name@en": "Anime Sci-Fi",
+      "n_films": 4
+    },
+    {
+      "name@en": "Anthology",
+      "n_films": 14
+    },
+    {
+      "name@en": "Anthology film",
+      "n_films": 2
+    },
+    {
+      "name@en": "Anti-McCarthyist",
+      "n_films": 1
+    },
+    {
+      "name@en": "Anti-war film",
+      "n_films": 43
+    },
+    {
+      "name@en": "Anti-war movement",
+      "n_films": 2
+    },
+    {
+      "name@en": "Arab cinema",
+      "n_films": 1
+    },
+    {
+      "name@en": "Archaeology",
+      "n_films": 8
+    },
+    {
+      "name@en": "Architecture & Design",
+      "n_films": 11
+    },
+    {
+      "name@en": "Archives and records",
+      "n_films": 5
+    },
+    {
+      "name@en": "Armchair Travel",
+      "n_films": 25
+    },
+    {
+      "name@en": "Art history",
+      "n_films": 18
+    },
+    {
+      "name@en": "Artistic gymnastics",
+      "n_films": 2
+    },
+    {
+      "name@en": "Arts and Culture",
+      "n_films": 395
+    },
+    {
+      "name@en": "Assamese cinema",
+      "n_films": 10
+    },
+    {
+      "name@en": "Auto racing",
+      "n_films": 210
+    },
+    {
+      "name@en": "Avant-garde",
+      "n_films": 152
+    },
+    {
+      "name@en": "B movie",
+      "n_films": 1059
+    },
+    {
+      "name@en": "B-boying",
+      "n_films": 2
+    },
+    {
+      "name@en": "B-Western",
+      "n_films": 86
+    },
+    {
+      "name@en": "Backstage",
+      "n_films": 1
+    },
+    {
+      "name@en": "Backstage Musical",
+      "n_films": 7246
+    },
+    {
+      "name@en": "Ballet",
+      "n_films": 10
+    },
+    {
+      "name@en": "BDSM",
+      "n_films": 3
+    },
+    {
+      "name@en": "Beach Film",
+      "n_films": 21
+    },
+    {
+      "name@en": "Beach party film",
+      "n_films": 3
+    },
+    {
+      "name@en": "Beauty & Fashion",
+      "n_films": 15
+    },
+    {
+      "name@en": "Bedroom farce",
+      "n_films": 1
+    },
+    {
+      "name@en": "Bengali Cinema",
+      "n_films": 854
+    },
+    {
+      "name@en": "Best of compilation",
+      "n_films": 1
+    },
+    {
+      "name@en": "Bhojpuri cinema",
+      "n_films": 4
+    },
+    {
+      "name@en": "Biker Film",
+      "n_films": 38
+    },
+    {
+      "name@en": "Biographical Documentaries",
+      "n_films": 27
+    },
+    {
+      "name@en": "Biographical film",
+      "n_films": 5968
+    },
+    {
+      "name@en": "Biography",
+      "n_films": 67
+    },
+    {
+      "name@en": "Biological Sciences",
+      "n_films": 15
+    },
+    {
+      "name@en": "Bisexual pornography",
+      "n_films": 12
+    },
+    {
+      "name@en": "Black comedy",
+      "n_films": 1313
+    },
+    {
+      "name@en": "Black-and-white",
+      "n_films": 7780
+    },
+    {
+      "name@en": "Blaxploitation film",
+      "n_films": 121
+    },
+    {
+      "name@en": "Bloopers & Candid Camera",
+      "n_films": 7
+    },
+    {
+      "name@en": "Bollywood",
+      "n_films": 5119
+    },
+    {
+      "name@en": "British Cinema",
+      "n_films": 10
+    },
+    {
+      "name@en": "British Empire Film",
+      "n_films": 21
+    },
+    {
+      "name@en": "British New Wave",
+      "n_films": 12
+    },
+    {
+      "name@en": "Bruceploitation",
+      "n_films": 4
+    },
+    {
+      "name@en": "Buddy cop film",
+      "n_films": 11
+    },
+    {
+      "name@en": "Buddy film",
+      "n_films": 357
+    },
+    {
+      "name@en": "Business",
+      "n_films": 2
+    },
+    {
+      "name@en": "Business",
+      "n_films": 17
+    },
+    {
+      "name@en": "C-Movie",
+      "n_films": 1
+    },
+    {
+      "name@en": "Camp",
+      "n_films": 2
+    },
+    {
+      "name@en": "Cannibal film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Caper story",
+      "n_films": 96
+    },
+    {
+      "name@en": "Careers",
+      "n_films": 4
+    },
+    {
+      "name@en": "Cartoon",
+      "n_films": 374
+    },
+    {
+      "name@en": "Cavalry Film",
+      "n_films": 19
+    },
+    {
+      "name@en": "Chase Movie",
+      "n_films": 89
+    },
+    {
+      "name@en": "Chick flick",
+      "n_films": 2
+    },
+    {
+      "name@en": "Childhood Drama",
+      "n_films": 132
+    },
+    {
+      "name@en": "Children's Fantasy",
+      "n_films": 229
+    },
+    {
+      "name@en": "Children's Issues",
+      "n_films": 14
+    },
+    {
+      "name@en": "Children's television series",
+      "n_films": 1
+    },
+    {
+      "name@en": "Children's/Family",
+      "n_films": 884
+    },
+    {
+      "name@en": "Chinese Movies",
+      "n_films": 2446
+    },
+    {
+      "name@en": "Chivalric romance",
+      "n_films": 2
+    },
+    {
+      "name@en": "Christian film",
+      "n_films": 122
+    },
+    {
+      "name@en": "Christian film industry",
+      "n_films": 3
+    },
+    {
+      "name@en": "Christianity",
+      "n_films": 5
+    },
+    {
+      "name@en": "Christmas",
+      "n_films": 1
+    },
+    {
+      "name@en": "Christmas movie",
+      "n_films": 94
+    },
+    {
+      "name@en": "Christmas special",
+      "n_films": 3
+    },
+    {
+      "name@en": "Cin\u00e9ma v\u00e9rit\u00e9",
+      "n_films": 7
+    },
+    {
+      "name@en": "Clay animation",
+      "n_films": 7
+    },
+    {
+      "name@en": "Closeted",
+      "n_films": 1
+    },
+    {
+      "name@en": "Collage",
+      "n_films": 2
+    },
+    {
+      "name@en": "College life",
+      "n_films": 1
+    },
+    {
+      "name@en": "Color motion picture film",
+      "n_films": 2
+    },
+    {
+      "name@en": "Combat Films",
+      "n_films": 93
+    },
+    {
+      "name@en": "Comedy",
+      "n_films": 41070
+    },
+    {
+      "name@en": "Comedy of Errors",
+      "n_films": 182
+    },
+    {
+      "name@en": "Comedy of manners",
+      "n_films": 218
+    },
+    {
+      "name@en": "Comedy Thriller",
+      "n_films": 93
+    },
+    {
+      "name@en": "Comedy Western",
+      "n_films": 241
+    },
+    {
+      "name@en": "Comedy-drama",
+      "n_films": 2173
+    },
+    {
+      "name@en": "Coming of age",
+      "n_films": 781
+    },
+    {
+      "name@en": "Coming out",
+      "n_films": 13
+    },
+    {
+      "name@en": "Coming-of-age story",
+      "n_films": 277
+    },
+    {
+      "name@en": "Commedia all'italiana",
+      "n_films": 2
+    },
+    {
+      "name@en": "Commedia sexy all'italiana",
+      "n_films": 2
+    },
+    {
+      "name@en": "Compilation film",
+      "n_films": 15
+    },
+    {
+      "name@en": "Computer Animation",
+      "n_films": 197
+    },
+    {
+      "name@en": "Computers",
+      "n_films": 13
+    },
+    {
+      "name@en": "Concert",
+      "n_films": 4
+    },
+    {
+      "name@en": "Concert film",
+      "n_films": 3050
+    },
+    {
+      "name@en": "Conspiracy fiction",
+      "n_films": 1
+    },
+    {
+      "name@en": "Cooking & Food",
+      "n_films": 6
+    },
+    {
+      "name@en": "Costume Adventure",
+      "n_films": 80
+    },
+    {
+      "name@en": "Costume drama",
+      "n_films": 359
+    },
+    {
+      "name@en": "Costume Horror",
+      "n_films": 42
+    },
+    {
+      "name@en": "Courtroom Comedy",
+      "n_films": 6
+    },
+    {
+      "name@en": "Creature Film",
+      "n_films": 306
+    },
+    {
+      "name@en": "Crime",
+      "n_films": 224
+    },
+    {
+      "name@en": "Crime Comedy",
+      "n_films": 272
+    },
+    {
+      "name@en": "Crime Drama",
+      "n_films": 479
+    },
+    {
+      "name@en": "Crime Fiction",
+      "n_films": 13019
+    },
+    {
+      "name@en": "Crime film",
+      "n_films": 42
+    },
+    {
+      "name@en": "Crime Thriller",
+      "n_films": 2541
+    },
+    {
+      "name@en": "Cult film",
+      "n_films": 937
+    },
+    {
+      "name@en": "Culture & Society",
+      "n_films": 895
+    },
+    {
+      "name@en": "Current affairs",
+      "n_films": 1
+    },
+    {
+      "name@en": "Cyberpunk",
+      "n_films": 9
+    },
+    {
+      "name@en": "Cycling",
+      "n_films": 1
+    },
+    {
+      "name@en": "Czechoslovak New Wave",
+      "n_films": 6
+    },
+    {
+      "name@en": "Damsel in distress",
+      "n_films": 1
+    },
+    {
+      "name@en": "Dance film",
+      "n_films": 986
+    },
+    {
+      "name@en": "Demonic child",
+      "n_films": 5
+    },
+    {
+      "name@en": "Detective fiction",
+      "n_films": 520
+    },
+    {
+      "name@en": "Diet & Nutrition",
+      "n_films": 8
+    },
+    {
+      "name@en": "Direct-to-video",
+      "n_films": 51
+    },
+    {
+      "name@en": "Disaster Film",
+      "n_films": 318
+    },
+    {
+      "name@en": "Docmentary",
+      "n_films": 1
+    },
+    {
+      "name@en": "Docudrama",
+      "n_films": 477
+    },
+    {
+      "name@en": "Docufiction",
+      "n_films": 28
+    },
+    {
+      "name@en": "Documentary film",
+      "n_films": 31370
+    },
+    {
+      "name@en": "Documentation",
+      "n_films": 1
+    },
+    {
+      "name@en": "Dogme 95",
+      "n_films": 77
+    },
+    {
+      "name@en": "Dokumentarfilm",
+      "n_films": 1
+    },
+    {
+      "name@en": "Domaci",
+      "n_films": 1
+    },
+    {
+      "name@en": "Domestic Comedy",
+      "n_films": 179
+    },
+    {
+      "name@en": "Doomsday film",
+      "n_films": 79
+    },
+    {
+      "name@en": "Drama",
+      "n_films": 238
+    },
+    {
+      "name@en": "Drama",
+      "n_films": 76252
+    },
+    {
+      "name@en": "Dystopia",
+      "n_films": 62
+    },
+    {
+      "name@en": "Early Black Cinema",
+      "n_films": 7
+    },
+    {
+      "name@en": "East Asian cinema",
+      "n_films": 3747
+    },
+    {
+      "name@en": "Education",
+      "n_films": 26
+    },
+    {
+      "name@en": "Educational & Guidance",
+      "n_films": 1
+    },
+    {
+      "name@en": "Educational entertainment",
+      "n_films": 1
+    },
+    {
+      "name@en": "Educational film",
+      "n_films": 3852
+    },
+    {
+      "name@en": "Edupunk",
+      "n_films": 1
+    },
+    {
+      "name@en": "Ensemble Film",
+      "n_films": 328
+    },
+    {
+      "name@en": "Environment",
+      "n_films": 11
+    },
+    {
+      "name@en": "Environmental Science",
+      "n_films": 36
+    },
+    {
+      "name@en": "Epic film",
+      "n_films": 318
+    },
+    {
+      "name@en": "Epic Western",
+      "n_films": 16
+    },
+    {
+      "name@en": "Equestrianism",
+      "n_films": 1
+    },
+    {
+      "name@en": "Erotic Drama",
+      "n_films": 132
+    },
+    {
+      "name@en": "Erotic Science Fiction",
+      "n_films": 1
+    },
+    {
+      "name@en": "Erotic thriller",
+      "n_films": 471
+    },
+    {
+      "name@en": "Erotica",
+      "n_films": 719
+    },
+    {
+      "name@en": "Escape Film",
+      "n_films": 45
+    },
+    {
+      "name@en": "Essay Film",
+      "n_films": 25
+    },
+    {
+      "name@en": "Estonian animation",
+      "n_films": 3
+    },
+    {
+      "name@en": "Ethnofiction",
+      "n_films": 2
+    },
+    {
+      "name@en": "Ethnographic film",
+      "n_films": 4
+    },
+    {
+      "name@en": "Eurospy film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Eurowestern",
+      "n_films": 5
+    },
+    {
+      "name@en": "Evil clown",
+      "n_films": 3
+    },
+    {
+      "name@en": "Existentialism",
+      "n_films": 16
+    },
+    {
+      "name@en": "Experimental film",
+      "n_films": 1563
+    },
+    {
+      "name@en": "Exploitation film",
+      "n_films": 43
+    },
+    {
+      "name@en": "Expressionism",
+      "n_films": 3
+    },
+    {
+      "name@en": "Extraterrestrial life",
+      "n_films": 1
+    },
+    {
+      "name@en": "Extreme Sports",
+      "n_films": 174
+    },
+    {
+      "name@en": "Fairy tale",
+      "n_films": 80
+    },
+    {
+      "name@en": "Family",
+      "n_films": 11267
+    },
+    {
+      "name@en": "Family",
+      "n_films": 11
+    },
+    {
+      "name@en": "Family Comedies",
+      "n_films": 3
+    },
+    {
+      "name@en": "Family Drama",
+      "n_films": 1024
+    },
+    {
+      "name@en": "Family-Oriented Adventure",
+      "n_films": 237
+    },
+    {
+      "name@en": "Fan film",
+      "n_films": 43
+    },
+    {
+      "name@en": "Fantasy",
+      "n_films": 466
+    },
+    {
+      "name@en": "Fantasy",
+      "n_films": 1
+    },
+    {
+      "name@en": "Fantasy",
+      "n_films": 5854
+    },
+    {
+      "name@en": "Fantasy",
+      "n_films": 1
+    },
+    {
+      "name@en": "Fantasy Adventure",
+      "n_films": 162
+    },
+    {
+      "name@en": "Fantasy Comedy",
+      "n_films": 171
+    },
+    {
+      "name@en": "Fantasy Drama",
+      "n_films": 15
+    },
+    {
+      "name@en": "Farce",
+      "n_films": 293
+    },
+    {
+      "name@en": "Fashion",
+      "n_films": 1
+    },
+    {
+      "name@en": "Feature film",
+      "n_films": 26
+    },
+    {
+      "name@en": "Female buddy film",
+      "n_films": 4
+    },
+    {
+      "name@en": "Feminist Film",
+      "n_films": 80
+    },
+    {
+      "name@en": "Fiction",
+      "n_films": 71
+    },
+    {
+      "name@en": "Fiction",
+      "n_films": 1
+    },
+    {
+      "name@en": "Fictional film",
+      "n_films": 43
+    },
+    {
+      "name@en": "Filipino Movies",
+      "n_films": 18
+    },
+    {
+      "name@en": "Film & Television History",
+      "n_films": 428
+    },
+    {
+      "name@en": "Film \u00e0 clef",
+      "n_films": 29
+    },
+    {
+      "name@en": "Film adaptation",
+      "n_films": 1448
+    },
+    {
+      "name@en": "Film noir",
+      "n_films": 757
+    },
+    {
+      "name@en": "Film-Opera",
+      "n_films": 5
+    },
+    {
+      "name@en": "Film-poem",
+      "n_films": 1
+    },
+    {
+      "name@en": "Filmed Play",
+      "n_films": 18
+    },
+    {
+      "name@en": "Films with live action and animation",
+      "n_films": 8
+    },
+    {
+      "name@en": "Finance & Investing",
+      "n_films": 7
+    },
+    {
+      "name@en": "Flash animation",
+      "n_films": 1
+    },
+    {
+      "name@en": "Foreign legion",
+      "n_films": 8
+    },
+    {
+      "name@en": "Found footage",
+      "n_films": 10
+    },
+    {
+      "name@en": "French New Wave",
+      "n_films": 1
+    },
+    {
+      "name@en": "Future history",
+      "n_films": 1
+    },
+    {
+      "name@en": "Future noir",
+      "n_films": 18
+    },
+    {
+      "name@en": "Game show",
+      "n_films": 4
+    },
+    {
+      "name@en": "Gangster Film",
+      "n_films": 426
+    },
+    {
+      "name@en": "Gay",
+      "n_films": 306
+    },
+    {
+      "name@en": "Gay & Lesbian Films",
+      "n_films": 3
+    },
+    {
+      "name@en": "Gay Interest",
+      "n_films": 300
+    },
+    {
+      "name@en": "Gay pornography",
+      "n_films": 10970
+    },
+    {
+      "name@en": "Gay Themed",
+      "n_films": 467
+    },
+    {
+      "name@en": "Gender Issues",
+      "n_films": 107
+    },
+    {
+      "name@en": "Giallo",
+      "n_films": 20
+    },
+    {
+      "name@en": "Glamorized Spy Film",
+      "n_films": 47
+    },
+    {
+      "name@en": "Goat gland film",
+      "n_films": 3
+    },
+    {
+      "name@en": "Gothic Film",
+      "n_films": 52
+    },
+    {
+      "name@en": "Graphic & Applied Arts",
+      "n_films": 32
+    },
+    {
+      "name@en": "Gross out",
+      "n_films": 45
+    },
+    {
+      "name@en": "Gujarati cinema",
+      "n_films": 1
+    },
+    {
+      "name@en": "Gulf War",
+      "n_films": 4
+    },
+    {
+      "name@en": "Hagiography",
+      "n_films": 26
+    },
+    {
+      "name@en": "Hard rock",
+      "n_films": 1
+    },
+    {
+      "name@en": "Hardcore pornography",
+      "n_films": 278
+    },
+    {
+      "name@en": "Hardcore punk",
+      "n_films": 1
+    },
+    {
+      "name@en": "Haunted House Film",
+      "n_films": 66
+    },
+    {
+      "name@en": "Health & Fitness",
+      "n_films": 218
+    },
+    {
+      "name@en": "Heaven-Can-Wait Fantasies",
+      "n_films": 24
+    },
+    {
+      "name@en": "Heavenly Comedy",
+      "n_films": 30
+    },
+    {
+      "name@en": "Heavenly Drama",
+      "n_films": 2
+    },
+    {
+      "name@en": "Heavy metal",
+      "n_films": 1
+    },
+    {
+      "name@en": "Heist film",
+      "n_films": 203
+    },
+    {
+      "name@en": "Hentai",
+      "n_films": 35
+    },
+    {
+      "name@en": "Hip hop film",
+      "n_films": 770
+    },
+    {
+      "name@en": "Historical drama",
+      "n_films": 1038
+    },
+    {
+      "name@en": "Historical Epic",
+      "n_films": 64
+    },
+    {
+      "name@en": "Historical fiction",
+      "n_films": 2095
+    },
+    {
+      "name@en": "Historical period drama",
+      "n_films": 1404
+    },
+    {
+      "name@en": "History",
+      "n_films": 2272
+    },
+    {
+      "name@en": "Hobbies and interests",
+      "n_films": 167
+    },
+    {
+      "name@en": "Holiday",
+      "n_films": 4
+    },
+    {
+      "name@en": "Holiday Film",
+      "n_films": 97
+    },
+    {
+      "name@en": "Home movies",
+      "n_films": 2
+    },
+    {
+      "name@en": "Horor",
+      "n_films": 1
+    },
+    {
+      "name@en": "Horror",
+      "n_films": 10511
+    },
+    {
+      "name@en": "Horror comedy",
+      "n_films": 794
+    },
+    {
+      "name@en": "Human sexuality",
+      "n_films": 5
+    },
+    {
+      "name@en": "Hybrid Western",
+      "n_films": 41
+    },
+    {
+      "name@en": "Illnesses & Disabilities",
+      "n_films": 65
+    },
+    {
+      "name@en": "Incest pornography",
+      "n_films": 2
+    },
+    {
+      "name@en": "Independent Dramas",
+      "n_films": 2
+    },
+    {
+      "name@en": "Indian Movies",
+      "n_films": 8
+    },
+    {
+      "name@en": "Indian Western",
+      "n_films": 26
+    },
+    {
+      "name@en": "Indie film",
+      "n_films": 8644
+    },
+    {
+      "name@en": "Informational",
+      "n_films": 6
+    },
+    {
+      "name@en": "Inspirational Drama",
+      "n_films": 39
+    },
+    {
+      "name@en": "inspirational film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Instrumental Music",
+      "n_films": 56
+    },
+    {
+      "name@en": "International",
+      "n_films": 1
+    },
+    {
+      "name@en": "Interpersonal Relationships",
+      "n_films": 55
+    },
+    {
+      "name@en": "Inventions & Innovations",
+      "n_films": 16
+    },
+    {
+      "name@en": "Japanese",
+      "n_films": 1
+    },
+    {
+      "name@en": "Japanese horror",
+      "n_films": 3
+    },
+    {
+      "name@en": "Japanese Movies",
+      "n_films": 3257
+    },
+    {
+      "name@en": "Jazz & Easy Listening",
+      "n_films": 1
+    },
+    {
+      "name@en": "Jazz & Modern Dance",
+      "n_films": 16
+    },
+    {
+      "name@en": "Jidaigeki",
+      "n_films": 9
+    },
+    {
+      "name@en": "Journalism",
+      "n_films": 9
+    },
+    {
+      "name@en": "Jukebox musical",
+      "n_films": 6
+    },
+    {
+      "name@en": "Jungle Film",
+      "n_films": 66
+    },
+    {
+      "name@en": "Juvenile Delinquency Film",
+      "n_films": 49
+    },
+    {
+      "name@en": "Kafkaesque",
+      "n_films": 3
+    },
+    {
+      "name@en": "Kaiju",
+      "n_films": 7
+    },
+    {
+      "name@en": "Kannada",
+      "n_films": 10
+    },
+    {
+      "name@en": "Kids' TV",
+      "n_films": 3
+    },
+    {
+      "name@en": "Kitchen sink realism",
+      "n_films": 15
+    },
+    {
+      "name@en": "Korean drama",
+      "n_films": 109
+    },
+    {
+      "name@en": "Korean horror",
+      "n_films": 3
+    },
+    {
+      "name@en": "Language & Literature",
+      "n_films": 48
+    },
+    {
+      "name@en": "Language Instruction",
+      "n_films": 1
+    },
+    {
+      "name@en": "Latin American cinema",
+      "n_films": 13
+    },
+    {
+      "name@en": "Latino",
+      "n_films": 2
+    },
+    {
+      "name@en": "Law & Crime",
+      "n_films": 84
+    },
+    {
+      "name@en": "Legal drama",
+      "n_films": 9
+    },
+    {
+      "name@en": "Leisure Arts",
+      "n_films": 15
+    },
+    {
+      "name@en": "LGBT",
+      "n_films": 3605
+    },
+    {
+      "name@en": "Libraries and librarians",
+      "n_films": 5
+    },
+    {
+      "name@en": "Lifestyle",
+      "n_films": 1
+    },
+    {
+      "name@en": "Linguistics",
+      "n_films": 5
+    },
+    {
+      "name@en": "Literary Studies",
+      "n_films": 33
+    },
+    {
+      "name@en": "Live action",
+      "n_films": 15
+    },
+    {
+      "name@en": "Lost film",
+      "n_films": 17
+    },
+    {
+      "name@en": "Mafia",
+      "n_films": 1
+    },
+    {
+      "name@en": "Mafia comedy",
+      "n_films": 3
+    },
+    {
+      "name@en": "Magic realism",
+      "n_films": 4
+    },
+    {
+      "name@en": "Malayalam Cinema",
+      "n_films": 2155
+    },
+    {
+      "name@en": "Male bonding",
+      "n_films": 2
+    },
+    {
+      "name@en": "Marathi cinema",
+      "n_films": 286
+    },
+    {
+      "name@en": "Marriage & Commitment",
+      "n_films": 10
+    },
+    {
+      "name@en": "Marriage Drama",
+      "n_films": 160
+    },
+    {
+      "name@en": "Martial Arts Film",
+      "n_films": 1944
+    },
+    {
+      "name@en": "Masala film",
+      "n_films": 6
+    },
+    {
+      "name@en": "Mashup",
+      "n_films": 1
+    },
+    {
+      "name@en": "Mecha",
+      "n_films": 21
+    },
+    {
+      "name@en": "Mecha anime and manga",
+      "n_films": 3
+    },
+    {
+      "name@en": "Media Satire",
+      "n_films": 71
+    },
+    {
+      "name@en": "Media studies",
+      "n_films": 45
+    },
+    {
+      "name@en": "Medical fiction",
+      "n_films": 74
+    },
+    {
+      "name@en": "Medieval fantasy",
+      "n_films": 1
+    },
+    {
+      "name@en": "Melodrama",
+      "n_films": 1206
+    },
+    {
+      "name@en": "Metalcore",
+      "n_films": 2
+    },
+    {
+      "name@en": "Miniseries",
+      "n_films": 1
+    },
+    {
+      "name@en": "Mistery",
+      "n_films": 1
+    },
+    {
+      "name@en": "Mockbuster",
+      "n_films": 13
+    },
+    {
+      "name@en": "Mockumentary",
+      "n_films": 280
+    },
+    {
+      "name@en": "Mondo film",
+      "n_films": 11
+    },
+    {
+      "name@en": "Monster",
+      "n_films": 104
+    },
+    {
+      "name@en": "Monster movie",
+      "n_films": 252
+    },
+    {
+      "name@en": "Montage",
+      "n_films": 1
+    },
+    {
+      "name@en": "Motion capture",
+      "n_films": 1
+    },
+    {
+      "name@en": "Motorsport",
+      "n_films": 15
+    },
+    {
+      "name@en": "Movies About Gladiators",
+      "n_films": 2
+    },
+    {
+      "name@en": "Multimedia",
+      "n_films": 2
+    },
+    {
+      "name@en": "Mumblecore",
+      "n_films": 8
+    },
+    {
+      "name@en": "Murder-mystery",
+      "n_films": 5
+    },
+    {
+      "name@en": "Museums and art galleries",
+      "n_films": 1
+    },
+    {
+      "name@en": "Music",
+      "n_films": 8705
+    },
+    {
+      "name@en": "Music video",
+      "n_films": 183
+    },
+    {
+      "name@en": "Musical comedy",
+      "n_films": 2681
+    },
+    {
+      "name@en": "Musical Drama",
+      "n_films": 2841
+    },
+    {
+      "name@en": "Musical theatre",
+      "n_films": 2
+    },
+    {
+      "name@en": "Mystery",
+      "n_films": 6520
+    },
+    {
+      "name@en": "Mystery film",
+      "n_films": 23
+    },
+    {
+      "name@en": "Mythic fiction",
+      "n_films": 5
+    },
+    {
+      "name@en": "Mythological Fantasy",
+      "n_films": 23
+    },
+    {
+      "name@en": "Natural horror film",
+      "n_films": 153
+    },
+    {
+      "name@en": "Nature",
+      "n_films": 73
+    },
+    {
+      "name@en": "Nazi exploitation",
+      "n_films": 4
+    },
+    {
+      "name@en": "Neo-noir",
+      "n_films": 58
+    },
+    {
+      "name@en": "New Queer Cinema",
+      "n_films": 1
+    },
+    {
+      "name@en": "News",
+      "n_films": 76
+    },
+    {
+      "name@en": "Newsreel",
+      "n_films": 7
+    },
+    {
+      "name@en": "Ninja movie",
+      "n_films": 1
+    },
+    {
+      "name@en": "No Wave Cinema",
+      "n_films": 1
+    },
+    {
+      "name@en": "Non-fiction",
+      "n_films": 40
+    },
+    {
+      "name@en": "Northern",
+      "n_films": 48
+    },
+    {
+      "name@en": "Nuclear warfare",
+      "n_films": 1
+    },
+    {
+      "name@en": "Nudie film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Nunsploitation",
+      "n_films": 14
+    },
+    {
+      "name@en": "Opera",
+      "n_films": 51
+    },
+    {
+      "name@en": "Operetta",
+      "n_films": 6
+    },
+    {
+      "name@en": "Operetta film",
+      "n_films": 5
+    },
+    {
+      "name@en": "Ostern",
+      "n_films": 5
+    },
+    {
+      "name@en": "Outdoor & Mountain Sports",
+      "n_films": 8
+    },
+    {
+      "name@en": "Outlaw",
+      "n_films": 2
+    },
+    {
+      "name@en": "Paracinema",
+      "n_films": 1
+    },
+    {
+      "name@en": "Paranormal",
+      "n_films": 6
+    },
+    {
+      "name@en": "Parody",
+      "n_films": 1229
+    },
+    {
+      "name@en": "Parody film",
+      "n_films": 19
+    },
+    {
+      "name@en": "Part-talkie",
+      "n_films": 5
+    },
+    {
+      "name@en": "Patriotic film",
+      "n_films": 3
+    },
+    {
+      "name@en": "Period Horror",
+      "n_films": 1
+    },
+    {
+      "name@en": "Pink film",
+      "n_films": 53
+    },
+    {
+      "name@en": "Point of view shot",
+      "n_films": 2
+    },
+    {
+      "name@en": "Police",
+      "n_films": 1
+    },
+    {
+      "name@en": "Police Comedy",
+      "n_films": 26
+    },
+    {
+      "name@en": "Police procedural",
+      "n_films": 2
+    },
+    {
+      "name@en": "Political cinema",
+      "n_films": 855
+    },
+    {
+      "name@en": "Political Documetary",
+      "n_films": 2
+    },
+    {
+      "name@en": "Political drama",
+      "n_films": 1386
+    },
+    {
+      "name@en": "Political fiction",
+      "n_films": 4
+    },
+    {
+      "name@en": "Political satire",
+      "n_films": 73
+    },
+    {
+      "name@en": "Political thriller",
+      "n_films": 282
+    },
+    {
+      "name@en": "Politics",
+      "n_films": 1
+    },
+    {
+      "name@en": "Poliziotteschi",
+      "n_films": 42
+    },
+    {
+      "name@en": "Pop rock",
+      "n_films": 1
+    },
+    {
+      "name@en": "Pornochanchada",
+      "n_films": 1
+    },
+    {
+      "name@en": "Pornographic film",
+      "n_films": 6516
+    },
+    {
+      "name@en": "Pornography",
+      "n_films": 2
+    },
+    {
+      "name@en": "Post-Apocalyptic fiction",
+      "n_films": 30
+    },
+    {
+      "name@en": "Prison escape",
+      "n_films": 2
+    },
+    {
+      "name@en": "Prison film",
+      "n_films": 143
+    },
+    {
+      "name@en": "Propaganda film",
+      "n_films": 221
+    },
+    {
+      "name@en": "Psycho film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Psycho-biddy",
+      "n_films": 13
+    },
+    {
+      "name@en": "Psychological Drama",
+      "n_films": 47
+    },
+    {
+      "name@en": "Psychological horror",
+      "n_films": 21
+    },
+    {
+      "name@en": "Psychological thriller",
+      "n_films": 1746
+    },
+    {
+      "name@en": "Public information film",
+      "n_films": 14
+    },
+    {
+      "name@en": "Punk rock",
+      "n_films": 395
+    },
+    {
+      "name@en": "Puppetoon",
+      "n_films": 1
+    },
+    {
+      "name@en": "Race film",
+      "n_films": 13
+    },
+    {
+      "name@en": "Rape and revenge film",
+      "n_films": 2
+    },
+    {
+      "name@en": "Real Robot",
+      "n_films": 2
+    },
+    {
+      "name@en": "Reality film",
+      "n_films": 4
+    },
+    {
+      "name@en": "Reality television",
+      "n_films": 30
+    },
+    {
+      "name@en": "Reboot",
+      "n_films": 5
+    },
+    {
+      "name@en": "Religion",
+      "n_films": 21
+    },
+    {
+      "name@en": "Religious Film",
+      "n_films": 170
+    },
+    {
+      "name@en": "Remake",
+      "n_films": 53
+    },
+    {
+      "name@en": "Revenge",
+      "n_films": 5
+    },
+    {
+      "name@en": "Revisionist Fairy Tale",
+      "n_films": 1
+    },
+    {
+      "name@en": "Revisionist Western",
+      "n_films": 68
+    },
+    {
+      "name@en": "Road movie",
+      "n_films": 399
+    },
+    {
+      "name@en": "Road-Horror",
+      "n_films": 16
+    },
+    {
+      "name@en": "Roadshow theatrical release",
+      "n_films": 24
+    },
+    {
+      "name@en": "Roadshow/Carny",
+      "n_films": 4
+    },
+    {
+      "name@en": "Rock & Pop",
+      "n_films": 1
+    },
+    {
+      "name@en": "Rockumentary",
+      "n_films": 1077
+    },
+    {
+      "name@en": "Romance",
+      "n_films": 4
+    },
+    {
+      "name@en": "Romance",
+      "n_films": 39
+    },
+    {
+      "name@en": "Romance Film",
+      "n_films": 21094
+    },
+    {
+      "name@en": "Romantic comedy",
+      "n_films": 3602
+    },
+    {
+      "name@en": "Romantic Drama",
+      "n_films": 1
+    },
+    {
+      "name@en": "Romantic fantasy",
+      "n_films": 67
+    },
+    {
+      "name@en": "Romantic Movies",
+      "n_films": 4
+    },
+    {
+      "name@en": "Romantic thriller",
+      "n_films": 4
+    },
+    {
+      "name@en": "Rubble film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Samurai cinema",
+      "n_films": 39
+    },
+    {
+      "name@en": "Satire",
+      "n_films": 713
+    },
+    {
+      "name@en": "School story",
+      "n_films": 5
+    },
+    {
+      "name@en": "Sci-Fi",
+      "n_films": 3
+    },
+    {
+      "name@en": "Sci-Fi Adventure",
+      "n_films": 31
+    },
+    {
+      "name@en": "Sci-Fi Horror",
+      "n_films": 157
+    },
+    {
+      "name@en": "Science",
+      "n_films": 1
+    },
+    {
+      "name@en": "Science and Nature Documentaries",
+      "n_films": 1
+    },
+    {
+      "name@en": "Science fantasy",
+      "n_films": 2
+    },
+    {
+      "name@en": "Science Fiction",
+      "n_films": 5851
+    },
+    {
+      "name@en": "Science fiction film",
+      "n_films": 20
+    },
+    {
+      "name@en": "Science fiction Western",
+      "n_films": 9
+    },
+    {
+      "name@en": "Screwball comedy",
+      "n_films": 345
+    },
+    {
+      "name@en": "Self-help",
+      "n_films": 13
+    },
+    {
+      "name@en": "Semidocumentary",
+      "n_films": 1
+    },
+    {
+      "name@en": "Sepia tone",
+      "n_films": 1
+    },
+    {
+      "name@en": "Serial film",
+      "n_films": 19
+    },
+    {
+      "name@en": "Sermons",
+      "n_films": 4
+    },
+    {
+      "name@en": "Sex comedy",
+      "n_films": 373
+    },
+    {
+      "name@en": "Sex Horror",
+      "n_films": 8
+    },
+    {
+      "name@en": "Sexploitation film",
+      "n_films": 142
+    },
+    {
+      "name@en": "Sh\u014djo manga",
+      "n_films": 1
+    },
+    {
+      "name@en": "Short Film",
+      "n_films": 46476
+    },
+    {
+      "name@en": "Short story",
+      "n_films": 1
+    },
+    {
+      "name@en": "Showbiz Dramas",
+      "n_films": 1
+    },
+    {
+      "name@en": "Silent comedy",
+      "n_films": 7
+    },
+    {
+      "name@en": "Silent film",
+      "n_films": 6955
+    },
+    {
+      "name@en": "Singing cowboy",
+      "n_films": 5
+    },
+    {
+      "name@en": "Sketch comedy",
+      "n_films": 1
+    },
+    {
+      "name@en": "Slapstick",
+      "n_films": 614
+    },
+    {
+      "name@en": "Slasher",
+      "n_films": 1198
+    },
+    {
+      "name@en": "Slice of life",
+      "n_films": 96
+    },
+    {
+      "name@en": "Snuff film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Social & Cultural Documentaries",
+      "n_films": 5
+    },
+    {
+      "name@en": "Social commentary",
+      "n_films": 1
+    },
+    {
+      "name@en": "Social film",
+      "n_films": 5
+    },
+    {
+      "name@en": "Social guidance film",
+      "n_films": 16
+    },
+    {
+      "name@en": "Social issues",
+      "n_films": 3
+    },
+    {
+      "name@en": "Social problem film",
+      "n_films": 155
+    },
+    {
+      "name@en": "Softcore pornography",
+      "n_films": 246
+    },
+    {
+      "name@en": "South Asian cinema",
+      "n_films": 358
+    },
+    {
+      "name@en": "Southeast Asian cinema",
+      "n_films": 7
+    },
+    {
+      "name@en": "Southern Gothic",
+      "n_films": 1
+    },
+    {
+      "name@en": "Space opera",
+      "n_films": 4
+    },
+    {
+      "name@en": "Space Western",
+      "n_films": 12
+    },
+    {
+      "name@en": "Spaghetti Western",
+      "n_films": 153
+    },
+    {
+      "name@en": "Special Interest",
+      "n_films": 41
+    },
+    {
+      "name@en": "Spiritual film",
+      "n_films": 297
+    },
+    {
+      "name@en": "Spirituality",
+      "n_films": 1
+    },
+    {
+      "name@en": "Splatter film",
+      "n_films": 35
+    },
+    {
+      "name@en": "Sponsored film",
+      "n_films": 9
+    },
+    {
+      "name@en": "Sports",
+      "n_films": 111
+    },
+    {
+      "name@en": "Sports films",
+      "n_films": 6114
+    },
+    {
+      "name@en": "Spy fiction",
+      "n_films": 1
+    },
+    {
+      "name@en": "Spy film",
+      "n_films": 554
+    },
+    {
+      "name@en": "Stand-up comedy",
+      "n_films": 686
+    },
+    {
+      "name@en": "Star vehicle",
+      "n_films": 1
+    },
+    {
+      "name@en": "Steampunk",
+      "n_films": 19
+    },
+    {
+      "name@en": "Stoner film",
+      "n_films": 46
+    },
+    {
+      "name@en": "Stop motion",
+      "n_films": 128
+    },
+    {
+      "name@en": "Structural film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Superhero movie",
+      "n_films": 306
+    },
+    {
+      "name@en": "Supermarionation",
+      "n_films": 2
+    },
+    {
+      "name@en": "Supernatural",
+      "n_films": 633
+    },
+    {
+      "name@en": "Supernatural Horror",
+      "n_films": 4
+    },
+    {
+      "name@en": "Surf film",
+      "n_films": 22
+    },
+    {
+      "name@en": "Surrealism",
+      "n_films": 97
+    },
+    {
+      "name@en": "Suspense",
+      "n_films": 993
+    },
+    {
+      "name@en": "Swashbuckler film",
+      "n_films": 137
+    },
+    {
+      "name@en": "Sword and Sandal film",
+      "n_films": 53
+    },
+    {
+      "name@en": "Sword and sorcery",
+      "n_films": 61
+    },
+    {
+      "name@en": "Talk show",
+      "n_films": 8
+    },
+    {
+      "name@en": "Talkie",
+      "n_films": 2
+    },
+    {
+      "name@en": "Tamil cinema",
+      "n_films": 2817
+    },
+    {
+      "name@en": "Tearjerkers",
+      "n_films": 1
+    },
+    {
+      "name@en": "Technicolor",
+      "n_films": 6
+    },
+    {
+      "name@en": "Techno-thriller",
+      "n_films": 1
+    },
+    {
+      "name@en": "Teen drama",
+      "n_films": 4
+    },
+    {
+      "name@en": "Teen film",
+      "n_films": 1047
+    },
+    {
+      "name@en": "Teen pornography",
+      "n_films": 3
+    },
+    {
+      "name@en": "Teen Screams",
+      "n_films": 1
+    },
+    {
+      "name@en": "Teleplay",
+      "n_films": 2
+    },
+    {
+      "name@en": "Television advertisement",
+      "n_films": 4
+    },
+    {
+      "name@en": "Television documentary",
+      "n_films": 93
+    },
+    {
+      "name@en": "Television film",
+      "n_films": 1414
+    },
+    {
+      "name@en": "Television Film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Television pilot",
+      "n_films": 6
+    },
+    {
+      "name@en": "Terrorism",
+      "n_films": 1
+    },
+    {
+      "name@en": "Theatrical Performances",
+      "n_films": 1
+    },
+    {
+      "name@en": "Therimin music",
+      "n_films": 3
+    },
+    {
+      "name@en": "Thrash metal",
+      "n_films": 1
+    },
+    {
+      "name@en": "Thriller",
+      "n_films": 17716
+    },
+    {
+      "name@en": "Time travel",
+      "n_films": 67
+    },
+    {
+      "name@en": "Tokusatsu",
+      "n_films": 4
+    },
+    {
+      "name@en": "Tollywood",
+      "n_films": 1868
+    },
+    {
+      "name@en": "Tragicomedy",
+      "n_films": 76
+    },
+    {
+      "name@en": "Training film",
+      "n_films": 7
+    },
+    {
+      "name@en": "Transforming robots",
+      "n_films": 1
+    },
+    {
+      "name@en": "Transsexualism",
+      "n_films": 2
+    },
+    {
+      "name@en": "Travel",
+      "n_films": 683
+    },
+    {
+      "name@en": "Travel & Adventure Documentaries",
+      "n_films": 1
+    },
+    {
+      "name@en": "Travel documentary",
+      "n_films": 5
+    },
+    {
+      "name@en": "Trial drama",
+      "n_films": 300
+    },
+    {
+      "name@en": "Tribute",
+      "n_films": 1
+    },
+    {
+      "name@en": "Triller",
+      "n_films": 1
+    },
+    {
+      "name@en": "True crime",
+      "n_films": 60
+    },
+    {
+      "name@en": "Tutorial",
+      "n_films": 1
+    },
+    {
+      "name@en": "TV Documentaries",
+      "n_films": 1
+    },
+    {
+      "name@en": "Underground film",
+      "n_films": 6
+    },
+    {
+      "name@en": "Vampire film",
+      "n_films": 18
+    },
+    {
+      "name@en": "Variety show",
+      "n_films": 1
+    },
+    {
+      "name@en": "Vigilante film",
+      "n_films": 1
+    },
+    {
+      "name@en": "Viral video",
+      "n_films": 1
+    },
+    {
+      "name@en": "War",
+      "n_films": 20
+    },
+    {
+      "name@en": "War effort",
+      "n_films": 1
+    },
+    {
+      "name@en": "War film",
+      "n_films": 5288
+    },
+    {
+      "name@en": "Web documentary",
+      "n_films": 2
+    },
+    {
+      "name@en": "Webisode",
+      "n_films": 2
+    },
+    {
+      "name@en": "Werewolf fiction",
+      "n_films": 4
+    },
+    {
+      "name@en": "Western",
+      "n_films": 4099
+    },
+    {
+      "name@en": "Whodunit",
+      "n_films": 87
+    },
+    {
+      "name@en": "Women in prison film",
+      "n_films": 13
+    },
+    {
+      "name@en": "Workplace Comedy",
+      "n_films": 86
+    },
+    {
+      "name@en": "World cinema",
+      "n_films": 21668
+    },
+    {
+      "name@en": "World history",
+      "n_films": 27
+    },
+    {
+      "name@en": "Wrestling",
+      "n_films": 1
+    },
+    {
+      "name@en": "Wuxia",
+      "n_films": 110
+    },
+    {
+      "name@en": "Yakuza film",
+      "n_films": 22
+    },
+    {
+      "name@en": "Youth",
+      "n_films": 1
+    },
+    {
+      "name@en": "Yuri",
+      "n_films": 2
+    },
+    {
+      "name@en": "Z movie",
+      "n_films": 2
+    },
+    {
+      "name@en": "Zapata Western",
+      "n_films": 1
+    },
+    {
+      "name@en": "Zombie",
+      "n_films": 4
+    },
+    {
+      "name@en": "Zombie",
+      "n_films": 8
+    },
+    {
+      "name@en": "Zombie comedy",
+      "n_films": 3
+    },
+    {
+      "name@en": "Zombie Film",
+      "n_films": 306
+    },
+    {
+      "name@en": "Zombie Movies",
+      "n_films": 2
+    },
+    {
+      "n_films": 2
+    }
+  ]
+}

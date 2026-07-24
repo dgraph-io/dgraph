@@ -137,9 +137,20 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 // TODO: When the opRollup is not running the keys from keysPool of ir are dropped. Figure out some
 // way to handle that.
 func (ir *incrRollupi) addKeyToBatch(key []byte, priority int) {
+	// Defensive copy. Callers (notably ReadPostingList's defer and the
+	// per-predicate mutation pipeline's ProcessCount loop) reuse a single
+	// key buffer across iterations and mutate its last 8 bytes per uid;
+	// keeping a slice header that aliases that buffer means every queued
+	// rollup target collapses to whatever uid was processed last. The
+	// async rollup then writes a BitCompletePosting to the wrong key,
+	// overwriting an unrelated posting list with WithDiscard. Take a copy
+	// here so the rollup queue owns its bytes.
+	keyCopy := make([]byte, len(key))
+	copy(keyCopy, key)
+
 	rki := ir.priorityKeys[priority]
 	batch := rki.keysPool.Get().(*[][]byte)
-	*batch = append(*batch, key)
+	*batch = append(*batch, keyCopy)
 	if len(*batch) < 16 {
 		rki.keysPool.Put(batch)
 		return
@@ -273,8 +284,11 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	defer cache.Unlock()
 
 	var keys []string
-	for key := range cache.deltas {
+	if err := cache.deltas.IterateKeys(func(key string) error {
 		keys = append(keys, key)
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	defer func() {
@@ -293,8 +307,15 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 		err := writer.update(commitTs, func(btxn *badger.Txn) error {
 			for ; idx < len(keys); idx++ {
 				key := keys[idx]
-				data := cache.deltas[key]
-				if len(data) == 0 {
+				data, ok := cache.deltas.GetBytes(key)
+				if !ok || data == nil {
+					continue
+				}
+				pl := &pb.PostingList{}
+				if err := proto.Unmarshal(data, pl); err != nil {
+					return err
+				}
+				if len(pl.Postings) == 0 {
 					continue
 				}
 				if ts := cache.maxVersions[key]; ts >= commitTs {
@@ -575,7 +596,7 @@ func (ml *MemoryLayer) wait() {
 	ml.cache.wait()
 }
 
-func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, commitTs uint64) {
+func (ml *MemoryLayer) updateItemInCache(key string, delta *pb.PostingList, startTs, commitTs uint64) {
 	if commitTs == 0 {
 		return
 	}
@@ -587,24 +608,19 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 	}
 
 	val, ok := ml.cache.get([]byte(key))
-	if !ok {
-		return
-	}
 
-	val.lastUpdate = commitTs
+	if ok && val.list != nil && val.list.minTs <= commitTs {
+		val.lastUpdate = commitTs
 
-	if val.list != nil {
-		p := new(pb.PostingList)
-		x.Check(proto.Unmarshal(delta, p))
-
-		if p.Pack == nil {
-			val.list.setMutationAfterCommit(startTs, commitTs, p, true)
-			checkForRollup([]byte(key), val.list)
-		} else {
-			// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
-			ml.del([]byte(key))
+		if val.list != nil {
+			if delta.Pack == nil {
+				val.list.setMutationAfterCommit(startTs, commitTs, delta, true)
+				checkForRollup([]byte(key), val.list)
+			} else {
+				// Data was rolled up. TODO figure out how is UpdateCachedKeys getting delta which is pack)
+				ml.del([]byte(key))
+			}
 		}
-
 	}
 }
 
@@ -615,8 +631,11 @@ func (txn *Txn) UpdateCachedKeys(commitTs uint64) {
 	}
 
 	MemLayerInstance.wait()
-	for key, delta := range txn.cache.deltas {
-		MemLayerInstance.updateItemInCache(key, delta, txn.StartTs, commitTs)
+	if err := txn.cache.deltas.IteratePostings(func(key string, value *pb.PostingList) error {
+		MemLayerInstance.updateItemInCache(key, value, txn.StartTs, commitTs)
+		return nil
+	}); err != nil {
+		glog.Errorf("UpdateCachedKeys: error while iterating deltas: %v", err)
 	}
 }
 
@@ -670,7 +689,16 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	}
 
 	l := new(List)
-	l.key = key
+	// Copy the key bytes. The caller (mutation pipeline ProcessCount and
+	// similar paths) reuses a single key buffer across loop iterations and
+	// mutates its trailing 8 bytes to scan many uids; without copying here
+	// the list's l.key field aliases that buffer, so by the time the list
+	// is read back from the in-memory cache (saveInCache stashes a
+	// copyList that shares the key alias) the bytes have changed. The
+	// async rollup path then takes alloc.Copy(l.key) to build the rolled-
+	// up KV's key and ends up writing a BitCompletePosting (with
+	// WithDiscard) to a different list's key — corrupting that list.
+	l.key = append([]byte(nil), key...)
 	l.plist = new(pb.PostingList)
 	l.mutationMap = newMutableLayer()
 	l.minTs = 0
