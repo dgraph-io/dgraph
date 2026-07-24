@@ -93,6 +93,25 @@ func TestCheckSchema(t *testing.T) {
 	}
 	require.NoError(t, checkSchema(s1))
 
+	// bm25 on a scalar string predicate is allowed.
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.AttrInRootNamespace("bio"),
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"bm25"},
+	}
+	require.NoError(t, checkSchema(s1))
+
+	// bm25 on a list predicate is rejected.
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.AttrInRootNamespace("tags"),
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"bm25"},
+		List:      true,
+	}
+	require.Error(t, checkSchema(s1))
+
 	s1 = &pb.SchemaUpdate{
 		Predicate: x.AttrInRootNamespace("friend"),
 		ValueType: pb.Posting_UID,

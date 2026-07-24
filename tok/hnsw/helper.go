@@ -214,6 +214,24 @@ type SimilarityType[T c.Float] struct {
 	isSimilarityMetric bool
 }
 
+// similarityScore converts a heap element's metric-domain value into a
+// higher-is-better similarity score suitable for ranking and score fusion.
+//
+//   - Cosine / dot product (isSimilarityMetric): the value is already a similarity
+//     where higher is better, so it is returned as-is.
+//   - Euclidean: the value is a squared L2 distance where lower is better. It is
+//     mapped to 1/(1+d) in (0,1], which is monotonically decreasing in distance, so
+//     higher is better and the result is well-behaved under linear normalization.
+//
+// Keeping this orientation in one place lets every caller (and hybrid-search
+// fusion) treat vector scores with the same higher-is-better convention as BM25.
+func (s SimilarityType[T]) similarityScore(value T) float64 {
+	if s.isSimilarityMetric {
+		return float64(value)
+	}
+	return 1.0 / (1.0 + float64(value))
+}
+
 func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	switch {
 	case indexType == Euclidean:

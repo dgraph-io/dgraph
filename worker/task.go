@@ -7,6 +7,7 @@ package worker
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -224,6 +225,7 @@ const (
 	customIndexFn
 	matchFn
 	similarToFn
+	bm25SearchFn
 	standardFn = 100
 )
 
@@ -266,6 +268,8 @@ func parseFuncTypeHelper(name string) (FuncType, string) {
 		return uidInFn, f
 	case "similar_to":
 		return similarToFn, f
+	case "bm25":
+		return bm25SearchFn, f
 	case "anyof", "allof":
 		return customIndexFn, f
 	case "match":
@@ -292,6 +296,8 @@ func needsIndex(fnType FuncType, uidList *pb.List) bool {
 		return true
 	case similarToFn:
 		return true
+	case bm25SearchFn:
+		return true
 	}
 	return false
 }
@@ -314,7 +320,7 @@ type funcArgs struct {
 // The function tells us whether we want to fetch value posting lists or uid posting lists.
 func (srcFn *functionContext) needsValuePostings(typ types.TypeID) (bool, error) {
 	switch srcFn.fnType {
-	case aggregatorFn, passwordFn, similarToFn:
+	case aggregatorFn, passwordFn, similarToFn, bm25SearchFn:
 		return true, nil
 	case compareAttrFn:
 		if len(srcFn.tokens) > 0 {
@@ -351,15 +357,26 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		attribute.String("srcFn", x.SafeUTF8(fmt.Sprintf("%+v", args.srcFn)))))
 
 	switch srcFn.fnType {
-	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn:
+	case notAFunction, aggregatorFn, passwordFn, compareAttrFn, similarToFn, bm25SearchFn:
 	default:
 		return errors.Errorf("Unhandled function in handleValuePostings: %s", srcFn.fname)
+	}
+
+	if srcFn.fnType == bm25SearchFn {
+		return qs.handleBM25Search(ctx, args)
 	}
 
 	if srcFn.fnType == similarToFn {
 		numNeighbors, err := strconv.ParseInt(q.SrcFunc.Args[0], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
+		}
+		// HNSW panics on expectedNeighbors <= 0 (searchLayerResult truncates its
+		// neighbor slice to zero length and dereferences neighbors[0]); reject the
+		// value before it reaches the index rather than crashing the alpha.
+		if numNeighbors <= 0 {
+			return fmt.Errorf("similar_to requires a positive number of neighbors, got %d",
+				numNeighbors)
 		}
 		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
 		if err != nil {
@@ -375,6 +392,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			return err
 		}
 		var nnUids []uint64
+		var nnScores []float64
 		// Build optional search options if provided
 		filter := index.AcceptAll[float32]
 		opts := index.VectorIndexOptions[float32]{Filter: filter}
@@ -385,27 +403,63 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			opts.DistanceThreshold = srcFn.vsDistanceThreshold
 		}
 		hasOptions := opts.EfOverride > 0 || opts.DistanceThreshold != nil
-		if o, ok := indexer.(index.OptionalSearchOptions[float32]); ok && hasOptions {
-			if srcFn.vectorInfo != nil {
-				nnUids, err = o.SearchWithOptions(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
-			} else {
-				nnUids, err = o.SearchWithUidAndOptions(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+		// Use the scored search path so the per-uid similarity score can be bound to a
+		// value variable (powering native hybrid search / fuse()). The scored variants
+		// mirror their unscored counterparts exactly — SearchScored/SearchWithUidScored
+		// preserve the plain-query neighbor selection, and the *Options* variants are
+		// used only when the query supplies ef/distance-threshold — so adding scoring
+		// does not change which neighbors existing queries return. Indexes that don't
+		// implement scoring fall back to the unscored path (no scores surfaced).
+		if so, ok := indexer.(index.ScoredSearchOptions[float32]); ok {
+			switch {
+			case hasOptions && srcFn.vectorInfo != nil:
+				nnUids, nnScores, err = so.SearchWithOptionsScored(ctx, qc, srcFn.vectorInfo, int(numNeighbors), opts)
+			case hasOptions:
+				nnUids, nnScores, err = so.SearchWithUidAndOptionsScored(ctx, qc, srcFn.vectorUid, int(numNeighbors), opts)
+			case srcFn.vectorInfo != nil:
+				nnUids, nnScores, err = so.SearchScored(ctx, qc, srcFn.vectorInfo, int(numNeighbors), index.AcceptAll[float32])
+			default:
+				nnUids, nnScores, err = so.SearchWithUidScored(ctx, qc, srcFn.vectorUid, int(numNeighbors), index.AcceptAll[float32])
 			}
+		} else if srcFn.vectorInfo != nil {
+			nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
+				int(numNeighbors), index.AcceptAll[float32])
 		} else {
-			if srcFn.vectorInfo != nil {
-				nnUids, err = indexer.Search(ctx, qc, srcFn.vectorInfo,
-					int(numNeighbors), index.AcceptAll[float32])
-			} else {
-				nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
-					int(numNeighbors), index.AcceptAll[float32])
-			}
+			nnUids, err = indexer.SearchWithUid(ctx, qc, srcFn.vectorUid,
+				int(numNeighbors), index.AcceptAll[float32])
 		}
 
 		if err != nil && !strings.Contains(err.Error(), hnsw.EmptyHNSWTreeError+": "+badger.ErrKeyNotFound.Error()) {
 			return err
 		}
-		sort.Slice(nnUids, func(i, j int) bool { return nnUids[i] < nnUids[j] })
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: nnUids})
+
+		// Emit uids ascending (required by the query pipeline) with positionally
+		// aligned similarity scores in ValueMatrix. The query layer binds these to a
+		// value variable so callers can order by and project the score via val(), and
+		// so vector results can serve as a fuse() channel. Scores are higher-is-better.
+		order := make([]int, len(nnUids))
+		for i := range order {
+			order[i] = i
+		}
+		sort.Slice(order, func(i, j int) bool { return nnUids[order[i]] < nnUids[order[j]] })
+		sortedUids := make([]uint64, len(nnUids))
+		for i, idx := range order {
+			sortedUids[i] = nnUids[idx]
+		}
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: sortedUids})
+
+		if len(nnScores) == len(nnUids) && len(nnScores) > 0 {
+			scoreBuf := make([]byte, len(nnUids)*8)
+			scoreValues := make([]*pb.ValueList, len(nnUids))
+			for i, idx := range order {
+				off := i * 8
+				binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(nnScores[idx]))
+				scoreValues[i] = &pb.ValueList{
+					Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_FLOAT}},
+				}
+			}
+			args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)
+		}
 		return nil
 	}
 
@@ -1217,6 +1271,115 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
 			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
 			srcFn.fnType == customIndexFn || srcFn.fnType == ngramFn)
+}
+
+func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error {
+	q := args.q
+	attr := q.Attr
+
+	// 1. Parse args: query text, optional k (default 1.2), b (default 0.75).
+	if len(q.SrcFunc.Args) < 1 {
+		return errors.Errorf("bm25 requires at least 1 argument (query text)")
+	}
+	queryText := q.SrcFunc.Args[0]
+	k := 1.2
+	b := 0.75
+	if len(q.SrcFunc.Args) >= 2 {
+		var err error
+		k, err = strconv.ParseFloat(q.SrcFunc.Args[1], 64)
+		if err != nil {
+			return errors.Errorf("bm25: invalid k parameter: %s", q.SrcFunc.Args[1])
+		}
+	}
+	if len(q.SrcFunc.Args) >= 3 {
+		var err error
+		b, err = strconv.ParseFloat(q.SrcFunc.Args[2], 64)
+		if err != nil {
+			return errors.Errorf("bm25: invalid b parameter: %s", q.SrcFunc.Args[2])
+		}
+	}
+	if math.IsNaN(k) || math.IsInf(k, 0) || k <= 0 {
+		return errors.Errorf("bm25: k must be a positive finite number, got %v", k)
+	}
+	if math.IsNaN(b) || math.IsInf(b, 0) || b < 0 || b > 1 {
+		return errors.Errorf("bm25: b must be between 0 and 1, got %v", b)
+	}
+
+	// 2. Tokenize query (deduplicated) using the fulltext pipeline. The returned
+	// tokens already carry the BM25 tokenizer identifier byte.
+	lang := langForFunc(q.Langs)
+	queryTokens, err := tok.GetBM25QueryTokens([]string{queryText}, lang)
+	if err != nil {
+		return err
+	}
+	if len(queryTokens) == 0 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+
+	// 3. Read bucketed corpus stats and derive N and the average document length.
+	docCount, totalTerms, err := posting.ReadBM25Stats(qs.cache.Get, attr, q.ReadTs)
+	if err != nil {
+		return err
+	}
+	if docCount == 0 || totalTerms == 0 {
+		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
+		return nil
+	}
+	avgDL := float64(totalTerms) / float64(docCount)
+	N := float64(docCount)
+
+	// Build a filter set if bm25 is used as a filter (@filter(bm25(...))).
+	var filterSet map[uint64]struct{}
+	if q.UidList != nil && len(q.UidList.Uids) > 0 {
+		filterSet = make(map[uint64]struct{}, len(q.UidList.Uids))
+		for _, uid := range q.UidList.Uids {
+			filterSet[uid] = struct{}{}
+		}
+	}
+
+	// 4. Use WAND top-k early termination whenever a first limit is set, retaining
+	// first+offset documents so the offset can be dropped afterward. This bounds work
+	// and memory to the requested window instead of scoring (and materializing) every
+	// matching document just because an offset was supplied. With no first limit,
+	// topK is 0 and every match is scored (the caller explicitly asked for all results).
+	topK := bm25TopK(int(q.First), int(q.Offset))
+
+	// 5. Run WAND / Block-Max WAND over the standard posting lists.
+	results, err := wandSearch(qs.cache.Get, attr, q.ReadTs, queryTokens, k, b, avgDL, N,
+		topK, filterSet, true)
+	if err != nil {
+		return err
+	}
+
+	// 6. Apply the first/offset window over the score-descending results. wandSearch
+	// returns results sorted by score (descending), whether or not it top-k'd them, so
+	// the same slice is correct for both the top-k and score-all paths.
+	results = bm25PaginateScored(results, int(q.First), int(q.Offset))
+
+	// 7. Emit UIDs ascending (required by the query pipeline) with positionally-
+	// aligned scores in ValueMatrix; the query layer binds these to a value
+	// variable so callers order by and project the score via val().
+	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
+	uids := make([]uint64, len(results))
+	for i, r := range results {
+		uids[i] = r.uid
+	}
+	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
+
+	scoreBuf := make([]byte, len(results)*8)
+	scoreValues := make([]*pb.ValueList, len(results))
+	for i, r := range results {
+		off := i * 8
+		binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(r.score))
+		// Three-index slice caps capacity at 8 so a downstream append can't corrupt
+		// adjacent scores in the shared backing array.
+		scoreValues[i] = &pb.ValueList{
+			Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_FLOAT}},
+		}
+	}
+	args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)
+	return nil
 }
 
 func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcArgs) error {
@@ -2167,6 +2330,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		checkRoot(q, fc)
+	case bm25SearchFn:
+		// bm25(pred, "query text") or bm25(pred, "query text", "k", "b")
+		if len(q.SrcFunc.Args) < 1 || len(q.SrcFunc.Args) > 3 {
+			return nil, errors.Errorf("Function 'bm25' requires 1-3 arguments (query [, k, b]), but got %d",
+				len(q.SrcFunc.Args))
+		}
+		required, found := verifyStringIndex(ctx, attr, fnType)
+		if !found {
+			return nil, errors.Errorf("Attribute %s is not indexed with type %s", x.ParseAttr(attr),
+				required)
+		}
+		checkRoot(q, fc)
 	case similarToFn:
 		// similar_to accepts 2 mandatory args: k, vector_or_uid followed by optional key:value pairs
 		// Example: similar_to(vpred, 3, $vec, ef: 64, distance_threshold: 0.5)
@@ -2177,6 +2352,16 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.vectorInfo, fc.vectorUid, err = interpretVFloatOrUid(q.SrcFunc.Args[1])
 		if err != nil {
 			return nil, err
+		}
+		// Reject non-finite query-vector components up front: a NaN poisons every
+		// distance comparison inside HNSW (undefined ordering, arbitrary neighbors)
+		// and would surface as silently wrong similarity scores.
+		for _, f := range fc.vectorInfo {
+			if math.IsNaN(float64(f)) || math.IsInf(float64(f), 0) {
+				return nil, errors.Errorf(
+					"Function '%s' requires a finite query vector; got a NaN/Inf component",
+					q.SrcFunc.Name)
+			}
 		}
 		if len(q.SrcFunc.Args) > 2 {
 			if err := parseSimilarToOptions(q.SrcFunc.Args[2:], fc); err != nil {

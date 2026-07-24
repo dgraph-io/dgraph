@@ -292,6 +292,51 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	return buf
 }
 
+// BM25IndexKey generates the index key for a BM25 term posting list. The
+// encodedToken already carries the BM25 tokenizer identifier byte, so BM25 term
+// postings live at the same standard index key as every other tokenizer —
+// IndexKey(attr, identifier || term) — and inherit rollup, splits, backup, and
+// index-rebuild handling for free. This is a thin alias of IndexKey so the index
+// write path and the query read path share one definition.
+func BM25IndexKey(attr string, encodedToken string) []byte {
+	return IndexKey(attr, encodedToken)
+}
+
+// bm25StatsPrefix namespaces the BM25 corpus-statistics keys. These hold the
+// document count and total term count (used to derive the average document
+// length); they are auxiliary metadata, not term postings, so they use a reserved
+// token that cannot collide with any stemmed BM25 term.
+const bm25StatsPrefix = "\x00_bm25stats_"
+
+// BM25StatsKey generates the key for one bucket of BM25 corpus statistics. Stats
+// are sharded across buckets (keyed by uid%numBuckets) to spread write contention.
+func BM25StatsKey(attr string, bucket int) []byte {
+	var buf [2]byte
+	binary.BigEndian.PutUint16(buf[:], uint16(bucket))
+	return IndexKey(attr, bm25StatsPrefix+string(buf[:]))
+}
+
+// IsBM25Stats reports whether p is a BM25 corpus-statistics bucket key (the
+// reserved-token index keys written by BM25StatsKey). The bulk reducer uses this
+// to fold per-document stats postings into the single aggregate bucket posting.
+func (p ParsedKey) IsBM25Stats() bool {
+	return p.IsIndex() && strings.HasPrefix(p.Term, bm25StatsPrefix)
+}
+
+// BM25StatsPrefix returns the key prefix covering every BM25 corpus-statistics
+// bucket for attr. Stats live under a reserved token prefix that is distinct from
+// the IdentBM25 term-posting prefix, so dropping/rebuilding the BM25 index must
+// delete this prefix too — otherwise the stale stats survive a drop and
+// double-count when the index is rebuilt on top of them. The split argument
+// selects the ByteSplit-prefixed variant used by multi-part lists.
+func BM25StatsPrefix(attr string, split bool) []byte {
+	prefix := IndexKey(attr, bm25StatsPrefix)
+	if split {
+		prefix[0] = ByteSplit
+	}
+	return prefix
+}
+
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
 	Attr        string

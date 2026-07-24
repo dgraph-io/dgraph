@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -267,6 +268,15 @@ type SubGraph struct {
 	// uidMatrix is a slice of List. There would be one List corresponding to each uid in SrcUIDs.
 	// In graph terms, a list is a slice of outgoing edges from a node.
 	uidMatrix []*pb.List
+
+	// rankerScores maps a matched document UID to its ranker score (BM25 relevance
+	// or vector similarity). It is snapshotted from the (uid-aligned) worker result
+	// the moment it arrives, before filters or pagination can shrink/reorder
+	// uidMatrix out of step with valueMatrix. populateUidValVar binds the score
+	// variable from this map keyed by UID, so the score stays correct even when the
+	// ranker block carries an @filter. nil unless the source function is a ranker
+	// (bm25 / similar_to).
+	rankerScores map[uint64]float64
 
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
@@ -1556,6 +1566,17 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 	var ok bool
 
 	switch {
+	case sg.SrcFunc != nil && sg.SrcFunc.Name == "fuse":
+		// Native hybrid search: fuse() combines several already-scored value
+		// variables (its NeedsVar channels) into one ranked value variable. Fusion is
+		// a coordinator-side operation over resolved variables — the channel blocks
+		// have already populated doneVars by the time this block is scheduled. We bind
+		// both the union uid set (uid(var)) and the uid->fused-score map (val(var)).
+		fv, err := computeFuse(sg.SrcFunc.Args, sg.Params.NeedsVar, doneVars, sgPath)
+		if err != nil {
+			return err
+		}
+		doneVars[sg.Params.Var] = fv
 	case len(sg.counts) > 0:
 		// 1. When count of a predicate is assigned a variable, we store the mapping of uid =>
 		// count(predicate).
@@ -1591,6 +1612,27 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
+	case sg.SrcFunc != nil && (sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") &&
+		sg.rankerScores != nil:
+		// A query-side ranker (BM25 relevance or vector similarity) binds its
+		// per-document score as a value variable. We populate BOTH the matched uid set
+		// and the uid->score map so the variable works with uid(var), val(var) and
+		// orderdesc: val(var) — surfacing and ordering by score without a
+		// pseudo-predicate or a ParentVars channel. Scores are looked up from the
+		// uid-keyed snapshot taken at result time (sg.rankerScores), so they remain
+		// correct even after an @filter on the ranker block shrinks DestUIDs. For
+		// similar_to the score is a higher-is-better similarity; this also lets vector
+		// results feed fuse().
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
+		}
+		v.Uids = sg.DestUIDs
+		for _, uid := range sg.DestUIDs.GetUids() {
+			if score, has := sg.rankerScores[uid]; has {
+				v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
+			}
+		}
+		doneVars[sg.Params.Var] = v
 	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
@@ -2173,6 +2215,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
@@ -2275,6 +2318,36 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
 
+			// bm25 and similar_to return their per-document scores in valueMatrix
+			// positionally aligned with uidMatrix[0]. Snapshot them into a uid-keyed
+			// map now, while the two are still aligned — later filters/pagination
+			// shrink uidMatrix without touching valueMatrix, which would otherwise
+			// misbind scores to UIDs (and feed wrong scores into fuse() channels).
+			if sg.SrcFunc != nil && (sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") &&
+				len(result.UidMatrix) > 0 {
+				uids := result.UidMatrix[0].GetUids()
+				sg.rankerScores = make(map[uint64]float64, len(uids))
+				for idx, uid := range uids {
+					if idx >= len(result.ValueMatrix) || len(result.ValueMatrix[idx].Values) == 0 {
+						continue
+					}
+					tv := result.ValueMatrix[idx].Values[0]
+					if len(tv.Val) != 8 {
+						continue
+					}
+					score := math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+					// Drop non-finite scores at the source: a NaN here would reach the
+					// value-var sort comparator (undefined order) and val() output.
+					// fuse() already drops them per-channel; direct consumers must be
+					// protected the same way. The uid stays matched — it just carries
+					// no score (same as fuse's convention).
+					if math.IsNaN(score) || math.IsInf(score, 0) {
+						continue
+					}
+					sg.rankerScores[uid] = score
+				}
+			}
+
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
@@ -2373,9 +2446,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// for `has` function when there is no filtering and ordering, we fetch
-		// correct paginated results so no need to apply pagination here.
-		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+		// For `has` and `bm25`, the worker already returns correctly paginated
+		// results (bm25 paginates over score order, which the uid-sorted query-layer
+		// pagination cannot reproduce), so applying pagination again here would
+		// double-apply first/offset. Skip it when there is no filtering/ordering.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil &&
+			(sg.SrcFunc.Name == "has" || sg.SrcFunc.Name == "bm25")) {
 			// There is no ordering. Just apply pagination and return.
 			if err = sg.applyPagination(ctx); err != nil {
 				rch <- err
@@ -2452,6 +2528,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
+
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
@@ -2496,14 +2573,54 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 	}
 
 	sg.updateUidMatrix()
-	for i := range sg.uidMatrix {
-		// Apply the offsets.
-		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
-		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+	if sg.rankerScores != nil && sg.Params.Count >= 0 && sg.SrcFunc != nil &&
+		(sg.SrcFunc.Name == "bm25" || sg.SrcFunc.Name == "similar_to") {
+		// A ranker root's page is defined by score order. The worker paginates by
+		// score itself when there is no @filter (First is only pushed down then);
+		// with a filter, pagination happens here after filtering — and slicing the
+		// uid-ascending matrix would silently return the lowest-uid page instead of
+		// the top-scored one. Select the [offset, offset+count) window by
+		// (score desc, uid asc) from the snapshot, then restore ascending uid order
+		// for the pipeline. Presentation order still comes from orderdesc: val(var).
+		for i := range sg.uidMatrix {
+			sg.uidMatrix[i].Uids = pageByScore(sg.uidMatrix[i].Uids, sg.rankerScores,
+				sg.Params.Count, sg.Params.Offset)
+		}
+	} else {
+		for i := range sg.uidMatrix {
+			// Apply the offsets.
+			start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
+			sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+		}
 	}
 	// Re-merge the UID matrix.
 	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
 	return nil
+}
+
+// pageByScore returns the [offset, offset+count) window of uids ranked by
+// (score desc, uid asc), re-sorted to ascending uid order. count <= 0 means no
+// limit. Uids missing from scores (cannot happen for a ranker root, where every
+// matched uid is snapshotted) rank last at score 0.
+func pageByScore(uids []uint64, scores map[uint64]float64, count, offset int) []uint64 {
+	ranked := make([]uint64, len(uids))
+	copy(ranked, uids)
+	sort.Slice(ranked, func(i, j int) bool {
+		si, sj := scores[ranked[i]], scores[ranked[j]]
+		if si != sj {
+			return si > sj
+		}
+		return ranked[i] < ranked[j]
+	})
+	if offset > len(ranked) {
+		offset = len(ranked)
+	}
+	ranked = ranked[offset:]
+	if count > 0 && count < len(ranked) {
+		ranked = ranked[:count]
+	}
+	sort.Slice(ranked, func(i, j int) bool { return ranked[i] < ranked[j] })
+	return ranked
 }
 
 // applyOrderAndPagination orders each posting list by a given attribute
@@ -2751,7 +2868,8 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext", "ngram",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25",
+		"fuse":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
@@ -2955,6 +3073,15 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			// vector parameter was a Var and evaluated as empty
 			if sg.SrcFunc != nil && sg.SrcFunc.Name == "similar_to" &&
 				len(sg.SrcFunc.Args) == 1 && len(sg.Params.NeedsVar) > 0 {
+				errChan <- nil
+				continue
+			}
+
+			// fuse() is a coordinator-side fusion over already-resolved value
+			// variables; it is never dispatched to a worker. The fused variable is
+			// produced from doneVars in populateVarMap (the fuse case in
+			// populateUidValVar) once its channel variables are populated.
+			if sg.SrcFunc != nil && sg.SrcFunc.Name == "fuse" {
 				errChan <- nil
 				continue
 			}
