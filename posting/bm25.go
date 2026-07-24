@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"sync/atomic"
 
+	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
@@ -64,10 +65,6 @@ func ReadBM25TermPostings(getList func(key []byte) (*List, error), attr, encoded
 // rebuild paths.
 const NumBM25StatsBuckets = 32
 
-// numBM25StatsBuckets is the unexported alias retained for readability within this
-// package.
-const numBM25StatsBuckets = NumBM25StatsBuckets
-
 // EncodeBM25Value packs a posting's term frequency and document length the same way the
 // live index path does, for the bulk loader to write BM25 term postings in the standard
 // format. See encodeBM25Value.
@@ -118,17 +115,20 @@ func encodeBM25Stats(docCount, totalTerms uint64) []byte {
 	return buf[:n]
 }
 
-// decodeBM25Stats reverses encodeBM25Stats. It returns (0, 0) on malformed input.
-func decodeBM25Stats(b []byte) (docCount, totalTerms uint64) {
+// decodeBM25Stats reverses encodeBM25Stats. ok is false when the input does not hold
+// two complete varints. Callers must treat !ok as corruption and surface an error:
+// silently treating a malformed bucket as zero would let the next read-modify-write
+// SET wipe that bucket's real totals with no signal.
+func decodeBM25Stats(b []byte) (docCount, totalTerms uint64, ok bool) {
 	docCount, n := binary.Uvarint(b)
 	if n <= 0 {
-		return 0, 0
+		return 0, 0, false
 	}
 	totalTerms, m := binary.Uvarint(b[n:])
 	if m <= 0 {
-		return docCount, 0
+		return 0, 0, false
 	}
-	return docCount, totalTerms
+	return docCount, totalTerms, true
 }
 
 // addBM25TermPosting writes (op=SET) or removes (op=DEL) the posting for the given
@@ -168,15 +168,15 @@ func (txn *Txn) addBM25TermPosting(ctx context.Context, attr, term string, uid u
 // where last-write-wins on the value posting drops every thread's partial total but
 // one.
 type bm25StatsAccum struct {
-	count [numBM25StatsBuckets]atomic.Int64
-	terms [numBM25StatsBuckets]atomic.Int64
+	count [NumBM25StatsBuckets]atomic.Int64
+	terms [NumBM25StatsBuckets]atomic.Int64
 }
 
 func newBM25StatsAccum() *bm25StatsAccum { return &bm25StatsAccum{} }
 
-// add records a document's contribution in its bucket (uid%numBM25StatsBuckets).
+// add records a document's contribution in its bucket (uid%NumBM25StatsBuckets).
 func (a *bm25StatsAccum) add(uid uint64, docCountDelta, totalTermsDelta int64) {
-	bucket := uid % numBM25StatsBuckets
+	bucket := uid % NumBM25StatsBuckets
 	a.count[bucket].Add(docCountDelta)
 	a.terms[bucket].Add(totalTermsDelta)
 }
@@ -187,7 +187,7 @@ func (a *bm25StatsAccum) add(uid uint64, docCountDelta, totalTermsDelta int64) {
 // caller commits txn. Buckets are written as absolute SETs because a rebuild deletes
 // the prior stats first, so the buckets start empty.
 func (a *bm25StatsAccum) flush(ctx context.Context, txn *Txn, attr string) error {
-	for bucket := 0; bucket < numBM25StatsBuckets; bucket++ {
+	for bucket := 0; bucket < NumBM25StatsBuckets; bucket++ {
 		docCount := a.count[bucket].Load()
 		totalTerms := a.terms[bucket].Load()
 		if docCount <= 0 && totalTerms <= 0 {
@@ -212,7 +212,7 @@ func (a *bm25StatsAccum) flush(ctx context.Context, txn *Txn, attr string) error
 }
 
 // updateBM25Stats applies (docCountDelta, totalTermsDelta) to the bucketed corpus
-// statistics for attr. The bucket is selected by uid%numBM25StatsBuckets. The
+// statistics for attr. The bucket is selected by uid%NumBM25StatsBuckets. The
 // running totals are stored as a single value posting per bucket; the read at
 // txn.StartTs sees this transaction's own earlier writes (read-your-own-writes),
 // so multiple documents in the same transaction that land in the same bucket
@@ -226,7 +226,7 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 		txn.bm25Acc.add(uid, docCountDelta, totalTermsDelta)
 		return nil
 	}
-	bucket := int(uid % numBM25StatsBuckets)
+	bucket := int(uid % NumBM25StatsBuckets)
 	key := x.BM25StatsKey(attr, bucket)
 	// Stats are maintained by read-modify-write: we must read the committed total
 	// from disk (and merge this transaction's own writes), not just the in-memory
@@ -242,8 +242,18 @@ func (txn *Txn) updateBM25Stats(ctx context.Context, attr string, uid uint64,
 	val, err := plist.Value(txn.StartTs)
 	switch err {
 	case nil:
-		if data, ok := val.Value.([]byte); ok {
-			docCount, totalTerms = decodeBM25Stats(data)
+		data, isBytes := val.Value.([]byte)
+		if !isBytes {
+			return errors.Errorf("BM25 stats bucket %d for attr %s holds a non-binary value",
+				bucket, attr)
+		}
+		if len(data) > 0 {
+			var ok bool
+			docCount, totalTerms, ok = decodeBM25Stats(data)
+			if !ok {
+				return errors.Errorf("corrupt BM25 stats bucket %d for attr %s; "+
+					"rebuild the bm25 index to repair", bucket, attr)
+			}
 		}
 	case ErrNoValue:
 		// No stats yet for this bucket; start from zero.
@@ -281,7 +291,7 @@ func applyBM25Delta(v uint64, delta int64) uint64 {
 // caller controls caching and the read timestamp.
 func ReadBM25Stats(getList func(key []byte) (*List, error), attr string,
 	readTs uint64) (docCount, totalTerms uint64, err error) {
-	for b := 0; b < numBM25StatsBuckets; b++ {
+	for b := 0; b < NumBM25StatsBuckets; b++ {
 		key := x.BM25StatsKey(attr, b)
 		pl, perr := getList(key)
 		if perr != nil {
@@ -294,11 +304,15 @@ func ReadBM25Stats(getList func(key []byte) (*List, error), attr string,
 		if verr != nil {
 			return 0, 0, verr
 		}
-		data, ok := val.Value.([]byte)
-		if !ok || len(data) == 0 {
+		data, isBytes := val.Value.([]byte)
+		if !isBytes || len(data) == 0 {
 			continue
 		}
-		dc, tt := decodeBM25Stats(data)
+		dc, tt, ok := decodeBM25Stats(data)
+		if !ok {
+			return 0, 0, errors.Errorf("corrupt BM25 stats bucket %d for attr %s; "+
+				"rebuild the bm25 index to repair", b, attr)
+		}
 		docCount += dc
 		totalTerms += tt
 	}

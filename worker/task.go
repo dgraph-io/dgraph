@@ -7,7 +7,6 @@ package worker
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -1227,115 +1226,6 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 		(srcFn.fnType == standardFn || srcFn.fnType == hasFn ||
 			srcFn.fnType == fullTextSearchFn || srcFn.fnType == compareAttrFn ||
 			srcFn.fnType == customIndexFn || srcFn.fnType == ngramFn)
-}
-
-func (qs *queryState) handleBM25Search(ctx context.Context, args funcArgs) error {
-	q := args.q
-	attr := q.Attr
-
-	// 1. Parse args: query text, optional k (default 1.2), b (default 0.75).
-	if len(q.SrcFunc.Args) < 1 {
-		return errors.Errorf("bm25 requires at least 1 argument (query text)")
-	}
-	queryText := q.SrcFunc.Args[0]
-	k := 1.2
-	b := 0.75
-	if len(q.SrcFunc.Args) >= 2 {
-		var err error
-		k, err = strconv.ParseFloat(q.SrcFunc.Args[1], 64)
-		if err != nil {
-			return errors.Errorf("bm25: invalid k parameter: %s", q.SrcFunc.Args[1])
-		}
-	}
-	if len(q.SrcFunc.Args) >= 3 {
-		var err error
-		b, err = strconv.ParseFloat(q.SrcFunc.Args[2], 64)
-		if err != nil {
-			return errors.Errorf("bm25: invalid b parameter: %s", q.SrcFunc.Args[2])
-		}
-	}
-	if math.IsNaN(k) || math.IsInf(k, 0) || k <= 0 {
-		return errors.Errorf("bm25: k must be a positive finite number, got %v", k)
-	}
-	if math.IsNaN(b) || math.IsInf(b, 0) || b < 0 || b > 1 {
-		return errors.Errorf("bm25: b must be between 0 and 1, got %v", b)
-	}
-
-	// 2. Tokenize query (deduplicated) using the fulltext pipeline. The returned
-	// tokens already carry the BM25 tokenizer identifier byte.
-	lang := langForFunc(q.Langs)
-	queryTokens, err := tok.GetBM25QueryTokens([]string{queryText}, lang)
-	if err != nil {
-		return err
-	}
-	if len(queryTokens) == 0 {
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-
-	// 3. Read bucketed corpus stats and derive N and the average document length.
-	docCount, totalTerms, err := posting.ReadBM25Stats(qs.cache.Get, attr, q.ReadTs)
-	if err != nil {
-		return err
-	}
-	if docCount == 0 || totalTerms == 0 {
-		args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{})
-		return nil
-	}
-	avgDL := float64(totalTerms) / float64(docCount)
-	N := float64(docCount)
-
-	// Build a filter set if bm25 is used as a filter (@filter(bm25(...))).
-	var filterSet map[uint64]struct{}
-	if q.UidList != nil && len(q.UidList.Uids) > 0 {
-		filterSet = make(map[uint64]struct{}, len(q.UidList.Uids))
-		for _, uid := range q.UidList.Uids {
-			filterSet[uid] = struct{}{}
-		}
-	}
-
-	// 4. Use WAND top-k early termination whenever a first limit is set, retaining
-	// first+offset documents so the offset can be dropped afterward. This bounds work
-	// and memory to the requested window instead of scoring (and materializing) every
-	// matching document just because an offset was supplied. With no first limit,
-	// topK is 0 and every match is scored (the caller explicitly asked for all results).
-	topK := bm25TopK(int(q.First), int(q.Offset))
-
-	// 5. Run WAND / Block-Max WAND over the standard posting lists.
-	results, err := wandSearch(qs.cache.Get, attr, q.ReadTs, queryTokens, k, b, avgDL, N,
-		topK, filterSet, true)
-	if err != nil {
-		return err
-	}
-
-	// 6. Apply the first/offset window over the score-descending results. wandSearch
-	// returns results sorted by score (descending), whether or not it top-k'd them, so
-	// the same slice is correct for both the top-k and score-all paths.
-	results = bm25PaginateScored(results, int(q.First), int(q.Offset))
-
-	// 7. Emit UIDs ascending (required by the query pipeline) with positionally-
-	// aligned scores in ValueMatrix; the query layer binds these to a value
-	// variable so callers order by and project the score via val().
-	sort.Slice(results, func(i, j int) bool { return results[i].uid < results[j].uid })
-	uids := make([]uint64, len(results))
-	for i, r := range results {
-		uids[i] = r.uid
-	}
-	args.out.UidMatrix = append(args.out.UidMatrix, &pb.List{Uids: uids})
-
-	scoreBuf := make([]byte, len(results)*8)
-	scoreValues := make([]*pb.ValueList, len(results))
-	for i, r := range results {
-		off := i * 8
-		binary.LittleEndian.PutUint64(scoreBuf[off:off+8], math.Float64bits(r.score))
-		// Three-index slice caps capacity at 8 so a downstream append can't corrupt
-		// adjacent scores in the shared backing array.
-		scoreValues[i] = &pb.ValueList{
-			Values: []*pb.TaskValue{{Val: scoreBuf[off : off+8 : off+8], ValType: pb.Posting_FLOAT}},
-		}
-	}
-	args.out.ValueMatrix = append(args.out.ValueMatrix, scoreValues...)
-	return nil
 }
 
 func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcArgs) error {

@@ -795,3 +795,15 @@ func TestGetBM25QueryTokensWrongArgCount(t *testing.T) {
 func BenchmarkTermTokenizer(b *testing.B) {
 	b.Skip() // tmp
 }
+
+// BenchmarkBM25TokensWithFrequency measures the mutation-path tokenization cost
+// (analyze + stopwords + stemming + frequency counting) for a mid-sized document.
+func BenchmarkBM25TokensWithFrequency(b *testing.B) {
+	doc := strings.Repeat("the quick brown fox jumps over the lazy dog while searching ranked results ", 20)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, err := (BM25Tokenizer{}).TokensWithFrequency(doc, "en"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

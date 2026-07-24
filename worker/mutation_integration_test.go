@@ -112,6 +112,28 @@ func TestCheckSchema(t *testing.T) {
 	}
 	require.Error(t, checkSchema(s1))
 
+	// bm25 on a @lang predicate is rejected: term keys and posting identity are
+	// language-blind, so multi-language values would overwrite each other.
+	s1 = &pb.SchemaUpdate{
+		Predicate: x.AttrInRootNamespace("bio_lang"),
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"bm25"},
+		Lang:      true,
+	}
+	require.Error(t, checkSchema(s1))
+
+	// bm25 with @noconflict is rejected here too (not only in the text-schema
+	// parser), so protobuf schema updates cannot bypass the guard.
+	s1 = &pb.SchemaUpdate{
+		Predicate:  x.AttrInRootNamespace("bio_nc"),
+		ValueType:  pb.Posting_STRING,
+		Directive:  pb.SchemaUpdate_INDEX,
+		Tokenizer:  []string{"bm25"},
+		NoConflict: true,
+	}
+	require.Error(t, checkSchema(s1))
+
 	s1 = &pb.SchemaUpdate{
 		Predicate: x.AttrInRootNamespace("friend"),
 		ValueType: pb.Posting_UID,
