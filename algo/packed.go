@@ -224,8 +224,9 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 		return nil
 	}
 
-	h := &uint64Heap{}
-	heap.Init(h)
+	// Pre-size the heap and build via heap.Init (O(n)) rather than n × heap.Push,
+	// which boxes each elem into an interface{} and pays O(log n) per insert.
+	hs := make(uint64Heap, 0, len(lists))
 	maxSz := 0
 	blockSize := 0
 
@@ -244,7 +245,7 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 
 		listLen := codec.ExactLen(lists[i])
 		if listLen > 0 {
-			heap.Push(h, elem{
+			hs = append(hs, elem{
 				val:       block[0],
 				listIdx:   i,
 				decoder:   decoder,
@@ -256,6 +257,8 @@ func MergeSortedPacked(lists []*pb.UidPack) *pb.UidPack {
 			}
 		}
 	}
+	h := &hs
+	heap.Init(h)
 
 	// Our final result.
 	result := codec.Encoder{BlockSize: blockSize}
