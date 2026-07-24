@@ -128,6 +128,11 @@ func TestBm25TopK(t *testing.T) {
 	require.Equal(t, 10, bm25TopK(10, 0))
 	require.Equal(t, 15, bm25TopK(10, 5))
 	require.Equal(t, 1001, bm25TopK(1, 1000))
+
+	// Negative first means score-all (handleBM25Search rejects it before this point);
+	// a negative offset is clamped rather than shrinking the retained window.
+	require.Equal(t, 0, bm25TopK(-5, 0))
+	require.Equal(t, 10, bm25TopK(10, -5))
 }
 
 func TestBm25PaginateScored(t *testing.T) {
@@ -153,6 +158,10 @@ func TestBm25PaginateScored(t *testing.T) {
 	require.Equal(t, []uint64{4, 5}, ids(bm25PaginateScored(mk(1, 2, 3, 4, 5), 10, 3)))
 	// Offset past the end yields nothing rather than panicking.
 	require.Empty(t, bm25PaginateScored(mk(1, 2, 3), 2, 10))
+	// Negative offset is clamped to 0 (mirroring x.PageRange) rather than panicking
+	// with a slice-bounds error.
+	require.Equal(t, []uint64{1, 2}, ids(bm25PaginateScored(mk(1, 2, 3, 4, 5), 2, -3)))
+	require.Equal(t, []uint64{1, 2, 3}, ids(bm25PaginateScored(mk(1, 2, 3), 0, -1)))
 }
 
 func TestBm25ScoreFunction(t *testing.T) {

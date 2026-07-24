@@ -237,7 +237,7 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 // Dgraph's normal posting-list machinery — MVCC, deltas, rollup, splits, backup —
 // with no separate storage path. Corpus statistics (document count and total term
 // count, from which the average document length is derived) are kept in bucketed
-// stats posting lists keyed by uid%numBM25StatsBuckets to avoid a single write-hot
+// stats posting lists keyed by uid%NumBM25StatsBuckets to avoid a single write-hot
 // key while preserving conflict detection per bucket.
 //
 // Updates are driven entirely by the caller (AddMutationWithIndex), which issues a

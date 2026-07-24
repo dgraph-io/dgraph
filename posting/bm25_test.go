@@ -281,3 +281,66 @@ func TestBM25StatsAccumulateAcrossTxns(t *testing.T) {
 	require.Equal(t, uint64(2), dc, "doc count must accumulate across transactions")
 	require.Equal(t, uint64(16), tt, "total terms must accumulate across transactions")
 }
+
+// TestBM25StatsCodecMalformed: decodeBM25Stats must flag malformed input rather
+// than silently returning zeros — a zeroed decode feeding the read-modify-write
+// SET in updateBM25Stats would wipe the bucket's real totals with no signal.
+func TestBM25StatsCodecMalformed(t *testing.T) {
+	dc, tt, ok := decodeBM25Stats(encodeBM25Stats(12345, 987654321))
+	require.True(t, ok)
+	require.Equal(t, uint64(12345), dc)
+	require.Equal(t, uint64(987654321), tt)
+
+	for _, b := range [][]byte{nil, {}, {0x80}, {0x05}, {0x05, 0x80}} {
+		_, _, ok := decodeBM25Stats(b)
+		require.Falsef(t, ok, "input %v must be flagged malformed", b)
+	}
+}
+
+// TestBM25StatsCorruptBucketSurfacesError writes raw garbage into a stats bucket
+// and verifies both the mutation path (updateBM25Stats) and the query path
+// (ReadBM25Stats) surface an error instead of treating the bucket as zero.
+func TestBM25StatsCorruptBucketSurfacesError(t *testing.T) {
+	ctx := context.Background()
+	attr := x.AttrInRootNamespace("bm25statscorrupt")
+	uid := uint64(7)
+
+	txn := Oracle().RegisterStartTs(301)
+	txn.cache = NewLocalCache(301)
+	key := x.BM25StatsKey(attr, int(uid%NumBM25StatsBuckets))
+	plist, err := txn.cache.Get(key)
+	require.NoError(t, err)
+	edge := &pb.DirectedEdge{
+		Attr:      attr,
+		Value:     []byte{0x80}, // varint continuation byte with no terminator
+		ValueType: pb.Posting_BINARY,
+		Op:        pb.DirectedEdge_SET,
+	}
+	require.NoError(t, plist.addMutation(ctx, txn, edge))
+	txn.Update()
+	txn.UpdateCachedKeys(302)
+	writer := NewTxnWriter(pstore)
+	require.NoError(t, txn.CommitToDisk(writer, 302))
+	require.NoError(t, writer.Flush())
+
+	txn2 := Oracle().RegisterStartTs(303)
+	txn2.cache = NewLocalCache(303)
+	require.Error(t, txn2.updateBM25Stats(ctx, attr, uid, 1, 10),
+		"read-modify-write must refuse a corrupt bucket instead of wiping it")
+
+	get := func(k []byte) (*List, error) { return GetNoStore(k, 303) }
+	_, _, err = ReadBM25Stats(get, attr, 303)
+	require.Error(t, err, "query-time stats read must surface corruption")
+}
+
+// BenchmarkBM25ValueDecode measures the per-posting decode cost paid when
+// materializing a term's posting list at query time.
+func BenchmarkBM25ValueDecode(b *testing.B) {
+	val := encodeBM25Value(3, 147)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, ok := decodeBM25Value(val); !ok {
+			b.Fatal("decode failed")
+		}
+	}
+}

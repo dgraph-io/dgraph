@@ -1144,3 +1144,27 @@ func TestBM25ConcurrentOverlappingTxns(t *testing.T) {
 	require.Contains(t, js, fmt.Sprintf(`"count":%d`, len(uids)),
 		"all concurrently-indexed documents must be searchable (no lost stats updates)")
 }
+
+// TestBM25NegativePagination: a negative offset must be clamped (previously it
+// panicked the worker with a slice-bounds error), and a negative first is
+// rejected explicitly rather than silently returning every match.
+func TestBM25NegativePagination(t *testing.T) {
+	js := processQueryNoErr(t, `
+	{
+		me(func: bm25(description_bm25, "fox"), first: 2, offset: -5) {
+			uid
+		}
+	}
+	`)
+	require.Contains(t, js, "uid")
+
+	_, err := processQuery(context.Background(), t, `
+	{
+		me(func: bm25(description_bm25, "fox"), first: -2) {
+			uid
+		}
+	}
+	`)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "negative first")
+}

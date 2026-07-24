@@ -326,6 +326,14 @@ func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.IsInternal
 }
 
+// isBM25 reports whether this subgraph's source function is bm25. The bm25 result
+// carries per-UID scores that the query layer snapshots and binds as a value
+// variable, and its worker-side pagination is score-ordered, so several shared
+// paths special-case it through this single predicate.
+func (sg *SubGraph) isBM25() bool {
+	return sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25"
+}
+
 func (sg *SubGraph) createSrcFunction(gf *dql.Function) {
 	if gf == nil {
 		return
@@ -1600,7 +1608,7 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
-	case sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && sg.bm25Scores != nil:
+	case sg.isBM25() && sg.bm25Scores != nil:
 		// A query-side ranker (BM25) binds its per-document relevance score as a
 		// value variable. We populate BOTH the matched uid set and the uid->score
 		// map so the variable works with uid(var), val(var) and orderdesc: val(var)
@@ -2307,7 +2315,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			// with uidMatrix[0]. Snapshot them into a uid-keyed map now, while the two
 			// are still aligned — later filters/pagination shrink uidMatrix without
 			// touching valueMatrix, which would otherwise misbind scores to UIDs.
-			if sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25" && len(result.UidMatrix) > 0 {
+			if sg.isBM25() && len(result.UidMatrix) > 0 {
 				uids := result.UidMatrix[0].GetUids()
 				sg.bm25Scores = make(map[uint64]float64, len(uids))
 				for idx, uid := range uids {
@@ -2425,7 +2433,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		// pagination cannot reproduce), so applying pagination again here would
 		// double-apply first/offset. Skip it when there is no filtering/ordering.
 		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil &&
-			(sg.SrcFunc.Name == "has" || sg.SrcFunc.Name == "bm25")) {
+			(sg.SrcFunc.Name == "has" || sg.isBM25())) {
 			// There is no ordering. Just apply pagination and return.
 			if err = sg.applyPagination(ctx); err != nil {
 				rch <- err
