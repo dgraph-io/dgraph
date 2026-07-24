@@ -33,18 +33,20 @@ import (
 // ensure that those errors get caught before they reach rewriting.
 
 type testCase struct {
-	Name            string
-	GQLMutation     string
-	GQLVariables    string
-	Explanation     string
-	DGMutations     []*dgraphMutation
-	DGMutationsSec  []*dgraphMutation
-	DGQuery         string
-	DGQuerySec      string
-	Error           *x.GqlError
-	Error2          *x.GqlError
-	ValidationError *x.GqlError
-	QNameToUID      string
+	Name             string
+	GQLMutation      string
+	GQLVariables     string
+	Explanation      string
+	DGMutations      []*dgraphMutation
+	DGMutationsSec   []*dgraphMutation
+	DGQuery          string
+	DGQuerySec       string
+	Error            *x.GqlError
+	Error2           *x.GqlError
+	ValidationError  *x.GqlError
+	QNameToUID       string
+	XIDConflictUIDs  string      // JSON array of mock mutated UIDs for VerifyXIDConflicts
+	XIDConflictError *x.GqlError // expected error from VerifyXIDConflicts
 }
 
 type dgraphMutation struct {
@@ -300,6 +302,22 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 			// Compare the query generated along with mutations.
 			dgQuerySec := dgraph.AsString(upsert[0].Query)
 			require.Equal(t, tcase.DGQuerySec, dgQuerySec)
+
+			// Verify deferred @id conflicts via VerifyXIDConflicts if the test case
+			// specifies mock mutated UIDs. This simulates the post-execution check in
+			// mutation.go without needing a real cluster.
+			if tcase.XIDConflictUIDs != "" {
+				var conflictUIDs []string
+				require.NoError(t, json.Unmarshal([]byte(tcase.XIDConflictUIDs), &conflictUIDs))
+				if verifier, ok := rewriterToTest.(XIDConflictVerifier); ok {
+					conflictErr := verifier.VerifyXIDConflicts(conflictUIDs, false)
+					if tcase.XIDConflictError != nil || conflictErr != nil {
+						require.NotNil(t, conflictErr)
+						require.NotNil(t, tcase.XIDConflictError)
+						require.Equal(t, tcase.XIDConflictError.Error(), conflictErr.Error())
+					}
+				}
+			}
 		})
 	}
 }
