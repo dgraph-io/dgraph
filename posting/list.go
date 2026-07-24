@@ -988,9 +988,14 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	}
 
 	if refresh {
+		// The committedEntries map may be aliased by other transactions' MutableLayer
+		// clones (see MutableLayer.clone), so we cannot mutate it in place. We do however
+		// copy the map by reference of its values: per the type's invariant (see comment
+		// above MutableLayer), committed entry *pb.PostingLists are treated as immutable
+		// once inserted, so a shallow copy is sufficient.
 		newMap := make(map[uint64]*pb.PostingList, l.mutationMap.len())
 		for k, v := range l.mutationMap.committedEntries {
-			newMap[k] = proto.Clone(v).(*pb.PostingList)
+			newMap[k] = v
 		}
 		newMap[commitTs] = pl
 		l.mutationMap.committedEntries = newMap
