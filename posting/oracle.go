@@ -84,6 +84,31 @@ func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	return vt.GetValueFromPostingList(pl)
 }
 
+// MultiGet resolves many keys to their values in one batched read (see
+// LocalCache.MultiGet). vals and errs are aligned with keys; errs[i] is
+// ErrNoValue when keys[i] has no value, matching Get's per-key semantics.
+func (vt *viTxn) MultiGet(keys [][]byte) ([][]byte, []error) {
+	vals := make([][]byte, len(keys))
+	errs := make([]error, len(keys))
+	lists, err := vt.delegate.cache.MultiGet(keys)
+	if err != nil {
+		for i := range errs {
+			errs[i] = err
+		}
+		return vals, errs
+	}
+	for i, pl := range lists {
+		if pl == nil {
+			errs[i] = ErrNoValue
+			continue
+		}
+		pl.Lock()
+		vals[i], errs[i] = vt.GetValueFromPostingList(pl)
+		pl.Unlock()
+	}
+	return vals, errs
+}
+
 func (vt *viTxn) GetWithLockHeld(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
