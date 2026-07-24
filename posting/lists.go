@@ -327,32 +327,32 @@ func (lc *LocalCache) readPostingListAt(key []byte) (*pb.PostingList, error) {
 	return pl, err
 }
 
+func (lc *LocalCache) GetSinglePostingFromLocalCache(key []byte) (*pb.PostingList, error) {
+	lc.RLock()
+
+	pl := &pb.PostingList{}
+	if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
+		err := proto.Unmarshal(delta, pl)
+		lc.RUnlock()
+		return pl, err
+	}
+
+	l := lc.plists[string(key)]
+	lc.RUnlock()
+
+	if l != nil {
+		return l.StaticValue(lc.startTs)
+	}
+
+	return nil, nil
+}
+
 // GetSinglePosting retrieves the cached version of the first item in the list associated with the
 // given key. This is used for retrieving the value of a scalar predicats.
 func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	// This would return an error if there is some data in the local cache, but we couldn't read it.
-	getListFromLocalCache := func() (*pb.PostingList, error) {
-		lc.RLock()
-
-		pl := &pb.PostingList{}
-		if delta, ok := lc.deltas[string(key)]; ok && len(delta) > 0 {
-			err := proto.Unmarshal(delta, pl)
-			lc.RUnlock()
-			return pl, err
-		}
-
-		l := lc.plists[string(key)]
-		lc.RUnlock()
-
-		if l != nil {
-			return l.StaticValue(lc.startTs)
-		}
-
-		return nil, nil
-	}
-
 	getPostings := func() (*pb.PostingList, error) {
-		pl, err := getListFromLocalCache()
+		pl, err := lc.GetSinglePostingFromLocalCache(key)
 		// If both pl and err are empty, that means that there was no data in local cache, hence we should
 		// read the data from badger.
 		if pl != nil || err != nil {
@@ -383,6 +383,120 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	}
 	pl.Postings = pl.Postings[:idx]
 	return pl, nil
+}
+
+// GetBatchSinglePosting is the batched equivalent of GetSinglePosting: for every key,
+// the result at the same position is exactly what GetSinglePosting(key) would return —
+// the transaction's own local-cache state when present, otherwise the latest version in
+// badger (fetched for all cache misses in a single Txn.GetBatch call), with the same
+// delete-all and Del-posting filtering applied per key.
+func (lc *LocalCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
+	results := make([]*pb.PostingList, len(keys))
+	remainingKeys := make([][]byte, 0, len(keys))
+	remainingIdx := make([]int, 0, len(keys))
+	for i, key := range keys {
+		pl, err := lc.GetSinglePostingFromLocalCache(key)
+		if err != nil {
+			return nil, err
+		}
+		if pl != nil {
+			results[i] = pl
+		} else {
+			remainingKeys = append(remainingKeys, key)
+			remainingIdx = append(remainingIdx, i)
+		}
+	}
+
+	if len(remainingKeys) > 0 {
+		txn := pstore.NewTransactionAt(lc.startTs, false)
+		defer txn.Discard()
+		items, err := txn.GetBatch(remainingKeys)
+		if err != nil {
+			return nil, err
+		}
+		x.AssertTrue(len(items) == len(remainingKeys))
+		for j, item := range items {
+			if item == nil {
+				// Absent in badger: the batched analogue of ErrKeyNotFound, which
+				// GetSinglePosting maps to a nil posting list.
+				continue
+			}
+			pl := &pb.PostingList{}
+			err := item.Value(func(val []byte) error {
+				return proto.Unmarshal(val, pl)
+			})
+			if err != nil {
+				return nil, err
+			}
+			results[remainingIdx[j]] = pl
+		}
+	}
+
+	// Apply GetSinglePosting's posting filter per key: a delete-all wipes that key only,
+	// and Del postings are dropped.
+	for i, pl := range results {
+		if pl == nil {
+			continue
+		}
+		keep := 0
+		wiped := false
+		for _, p := range pl.Postings {
+			if hasDeleteAll(p) {
+				wiped = true
+				break
+			}
+			if p.Op != Del {
+				pl.Postings[keep] = p
+				keep++
+			}
+		}
+		if wiped {
+			results[i] = nil
+			continue
+		}
+		pl.Postings = pl.Postings[:keep]
+	}
+
+	return results, nil
+}
+
+// batchSinglePostingSize is the number of keys fetched from badger in one
+// GetBatchSinglePosting call by NewBatchedSinglePostingIterator.
+const batchSinglePostingSize = 10
+
+// NewBatchedSinglePostingIterator returns a function that, on its i-th call, yields the
+// posting list for key i (callers must consume sequentially from 0 to n-1 — the access
+// pattern of handleValuePostings' per-goroutine loop). Keys are materialized lazily via
+// keyAt and fetched in batches of batchSinglePostingSize through GetBatchSinglePosting.
+func (lc *LocalCache) NewBatchedSinglePostingIterator(
+	n int, keyAt func(int) []byte) func() (*pb.PostingList, error) {
+
+	var buf []*pb.PostingList
+	next := 0 // index of the first key not yet buffered
+	return func() (*pb.PostingList, error) {
+		if len(buf) == 0 {
+			hi := next + batchSinglePostingSize
+			if hi > n {
+				hi = n
+			}
+			keys := make([][]byte, 0, hi-next)
+			for j := next; j < hi; j++ {
+				keys = append(keys, keyAt(j))
+			}
+			batch, err := lc.GetBatchSinglePosting(keys)
+			if err != nil {
+				return nil, err
+			}
+			buf = batch
+			next = hi
+		}
+		pl := buf[0]
+		// Always advance: when the chunk is exhausted, buf becomes empty and the next
+		// call fetches the next chunk. (Not advancing on the last element made every
+		// later call reuse it and prevented the refill.)
+		buf = buf[1:]
+		return pl, nil
+	}
 }
 
 // Get retrieves the cached version of the list associated with the given key.
