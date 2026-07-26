@@ -565,6 +565,16 @@ func findSingleValueInPostingList(pb *pb.PostingList) *pb.Posting {
 	return nil
 }
 
+// reverseParallelMinTargets is the minimum number of distinct reverse targets
+// before ProcessReverse splits its write loop across the predicate's worker
+// grant. Below it the reverse map holds a handful of hot targets: there is
+// little to partition, and each of those few posting lists is large, so the
+// per-target SortAndDedupPostings + Marshal dominates and sharding measures as a
+// net loss. Above it the map holds thousands of independent <~pred,targetUid>
+// keys and the split has real work to spread. Mirrors the spirit of
+// MutationsPipelineMinEdgesPerWorker.
+const reverseParallelMinTargets = 256
+
 func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
 	key := x.ReverseKey(pipeline.attr, 0)
 	edge := &pb.DirectedEdge{
@@ -600,19 +610,181 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 		return mp.ProcessCount(ctx, pipeline, &reverseredMap, newInfo, true, true)
 	}
 
-	for uid, pl := range reverseredMap {
+	// writeReverseTarget emits the reverse delta for a single target uid. The
+	// reverse key <~pred,targetUid> is one-to-one over reverseredMap — the map is
+	// already keyed by target, so each key is written exactly once — which makes
+	// it the same safe beneficiary of intra-predicate parallelism as ProcessList's
+	// forward <pred,srcUid> write. scratchKey MUST be per-worker: the legacy loop
+	// reused a single ReverseKey buffer, and addConflictKeyWithUid fingerprints
+	// the FULL buffer including the 8 uid bytes, so sharing it across goroutines
+	// would both race and produce wrong conflict keys. store is the locked
+	// AddDelta on the serial path and the lock-free AddDeltaConcurrent wrapper on
+	// the parallel path; for a given distinct key both write identical bytes and
+	// return the same deduped list, so the committed result (reverse data bytes
+	// and conflict-key set) is store-order-independent.
+	writeReverseTarget := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+		store func(key string, input *pb.PostingList) (*pb.PostingList, error)) error {
 		if len(pl.Postings) == 0 {
-			continue
+			return nil
 		}
-		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
-		if newPl, err := mp.txn.AddDelta(string(key), pl, true, true); err != nil {
+
+		binary.BigEndian.PutUint64(scratchKey[len(scratchKey)-8:], uid)
+		newPl, err := store(string(scratchKey), pl)
+		if err != nil {
 			return err
-		} else {
-			mp.txn.addConflictKeyWithUid(key, newPl, info.hasUpsert, info.noConflict)
 		}
+		mp.txn.addConflictKeyWithUid(scratchKey, newPl, info.hasUpsert, info.noConflict)
+		return nil
 	}
 
-	return nil
+	// concStore reproduces AddDelta(..., true, true)'s committed bytes without
+	// taking the global cache lock. Two behaviors must be matched exactly:
+	//
+	//   - addToList=true: a transaction may apply several mutation proposals on
+	//     the SAME *Txn (worker/draft.go RegisterStartTs reuses it, and txn.Update
+	//     between proposals does not clear txn.cache.deltas), so an EARLIER
+	//     proposal may have left a delta for this reverse key. It must be
+	//     prepended, exactly as the serial AddDelta does — otherwise a later
+	//     proposal silently drops the earlier proposal's reverse postings.
+	//   - doSortAndDedup=true: reverse postings are always REF (uid) postings, so
+	//     unlike ProcessList — which gates this on info.isUid — the sort/dedup is
+	//     unconditional here, matching the serial call's literal `true`.
+	//
+	// The prior delta is read from the sharded, per-key-locked deltas map ONLY —
+	// never (*Deltas).Get/GetBytes, which also read the plain-Go indexMap that is
+	// only safe under cache.Lock (another predicate's InsertTokenizerIndexes may
+	// be writing it concurrently). A reverse key never appears in indexMap —
+	// x.generateKey encodes attrLen plus a per-type discriminator byte, so index
+	// and reverse key strings cannot collide — so the sharded read returns
+	// byte-for-byte what serial AddDelta observes. Single-writer-per-key (I1)
+	// makes this read-merge-write safe without the global lock.
+	concStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
+		merged := new(pb.PostingList)
+		if prevBytes, ok := mp.txn.cache.deltas.deltas.Get(k); ok {
+			prev := &pb.PostingList{}
+			if err := proto.Unmarshal(prevBytes, prev); err != nil {
+				glog.Errorf("Error unmarshalling prior reverse delta for key %x: %v", k, err)
+				return nil, err
+			}
+			merged.Postings = append(merged.Postings, prev.Postings...)
+		}
+		merged.Postings = append(merged.Postings, in.Postings...)
+		merged.Postings = SortAndDedupPostings(merged.Postings)
+		if err := mp.txn.AddDeltaConcurrent(k, merged); err != nil {
+			return nil, err
+		}
+		return merged, nil
+	}
+
+	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
+	// Keep the locked AddDelta so the "budget off == byte-identical legacy"
+	// contract holds.
+	if pipeline.workers <= 0 {
+		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
+			return mp.txn.AddDelta(k, in, true, true)
+		}
+		for uid, pl := range reverseredMap {
+			if err := writeReverseTarget(uid, pl, key, serialStore); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Budget enabled but no k-way split — either a one-worker grant or too few
+	// distinct targets to be worth partitioning. Still use the LOCK-FREE store.
+	//
+	// This split matters more than the goroutine fan-out: the dominant cost of the
+	// legacy loop is not the absence of workers, it is that AddDelta holds the
+	// GLOBAL txn.cache.Lock() across proto.Marshal, so every concurrent predicate
+	// goroutine at L1 convoys on that one mutex. A single-writer loop through
+	// concStore escapes the convoy without spawning anything. Keeping these two
+	// decisions tied together would strand the common production grant — with P
+	// predicates and a budget below 2*P, allocateWorkers hands out mostly 1s, so
+	// nearly every predicate would fall back to the global lock.
+	//
+	// Single-writer safety holds here for the same reason it does in the parallel
+	// path: reverse keys are <~pred,targetUid>, and x.generateKey encodes attrLen
+	// plus a per-type discriminator byte, so no two predicates — and no other key
+	// type — can produce the same key string.
+	if pipeline.workers == 1 || len(reverseredMap) < reverseParallelMinTargets {
+		for uid, pl := range reverseredMap {
+			if err := writeReverseTarget(uid, pl, key, concStore); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Parallel path: split the disjoint <~pred,targetUid> reverse keys across k
+	// goroutines. Each worker owns a contiguous, non-overlapping slice of the
+	// target-uid snapshot, and reverseredMap is keyed BY target, so no two workers
+	// ever write the same reverse key (invariant I1) — that disjointness is what
+	// makes the lock-free AddDeltaConcurrent safe, exactly as in ProcessList's
+	// forward write. All workers join here (wg.Wait) before ProcessReverse returns.
+	//
+	// I1 also depends on an invariant established OUTSIDE this function: the only
+	// other writer of <~pred,targetUid> is handleDeleteAll -> addReverseAndCountMutation,
+	// which Process runs INLINE on the dispatcher goroutine. Predicate goroutines
+	// are parked in `for edge := range pipeline.edges` and cannot reach
+	// ProcessReverse until close(pred.edges), which happens only after the whole
+	// sendLoop — star-deletes included — has finished. If star-delete handling ever
+	// moves off the dispatcher, or channels are closed per-predicate as the
+	// sendLoop discovers them, this lock-free write silently becomes a multi-writer
+	// read-modify-write race: silent reverse-index corruption, no panic, and no
+	// race-detector hit unless a batch happens to mix a star-delete with normal
+	// edges for the same predicate.
+	//
+	// Note this parallelizes only the WRITE. The reverseredMap build above stays
+	// serial: it is many-to-one (many sources fold into one target) and reuses a
+	// single edge struct, so splitting it would need a merge stage that costs more
+	// than it saves.
+
+	uidList := make([]uint64, 0, len(reverseredMap))
+	for uid := range reverseredMap {
+		uidList = append(uidList, uid)
+	}
+	// Parity with ProcessList's parallel path: an empty snapshot would make k == 0
+	// and the ceil-division below a divide-by-zero panic on the serial apply
+	// goroutine. Unreachable while reverseParallelMinTargets > 0, but that is a
+	// tuning knob — do not let lowering it crash an Alpha mid-Raft-entry.
+	if len(uidList) == 0 {
+		return nil
+	}
+	k := pipeline.workers
+	if k > len(uidList) {
+		k = len(uidList)
+	}
+	width := (len(uidList) + k - 1) / k // ceil(len/k), DivideAndRule-style
+
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+	for w := 0; w < k; w++ {
+		start := w * width
+		if start >= len(uidList) {
+			break
+		}
+		end := start + width
+		if end > len(uidList) {
+			end = len(uidList)
+		}
+		wg.Add(1)
+		go func(sub []uint64) {
+			defer wg.Done()
+			// Per-worker scratch buffer: sharing `key` across goroutines races.
+			localKey := x.ReverseKey(pipeline.attr, 0)
+			for _, uid := range sub {
+				if err := writeReverseTarget(uid, reverseredMap[uid], localKey,
+					concStore); err != nil {
+					once.Do(func() { firstErr = err })
+					return
+				}
+			}
+		}(uidList[start:end])
+	}
+	wg.Wait()
+	return firstErr
 }
 
 func makePostingFromEdge(startTs uint64, edge *pb.DirectedEdge) *pb.Posting {

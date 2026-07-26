@@ -324,6 +324,87 @@ func TestProcessListCrossProposalByteIdentical(t *testing.T) {
 	require.Equal(t, conflicts0, conflicts30, "conflict-key sets must be identical")
 }
 
+// TestProcessReverseCrossProposalByteIdentical is the regression test for the
+// PARALLEL reverse write's addToList=true merge. ProcessReverse only takes its
+// parallel path above reverseParallelMinTargets distinct targets, so the other
+// @reverse tests here (5 hot targets) all stay serial and cannot catch this.
+//
+// Two proposals on the SAME txn SET different source uids onto the same 600
+// reverse targets. The serial path prepends the earlier proposal's delta, so each
+// <~rlink,target> ends with BOTH sources; a parallel concStore that failed to
+// replicate addToList would silently drop the first proposal's reverse posting.
+// Asserts the budget>1 result equals the serial baseline AND that the baseline
+// itself carries both proposals (so the test fails on the overwrite bug rather
+// than merely on disagreement). Run under -race.
+func TestProcessReverseCrossProposalByteIdentical(t *testing.T) {
+	// Must exceed reverseParallelMinTargets so the parallel write path is taken.
+	const revTargets = 600
+	require.Greater(t, revTargets, reverseParallelMinTargets,
+		"test must exercise the PARALLEL ProcessReverse write path")
+
+	rlinkAttr := x.AttrInRootNamespace("rlink")
+	const (
+		srcABase = uint64(1_000_000)
+		srcBBase = uint64(2_000_000)
+		tgtBase  = uint64(9_000_000)
+	)
+
+	// Each proposal points a distinct source set at the SAME 600 targets, so every
+	// reverse key is written by both proposals and must merge, not overwrite.
+	buildRev := func(srcBase uint64) []*pb.DirectedEdge {
+		edges := make([]*pb.DirectedEdge, 0, revTargets)
+		for i := 0; i < revTargets; i++ {
+			edges = append(edges, &pb.DirectedEdge{
+				Entity:  srcBase + uint64(i),
+				Attr:    rlinkAttr,
+				ValueId: tgtBase + uint64(i),
+				Op:      pb.DirectedEdge_SET,
+			})
+		}
+		return edges
+	}
+	batch1, batch2 := buildRev(srcABase), buildRev(srcBBase)
+
+	alloc := allocateWorkers(map[string]int{rlinkAttr: revTargets}, 30)
+	require.Greater(t, alloc[rlinkAttr], 1, "test must grant the predicate >1 worker")
+
+	schemaBytes := []byte(`rlink: [uid] @reverse .`)
+
+	collectRev := func(readTs uint64) map[uint64][]uint64 {
+		out := map[uint64][]uint64{}
+		for i := 0; i < revTargets; i++ {
+			tgt := tgtBase + uint64(i)
+			out[tgt] = sortedUint64(reverseUids(t, rlinkAttr, tgt, readTs))
+		}
+		return out
+	}
+
+	// Run 1 — budget disabled (serial cross-proposal addToList merge).
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+	require.NoError(t, schema.ParseBytes(schemaBytes, 1))
+	conflicts0 := runTwoProposalBatch(t, 0, 5500, 5501, cloneEdges(batch1), cloneEdges(batch2))
+	rev0 := collectRev(5502)
+
+	// Run 2 — budget=30 (parallel concStore must reproduce the merge).
+	require.NoError(t, pstore.DropAll())
+	MemLayerInstance.clear()
+	require.NoError(t, schema.ParseBytes(schemaBytes, 1))
+	conflicts30 := runTwoProposalBatch(t, 30, 5510, 5511, cloneEdges(batch1), cloneEdges(batch2))
+	rev30 := collectRev(5512)
+
+	// The serial baseline must itself carry BOTH proposals' reverse postings —
+	// otherwise the equality assertion below could pass on a shared wrong result.
+	for i := 0; i < revTargets; i++ {
+		want := sortedUint64([]uint64{srcABase + uint64(i), srcBBase + uint64(i)})
+		require.Equal(t, want, rev0[tgtBase+uint64(i)],
+			"serial reverse list must append across proposals (target %d)", tgtBase+uint64(i))
+	}
+
+	require.Equal(t, rev0, rev30, "reverse lists must match across budgets")
+	require.Equal(t, conflicts0, conflicts30, "conflict-key sets must be identical")
+}
+
 // TestAllocateWorkers exercises the pure apportionment helper: floor of 1, the
 // budget-disabled and saturated edge cases, the largest-remainder distribution,
 // the floor-of-1 reclaim, and determinism — no cluster needed.
