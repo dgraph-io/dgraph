@@ -145,6 +145,14 @@ func (z *zero) cmd(c *LocalCluster) []string {
 			fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease))
 	}
 
+	// Zero's admin HTTP endpoints (/moveTablet, /removeNode) only admit whitelisted or loopback
+	// callers, and tests drive them from the host. ponytail: gated on localVersion because the
+	// --security flag does not exist on older Zero binaries used by upgrade tests; widen to a
+	// version comparison once a release carrying it exists.
+	if c.conf.version == localVersion {
+		zcmd = append(zcmd, `--security=whitelist=0.0.0.0/0`)
+	}
+
 	if z.id > 0 {
 		zcmd = append(zcmd, "--peer="+c.zeros[0].aname()+":"+zeroGrpcPort)
 	}
