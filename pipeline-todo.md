@@ -311,3 +311,35 @@ Fixing either would be a worthwhile separate change; neither blocks this work.
 directory samples partial files, which silently produces four "different"
 databases that are actually just different flush points. Poll for completion, or
 use queries (synchronous) as done here.
+
+### Integration suite (`t/` runner, Docker) — 39 packages, zero failures
+
+Run on the 32-core box against a `dgraph/dgraph:local` image built from this
+tree and **verified by symbol inspection** to contain the changes
+(`flushConflicts`=2, `maphash`=18) before trusting any result.
+
+**39 packages `ok`, 0 package failures, 0 test failures**, including the ones
+that matter most here:
+
+| package | time | note |
+|---|---|---|
+| `systest/mutations-and-queries` | 50s | the mutation-heavy systest |
+| `systest/vector` | 1484s | HNSW path, a known pipeline bug source |
+| `worker` | 213s | passes cleanly under the integration harness |
+| `systest/multi-tenancy`, `systest/plugin`, `acl`, … | — | ok |
+| `posting` (rerun, `--pkg=posting`) | — | `T_EXIT=0` |
+
+Setup needed on a clean box: Docker (`t/` demands it even for unit tests),
+`gotestsum` (`AUTO_INSTALL=true make check-deps`), a git repo root, and
+`make local-image`. `ack` is unavailable on RHEL 9 and blocks `check-deps`, but
+the runner itself does not need it — invoke `go run .` in `t/` directly.
+
+**Unexplained:** the first full-suite invocation exited 1 with no failing test
+and a log ending mid-`posting`. Re-running that package alone gave `T_EXIT=0`.
+The four `panic:` entries in the log are intentional — they come from
+`TestRunAll_WithDgraphDirectives/panic_catcher`, whose own output says the panic
+is expected.
+
+Caveat worth stating: `TestRebuildTokIndex` appears to stall if you filter test
+output with `grep | head` — badger emits enough INFO lines between `=== RUN` and
+`--- PASS` to be truncated. It passes in 0.06s.
