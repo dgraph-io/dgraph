@@ -148,9 +148,11 @@ func runMatrixBatch(t *testing.T, budget int, fraction float64, minEdges int,
 	return conflicts
 }
 
-// matrixCases is the schema/index-type matrix.
-func matrixCases() []schemaCase {
-	const n = 600 // edges per scalar predicate; > any tested budget so the split fires
+// matrixCases is the schema/index-type matrix (default batch size).
+func matrixCases() []schemaCase { return matrixCasesN(600) }
+
+// matrixCasesN is the schema/index-type matrix with n edges per scalar predicate.
+func matrixCasesN(n int) []schemaCase {
 	scalar := func(valOf func(i int) string) func([]string) []*pb.DirectedEdge {
 		return func(attrs []string) []*pb.DirectedEdge {
 			e := make([]*pb.DirectedEdge, 0, n)
@@ -212,6 +214,23 @@ func matrixCases() []schemaCase {
 			},
 		},
 		{
+			// One distinct reverse target per source, so len(reverseredMap) == n
+			// exceeds reverseParallelMinTargets and ProcessReverse takes its
+			// PARALLEL write path. Every other @reverse case here lands on 5 hot
+			// targets and stays serial, so without this row the parallel reverse
+			// write would be uncovered by the byte-identity matrix.
+			name:   "list_uid_reverse_highcard",
+			schema: `p: [uid] @reverse .`,
+			attrs:  []string{"p"},
+			edges: func(attrs []string) []*pb.DirectedEdge {
+				e := make([]*pb.DirectedEdge, 0, n)
+				for i := 0; i < n; i++ {
+					e = append(e, uidEdge(attrs[0], uint64(1_000_000+i), uint64(9_000_000+i)))
+				}
+				return e
+			},
+		},
+		{
 			name:   "uid_reverse_singular",
 			schema: `p: uid @reverse .`,
 			attrs:  []string{"p"},
@@ -219,6 +238,25 @@ func matrixCases() []schemaCase {
 				e := make([]*pb.DirectedEdge, 0, n)
 				for i := 0; i < n; i++ {
 					e = append(e, uidEdge(attrs[0], uint64(1_000_000+i), uint64(9_000_000+i%5)))
+				}
+				return e
+			},
+		},
+		{
+			// The singular-uid leg reaches ProcessReverse via ProcessSingle, not
+			// ProcessList, and handleOldDeleteForSingle appends a synthetic DEL
+			// carrying the OLD target — so one source uid can produce TWO distinct
+			// reverse keys. uid_reverse_singular above lands on 5 hot targets and
+			// stays serial, leaving that leg's parallel path uncovered; this row
+			// gives it one distinct target per source so it exceeds
+			// reverseParallelMinTargets.
+			name:   "uid_reverse_singular_highcard",
+			schema: `p: uid @reverse .`,
+			attrs:  []string{"p"},
+			edges: func(attrs []string) []*pb.DirectedEdge {
+				e := make([]*pb.DirectedEdge, 0, n)
+				for i := 0; i < n; i++ {
+					e = append(e, uidEdge(attrs[0], uint64(1_000_000+i), uint64(9_000_000+i)))
 				}
 				return e
 			},
