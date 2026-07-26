@@ -256,3 +256,58 @@ dominated by `posting/`. Measured on the 32-core box:
 - **Sequential A/B on a laptop is invalid** — thermal drift produced a spurious
   43% "regression" on a code path that had not changed. Build two test binaries
   and interleave them.
+
+---
+
+## 5. Regression evidence (2026-07-26, 32-core EC2)
+
+### Query-based differential — the strongest gate we have
+
+A mixed-workload corpus (60 batches x 400 entities x 17 predicates, ~408k
+triples) was ingested into four FRESH clusters and fingerprinted with 72 DQL
+queries covering every predicate type, index tokenizer, reverse edge, count
+index, language tag, a 40-entity full dump, and star-delete verification:
+
+| config | binary | budget | result |
+|---|---|---|---|
+| `stock30` | pre-change (`ab0a49e77`) | 30 | reference |
+| `new0` | all changes | 0 (legacy path) | **identical** |
+| `new30` | all changes | 30 (prod default) | **identical** |
+| `newauto` | all changes | -1 (auto) | **identical** |
+
+Zero mutation errors in all four. The corpus exercises `ProcessSingle`,
+`ProcessList`, `ProcessReverse` (hot AND spread targets), `ProcessCount`,
+`InsertTokenizerIndexes` (exact/hash/term/fulltext/trigram/int/float/bool/day/geo),
+`@upsert`, `@noconflict`, `@lang`, `[string]` lists, SET, DEL, and star-delete —
+i.e. every branch the pipeline work touched, not just the benchmark shape.
+
+Harness: `/data/harness/verify.sh`, corpus generator `gen_mixed.py`.
+
+### Pre-existing test failures — NOT caused by this work
+
+Verified by running the identical suite on `ab0a49e77` (pre-change tree) on the
+same box:
+
+- **`worker` package fails `-race` on BOTH trees.** Root cause is structural:
+  `worker.Init()` (`worker/worker.go:48-52`) overwrites the package-global
+  `limiter` and starts `go limiter.bleed()`, a goroutine that is never stopped.
+  Every test calls `Init()`, so each new call races the previous test's still-live
+  `bleed()`. The race detector then attributes the failure to whichever test
+  happens to be running, which is why the failing set differs every run.
+  Measured over 5 runs per tree: baseline and HEAD both fail, with overlapping
+  and fluctuating sets (`TestLimiterDeadlock` fails 5/5 on both).
+- **`types`: `TestParseTimeWithTZ`** writes the process-global `time.Local`
+  (`types/scalar_types_test.go:121`) while an OpenCensus worker reads it via
+  `time.Now()`. ~6/8 failures on a clean tree.
+- **`posting` — the package this work actually changes — passes cleanly on both
+  trees** (280s baseline, 286s HEAD, `-race`).
+
+Fixing either would be a worthwhile separate change; neither blocks this work.
+
+### Harness trap discovered here
+
+**Dgraph's `/admin` export is ASYNCHRONOUS** — it returns
+`"Export queued with ID ..."` immediately. Sleeping and then reading the export
+directory samples partial files, which silently produces four "different"
+databases that are actually just different flush points. Poll for completion, or
+use queries (synchronous) as done here.
