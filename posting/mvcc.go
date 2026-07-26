@@ -236,14 +236,9 @@ func (txn *Txn) ShouldAbort() bool {
 }
 
 func (txn *Txn) addConflictKey(conflictKey uint64) {
-	txn.Lock()
-	defer txn.Unlock()
-	if txn.conflicts == nil {
-		txn.conflicts = make(map[uint64]struct{})
-	}
-	if conflictKey > 0 {
-		txn.conflicts[conflictKey] = struct{}{}
-	}
+	var c conflictBuf
+	c.addRaw(conflictKey)
+	txn.flushConflicts(&c)
 }
 
 // FillContext updates the given transaction context with data from this transaction.

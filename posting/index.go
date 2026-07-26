@@ -276,6 +276,16 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 	wg.Wait()
 
+	// Buffer conflict keys and flush them with ONE txn.Lock() acquisition.
+	//
+	// This defer MUST be registered ABOVE cache.Lock(): defers run LIFO, so
+	// cache.Unlock() (registered second) fires first and the flush then runs with
+	// the cache lock already released. Registering it below would still compile
+	// and still pass every byte-identical test, while silently keeping the
+	// txn.Lock()-inside-cache.Lock() nesting this change exists to remove.
+	var cbuf conflictBuf
+	defer mp.txn.flushConflicts(&cbuf)
+
 	mp.txn.cache.Lock()
 	defer mp.txn.cache.Unlock()
 
@@ -298,7 +308,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	if info.hasUpsert {
 		err := indexesGenInMutation.Iterate(func(key string, value *MutableLayer) error {
 			updateFn(key, value)
-			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
+			cbuf.addRaw(farm.Fingerprint64([]byte(key)))
 			return nil
 		})
 		if err != nil {
@@ -307,7 +317,7 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	} else {
 		err := indexesGenInMutation.Iterate(func(key string, value *MutableLayer) error {
 			updateFn(key, value)
-			mp.txn.addConflictKeyWithUid([]byte(key), value.currentEntries, info.hasUpsert, info.noConflict)
+			cbuf.addForPostings([]byte(key), value.currentEntries, info.hasUpsert, info.noConflict)
 			return nil
 		})
 		if err != nil {
@@ -426,7 +436,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	// Lang predicates ride the SAME path: all language postings for one entity fold
 	// into that entity's single <pred,entity> data key (one-to-one by source
 	// entity), so the disjointness invariant holds for them too.
-	writeListDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+	writeListDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte, cbuf *conflictBuf,
 		store func(key string, input *pb.PostingList) (*pb.PostingList, error)) error {
 		if len(pl.Postings) == 0 {
 			return nil
@@ -440,7 +450,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 			return err
 		}
 		if !info.noConflict {
-			mp.txn.addConflictKeyWithUid(scratchKey, newPl, info.hasUpsert, info.noConflict)
+			cbuf.addForPostings(scratchKey, newPl, info.hasUpsert, info.noConflict)
 		}
 		return nil
 	}
@@ -486,6 +496,12 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		return merged, nil
 	}
 
+	// Conflict keys are buffered and flushed with ONE txn.Lock() acquisition for
+	// the whole predicate. The reverse/index/count passes above have already run
+	// and flushed their own buffers; this one covers the forward write only.
+	var cbuf conflictBuf
+	defer mp.txn.flushConflicts(&cbuf)
+
 	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
 	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
 	if pipeline.workers <= 0 {
@@ -493,7 +509,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 			return mp.txn.AddDelta(k, in, info.isUid, true)
 		}
 		for uid, pl := range postings {
-			if err := writeListDataUid(uid, pl, dataKey, serialStore); err != nil {
+			if err := writeListDataUid(uid, pl, dataKey, &cbuf, serialStore); err != nil {
 				return err
 			}
 		}
@@ -507,7 +523,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	// whenever the budget is below ~2x the predicate count.
 	if pipeline.workers == 1 {
 		for uid, pl := range postings {
-			if err := writeListDataUid(uid, pl, dataKey, concStore); err != nil {
+			if err := writeListDataUid(uid, pl, dataKey, &cbuf, concStore); err != nil {
 				return err
 			}
 		}
@@ -537,6 +553,7 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	var wg sync.WaitGroup
 	var once sync.Once
 	var firstErr error
+	bufs := make([][]uint64, k)
 	for w := 0; w < k; w++ {
 		start := w * width
 		if start >= len(uidList) {
@@ -547,20 +564,29 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 			end = len(uidList)
 		}
 		wg.Add(1)
-		go func(sub []uint64) {
+		go func(w int, sub []uint64) {
 			defer wg.Done()
 			// Per-worker scratch buffer: sharing dataKey across goroutines races.
 			localKey := x.DataKey(pipeline.attr, 0)
+			// Per-worker conflict buffer: appended lock-free, merged below.
+			var local conflictBuf
 			for _, uid := range sub {
-				if err := writeListDataUid(uid, postings[uid], localKey,
+				if err := writeListDataUid(uid, postings[uid], localKey, &local,
 					concStore); err != nil {
 					once.Do(func() { firstErr = err })
-					return
+					// break, not return: see ProcessSingle — dropping already
+					// buffered keys would shrink the conflict set, and a subset
+					// risks a lost update.
+					break
 				}
 			}
-		}(uidList[start:end])
+			bufs[w] = local.keys
+		}(w, uidList[start:end])
 	}
 	wg.Wait()
+	for _, b := range bufs {
+		cbuf.keys = append(cbuf.keys, b...)
+	}
 	return firstErr
 }
 
@@ -633,7 +659,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 	// the parallel path; for a given distinct key both write identical bytes and
 	// return the same deduped list, so the committed result (reverse data bytes
 	// and conflict-key set) is store-order-independent.
-	writeReverseTarget := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+	writeReverseTarget := func(uid uint64, pl *pb.PostingList, scratchKey []byte, cbuf *conflictBuf,
 		store func(key string, input *pb.PostingList) (*pb.PostingList, error)) error {
 		if len(pl.Postings) == 0 {
 			return nil
@@ -644,9 +670,14 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 		if err != nil {
 			return err
 		}
-		mp.txn.addConflictKeyWithUid(scratchKey, newPl, info.hasUpsert, info.noConflict)
+		cbuf.addForPostings(scratchKey, newPl, info.hasUpsert, info.noConflict)
 		return nil
 	}
+
+	// Conflict keys are buffered and flushed with ONE txn.Lock() acquisition for
+	// the whole reverse pass; worker goroutines never touch txn.Mutex.
+	var cbuf conflictBuf
+	defer mp.txn.flushConflicts(&cbuf)
 
 	// concStore reproduces AddDelta(..., true, true)'s committed bytes without
 	// taking the global cache lock. Two behaviors must be matched exactly:
@@ -695,7 +726,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			return mp.txn.AddDelta(k, in, true, true)
 		}
 		for uid, pl := range reverseredMap {
-			if err := writeReverseTarget(uid, pl, key, serialStore); err != nil {
+			if err := writeReverseTarget(uid, pl, key, &cbuf, serialStore); err != nil {
 				return err
 			}
 		}
@@ -720,7 +751,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 	// type — can produce the same key string.
 	if pipeline.workers == 1 || len(reverseredMap) < reverseParallelMinTargets {
 		for uid, pl := range reverseredMap {
-			if err := writeReverseTarget(uid, pl, key, concStore); err != nil {
+			if err := writeReverseTarget(uid, pl, key, &cbuf, concStore); err != nil {
 				return err
 			}
 		}
@@ -771,6 +802,7 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 	var wg sync.WaitGroup
 	var once sync.Once
 	var firstErr error
+	bufs := make([][]uint64, k)
 	for w := 0; w < k; w++ {
 		start := w * width
 		if start >= len(uidList) {
@@ -781,20 +813,28 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 			end = len(uidList)
 		}
 		wg.Add(1)
-		go func(sub []uint64) {
+		go func(w int, sub []uint64) {
 			defer wg.Done()
 			// Per-worker scratch buffer: sharing `key` across goroutines races.
 			localKey := x.ReverseKey(pipeline.attr, 0)
+			// Per-worker conflict buffer: appended lock-free, merged below.
+			var local conflictBuf
 			for _, uid := range sub {
-				if err := writeReverseTarget(uid, reverseredMap[uid], localKey,
+				if err := writeReverseTarget(uid, reverseredMap[uid], localKey, &local,
 					concStore); err != nil {
 					once.Do(func() { firstErr = err })
-					return
+					// break, not return: see ProcessSingle — a shrunken conflict
+					// set risks a lost update.
+					break
 				}
 			}
-		}(uidList[start:end])
+			bufs[w] = local.keys
+		}(w, uidList[start:end])
 	}
 	wg.Wait()
+	for _, b := range bufs {
+		cbuf.keys = append(cbuf.keys, b...)
+	}
 	return firstErr
 }
 
@@ -924,26 +964,83 @@ func (mp *MutationPipeline) handleOldDeleteForList(pipeline *PredicatePipeline,
 	return nil
 }
 
-func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList, hasUpsert bool, hasNoConflict bool) {
-	if hasNoConflict {
-		return
-	}
-	txn.Lock()
-	defer txn.Unlock()
-	if txn.conflicts == nil {
-		txn.conflicts = make(map[uint64]struct{})
-	}
-	keyHash := farm.Fingerprint64(key)
-	if hasUpsert {
-		txn.conflicts[keyHash] = struct{}{}
-		return
-	}
-	for _, post := range pl.Postings {
-		txn.conflicts[keyHash^post.Uid] = struct{}{}
+// conflictBuf accumulates a worker's conflict keys so they can be inserted into
+// txn.conflicts with a SINGLE txn.Lock() acquisition instead of one per call.
+//
+// The map insert itself is cheap; the lock traffic is not. A CPU profile of a
+// 32-core ingest run attributed 80% of addConflictKeyWithUid's cost to acquiring
+// and releasing the mutex and only 15% to the map writes, with every parallel
+// worker in every predicate contending the same lock. Buffering collapses that
+// to one acquisition per Process* call, and lets the worker goroutines run
+// without ever touching txn.Mutex.
+//
+// Keys are expanded EAGERLY into uint64s. Callers reuse a single scratch key
+// buffer across iterations (see the localKey allocations in the parallel
+// branches), so a buffer that retained the []byte and fingerprinted at flush
+// time would hash the LAST uid's bytes for every entry — wrong conflict keys,
+// with no panic and nothing for the race detector to catch.
+type conflictBuf struct {
+	keys []uint64
+}
+
+// addRaw buffers a pre-computed conflict key, preserving addConflictKey's
+// "skip zero" guard.
+func (c *conflictBuf) addRaw(conflictKey uint64) {
+	if conflictKey > 0 {
+		c.keys = append(c.keys, conflictKey)
 	}
 }
 
+// addForPostings buffers one conflict key per posting, matching the legacy
+// addConflictKeyWithUid derivation exactly: fingerprint of the FULL key buffer
+// (including its 8 uid bytes) XOR each posting's uid, or the bare fingerprint
+// for an @upsert predicate. Note the fingerprint now happens outside any lock.
+func (c *conflictBuf) addForPostings(key []byte, pl *pb.PostingList, hasUpsert, hasNoConflict bool) {
+	if hasNoConflict {
+		return
+	}
+	keyHash := farm.Fingerprint64(key)
+	if hasUpsert {
+		c.keys = append(c.keys, keyHash)
+		return
+	}
+	for _, post := range pl.Postings {
+		c.keys = append(c.keys, keyHash^post.Uid)
+	}
+}
+
+// flushConflicts drains a buffer into txn.conflicts under one lock acquisition.
+// Safe to call on an empty buffer, and safe to call repeatedly. The resulting
+// SET is what matters — FillContext sorts and dedups via x.Unique before the
+// keys reach Zero — so merge order across workers is irrelevant.
+func (txn *Txn) flushConflicts(c *conflictBuf) {
+	if c == nil || len(c.keys) == 0 {
+		return
+	}
+	txn.Lock()
+	if txn.conflicts == nil {
+		txn.conflicts = make(map[uint64]struct{}, len(c.keys))
+	}
+	for _, k := range c.keys {
+		txn.conflicts[k] = struct{}{}
+	}
+	txn.Unlock()
+	c.keys = c.keys[:0]
+}
+
+func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList, hasUpsert bool, hasNoConflict bool) {
+	var c conflictBuf
+	c.addForPostings(key, pl, hasUpsert, hasNoConflict)
+	txn.flushConflicts(&c)
+}
+
 func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo, isListEdge bool, isReverseEdge bool) error {
+	// Conflict keys are buffered and flushed with ONE txn.Lock() acquisition.
+	// ProcessCount runs single-goroutine (called serially from ProcessList and
+	// ProcessReverse), so one buffer suffices.
+	var cbuf conflictBuf
+	defer mp.txn.flushConflicts(&cbuf)
+
 	dataKey := x.DataKey(pipeline.attr, 0)
 	if isReverseEdge {
 		dataKey = x.ReverseKey(pipeline.attr, 0)
@@ -1022,10 +1119,10 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		if updated {
 			if !isListEdge {
 				if !info.noConflict {
-					mp.txn.addConflictKey(farm.Fingerprint64(dataKey))
+					cbuf.addRaw(farm.Fingerprint64(dataKey))
 				}
 			} else {
-				mp.txn.addConflictKeyWithUid(dataKey, postingList, info.hasUpsert, info.noConflict)
+				cbuf.addForPostings(dataKey, postingList, info.hasUpsert, info.noConflict)
 			}
 		}
 
@@ -1049,7 +1146,7 @@ func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *Predicat
 		if newPl, err := mp.txn.AddDelta(string(ck), pl, true, true); err != nil {
 			return err
 		} else {
-			mp.txn.addConflictKeyWithUid(ck, newPl, info.hasUpsert, info.noConflict)
+			cbuf.addForPostings(ck, newPl, info.hasUpsert, info.noConflict)
 		}
 	}
 
@@ -1214,7 +1311,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	// a data race across goroutines. store is AddDelta on the serial path and the
 	// lock-free AddDeltaConcurrent on the parallel path; for a given distinct key
 	// both write identical bytes, so the result is store-order-independent.
-	writeDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte,
+	writeDataUid := func(uid uint64, pl *pb.PostingList, scratchKey []byte, cbuf *conflictBuf,
 		store func(string, *pb.PostingList) error) error {
 		// An empty PostingList means nothing was accumulated for this uid (e.g.
 		// a DEL whose value did not match the committed value, or a same-value
@@ -1235,7 +1332,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		key := baseKey + string(scratchKey[len(scratchKey)-8:])
 
 		if !info.noConflict {
-			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
+			cbuf.addRaw(farm.Fingerprint64([]byte(key)))
 		}
 
 		writePl := pl
@@ -1262,11 +1359,17 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		return store(key, writePl)
 	}
 
+	// Conflict keys are buffered and flushed with ONE txn.Lock() acquisition for
+	// the whole predicate instead of one per uid. Worker goroutines below get
+	// their own buffers and so never touch txn.Mutex at all.
+	var cbuf conflictBuf
+	defer mp.txn.flushConflicts(&cbuf)
+
 	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
 	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
 	if pipeline.workers <= 0 {
 		for uid, pl := range postings {
-			if err := writeDataUid(uid, pl, dataKey,
+			if err := writeDataUid(uid, pl, dataKey, &cbuf,
 				func(k string, wpl *pb.PostingList) error {
 					_, err := mp.txn.AddDelta(k, wpl, false, false)
 					return err
@@ -1288,7 +1391,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	// encodes attrLen plus a per-type discriminator byte).
 	if pipeline.workers == 1 {
 		for uid, pl := range postings {
-			if err := writeDataUid(uid, pl, dataKey, mp.txn.AddDeltaConcurrent); err != nil {
+			if err := writeDataUid(uid, pl, dataKey, &cbuf, mp.txn.AddDeltaConcurrent); err != nil {
 				return err
 			}
 		}
@@ -1318,6 +1421,7 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	var wg sync.WaitGroup
 	var once sync.Once
 	var firstErr error
+	bufs := make([][]uint64, k)
 	for w := 0; w < k; w++ {
 		start := w * width
 		if start >= len(uidList) {
@@ -1328,20 +1432,32 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 			end = len(uidList)
 		}
 		wg.Add(1)
-		go func(sub []uint64) {
+		go func(w int, sub []uint64) {
 			defer wg.Done()
 			// Per-worker scratch buffer: sharing dataKey across goroutines races.
 			localKey := x.DataKey(pipeline.attr, 0)
+			// Per-worker conflict buffer: appended lock-free, merged below.
+			var local conflictBuf
 			for _, uid := range sub {
-				if err := writeDataUid(uid, postings[uid], localKey,
+				if err := writeDataUid(uid, postings[uid], localKey, &local,
 					mp.txn.AddDeltaConcurrent); err != nil {
 					once.Do(func() { firstErr = err })
-					return
+					// break, not return: keys already buffered for successfully
+					// written uids must still be emitted. The pre-existing error
+					// path never rolled back emitted keys, so dropping them here
+					// would CHANGE the conflict set — and since Zero's hasConflict
+					// is a pure existential over the set, a subset risks a lost
+					// update while a superset only costs a spurious abort.
+					break
 				}
 			}
-		}(uidList[start:end])
+			bufs[w] = local.keys
+		}(w, uidList[start:end])
 	}
 	wg.Wait()
+	for _, b := range bufs {
+		cbuf.keys = append(cbuf.keys, b...)
+	}
 	return firstErr
 }
 
