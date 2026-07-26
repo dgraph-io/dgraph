@@ -445,30 +445,6 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		return nil
 	}
 
-	// Serial path (budget disabled or a one-worker grant): byte-for-byte the
-	// pre-budget loop, reusing the single dataKey scratch buffer and the locked
-	// AddDelta(..., info.isUid, true).
-	if pipeline.workers <= 1 {
-		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
-			return mp.txn.AddDelta(k, in, info.isUid, true)
-		}
-		for uid, pl := range postings {
-			if err := writeListDataUid(uid, pl, dataKey, serialStore); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Parallel path: split the disjoint <pred,srcUid> forward keys across k
-	// goroutines. Each worker owns a contiguous, non-overlapping slice of the
-	// source-uid snapshot, so no two workers ever write the same data key
-	// (invariant I1) — that disjointness is what makes the lock-free
-	// AddDeltaConcurrent safe. ProcessReverse / the index / count passes have
-	// already run serially above; all workers join here (wg.Wait) before
-	// ProcessList returns, so the legacy MVCC ordering — every delta in place
-	// before the predicate goroutine closes — is preserved.
-	//
 	// concStore reproduces AddDelta(..., info.isUid, true)'s committed bytes
 	// without taking the global cache lock. Two behaviors must be matched exactly:
 	//
@@ -510,6 +486,41 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		return merged, nil
 	}
 
+	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
+	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
+	if pipeline.workers <= 0 {
+		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
+			return mp.txn.AddDelta(k, in, info.isUid, true)
+		}
+		for uid, pl := range postings {
+			if err := writeListDataUid(uid, pl, dataKey, serialStore); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Budget enabled but only one worker: still use the LOCK-FREE concStore. See
+	// the equivalent branch in ProcessSingle/ProcessReverse — the win is escaping
+	// the global txn.cache.Lock() that AddDelta holds across proto.Marshal, not
+	// the goroutine fan-out, and allocateWorkers hands out mostly 1-worker grants
+	// whenever the budget is below ~2x the predicate count.
+	if pipeline.workers == 1 {
+		for uid, pl := range postings {
+			if err := writeListDataUid(uid, pl, dataKey, concStore); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Parallel path: split the disjoint <pred,srcUid> forward keys across k
+	// goroutines. Each worker owns a contiguous, non-overlapping slice of the
+	// source-uid snapshot, so no two workers ever write the same data key
+	// (invariant I1) — that disjointness is what makes the lock-free
+	// AddDeltaConcurrent safe. All workers join here (wg.Wait) before ProcessList
+	// returns, so the legacy MVCC ordering — every delta in place before the
+	// predicate goroutine closes — is preserved.
 	uidList := make([]uint64, 0, len(postings))
 	for uid := range postings {
 		uidList = append(uidList, uid)
@@ -1251,16 +1262,33 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 		return store(key, writePl)
 	}
 
-	// Serial path (budget disabled or a one-worker grant): byte-for-byte the
-	// pre-budget loop, reusing the single dataKey scratch buffer and the locked
-	// AddDelta.
-	if pipeline.workers <= 1 {
+	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
+	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
+	if pipeline.workers <= 0 {
 		for uid, pl := range postings {
 			if err := writeDataUid(uid, pl, dataKey,
 				func(k string, wpl *pb.PostingList) error {
 					_, err := mp.txn.AddDelta(k, wpl, false, false)
 					return err
 				}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// Budget enabled but only one worker: still use the LOCK-FREE store. The
+	// dominant cost of the legacy loop is not the missing goroutines, it is that
+	// AddDelta holds the GLOBAL txn.cache.Lock() across proto.Marshal, so every
+	// concurrent predicate goroutine at L1 convoys on that one mutex. Tying the
+	// lock-free store to workers > 1 stranded the common production grant:
+	// allocateWorkers hands out mostly 1s when the budget is below ~2x the
+	// predicate count. Single-writer safety is unchanged — <pred,uid> data keys
+	// are one-to-one and distinct predicates cannot collide (x.generateKey
+	// encodes attrLen plus a per-type discriminator byte).
+	if pipeline.workers == 1 {
+		for uid, pl := range postings {
+			if err := writeDataUid(uid, pl, dataKey, mp.txn.AddDeltaConcurrent); err != nil {
 				return err
 			}
 		}
