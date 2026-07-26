@@ -1,5 +1,45 @@
 # Mutation-pipeline TODO
 
+## STATUS: intra-transaction apply-path work is COMPLETE
+
+Six commits, each measured on an `i4i.16xlarge` (32 physical cores / 64 vCPU),
+25 `[uid] @reverse` predicates, 20k triples/txn, 64 threads, 300 s,
+`badger_write_bytes_user`:
+
+| commit | change | MB/s |
+|---|---|---|
+| — | branch base | 9.63 |
+| `4a02d8eeb` | parallel reverse write; lock-free store at any grant | 10.58 |
+| `612ae8cd5` | lock-free forward write at a one-worker grant | 11.44 |
+| `5b69ac2b4` | batch conflict-key emission into one lock acquisition | 12.45 |
+| `016a03a0a` | snapshot uid lease once per mutation | 12.53 (flat) |
+| `04944f125` | size `LockedShardedMap` per machine; drop hash alloc | **13.17** |
+
+**+36.8% cumulative.** Blocked pipeline goroutines fell from ~86% (stock, on the
+global cache lock) to **10.5%**; runnable rose to **75.6%**.
+
+### The rule that governs any further work here
+
+CPU utilisation is **~10% of 64 vCPU** and barely moved across all six commits,
+because `processApplyCh` applies one Raft entry at a time. So **a change that
+only reduces CPU or allocations will not move throughput** — `016a03a0a` removed
+~3.5% of CPU for exactly zero gain. Rank candidates by share of **blocked**
+goroutines (from `/debug/pprof/goroutine?debug=2`), not CPU. Use a CPU profile to
+*explain* a blocker once found, not to pick one.
+
+Bottleneck migration observed, each fix exposing the next — which is why the
+order mattered: global `cache.Lock` 86% → `txn.conflicts` 71% →
+`Deltas.AddToDeltas` 58% → nothing above ~10%.
+
+**Everything in §2b/§3 below that is CPU-or-allocation-only was skipped on
+purpose.** The next real lever is cross-transaction concurrency in
+`processApplyCh`, not more intra-transaction work.
+
+(The same summary is in the local, gitignored `CLAUDE.md` so it auto-loads.)
+
+---
+
+
 Working list for the intra-predicate pipeline work on
 `rahst12/hybrid-pipeline-reverse-parallel`. Ordered by what actually blocks
 throughput, not by effort.
