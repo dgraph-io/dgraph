@@ -383,3 +383,36 @@ Two things this reveals that the synthetic corpus hid:
 Reproduce: `/data/harness/prodbench.sh <binary> <tag> <budget> <threads>` with
 `/data/gen` (generator) and `/data/seed_snapshot` (seeded state) on the EC2 box.
 Generator needs Python 3.10+ (`dataclass(slots=True)`) — RHEL 9 ships 3.9.
+
+#### Client-thread sweep — the abort storm dominates, and fewer threads is faster
+
+Same production-replica corpus, budget=30, varying client threads (emulating a
+lock-cache-protected client, which serialises conflicting writes rather than
+letting them abort):
+
+| threads | stock MB/s | shard MB/s | speedup | stock nquads/s | shard nquads/s | files committed | aborts |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2 | 5.30 | **5.96** | 1.12x | 143,143 | **160,825** | 502-520 / 532 | ~380 |
+| 4 | 3.62 | **4.09** | 1.13x | 100,348 | **113,459** | 454 / 532 | ~940 |
+| 8 | 2.31 | **2.67** | 1.16x | 65,918 | **76,008** | ~368 / 532 | ~1,470 |
+| 16 | 1.48 | **1.74** | 1.18x | 44,699 | 52,357 | ~283 / 532 | ~1,860 |
+
+**Throughput more than triples as client threads DROP from 16 to 2** (1.48 ->
+5.30 MB/s on stock; 44.7k -> 143k nquads/s). Aborts fall 1,860 -> 380 and
+committed files rise 283 -> 502 of 532. On this workload the Alpha is not the
+constraint at all — Zero's conflict arbitration over `@upsert` re-asserts is,
+and every extra client thread buys more aborted work than committed work.
+
+Two consequences worth acting on:
+
+1. **A production ingest tuned for more threads is likely losing throughput to
+   aborts, not gaining it.** This is precisely what the client-side node-UID lock
+   cache exists to prevent — these numbers quantify what it is worth. Anyone
+   without it should test *lower* concurrency before adding more.
+2. **The apply-path gain is consistent everywhere (1.12x-1.18x)** and grows
+   mildly with contention. It is not an artifact of the abort storm — at 2
+   threads, where 502/532 files commit and aborts are minimal, it is still
+   **+12%** (and +12.4% on nquads/s).
+
+Abort counts track each other across every thread count (380/379, 945/931,
+1465/1479, 1855/1857) — conflict semantics unchanged, as intended.
