@@ -102,9 +102,9 @@ func fillContextFixture(t *testing.T, startTs uint64, budget int) []string {
 		cnc:   string @index(exact) @noconflict .
 	`), 1))
 
-	ob := x.WorkerConfig.MutationsPipelineGoroutines
-	x.WorkerConfig.MutationsPipelineGoroutines = budget
-	defer func() { x.WorkerConfig.MutationsPipelineGoroutines = ob }()
+	ob := x.WorkerConfig.IntraMutationParallelism
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: budget}
+	defer func() { x.WorkerConfig.IntraMutationParallelism = ob }()
 
 	cname := x.AttrInRootNamespace("cname")
 	clink := x.AttrInRootNamespace("clink")

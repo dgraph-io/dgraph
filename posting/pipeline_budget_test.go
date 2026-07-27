@@ -6,7 +6,7 @@
 package posting
 
 // Tests and benchmark for the proportional intra-predicate goroutine budget
-// (mutations-pipeline-goroutines). The budget lets a hot/dominant predicate use
+// (intra-mutation-parallelism). The budget lets a hot/dominant predicate use
 // more than one goroutine for its merge-light passes (data-write, index
 // tokenization) while staying byte-identical to the legacy one-goroutine path.
 
@@ -131,9 +131,9 @@ func sortedUint64(in []uint64) []uint64 {
 func runBudgetBatch(t *testing.T, budget int, startTs, commitTs uint64,
 	edges []*pb.DirectedEdge) map[uint64]struct{} {
 	t.Helper()
-	old := x.WorkerConfig.MutationsPipelineGoroutines
-	x.WorkerConfig.MutationsPipelineGoroutines = budget
-	defer func() { x.WorkerConfig.MutationsPipelineGoroutines = old }()
+	old := x.WorkerConfig.IntraMutationParallelism
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: budget}
+	defer func() { x.WorkerConfig.IntraMutationParallelism = old }()
 
 	txn := Oracle().RegisterStartTs(startTs)
 	mp := NewMutationPipeline(txn)
@@ -161,9 +161,9 @@ func runBudgetBatch(t *testing.T, budget int, startTs, commitTs uint64,
 func runTwoProposalBatch(t *testing.T, budget int, startTs, commitTs uint64,
 	batch1, batch2 []*pb.DirectedEdge) map[uint64]struct{} {
 	t.Helper()
-	old := x.WorkerConfig.MutationsPipelineGoroutines
-	x.WorkerConfig.MutationsPipelineGoroutines = budget
-	defer func() { x.WorkerConfig.MutationsPipelineGoroutines = old }()
+	old := x.WorkerConfig.IntraMutationParallelism
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: budget}
+	defer func() { x.WorkerConfig.IntraMutationParallelism = old }()
 
 	txn := Oracle().RegisterStartTs(startTs)
 
@@ -409,11 +409,29 @@ func TestProcessReverseCrossProposalByteIdentical(t *testing.T) {
 // budget-disabled and saturated edge cases, the largest-remainder distribution,
 // the floor-of-1 reclaim, and determinism — no cluster needed.
 func TestAllocateWorkers(t *testing.T) {
-	// Disabled budget (< 2) and empty input return nil → callers treat every
-	// predicate as workers=0 (legacy path).
-	require.Nil(t, allocateWorkers(map[string]int{"a": 5, "b": 3}, 0))
-	require.Nil(t, allocateWorkers(map[string]int{"a": 5, "b": 3}, 1))
+	// A budget below 2 grants one worker each rather than nil. This is the
+	// decoupling: a 1-worker grant means "no fan-out", NOT "take the legacy
+	// locked store". Tying those together made the disabled setting also give up
+	// the lock-free store — about two thirds of this branch's measured gain — and
+	// made the flag non-monotonic. The real kill switch is
+	// intra-mutation-min-edges=0, which never reaches this code.
+	require.Equal(t, map[string]int{"a": 1, "b": 1},
+		allocateWorkers(map[string]int{"a": 5, "b": 3}, 0))
+	require.Equal(t, map[string]int{"a": 1, "b": 1},
+		allocateWorkers(map[string]int{"a": 5, "b": 3}, 1))
+
+	// No predicates is still nil — there is nothing to grant.
 	require.Nil(t, allocateWorkers(map[string]int{}, 30))
+
+	// The invariant callers rely on: every predicate present in edgeCounts gets a
+	// grant of at least 1, at every budget.
+	for _, budget := range []int{0, 1, 2, 3, 30, 1000} {
+		got := allocateWorkers(map[string]int{"a": 5, "b": 3, "c": 1}, budget)
+		require.Len(t, got, 3, "budget %d", budget)
+		for attr, w := range got {
+			require.GreaterOrEqual(t, w, 1, "budget %d, attr %s", budget, attr)
+		}
+	}
 
 	// P >= budget: one worker each, nothing left to split with.
 	got := allocateWorkers(map[string]int{"a": 100, "b": 50, "c": 1}, 2)
@@ -646,49 +664,102 @@ func TestProcessListBudgetByteIdentical(t *testing.T) {
 	require.Equal(t, conflicts0, conflicts30, "conflict-key sets must be identical")
 }
 
-// TestAutoBudget exercises the pure AUTO-mode derivation directly, independent of
-// the real GOMAXPROCS: machineCap vs workCap interaction, rounding, the budget<2
-// fallback, the divide-by-zero guard on a misconfigured min-edges, and
-// determinism — no cluster needed.
-func TestAutoBudget(t *testing.T) {
-	// machineCap dominates: round(96*0.5)=48 < 1_000_000/256=3906.
-	require.Equal(t, 48, autoBudget(96, 1_000_000, 0.5, 256))
-
-	// workCap dominates: 2560/256=10 < round(96*0.5)=48.
-	require.Equal(t, 10, autoBudget(96, 2560, 0.5, 256))
-
-	// Rounding is half away from zero: round(3*0.5)=round(1.5)=2.
-	require.Equal(t, 2, autoBudget(3, 1_000_000, 0.5, 256))
-
-	// budget<2 fallback: round(1*0.5)=1 and 100/256 clamps to 1, so min==1 → the
-	// caller routes through allocateWorkers, which returns nil for budget<2 (legacy).
-	require.Equal(t, 1, autoBudget(1, 100, 0.5, 256))
-
-	// Divide-by-zero guard: a misconfigured minEdgesPerWorker of 0 must not panic
-	// and clamps to 1, so workCap==totalEdges and machineCap (48) wins here.
-	require.Equal(t, 48, autoBudget(96, 2560, 0.5, 0))
-
-	// Determinism: identical inputs yield identical outputs.
-	require.Equal(t, autoBudget(96, 2560, 0.5, 256), autoBudget(96, 2560, 0.5, 256))
+// mustResolve is Sizing followed by resolveWorkers, i.e. the full flag-to-worker
+// -count path a mutation takes, with gomaxprocs supplied so it stays independent
+// of the host running the test.
+func mustResolve(par x.IntraMutationParallelism, gomaxprocs, totalEdges, edgesPerWorker int) int {
+	workers, _ := resolveWorkers(par.Sizing(gomaxprocs), totalEdges, edgesPerWorker)
+	return workers
 }
 
-// runAutoBudgetBatch is runBudgetBatch's AUTO-mode sibling: it enables AUTO
-// (MutationsPipelineGoroutines=-1) with the given fraction / min-edges, runs the
-// batch through a fresh pipeline txn, snapshots the conflict-key set, commits, and
-// restores all three config fields on return.
-func runAutoBudgetBatch(t *testing.T, fraction float64, minEdges int,
+// TestParallelismSizing exercises the requested-size half of the resolution —
+// the part that turns off|auto|N|Fx into a number — independent of the real
+// GOMAXPROCS.
+func TestParallelismSizing(t *testing.T) {
+	// off: the zero value, and an explicit negative, both mean no fan-out.
+	require.Equal(t, 0, x.IntraMutationParallelism{}.Sizing(96))
+	require.Equal(t, 0, x.IntraMutationParallelism{Workers: -5}.Sizing(96))
+
+	// Absolute counts ignore the machine entirely.
+	require.Equal(t, 30, x.IntraMutationParallelism{Workers: 30}.Sizing(96))
+	require.Equal(t, 30, x.IntraMutationParallelism{Workers: 30}.Sizing(4))
+
+	// Per-CPU sizing tracks the machine. Rounding is half away from zero:
+	// round(3*0.5) == round(1.5) == 2.
+	require.Equal(t, 96, x.IntraMutationParallelism{PerCPU: 1.0}.Sizing(96))
+	require.Equal(t, 48, x.IntraMutationParallelism{PerCPU: 0.5}.Sizing(96))
+	require.Equal(t, 144, x.IntraMutationParallelism{PerCPU: 1.5}.Sizing(96))
+	require.Equal(t, 2, x.IntraMutationParallelism{PerCPU: 0.5}.Sizing(3))
+
+	// PerCPU wins when both are set, and never rounds down to 0.
+	require.Equal(t, 96, x.IntraMutationParallelism{Workers: 30, PerCPU: 1.0}.Sizing(96))
+	require.Equal(t, 1, x.IntraMutationParallelism{PerCPU: 0.01}.Sizing(4))
+}
+
+// TestResolveWorkers pins the edges-per-worker cap and the attribution the V(2)
+// grant log reports, and with it the saturation behavior that makes this hard to
+// reason about: once the cap binds, the worker count stops responding to both
+// core count and the multiplier.
+func TestResolveWorkers(t *testing.T) {
+	check := func(sizing, totalEdges, edgesPerWorker, wantWorkers, wantCap int) {
+		t.Helper()
+		workers, workCap := resolveWorkers(sizing, totalEdges, edgesPerWorker)
+		require.Equal(t, wantWorkers, workers)
+		require.Equal(t, wantCap, workCap)
+	}
+
+	// off stays off — the cap must never promote a disabled pool.
+	check(0, 1_000_000, 256, 0, 0)
+	check(-1, 1_000_000, 256, 0, 0)
+
+	// sizing binds: 48 < 1_000_000/256 == 3906.
+	check(48, 1_000_000, 256, 48, 3906)
+
+	// the cap binds: 2560/256 == 10 < 48.
+	check(48, 2560, 256, 10, 10)
+
+	// Tie: equal values, so which "bound" is reported is the only difference.
+	check(96, 96*256, 256, 96, 96)
+
+	// A tiny batch clamps the cap to 1, which allocateWorkers treats as no
+	// fan-out rather than as disabled.
+	check(48, 100, 256, 1, 1)
+
+	// The production benchmark shape — 20k edges at the default 256 — caps at 78.
+	// This is why the cap, not the multiplier, governs on a large box: at 1x on
+	// 64 vCPU the sizing still binds, but at 2x and 4x the cap does and the
+	// result stops moving. Reaching 128 workers would need >= 32,768 edges.
+	check(64, 20_000, 256, 64, 78)
+	check(128, 20_000, 256, 78, 78)
+	check(256, 20_000, 256, 78, 78)
+
+	// Lowering edges-per-worker is what actually lifts the ceiling there.
+	check(256, 20_000, 64, 256, 312)
+
+	// Divide-by-zero guard: a misconfigured 0 clamps to 1, so cap == totalEdges.
+	check(48, 2560, 0, 48, 2560)
+
+	// Determinism.
+	w1, c1 := resolveWorkers(48, 2560, 256)
+	w2, c2 := resolveWorkers(48, 2560, 256)
+	require.Equal(t, w1, w2)
+	require.Equal(t, c1, c2)
+}
+
+// runAutoBudgetBatch is runBudgetBatch's per-CPU-sizing sibling: it sets
+// parallelism to the given multiplier (what "auto" resolves to) plus the given
+// edges-per-worker, runs the batch through a fresh pipeline txn, snapshots the
+// conflict-key set, commits, and restores both config fields on return.
+func runAutoBudgetBatch(t *testing.T, perCPU float64, minEdges int,
 	startTs, commitTs uint64, edges []*pb.DirectedEdge) map[uint64]struct{} {
 	t.Helper()
-	oldBudget := x.WorkerConfig.MutationsPipelineGoroutines
-	oldFraction := x.WorkerConfig.MutationsPipelineGoroutinesFraction
-	oldMinEdges := x.WorkerConfig.MutationsPipelineMinEdgesPerWorker
-	x.WorkerConfig.MutationsPipelineGoroutines = mutationsPipelineGoroutinesAuto
-	x.WorkerConfig.MutationsPipelineGoroutinesFraction = fraction
-	x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = minEdges
+	oldPar := x.WorkerConfig.IntraMutationParallelism
+	oldMinEdges := x.WorkerConfig.IntraMutationEdgesPerWorker
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{PerCPU: perCPU}
+	x.WorkerConfig.IntraMutationEdgesPerWorker = minEdges
 	defer func() {
-		x.WorkerConfig.MutationsPipelineGoroutines = oldBudget
-		x.WorkerConfig.MutationsPipelineGoroutinesFraction = oldFraction
-		x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = oldMinEdges
+		x.WorkerConfig.IntraMutationParallelism = oldPar
+		x.WorkerConfig.IntraMutationEdgesPerWorker = oldMinEdges
 	}()
 
 	txn := Oracle().RegisterStartTs(startTs)
@@ -727,10 +798,11 @@ func TestPipelineBudgetAutoByteIdentical(t *testing.T) {
 	// than one worker, so the multi-worker path is genuinely exercised.
 	alloc := allocateWorkers(map[string]int{nameAttr: nameCount, deptAttr: 10, friendAttr: 10}, 10)
 	require.Greater(t, alloc[nameAttr], 1, "test must exercise multi-worker dominant predicate")
-	// Sanity: AUTO with fraction=100 / minEdges=32 derives exactly 10 regardless of
-	// the host's GOMAXPROCS (machineCap >= 100, workCap = 320/32 = 10).
-	require.Equal(t, 10, autoBudget(1, 320, 100, 32))
-	require.Equal(t, 10, autoBudget(256, 320, 100, 32))
+	// Sanity: per-CPU sizing at 100x with edges-per-worker=32 resolves to exactly
+	// 10 regardless of the host's GOMAXPROCS — the cap (320/32) binds, not the
+	// machine.
+	require.Equal(t, 10, mustResolve(x.IntraMutationParallelism{PerCPU: 100}, 1, 320, 32))
+	require.Equal(t, 10, mustResolve(x.IntraMutationParallelism{PerCPU: 100}, 256, 320, 32))
 
 	schemaBytes := []byte(`
 		name: string @index(exact) .
@@ -828,9 +900,9 @@ func BenchmarkPipelineSkewedBatch(b *testing.B) {
 	edges := buildSkewedBatch(nameAttr, deptAttr, friendAttr, 19980) // ~20,000 total
 
 	run := func(b *testing.B, budget int) {
-		old := x.WorkerConfig.MutationsPipelineGoroutines
-		x.WorkerConfig.MutationsPipelineGoroutines = budget
-		defer func() { x.WorkerConfig.MutationsPipelineGoroutines = old }()
+		old := x.WorkerConfig.IntraMutationParallelism
+		x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: budget}
+		defer func() { x.WorkerConfig.IntraMutationParallelism = old }()
 
 		var ts uint64 = 100_000
 		b.ResetTimer()
@@ -875,19 +947,17 @@ func BenchmarkPipelineBudgetSweep(b *testing.B) {
 	friendAttr := x.AttrInRootNamespace("friend")
 	edges := buildSkewedBatch(nameAttr, deptAttr, friendAttr, 19980) // ~20,000 total
 
-	// run sets the budget plus the two AUTO tunables (inert unless budget==-1) and
-	// restores all three on return. fraction/minEdges only matter for the auto case.
-	run := func(b *testing.B, budget int, fraction float64, minEdges int) {
-		oldBudget := x.WorkerConfig.MutationsPipelineGoroutines
-		oldFraction := x.WorkerConfig.MutationsPipelineGoroutinesFraction
-		oldMinEdges := x.WorkerConfig.MutationsPipelineMinEdgesPerWorker
-		x.WorkerConfig.MutationsPipelineGoroutines = budget
-		x.WorkerConfig.MutationsPipelineGoroutinesFraction = fraction
-		x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = minEdges
+	// run sets parallelism plus the edges-per-worker cap and restores both on
+	// return. Unlike the old three-flag form, the cap now applies to fixed worker
+	// counts too, so minEdges is live in every case rather than only for auto.
+	run := func(b *testing.B, par x.IntraMutationParallelism, minEdges int) {
+		oldPar := x.WorkerConfig.IntraMutationParallelism
+		oldMinEdges := x.WorkerConfig.IntraMutationEdgesPerWorker
+		x.WorkerConfig.IntraMutationParallelism = par
+		x.WorkerConfig.IntraMutationEdgesPerWorker = minEdges
 		defer func() {
-			x.WorkerConfig.MutationsPipelineGoroutines = oldBudget
-			x.WorkerConfig.MutationsPipelineGoroutinesFraction = oldFraction
-			x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = oldMinEdges
+			x.WorkerConfig.IntraMutationParallelism = oldPar
+			x.WorkerConfig.IntraMutationEdgesPerWorker = oldMinEdges
 		}()
 
 		var ts uint64 = 200_000
@@ -909,11 +979,13 @@ func BenchmarkPipelineBudgetSweep(b *testing.B) {
 
 	for _, budget := range []int{0, 8, 16, 24, 32, 48, 64, 96} {
 		budget := budget
-		b.Run(fmt.Sprintf("budget=%d", budget), func(b *testing.B) { run(b, budget, 0.5, 256) })
+		b.Run(fmt.Sprintf("budget=%d", budget), func(b *testing.B) {
+			run(b, x.IntraMutationParallelism{Workers: budget}, 256)
+		})
 	}
-	// AUTO uses the production default fraction (1.0); runtime.GOMAXPROCS(0) drives
-	// machineCap = round(GOMAXPROCS * 1.0), capped by edges/minEdgesPerWorker.
+	// "auto" is 1x: runtime.GOMAXPROCS(0) drives the sizing, then the
+	// edges-per-worker cap applies.
 	b.Run("budget=auto", func(b *testing.B) {
-		run(b, mutationsPipelineGoroutinesAuto, 1.0, 256)
+		run(b, x.IntraMutationParallelism{PerCPU: 1.0}, 256)
 	})
 }
