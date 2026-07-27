@@ -92,7 +92,22 @@ func TestLargePredicateMove(t *testing.T) {
 	start := time.Now()
 	t.Logf("loading %d GiB into predicate %q", gib, predicate)
 	triples := loadPayload(t, gc, targetBytes)
-	t.Logf("loaded %d triples (%d GiB) in %v", triples, gib, time.Since(start).Round(time.Second))
+	loadDur := time.Since(start)
+	t.Logf("loaded %d triples (%d GiB) in %v", triples, gib, loadDur.Round(time.Second))
+
+	// The induced failure below needs the move stream to outlast the kill point. A move cannot
+	// run faster than ingest on the same host (it re-reads, rolls up, streams, and re-applies
+	// every byte through the destination's Raft), so requiring bytes/ingestRate >= 2*killAfter
+	// guarantees the kill lands mid-stream. Top up the data if the host is too fast for the
+	// requested size.
+	loadRate := float64(targetBytes) / loadDur.Seconds()
+	if requiredBytes := int64(loadRate * 2 * killAfter.Seconds()); requiredBytes > targetBytes {
+		extra := requiredBytes - targetBytes
+		t.Logf("host ingests %.0f MiB/s; topping up %.1f GiB so the move outlasts the %v kill point",
+			loadRate/(1<<20), float64(extra)/(1<<30), killAfter)
+		triples += loadPayload(t, gc, extra)
+		targetBytes = requiredBytes
+	}
 
 	// Wait for Zero to learn the tablet size. Alphas recompute tablet sizes on a periodic
 	// ticker, so this can take several minutes after the load finishes.
@@ -119,8 +134,8 @@ func TestLargePredicateMove(t *testing.T) {
 	go func() { moveErrCh <- hc.MoveTablet(predicate, dstGroup) }()
 	select {
 	case err := <-moveErrCh:
-		t.Fatalf("move finished before the %v kill point (err=%v); this host moves data too fast"+
-			" for the failure scenario, increase MOVE_TEST_GB", killAfter, err)
+		t.Fatalf("move finished before the %v kill point (err=%v); the move ran faster than the"+
+			" measured ingest rate predicted, increase MOVE_TEST_GB", killAfter, err)
 	case <-time.After(killAfter):
 	}
 	t.Logf("killing destination alpha%d mid-move", dstAlpha)

@@ -31,10 +31,11 @@ Go default of 10m kills the test.
 
 Knobs and requirements:
 
-- `MOVE_TEST_GB` (default 8, minimum 3): value data loaded before the move. Bigger values stretch
-  every phase; the failure scenario needs the move to outlast the 75s kill point, so increase this
-  if the test reports the move finished too fast.
-- Disk: budget roughly 5x `MOVE_TEST_GB` inside the Docker Desktop VM (source + destination copies,
-  Raft WAL, and compaction headroom).
+- `MOVE_TEST_GB` (default 8, minimum 3): value data loaded before the move. This is a floor, not the
+  final size: the test measures the host's ingest rate and tops up automatically until the estimated
+  move duration outlasts the 75s kill point (roughly 17 GiB on a fast laptop NVMe, less on slower
+  disks).
+- Disk: budget roughly 5x the final loaded size inside the Docker Desktop VM (source + destination
+  copies, Raft WAL, and compaction headroom); on a fast host assume ~80-100 GB.
 - Time: about 30 minutes at the default size on an Apple Silicon laptop, dominated by the load and
   the tablet-size reporting interval (Alphas recompute tablet sizes on a periodic ticker).
