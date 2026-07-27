@@ -52,6 +52,14 @@ var (
 	// NumEdges is the total number of edges created so far.
 	NumEdges = ostats.Int64("num_edges_total",
 		"Total number of edges created", ostats.UnitDimensionless)
+	// IntraMutationNoFanout counts mutations whose resolved worker grant gave
+	// every predicate a single worker, i.e. intra-predicate parallelism was
+	// silently inactive for that batch. This happens whenever the resolved
+	// worker count falls below roughly twice the predicate count, which the
+	// operator cannot otherwise observe.
+	IntraMutationNoFanout = ostats.Int64("intra_mutation_no_fanout_total",
+		"Total mutations that ran with no intra-predicate fan-out",
+		ostats.UnitDimensionless)
 	// NumBackups is the number of backups requested
 	NumBackups = ostats.Int64("num_backups_total",
 		"Total number of backups requested", ostats.UnitDimensionless)
@@ -236,6 +244,13 @@ var (
 			Name:        NumEdges.Name(),
 			Measure:     NumEdges,
 			Description: NumEdges.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        IntraMutationNoFanout.Name(),
+			Measure:     IntraMutationNoFanout,
+			Description: IntraMutationNoFanout.Description(),
 			Aggregation: view.Count(),
 			TagKeys:     allTagKeys,
 		},

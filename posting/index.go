@@ -244,15 +244,14 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 	}
 
-	// Fold the historically-fixed 10-way index tokenization into the global
-	// budget. When the budget is disabled (pipeline.workers == 0) this stays at
-	// the legacy numGo=10, so behavior is byte-identical to before. Index
-	// tokenization is a low-fan-in pass (key <pred,token>), so parallelizing it
-	// is safe; the cache-locked merge below still serializes the final write.
-	numGo := 10
-	if pipeline.workers > 0 {
-		numGo = pipeline.workers
-	}
+	// Index tokenization has always run 10-way; the worker grant only ever raises
+	// that, never lowers it. Taking numGo straight from the grant would make the
+	// flag non-monotonic: a one-worker grant — what any pool below ~2x the
+	// predicate count produces — would drop this pass from 10 goroutines to 1,
+	// so enabling parallelism could measurably *reduce* it. Index tokenization is
+	// a low-fan-in pass (key <pred,token>), so extra goroutines are safe; the
+	// cache-locked merge below still serializes the final write.
+	numGo := max(10, pipeline.workers)
 	wg.Add(numGo)
 	chMap := make(map[int]chan uint64)
 
@@ -502,26 +501,12 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 	var cbuf conflictBuf
 	defer mp.txn.flushConflicts(&cbuf)
 
-	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
-	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
-	if pipeline.workers <= 0 {
-		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
-			return mp.txn.AddDelta(k, in, info.isUid, true)
-		}
-		for uid, pl := range postings {
-			if err := writeListDataUid(uid, pl, dataKey, &cbuf, serialStore); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Budget enabled but only one worker: still use the LOCK-FREE concStore. See
-	// the equivalent branch in ProcessSingle/ProcessReverse — the win is escaping
-	// the global txn.cache.Lock() that AddDelta holds across proto.Marshal, not
-	// the goroutine fan-out, and allocateWorkers hands out mostly 1-worker grants
-	// whenever the budget is below ~2x the predicate count.
-	if pipeline.workers == 1 {
+	// One worker: no fan-out, but still the LOCK-FREE concStore. The win here is
+	// escaping the global txn.cache.Lock() that AddDelta holds across
+	// proto.Marshal, not the goroutine fan-out — and allocateWorkers hands out
+	// mostly 1-worker grants whenever the pool is below ~2x the predicate count,
+	// so tying the store choice to workers > 1 would strand the common grant.
+	if pipeline.workers <= 1 {
 		for uid, pl := range postings {
 			if err := writeListDataUid(uid, pl, dataKey, &cbuf, concStore); err != nil {
 				return err
@@ -609,7 +594,12 @@ func findSingleValueInPostingList(pb *pb.PostingList) *pb.Posting {
 // per-target SortAndDedupPostings + Marshal dominates and sharding measures as a
 // net loss. Above it the map holds thousands of independent <~pred,targetUid>
 // keys and the split has real work to spread. Mirrors the spirit of
-// MutationsPipelineMinEdgesPerWorker.
+// IntraMutationEdgesPerWorker.
+//
+// Deliberately a const, not a flag: 256 is an assumption by analogy rather than
+// a measurement (behavior is known at 5 targets and at 600+, but the crossover
+// between them has never been swept), and exposing an uncalibrated knob would
+// work against the flag simplification.
 const reverseParallelMinTargets = 256
 
 func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
@@ -718,38 +708,23 @@ func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *Predic
 		return merged, nil
 	}
 
-	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
-	// Keep the locked AddDelta so the "budget off == byte-identical legacy"
-	// contract holds.
-	if pipeline.workers <= 0 {
-		serialStore := func(k string, in *pb.PostingList) (*pb.PostingList, error) {
-			return mp.txn.AddDelta(k, in, true, true)
-		}
-		for uid, pl := range reverseredMap {
-			if err := writeReverseTarget(uid, pl, key, &cbuf, serialStore); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Budget enabled but no k-way split — either a one-worker grant or too few
-	// distinct targets to be worth partitioning. Still use the LOCK-FREE store.
+	// No k-way split — either a one-worker grant or too few distinct targets to be
+	// worth partitioning. Still use the LOCK-FREE store.
 	//
 	// This split matters more than the goroutine fan-out: the dominant cost of the
-	// legacy loop is not the absence of workers, it is that AddDelta holds the
+	// serial loop is not the absence of workers, it is that AddDelta holds the
 	// GLOBAL txn.cache.Lock() across proto.Marshal, so every concurrent predicate
 	// goroutine at L1 convoys on that one mutex. A single-writer loop through
 	// concStore escapes the convoy without spawning anything. Keeping these two
 	// decisions tied together would strand the common production grant — with P
-	// predicates and a budget below 2*P, allocateWorkers hands out mostly 1s, so
+	// predicates and a pool below 2*P, allocateWorkers hands out mostly 1s, so
 	// nearly every predicate would fall back to the global lock.
 	//
 	// Single-writer safety holds here for the same reason it does in the parallel
 	// path: reverse keys are <~pred,targetUid>, and x.generateKey encodes attrLen
 	// plus a per-type discriminator byte, so no two predicates — and no other key
 	// type — can produce the same key string.
-	if pipeline.workers == 1 || len(reverseredMap) < reverseParallelMinTargets {
+	if pipeline.workers <= 1 || len(reverseredMap) < reverseParallelMinTargets {
 		for uid, pl := range reverseredMap {
 			if err := writeReverseTarget(uid, pl, key, &cbuf, concStore); err != nil {
 				return err
@@ -1365,31 +1340,16 @@ func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *Predica
 	var cbuf conflictBuf
 	defer mp.txn.flushConflicts(&cbuf)
 
-	// Legacy path: the intra-predicate budget is disabled entirely (workers == 0).
-	// Keep the locked AddDelta so "budget off == byte-identical legacy" holds.
-	if pipeline.workers <= 0 {
-		for uid, pl := range postings {
-			if err := writeDataUid(uid, pl, dataKey, &cbuf,
-				func(k string, wpl *pb.PostingList) error {
-					_, err := mp.txn.AddDelta(k, wpl, false, false)
-					return err
-				}); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Budget enabled but only one worker: still use the LOCK-FREE store. The
-	// dominant cost of the legacy loop is not the missing goroutines, it is that
-	// AddDelta holds the GLOBAL txn.cache.Lock() across proto.Marshal, so every
-	// concurrent predicate goroutine at L1 convoys on that one mutex. Tying the
-	// lock-free store to workers > 1 stranded the common production grant:
-	// allocateWorkers hands out mostly 1s when the budget is below ~2x the
-	// predicate count. Single-writer safety is unchanged — <pred,uid> data keys
-	// are one-to-one and distinct predicates cannot collide (x.generateKey
-	// encodes attrLen plus a per-type discriminator byte).
-	if pipeline.workers == 1 {
+	// One worker: no fan-out, but still the LOCK-FREE store. The dominant cost of
+	// the serial loop is not the missing goroutines, it is that AddDelta holds the
+	// GLOBAL txn.cache.Lock() across proto.Marshal, so every concurrent predicate
+	// goroutine at L1 convoys on that one mutex. Tying the lock-free store to
+	// workers > 1 stranded the common production grant: allocateWorkers hands out
+	// mostly 1s when the pool is below ~2x the predicate count. Single-writer
+	// safety is unchanged — <pred,uid> data keys are one-to-one and distinct
+	// predicates cannot collide (x.generateKey encodes attrLen plus a per-type
+	// discriminator byte).
+	if pipeline.workers <= 1 {
 		for uid, pl := range postings {
 			if err := writeDataUid(uid, pl, dataKey, &cbuf, mp.txn.AddDeltaConcurrent); err != nil {
 				return err
@@ -1675,10 +1635,16 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 // merge-light passes (data-write, index tokenization).
 //
 // edgeCounts maps predicate attr -> number of (non-star-delete) edges for that
-// predicate in the batch; budget is x.WorkerConfig.MutationsPipelineGoroutines.
-// Returns nil when the budget is disabled (budget < 2) or there are no
-// predicates. A nil result — and any attr missing from the result — is treated
-// by callers as workers=0, i.e. the legacy one-goroutine-per-predicate path.
+// predicate in the batch; budget is the resolved worker count from
+// resolveWorkers. Returns nil only when there are no predicates.
+//
+// Every predicate gets at least 1, including when the pool is disabled
+// (budget < 2). Callers therefore never see workers == 0: a grant of 1 means
+// "run this predicate's passes on one goroutine", NOT "take the legacy locked
+// store". Those two decisions used to be tied together, which made the
+// disabled setting also opt out of the lock-free store — the single largest
+// win in this whole change — and made the flag non-monotonic. The kill switch
+// is intra-mutation-min-edges=0, which bypasses this path entirely.
 //
 // Apportionment is Hamilton / largest-remainder with a floor of 1:
 //   - If P := len(edgeCounts) >= budget, the batch already saturates the budget
@@ -1698,8 +1664,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 // P < budget, sum(workers_p) == budget.
 func allocateWorkers(edgeCounts map[string]int, budget int) map[string]int {
 	P := len(edgeCounts)
-	if budget < 2 || P == 0 {
+	if P == 0 {
 		return nil
+	}
+	if budget < 2 {
+		// Disabled, or too small to split: one worker each. Still a real grant,
+		// so the lock-free store stays reachable.
+		out := make(map[string]int, P)
+		for attr := range edgeCounts {
+			out[attr] = 1
+		}
+		return out
 	}
 
 	// Deterministic predicate order so the remainder tie-break is stable.
@@ -1786,46 +1761,116 @@ func allocateWorkers(edgeCounts map[string]int, budget int) map[string]int {
 	return out
 }
 
-// mutationsPipelineGoroutinesAuto is the sentinel value of
-// x.WorkerConfig.MutationsPipelineGoroutines that selects AUTO mode: instead of a
-// fixed absolute budget, the per-batch budget is derived at runtime from the
-// machine and the batch size by autoBudget. 0 still disables the budget and any
-// N>0 is still an absolute budget.
-const mutationsPipelineGoroutinesAuto = -1
-
-// autoBudget derives the per-batch intra-predicate goroutine budget at runtime
-// (AUTO mode, mutations-pipeline-goroutines=-1). It is a pure, deterministic
-// function of its inputs — independent of the real GOMAXPROCS — so the formula
-// can be unit-tested directly.
+// resolveWorkers turns the operator's requested pool size into the worker count
+// for one mutation, applying the edges-per-worker cap:
 //
-//	machineCap = max(1, round(gomaxprocs * fraction))
-//	workCap    = max(1, totalEdges / minEdgesPerWorker)
-//	budget     = min(machineCap, workCap)
+//	workCap = max(1, totalEdges / edgesPerWorker)
+//	workers = min(sizing, workCap)      // and 0 stays 0
 //
-// fraction is < 1 by default (0.5) on purpose: the apply phase is serial across
-// transactions, so a single apply effectively owns the whole box, and we want to
-// leave headroom for Badger compaction, concurrent queries, and the GC rather
-// than pin every core to one mutation. workCap mirrors x.DivideAndRule's 256-edge
-// rule — there is no point spinning up a worker per <256 edges. A computed budget
-// of 1 (or anything < 2) feeds into allocateWorkers, which returns nil for
-// budget < 2, so the caller transparently falls back to the legacy
-// one-goroutine-per-predicate path.
-func autoBudget(gomaxprocs, totalEdges int, fraction float64, minEdgesPerWorker int) int {
-	machineCap := int(math.Round(float64(gomaxprocs) * fraction))
-	if machineCap < 1 {
-		machineCap = 1
+// It is pure and deterministic — gomaxprocs is already folded into sizing by
+// x.IntraMutationParallelism.Sizing — so the policy is unit-testable without a
+// runtime.
+//
+// The cap applies to EVERY sizing mode, not just the per-CPU one: "do not spin N
+// workers for a handful of edges" is as true of a fixed count as of a derived
+// one. Making it conditional (as AUTO-only) was what left two of the old four
+// flags inert at their defaults.
+//
+// It is also frequently the binding term rather than a safety net. At the
+// default 256 a 20k-edge mutation caps at 78 workers however many cores exist,
+// so on a large box edgesPerWorker — not the multiplier — is what governs. That
+// is subtle enough that the V(2) grant log names which term won.
+//
+// A result below 2 feeds into allocateWorkers, which floors every predicate at
+// one worker, i.e. no intra-predicate fan-out.
+func resolveWorkers(sizing, totalEdges, edgesPerWorker int) (workers, workCap int) {
+	if sizing <= 0 {
+		return 0, 0
 	}
-	if minEdgesPerWorker < 1 {
-		minEdgesPerWorker = 1 // defensive: avoid divide-by-zero on misconfig
+	if edgesPerWorker < 1 {
+		edgesPerWorker = 1 // defensive: avoid divide-by-zero on misconfig
 	}
-	workCap := totalEdges / minEdgesPerWorker
+	workCap = totalEdges / edgesPerWorker
 	if workCap < 1 {
 		workCap = 1
 	}
-	if machineCap < workCap {
-		return machineCap
+	if sizing < workCap {
+		return sizing, workCap
 	}
-	return workCap
+	return workCap, workCap
+}
+
+// logWorkerGrant reports the resolved intra-predicate worker grant at V(2), and
+// counts the batches that ended up with no fan-out at all.
+//
+// The all-1s grant is the failure mode worth watching. allocateWorkers floors
+// every predicate at one worker, so any budget below roughly twice the
+// predicate count silently degrades to one goroutine per predicate — 25
+// predicates against a budget of 30 yields {1:20 2:5}. Nothing else in the
+// system reports that: the mutation is fully correct and merely runs
+// single-threaded per predicate, so the only symptom is throughput that never
+// responds to the flag.
+//
+// sizing is what the operator asked for and workCap is the edges-per-worker
+// ceiling, so the log can name which of the two actually bound — the part of
+// the resolution that is least visible from the outside.
+func logWorkerGrant(ctx context.Context, workers, sizing, workCap, totalEdges int,
+	edgeCounts, workerAlloc map[string]int) {
+
+	if len(edgeCounts) == 0 {
+		return
+	}
+
+	// Count only the SILENT case: parallelism was asked for, yet the apportionment
+	// still gave nobody more than one worker. workers == 0 means the operator set
+	// it to off, which is a deliberate choice and not worth alerting on.
+	if workers > 0 {
+		fanout := false
+		for _, w := range workerAlloc {
+			if w > 1 {
+				fanout = true
+				break
+			}
+		}
+		if !fanout {
+			ostats.Record(ctx, x.IntraMutationNoFanout.M(1))
+		}
+	}
+
+	if !glog.V(2) {
+		return
+	}
+
+	// Histogram of workers -> predicate count, ordered so successive log lines
+	// are comparable. allocateWorkers covers every attr, so every value is >= 1.
+	hist := make(map[int]int, 4)
+	for attr := range edgeCounts {
+		hist[workerAlloc[attr]]++
+	}
+	widths := make([]int, 0, len(hist))
+	for w := range hist {
+		widths = append(widths, w)
+	}
+	sort.Ints(widths)
+	var grant strings.Builder
+	for i, w := range widths {
+		if i > 0 {
+			grant.WriteByte(' ')
+		}
+		fmt.Fprintf(&grant, "%d:%d", w, hist[w])
+	}
+
+	boundBy := "off"
+	switch {
+	case workers <= 0:
+	case sizing < workCap:
+		boundBy = "parallelism"
+	default:
+		boundBy = "edges-per-worker"
+	}
+
+	glog.Infof("intra-mutation: workers=%d boundBy=%s predicates=%d edges=%d grant={%s}",
+		workers, boundBy, len(edgeCounts), totalEdges, grant.String())
 }
 
 // Process is the entry point for the mutation pipeline. It fans out one goroutine per
@@ -1879,13 +1924,11 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	// once per call from GOMAXPROCS and the batch size before apportionment. AUTO
 	// only chooses the integer fed into allocateWorkers — the apportionment and the
 	// whole downstream path are identical to a fixed budget of that value.
-	budget := x.WorkerConfig.MutationsPipelineGoroutines
-	if budget == mutationsPipelineGoroutinesAuto {
-		budget = autoBudget(runtime.GOMAXPROCS(0), totalEdges,
-			x.WorkerConfig.MutationsPipelineGoroutinesFraction,
-			x.WorkerConfig.MutationsPipelineMinEdgesPerWorker)
-	}
-	workerAlloc := allocateWorkers(edgeCounts, budget)
+	sizing := x.WorkerConfig.IntraMutationParallelism.Sizing(runtime.GOMAXPROCS(0))
+	workers, workCap := resolveWorkers(sizing, totalEdges,
+		x.WorkerConfig.IntraMutationEdgesPerWorker)
+	workerAlloc := allocateWorkers(edgeCounts, workers)
+	logWorkerGrant(ctx, workers, sizing, workCap, totalEdges, edgeCounts, workerAlloc)
 
 	predicates := map[string]*PredicatePipeline{}
 	var wg sync.WaitGroup
