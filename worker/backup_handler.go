@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -74,6 +75,16 @@ func createBackupFile(h UriHandler, uri *url.URL, req *pb.BackupRequest) (io.Wri
 
 func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
+}
+
+// cleanRelPath anchors path at the root and cleans it so that a leading
+// separator or any number of ".." segments can never resolve above a handler's
+// root. It mirrors the containment in http.Dir.Open. The "path" field of a
+// backup manifest is read back from the backup location, so a manifest planted
+// there must not be able to steer reads/writes outside the handler root.
+func cleanRelPath(path string) string {
+	sep := string(filepath.Separator)
+	return strings.TrimPrefix(filepath.Join(sep, filepath.FromSlash(path)), sep)
 }
 
 // UriHandler interface is implemented by URI scheme handlers.
@@ -161,7 +172,7 @@ func (h *fileHandler) FileExists(path string) bool      { return pathExist(h.Joi
 func (h *fileHandler) Read(path string) ([]byte, error) { return os.ReadFile(h.JoinPath(path)) }
 
 func (h *fileHandler) JoinPath(path string) string {
-	return filepath.Join(h.rootDir, h.prefix, path)
+	return filepath.Join(h.rootDir, h.prefix, cleanRelPath(path))
 }
 func (h *fileHandler) Stream(path string) (io.ReadCloser, error) {
 	return os.Open(h.JoinPath(path))
@@ -288,7 +299,7 @@ func (h *s3Handler) FileExists(path string) bool {
 }
 
 func (h *s3Handler) JoinPath(path string) string {
-	return filepath.Join(h.bucketName, h.objectPrefix, path)
+	return filepath.Join(h.bucketName, h.objectPrefix, cleanRelPath(path))
 }
 
 func (h *s3Handler) Read(path string) ([]byte, error) {
@@ -410,5 +421,5 @@ func (h *s3Handler) Rename(srcPath, dstPath string) error {
 }
 
 func (h *s3Handler) getObjectPath(path string) string {
-	return filepath.Join(h.objectPrefix, path)
+	return filepath.Join(h.objectPrefix, cleanRelPath(path))
 }
