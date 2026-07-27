@@ -370,3 +370,25 @@ func TestGetBatchSinglePostingRepeatedReadsStable(t *testing.T) {
 	require.Equal(t, vals(single1), vals(fresh),
 		"reads through a fresh cache must match the primed cache's reads")
 }
+
+// TestBatchedSinglePostingIteratorEachKeyOwnValue: 25 committed keys with distinct
+// values, consumed through the chunked iterator (batches of 10, as handleValuePostings
+// does). Every sequential call must yield that position's own value — in particular
+// across batch boundaries (positions 10 and 20) and past the final short batch.
+func TestBatchedSinglePostingIteratorEachKeyOwnValue(t *testing.T) {
+	attr := x.AttrInRootNamespace("batchIterOwnValue")
+	keys := make([][]byte, 25)
+	for i := 0; i < 25; i++ {
+		keys[i] = x.DataKey(attr, uint64(i+1))
+		commitValuePosting(t, keys[i], fmt.Appendf(nil, "val%d", i+1), uint64(2*i+3), uint64(2*i+4))
+	}
+
+	lc := NewLocalCache(100)
+	next := lc.NewBatchedSinglePostingIterator(25, func(j int) []byte { return keys[j] })
+	for i := 0; i < 25; i++ {
+		pl, err := next()
+		require.NoError(t, err)
+		require.Equal(t, fmt.Sprintf("val%d", i+1), string(singleValue(t, pl)),
+			"call %d must yield key %d's own value", i, i+1)
+	}
+}
