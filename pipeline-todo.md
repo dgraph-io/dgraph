@@ -434,9 +434,10 @@ Two things this reveals that the synthetic corpus hid:
 
 1. **Absolute throughput is far lower (1.5 MB/s vs 13 MB/s)** because this
    workload is *abort*-dominated: only ~283 of 532 files commit, the rest give up
-   after 6 retries. The ceiling here is Zero's conflict arbitration, not the
-   apply path — which is exactly the contention the production client's
-   Caffeine lock layer exists to avoid.
+   after 6 retries — exactly the contention the production client's Caffeine
+   lock layer exists to avoid. (An earlier revision of this bullet attributed the
+   ceiling to "Zero's conflict arbitration". That is wrong; Zero is idle. See
+   §5a.)
 2. The relative gain (+17.6%) is **half** the synthetic figure (+36.8%), which is
    the expected dilution from a realistic predicate mix. Quote the 17.6% number
    for production expectations, not the 36.8%.
@@ -458,11 +459,22 @@ letting them abort):
 | 8 | 2.31 | **2.67** | 1.16x | 65,918 | **76,008** | ~368 / 532 | ~1,470 |
 | 16 | 1.48 | **1.74** | 1.18x | 44,699 | 52,357 | ~283 / 532 | ~1,860 |
 
-**Throughput more than triples as client threads DROP from 16 to 2** (1.48 ->
-5.30 MB/s on stock; 44.7k -> 143k nquads/s). Aborts fall 1,860 -> 380 and
-committed files rise 283 -> 502 of 532. On this workload the Alpha is not the
-constraint at all — Zero's conflict arbitration over `@upsert` re-asserts is,
-and every extra client thread buys more aborted work than committed work.
+**Throughput more than triples as client threads DROP from 16 to 2** — "triples"
+here is the verb, 3.58x, not RDF triples (1.48 -> 5.30 MB/s on stock; 44.7k ->
+143k nquads/s). Aborts fall 1,860 -> 380 and committed files rise 283 -> 502 of
+532. Every extra client thread buys more aborted work than committed work.
+
+**The mechanism is wasted apply work, not a slow Zero.** An earlier revision of
+this section named "Zero's conflict arbitration over `@upsert` re-asserts" as the
+constraint. Profiling says otherwise — see §5a. What actually happens: an
+aborted transaction still takes a startTs, still gets proposed through Raft, and
+still runs a full pre-write through the *serial* apply loop before being
+discarded. At 16 threads the Alpha performs ~2,100 mutation applies to commit
+~283 files, so **~85% of apply work is thrown away**, and the apply loop is
+68-88% occupied doing it.
+
+The distinction is actionable: making Zero faster buys nothing, while causing
+fewer conflicts buys ~3x.
 
 Two consequences worth acting on:
 
@@ -477,3 +489,71 @@ Two consequences worth acting on:
 
 Abort counts track each other across every thread count (380/379, 945/931,
 1465/1479, 1855/1857) — conflict semantics unchanged, as intended.
+
+## 5a. The control: it is aborts, not concurrency — and Zero is idle
+
+The sweep above shows throughput falling as threads rise, but on its own it
+cannot separate "aborts are expensive" from "concurrency is expensive". Two
+measurements settle it.
+
+### Same sweep on a corpus with zero aborts
+
+Reverse-heavy corpus (25 `[uid] @reverse`, no `@upsert`, so no conflicts), same
+box, same binary, 180 s runs, `intra-mutation-parallelism=auto`:
+
+| threads | triples/s | vs 2 threads |
+|---:|---:|---:|
+| 2 | 92,982 | — |
+| 8 | 120,581 | +30% |
+| 16 | 130,136 | +40% |
+| 64 | 134,173 | +44% |
+
+**Opposite direction to the abort-heavy sweep.** Conflict-free throughput *rises*
+monotonically with client threads; abort-heavy throughput *falls* 3.2x over the
+same range. Concurrency is not what hurts — aborts are. High thread counts are
+actively good when there is nothing to conflict on.
+
+### Zero is not the bottleneck
+
+Profiled during a 16-thread production-replica run (`ec2-harness/zeroprof.sh`,
+`analyze_zero.py`):
+
+- **5.39 s of CPU over 60 s — 9% of ONE core** on a 64-vCPU box.
+- Goroutine count flat at 42-47; every park site sits at exactly one goroutine
+  per dump, i.e. idle server loops.
+- **One sample inside `Oracle.commit` out of 1,695.**
+
+Zero decides those ~1,860 aborts essentially for free. Of the little CPU it does
+use, ~25% is the conflict-key wire format (`consumeStringSliceValidateUTF8`
+18.9%, `strconv.ParseUint` 5.0%, 70% of the latter under `hasConflict`) because
+`TxnContext.Keys` is `repeated string` base-36 that Zero parses back to uint64.
+Worth knowing for a far larger cluster; worth nothing at this scale.
+
+Also noted: **Zero publishes no transaction metrics at all** — its Prometheus
+endpoint carries only badger, memory and raft-leader gauges. No commits, aborts,
+lease or subscriber counters. The subscriber-overflow drop stays invisible.
+
+### What this says the lock cache is worth
+
+Lining the numbers up, all on the same box:
+
+| configuration | throughput | |
+|---|---:|---|
+| apply-loop ceiling (conflict-free, 16-64 thr) | 130-134k/s | the wall |
+| abort-heavy @ 2 threads | 143k nquads/s | already at the wall |
+| abort-heavy @ 16 threads | 44.7k nquads/s | 3.2x below it |
+
+A client-side transaction lock should recover the 16-thread case to roughly the
+130-143k range — about **3x** — without touching thread count. Two caveats:
+
+1. **It does not beat the 2-thread result, it reaches it.** The lock removes
+   abort waste; it does not lift the serial apply loop. Even conflict-free the
+   curve saturates hard (2->8 is +30%, 8->16 is +8%, 16->64 is +3%), so past
+   ~16 threads more concurrency buys nothing either way.
+2. **Its advantage over simply dropping threads** is that it serialises only
+   *conflicting* writes, leaving independent work fully parallel — so the benefit
+   scales with the independent fraction of the workload, and the operator does
+   not have to guess a thread count.
+
+Reproduce: `ec2-harness/threadctl.sh` (conflict-free sweep) and
+`ec2-harness/zeroprof.sh` + `analyze_zero.py` (Zero profile).
