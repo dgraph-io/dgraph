@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -538,7 +537,6 @@ func initMemoryLayer(cacheSize int64, removeOnUpdate bool) *MemoryLayer {
 			for range ticker {
 				// Record the posting list cache hit ratio
 				ostats.Record(context.Background(), x.PLCacheHitRatio.M(m.Ratio()))
-				fmt.Println("CACHE STATS: ", ml.cache.numCacheRead.Load(), ml.cache.numCacheReadFails.Load(), ml.cache.numCacheSave.Load())
 
 				if EnableDetailedMetrics {
 					x.NumPostingListCacheSave.M(ml.cache.numCacheSave.Load())

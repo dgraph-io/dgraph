@@ -385,57 +385,118 @@ func (lc *LocalCache) GetSinglePosting(key []byte) (*pb.PostingList, error) {
 	return pl, nil
 }
 
+// GetBatchSinglePosting is the batched equivalent of GetSinglePosting: for every key,
+// the result at the same position is exactly what GetSinglePosting(key) would return —
+// the transaction's own local-cache state when present, otherwise the latest version in
+// badger (fetched for all cache misses in a single Txn.GetBatch call), with the same
+// delete-all and Del-posting filtering applied per key.
 func (lc *LocalCache) GetBatchSinglePosting(keys [][]byte) ([]*pb.PostingList, error) {
 	results := make([]*pb.PostingList, len(keys))
-	remaining_keys := make([][]byte, 0)
+	remainingKeys := make([][]byte, 0, len(keys))
+	remainingIdx := make([]int, 0, len(keys))
 	for i, key := range keys {
-		if pl, err := lc.GetSinglePostingFromLocalCache(key); pl != nil && err != nil {
+		pl, err := lc.GetSinglePostingFromLocalCache(key)
+		if err != nil {
+			return nil, err
+		}
+		if pl != nil {
 			results[i] = pl
 		} else {
-			remaining_keys = append(remaining_keys, key)
+			remainingKeys = append(remainingKeys, key)
+			remainingIdx = append(remainingIdx, i)
 		}
 	}
 
-	txn := pstore.NewTransactionAt(lc.startTs, false)
-	items, err := txn.GetBatch(remaining_keys)
-	if err != nil {
-		fmt.Println(err, keys)
-		return nil, err
+	if len(remainingKeys) > 0 {
+		txn := pstore.NewTransactionAt(lc.startTs, false)
+		defer txn.Discard()
+		items, err := txn.GetBatch(remainingKeys)
+		if err != nil {
+			return nil, err
+		}
+		x.AssertTrue(len(items) == len(remainingKeys))
+		for j, item := range items {
+			if item == nil {
+				// Absent in badger: the batched analogue of ErrKeyNotFound, which
+				// GetSinglePosting maps to a nil posting list.
+				continue
+			}
+			pl := &pb.PostingList{}
+			err := item.Value(func(val []byte) error {
+				return proto.Unmarshal(val, pl)
+			})
+			if err != nil {
+				return nil, err
+			}
+			results[remainingIdx[j]] = pl
+		}
 	}
-	idx := 0
 
-	for i := 0; i < len(results); i++ {
-		if results[i] != nil {
+	// Apply GetSinglePosting's posting filter per key: a delete-all wipes that key only,
+	// and Del postings are dropped.
+	for i, pl := range results {
+		if pl == nil {
 			continue
 		}
-		pl := &pb.PostingList{}
-		err = items[idx].Value(func(val []byte) error {
-			if err := proto.Unmarshal(val, pl); err != nil {
-				return err
+		keep := 0
+		wiped := false
+		for _, p := range pl.Postings {
+			if hasDeleteAll(p) {
+				wiped = true
+				break
 			}
-			return nil
-		})
-		idx += 1
-		results[i] = pl
-	}
-
-	for i := 0; i < len(results); i++ {
-		pl := results[i]
-		idx := 0
-		for _, postings := range pl.Postings {
-			if hasDeleteAll(postings) {
-				return nil, nil
-			}
-			if postings.Op != Del {
-				pl.Postings[idx] = postings
-				idx++
+			if p.Op != Del {
+				pl.Postings[keep] = p
+				keep++
 			}
 		}
-		pl.Postings = pl.Postings[:idx]
-		results[i] = pl
+		if wiped {
+			results[i] = nil
+			continue
+		}
+		pl.Postings = pl.Postings[:keep]
 	}
 
-	return results, err
+	return results, nil
+}
+
+// batchSinglePostingSize is the number of keys fetched from badger in one
+// GetBatchSinglePosting call by NewBatchedSinglePostingIterator.
+const batchSinglePostingSize = 10
+
+// NewBatchedSinglePostingIterator returns a function that, on its i-th call, yields the
+// posting list for key i (callers must consume sequentially from 0 to n-1 — the access
+// pattern of handleValuePostings' per-goroutine loop). Keys are materialized lazily via
+// keyAt and fetched in batches of batchSinglePostingSize through GetBatchSinglePosting.
+func (lc *LocalCache) NewBatchedSinglePostingIterator(
+	n int, keyAt func(int) []byte) func() (*pb.PostingList, error) {
+
+	var buf []*pb.PostingList
+	next := 0 // index of the first key not yet buffered
+	return func() (*pb.PostingList, error) {
+		if len(buf) == 0 {
+			hi := next + batchSinglePostingSize
+			if hi > n {
+				hi = n
+			}
+			keys := make([][]byte, 0, hi-next)
+			for j := next; j < hi; j++ {
+				keys = append(keys, keyAt(j))
+			}
+			batch, err := lc.GetBatchSinglePosting(keys)
+			if err != nil {
+				return nil, err
+			}
+			buf = batch
+			next = hi
+		}
+		pl := buf[0]
+		// Always advance: when the chunk is exhausted, buf becomes empty and the next
+		// call fetches the next chunk. (Not advancing on the last element made every
+		// later call reuse it and prevented the refill.)
+		buf = buf[1:]
+		return pl, nil
+	}
 }
 
 // Get retrieves the cached version of the list associated with the given key.

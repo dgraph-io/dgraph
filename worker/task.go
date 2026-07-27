@@ -455,7 +455,12 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		out := &pb.Result{}
 		outputs[start/width] = out
 
-		cache := make([]*pb.PostingList, 0)
+		// Value postings are fetched through the batched iterator: it yields the posting
+		// list for uid start+j on its j-th call, reading badger in chunks instead of one
+		// key at a time.
+		nextPL := qs.cache.NewBatchedSinglePostingIterator(end-start, func(j int) []byte {
+			return x.DataKey(q.Attr, q.UidList.Uids[start+j])
+		})
 		for i := start; i < end; i++ {
 			select {
 			case <-ctx.Done():
@@ -470,22 +475,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			fcs := &pb.FacetsList{FacetsList: make([]*pb.Facets, 0)} // TODO Figure out how it is stored
 
 			if !getMultiplePosting {
-				if len(cache) == 0 {
-					keys := make([][]byte, 10)
-					keys[0] = key
-					lastI := 0
-					for j := i + 1; j < i+10 && j < end; j++ {
-						keys[j-i] = x.DataKey(q.Attr, q.UidList.Uids[j])
-						lastI = j - i
-					}
-					cache, err = qs.cache.GetBatchSinglePosting(keys[:lastI+1])
-					if err != nil {
-						return err
-					}
-				}
-				pl := cache[0]
-				if len(cache) > 1 {
-					cache = cache[1:]
+				pl, err := nextPL()
+				if err != nil {
+					return err
 				}
 				if pl == nil || len(pl.Postings) == 0 {
 					out.UidMatrix = append(out.UidMatrix, &pb.List{})

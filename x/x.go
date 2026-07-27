@@ -1006,8 +1006,10 @@ func DivideAndRule(num int) (numGo, width int) {
 	numGo, width = 64, 0
 	for ; numGo >= 1; numGo /= 2 {
 		widthF := math.Ceil(float64(num) / float64(numGo))
-		width = int(widthF)
-		return
+		if numGo == 1 || widthF >= 256.0 {
+			width = int(widthF)
+			return
+		}
 	}
 	return
 }
