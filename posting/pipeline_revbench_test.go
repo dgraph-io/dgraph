@@ -55,17 +55,15 @@ func buildScalarIndexedEdges(attr string, n, distinct int) []*pb.DirectedEdge {
 	return edges
 }
 
-func runBudget(b *testing.B, edges []*pb.DirectedEdge, budget int, fraction float64, minEdges int) {
-	ob := x.WorkerConfig.MutationsPipelineGoroutines
-	of := x.WorkerConfig.MutationsPipelineGoroutinesFraction
-	om := x.WorkerConfig.MutationsPipelineMinEdgesPerWorker
-	x.WorkerConfig.MutationsPipelineGoroutines = budget
-	x.WorkerConfig.MutationsPipelineGoroutinesFraction = fraction
-	x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = minEdges
+func runBudget(b *testing.B, edges []*pb.DirectedEdge, par x.IntraMutationParallelism,
+	minEdges int) {
+	ob := x.WorkerConfig.IntraMutationParallelism
+	om := x.WorkerConfig.IntraMutationEdgesPerWorker
+	x.WorkerConfig.IntraMutationParallelism = par
+	x.WorkerConfig.IntraMutationEdgesPerWorker = minEdges
 	defer func() {
-		x.WorkerConfig.MutationsPipelineGoroutines = ob
-		x.WorkerConfig.MutationsPipelineGoroutinesFraction = of
-		x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = om
+		x.WorkerConfig.IntraMutationParallelism = ob
+		x.WorkerConfig.IntraMutationEdgesPerWorker = om
 	}()
 	var ts uint64 = 300_000
 	b.ResetTimer()
@@ -93,9 +91,9 @@ func BenchmarkReverseDominant(b *testing.B) {
 
 	for _, bud := range []int{0, 8, 32} {
 		bud := bud
-		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 	}
-	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, mutationsPipelineGoroutinesAuto, 1.0, 256) })
+	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{PerCPU: 1.0}, 256) })
 }
 
 // BenchmarkReverseHighCardinality: ~20k edges on a single `[uid] @reverse`
@@ -113,9 +111,9 @@ func BenchmarkReverseHighCardinality(b *testing.B) {
 
 	for _, bud := range []int{0, 8, 32} {
 		bud := bud
-		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 	}
-	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, mutationsPipelineGoroutinesAuto, 1.0, 256) })
+	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{PerCPU: 1.0}, 256) })
 }
 
 // BenchmarkReverseMultiPredicate: ~20k edges spread over N CONCURRENT
@@ -132,9 +130,11 @@ func BenchmarkReverseHighCardinality(b *testing.B) {
 // the single-predicate number understates the production gain.
 func BenchmarkReverseMultiPredicate(b *testing.B) {
 	const totalEdges = 19980
-	// 25 predicates + budget=30 is the shipped production shape: worker/server_state.go
-	// defaults mutations-pipeline-goroutines=30, and allocateWorkers hands 25
-	// predicates a {1:20, 2:5} grant — i.e. most predicates get a ONE-worker grant.
+	// 25 predicates + budget=30 was the shipped production shape before
+	// intra-mutation-parallelism defaulted to auto: allocateWorkers hands 25
+	// predicates a {1:20, 2:5} grant — i.e. most predicates get a ONE-worker
+	// grant. Kept as a benchmark row because it is the cliff the default used to
+	// sit on, and the case auto exists to avoid.
 	for _, nPred := range []int{1, 4, 8, 16, 25} {
 		nPred := nPred
 		b.Run(fmt.Sprintf("preds=%d", nPred), func(b *testing.B) {
@@ -163,7 +163,7 @@ func BenchmarkReverseMultiPredicate(b *testing.B) {
 			}
 			for _, bud := range []int{0, 30, 32} {
 				bud := bud
-				b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+				b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 			}
 		})
 	}
@@ -206,7 +206,7 @@ func BenchmarkReverseHighCardConcurrent(b *testing.B) {
 			}
 			for _, bud := range []int{0, 30} {
 				bud := bud
-				b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+				b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 			}
 		})
 	}
@@ -230,9 +230,9 @@ func BenchmarkReverseFiftyFifty(b *testing.B) {
 
 	for _, bud := range []int{0, 8, 32} {
 		bud := bud
-		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 	}
-	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, mutationsPipelineGoroutinesAuto, 1.0, 256) })
+	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{PerCPU: 1.0}, 256) })
 }
 
 // BenchmarkScalarDominant: control — ~20k edges, dominant scalar `@index`
@@ -247,7 +247,7 @@ func BenchmarkScalarDominant(b *testing.B) {
 
 	for _, bud := range []int{0, 8, 32} {
 		bud := bud
-		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, bud, 1.0, 256) })
+		b.Run(fmt.Sprintf("budget=%d", bud), func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{Workers: bud}, 256) })
 	}
-	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, mutationsPipelineGoroutinesAuto, 1.0, 256) })
+	b.Run("budget=auto", func(b *testing.B) { runBudget(b, edges, x.IntraMutationParallelism{PerCPU: 1.0}, 256) })
 }
