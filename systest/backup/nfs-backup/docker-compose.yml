@@ -103,7 +103,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false;" --raft "idx=1;"
-      --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall
+      --my=zero1_backup_clust_ha:5080 --replicas=3 --logtostderr -v=2 --bindall --security
+      "whitelist=0.0.0.0/0;"
 
   zero2_backup_clust_ha:
     image: dgraph-nfs-client:local
@@ -310,7 +311,8 @@ services:
         read_only: true
     command:
       /gobin/dgraph  ${COVERAGE_OUTPUT} zero --telemetry "reports=false;" --raft "idx=1;"
-      --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall
+      --my=zero7_backup_clust_non_ha:5080 --replicas=1 --logtostderr -v=2 --bindall --security
+      "whitelist=0.0.0.0/0;"
 
   alpha7_backup_clust_non_ha:
     image: dgraph-nfs-client:local
