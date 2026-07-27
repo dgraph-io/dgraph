@@ -21,6 +21,24 @@ Binaries built on the instance from the same tree and verified to differ by
 disassembly: stock `ProcessReverse` references only `(*Txn).AddDelta`; patched
 references both `AddDeltaConcurrent` and the legacy `AddDelta`.
 
+> **Flag names below are the pre-simplification ones.** Every run recorded here
+> predates the `intra-mutation-*` rename, and the tables are left verbatim so
+> they still describe what was actually executed. To reproduce:
+>
+> | as run | today |
+> |---|---|
+> | `mutations-pipeline-threshold=1` | `intra-mutation-min-edges=1` |
+> | `mutations-pipeline-goroutines=30` | `intra-mutation-parallelism=30` |
+> | `mutations-pipeline-goroutines=0` | `intra-mutation-parallelism=off` |
+> | `mutations-pipeline-goroutines=-1` (auto) | `intra-mutation-parallelism=auto` |
+> | `mutations-pipeline-goroutines-fraction=F` | `intra-mutation-parallelism=Fx` |
+> | `mutations-pipeline-min-edges-per-worker=N` | `intra-mutation-edges-per-worker=N` |
+>
+> One behavioral caveat when re-running: the edges-per-worker cap now applies to
+> fixed counts too, not only to auto. At the 20k-edge batch used here the cap is
+> 78 and the fixed budget was 30, so the cap never binds and these numbers stand
+> unchanged.
+
 ## Results
 
 ### budget = 30 (the shipped production default), 2 paired runs each
@@ -60,8 +78,9 @@ budget" free win hypothesised earlier is **not** supported.
 
 **+18.8% over stock at the production default.** Note the budget stops mattering
 once the lock-free store is reachable at any grant — auto and 30 now agree to
-within noise. Tuning `mutations-pipeline-goroutines` is no longer load-bearing
-for this workload, which removes a whole class of misconfiguration.
+within noise. Tuning the worker count is no longer load-bearing for this
+workload, which removes a whole class of misconfiguration — and is part of why
+the four tuning flags were later collapsed into `intra-mutation-parallelism`.
 
 ### Adding conflict-key batching (`5b69ac2b4`)
 
