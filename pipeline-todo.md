@@ -46,49 +46,110 @@ throughput, not by effort.
 
 ---
 
-## 1. Simplify the flags
+## 1. Simplify the flags — DONE
 
-The pipeline now has **four** superflag knobs, and a fifth is proposed. That is
-too many for something whose correct setting is not obvious to an operator.
+Four knobs became **three**, all live at every setting, renamed to say what they
+scope: `intra-mutation-*`.
 
-Current (`worker/server_state.go:45-48`, `dgraph/cmd/alpha/run.go:267-310`):
-
-| flag | default | what it really controls |
+| was | now | default |
 |---|---|---|
-| `mutations-pipeline-threshold` | 1 | use pipeline vs legacy path |
-| `mutations-pipeline-goroutines` | 30 | L2 intra-predicate budget (`-1` = auto) |
-| `mutations-pipeline-goroutines-fraction` | 1.0 | AUTO only: fraction of GOMAXPROCS |
-| `mutations-pipeline-min-edges-per-worker` | 256 | AUTO only: edges/worker cap |
-| *(proposed)* `mutations-pipeline-min-targets-per-worker` | 256 | reverse split threshold |
+| `mutations-pipeline-threshold` | `intra-mutation-min-edges` | 1 |
+| `mutations-pipeline-goroutines` + `-goroutines-fraction` | `intra-mutation-parallelism` (`off｜auto｜N｜Fx`) | `auto` |
+| `mutations-pipeline-min-edges-per-worker` | `intra-mutation-edges-per-worker` | 256 |
 
-Problems:
-- Two of the four are **inert unless `goroutines == -1`**, which is not the
-  default — so most operators are tuning flags that do nothing.
-- The fixed default of **30 sits exactly on the `allocateWorkers` cliff**: with
-  25 predicates it yields a `{1:20, 2:5}` grant, i.e. 20 of 25 predicates get a
-  one-worker grant. A budget below ~2x the predicate count effectively disables
-  intra-predicate parallelism, silently.
-- `reverseParallelMinTargets` is currently a compile-time `const`
-  (`posting/index.go`), so it cannot be tuned at all.
+What the fix actually was, beyond the count:
 
-Proposed:
-- Make **AUTO the default** (`goroutines=-1`) so the budget scales with the box
-  instead of a magic 30 that is wrong on both an 8-core and a 148-core machine.
-- Collapse `goroutines-fraction` + `min-edges-per-worker` into the auto policy,
-  or document them as advanced/diagnostic only.
-- Express the reverse threshold as **targets-per-worker**, consistent with the
-  edges-per-worker vocabulary already used, rather than an absolute constant.
-- Emit a `glog.V(2)` line or a metric when a batch's grant is all-1s, so the
-  silent-disable case is observable.
+- **The two "inert unless `goroutines == -1`" flags were not deleted — the
+  conditional was.** `edges-per-worker` now caps every sizing mode, so "do not
+  spin N workers for a handful of edges" holds for a fixed count as much as a
+  derived one. That is what removed the inertness; deleting the flags would have
+  hidden the problem instead.
+- **`goroutines` and `-fraction` were the same axis in two notations**, not two
+  settings. One was a worker count, the other a multiple of GOMAXPROCS — and the
+  first doubled as the tag selecting which of the two was read. They merged into
+  one value taking `N` or `Fx`. The `-1` sentinel is gone; `auto` == `1x`.
+- **`auto` is now the default**, so the pool tracks the box rather than a magic
+  30 that was wrong on both an 8-core and a 148-core machine.
+- **`edges-per-worker` deliberately stayed a flag.** 256 was adopted by analogy
+  to `DivideAndRule` and never measured, and it is the *binding* term on a large
+  box: at 256 a 20k-edge mutation caps at **78 workers however many cores
+  exist**. Freezing an unmeasured number that governs large-box behavior was the
+  wrong thing to make permanent. Revisit after the 148-core sweep in §3.
+- **The proposed fifth flag was not added.** `reverseParallelMinTargets` stays a
+  `const` until §3 calibrates it — shipping an uncalibrated knob works against
+  this cleanup.
 
-### 1a. `WorkerOptions.String()` hides the pipeline config
-`x/config.go:206-210` hand-formats the struct and stops at `Audit:%v}` — none of
-the `MutationsPipeline*` fields are printed. The startup log line
-`glog.Infof("x.WorkerConfig: %+v")` therefore does **not** show the effective
-pipeline settings. This cost real time during live debugging: the log could not
-confirm whether the budget was 30 or 0. Add the fields to `String()`.
+### Two things the trace turned up that were not in the original write-up
+
+1. **`goroutines=1` was silently identical to `goroutines=0`**
+   (`allocateWorkers` returned nil for `budget < 2`), while **`goroutines=2`
+   with 25 predicates gave every predicate a lock-free 1-worker grant** via the
+   `P >= budget` short-circuit. The cheapest good setting looked inert.
+   Confirmed against the code: at 25 equal predicates, budget 2 → `{1:25}`,
+   30 → `{1:20 2:5}`, 50 (2×P) → `{2:25}`, 64 → `{2:11 3:14}`, 78 → `{3:22 4:3}`.
+2. **`-fraction` saturated.** Because the result was `min(machineCap, workCap)`,
+   raising fraction stopped changing anything above ≈1.22 on the 64-vCPU /
+   20k-edge shape. The help text's advice to "raise above 1.0 to oversubscribe,
+   peak near 2-3x cores" was therefore **unfollowable at that batch size** —
+   reaching 128 needs ≥32,768 edges. That advice came from the 8-core box, where
+   `workCap` was nowhere near binding. Corollary: on the 148-core box earmarked
+   for the §3 sweep, the old auto would derive **78, not 148**.
+
+   Both are pinned by `TestResolveWorkers` / `TestParallelismSizing` so they
+   cannot silently regress.
+
+### 1a. `WorkerOptions.String()` hid the pipeline config — DONE
+`x/config.go` hand-formats the struct and stopped at `Audit:%v}`, so the startup
+`glog.Infof("x.WorkerConfig: %+v")` never showed the effective settings. This
+cost real time during live debugging — the log could not confirm whether the
+budget was 30 or 0. The three `IntraMutation*` fields are now printed.
+
+### 1b. Observability — DONE
+- `glog.V(2)` line after `allocateWorkers` reporting resolved workers, **which
+  term bound** (`boundBy=parallelism` vs `edges-per-worker` — the least visible
+  part, given the saturation above), predicate count, edges, and the grant
+  histogram.
+- `intra_mutation_no_fanout_total` counts batches whose grant was all-1s, i.e.
+  the silent-degradation case. Explicitly *not* incremented when parallelism is
+  `off`, which is a deliberate operator choice rather than a surprise.
 
 ---
+
+## 1c. NEW FINDING — the pipeline and the legacy path disagree, and always have
+
+Surfaced while decoupling the lock-free store from the worker grant. That change
+deleted the in-pipeline `workers == 0` branches, which were an in-pipeline
+replica of legacy semantics and the baseline `TestSchemaMatrixByteIdentical`
+compared against. Replacing that baseline with the **real** legacy path (a serial
+`runMutation` loop — what `intra-mutation-min-edges=0` actually selects) made the
+matrix compare pipeline-vs-legacy for the first time, and it does not match.
+
+**All three divergences were measured on the pre-change tree** (`308ea6b35`, in a
+clean worktree, pipeline at the old disabled budget) and are therefore unrelated
+to the flag work:
+
+| schema | measurement | direction |
+|---|---|---|
+| `uid @reverse` | legacy 600 conflict keys, pipeline **1200** | pipeline superset (safe: extra aborts) |
+| `string @index(fulltext) @lang` | legacy 3000, pipeline 4800, **600 dropped that legacy emits** | pipeline drops keys — **the unsafe direction** |
+| `[uid] @reverse @count` | legacy 726 state keys, pipeline 607 | 119 legacy-only keys, **all empty**, 0 differing values |
+
+Committed state otherwise matches exactly across every schema and tokenizer in
+the matrix; the count difference is emptied buckets legacy leaves behind and the
+pipeline never creates, so the pipeline's output is the cleaner one.
+
+**The `@lang` case deserves a look on its own.** Dropping a conflict key that the
+legacy path emits is the direction that risks a lost update, and the pipeline has
+been the production default (`threshold=1`) all along. It is out of scope for the
+flag simplification — it is neither caused nor fixed by it — but it is the most
+significant thing this exercise turned up. Whether the 600 dropped keys are
+genuinely redundant (superseded by the 2400 extra) or a real gap needs the
+conflict-key derivation for `@lang` postings traced against `GetConflictKey`.
+
+The matrix test now asserts what is actually true and says why in-line: non-empty
+committed state identical to legacy, and conflict keys identical **across
+parallelism settings within the pipeline** — the guarantee this branch's work
+must preserve, and what the production abort-count parity rests on.
 
 ## 2. Performance follow-ups (ranked by measured gain / risk)
 
