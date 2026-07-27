@@ -343,3 +343,43 @@ is expected.
 Caveat worth stating: `TestRebuildTokIndex` appears to stall if you filter test
 output with `grep | head` — badger emits enough INFO lines between `=== RUN` and
 `--- PASS` to be truncated. It passes in 0.06s.
+
+### Production-replica corpus benchmark (ext-pointer-tech-collab data generator)
+
+The synthetic corpus used above is 100% `[uid] @reverse` with no upserts, which
+overstates the reverse share. Re-ran against the three-stage generator from
+`ext-pointer-tech-collab/data-generator`, which replicates the NiFi/dgraph4j
+production pipeline: **30 `@reverse` and 20 `@upsert` predicates**, 1.67M seeded
+nodes, hot-node reverse fan-out (Zipf `--hot-skew`), `@upsert` re-asserts and
+hours-later update waves. 532 transaction-sized files (20k nquads each, 600 MB).
+
+Both arms restore the **same seeded snapshot**, so they differ only in binary.
+Budget=30 (shipped default), 16 client threads, 2 runs per arm:
+
+| run | MB/s | elapsed | aborts | nquads committed | nquads/s |
+|---|---|---|---|---|---|
+| stock r1 | 1.47 | 129.2s | 1855 | 5,692,627 | 44,900 |
+| stock r2 | 1.48 | 129.5s | 1871 | 5,746,044 | 44,498 |
+| **shard r1** | **1.74** | 110.8s | 1850 | 5,709,947 | **52,612** |
+| **shard r2** | **1.73** | 110.1s | 1857 | 5,625,354 | **52,101** |
+
+**+17.6% MB/s, +17.1% nquads/s, 14.6% faster wall clock**, reproducible to ~1%.
+
+**Abort counts are identical (~1,860 both arms)** — the conflict-key semantics
+are unchanged under real `@upsert` contention, which is the strongest available
+correctness signal for the conflict-key batching work.
+
+Two things this reveals that the synthetic corpus hid:
+
+1. **Absolute throughput is far lower (1.5 MB/s vs 13 MB/s)** because this
+   workload is *abort*-dominated: only ~283 of 532 files commit, the rest give up
+   after 6 retries. The ceiling here is Zero's conflict arbitration, not the
+   apply path — which is exactly the contention the production client's
+   Caffeine lock layer exists to avoid.
+2. The relative gain (+17.6%) is **half** the synthetic figure (+36.8%), which is
+   the expected dilution from a realistic predicate mix. Quote the 17.6% number
+   for production expectations, not the 36.8%.
+
+Reproduce: `/data/harness/prodbench.sh <binary> <tag> <budget> <threads>` with
+`/data/gen` (generator) and `/data/seed_snapshot` (seeded state) on the EC2 box.
+Generator needs Python 3.10+ (`dataclass(slots=True)`) — RHEL 9 ships 3.9.
