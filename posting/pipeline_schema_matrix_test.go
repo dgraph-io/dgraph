@@ -117,25 +117,80 @@ func keyKinds(t *testing.T, snap map[string]string) (data, index, reverse, count
 
 // runMatrixBatch applies edges through a fresh pipeline txn at the given budget
 // (and auto tunables), snapshots the conflict-key set, commits, and restores the
-// config. Mirrors runBudgetBatch but also sets the auto fraction/min-edges.
-func runMatrixBatch(t *testing.T, budget int, fraction float64, minEdges int,
+// config. Mirrors runBudgetBatch but also sets the edges-per-worker cap.
+func runMatrixBatch(t *testing.T, par x.IntraMutationParallelism, minEdges int,
 	startTs, commitTs uint64, edges []*pb.DirectedEdge) map[uint64]struct{} {
 	t.Helper()
-	ob := x.WorkerConfig.MutationsPipelineGoroutines
-	of := x.WorkerConfig.MutationsPipelineGoroutinesFraction
-	om := x.WorkerConfig.MutationsPipelineMinEdgesPerWorker
-	x.WorkerConfig.MutationsPipelineGoroutines = budget
-	x.WorkerConfig.MutationsPipelineGoroutinesFraction = fraction
-	x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = minEdges
+	ob := x.WorkerConfig.IntraMutationParallelism
+	om := x.WorkerConfig.IntraMutationEdgesPerWorker
+	x.WorkerConfig.IntraMutationParallelism = par
+	x.WorkerConfig.IntraMutationEdgesPerWorker = minEdges
 	defer func() {
-		x.WorkerConfig.MutationsPipelineGoroutines = ob
-		x.WorkerConfig.MutationsPipelineGoroutinesFraction = of
-		x.WorkerConfig.MutationsPipelineMinEdgesPerWorker = om
+		x.WorkerConfig.IntraMutationParallelism = ob
+		x.WorkerConfig.IntraMutationEdgesPerWorker = om
 	}()
 
 	txn := Oracle().RegisterStartTs(startTs)
 	mp := NewMutationPipeline(txn)
 	require.NoError(t, mp.Process(context.Background(), edges))
+
+	txn.Lock()
+	conflicts := make(map[uint64]struct{}, len(txn.conflicts))
+	for k := range txn.conflicts {
+		conflicts[k] = struct{}{}
+	}
+	txn.Unlock()
+
+	commitPipelineTxn(t, txn, commitTs)
+	return conflicts
+}
+
+// nonEmpty drops keys whose posting list is empty, so a snapshot comparison
+// asserts agreement on real content rather than on leftover emptied buckets.
+func nonEmpty(snap map[string]string) map[string]string {
+	out := make(map[string]string, len(snap))
+	for k, v := range snap {
+		if v != "[]" {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// runMatrixLegacy is runMatrixBatch's legacy counterpart: it applies the edges
+// through a serial runMutation loop — the path draft.go takes when a mutation
+// bypasses the pipeline — then snapshots the conflict-key set and commits.
+//
+// Edges are stable-sorted by (Attr, Entity) first, exactly as applyMutations
+// does before its DivideAndRule fan-out. That matters for byte-identity: the
+// sort preserves relative order within each (attr, entity) group, and the
+// pipeline preserves order within a predicate, so both paths observe the same
+// sequence of operations per key.
+func runMatrixLegacy(t *testing.T, startTs, commitTs uint64,
+	edges []*pb.DirectedEdge) map[uint64]struct{} {
+	t.Helper()
+	sort.SliceStable(edges, func(i, j int) bool {
+		if edges[i].GetAttr() != edges[j].GetAttr() {
+			return edges[i].GetAttr() < edges[j].GetAttr()
+		}
+		return edges[i].GetEntity() < edges[j].GetEntity()
+	})
+
+	ctx := schema.GetWriteContext(context.Background())
+	txn := Oracle().RegisterStartTs(startTs)
+	for _, edge := range edges {
+		// worker.runMutation validates and converts before delegating to the
+		// posting-level runMutation, which does not. Skipping this step leaves
+		// scalar values as raw RDF strings ("10" instead of an encoded int), so
+		// the baseline would write different keys and every scalar case would
+		// "fail" for a harness reason rather than a real divergence.
+		su, ok := schema.State().Get(ctx, edge.Attr)
+		if edge.Op != pb.DirectedEdge_DEL {
+			require.Truef(t, ok, "no schema for %s", edge.Attr)
+		}
+		require.NoError(t, ValidateAndConvert(edge, &su))
+		require.NoError(t, runMutation(ctx, edge, txn))
+	}
 
 	txn.Lock()
 	conflicts := make(map[uint64]struct{}, len(txn.conflicts))
@@ -324,14 +379,13 @@ func matrixCasesN(n int) []schemaCase {
 func TestSchemaMatrixByteIdentical(t *testing.T) {
 	type budgetCfg struct {
 		name     string
-		budget   int
-		fraction float64
+		par      x.IntraMutationParallelism
 		minEdges int
 	}
 	budgets := []budgetCfg{
-		{"fixed8", 8, 1.0, 256},
-		{"fixed32", 32, 1.0, 256},
-		{"auto", mutationsPipelineGoroutinesAuto, 1.0, 64},
+		{"fixed8", x.IntraMutationParallelism{Workers: 8}, 256},
+		{"fixed32", x.IntraMutationParallelism{Workers: 32}, 256},
+		{"auto", x.IntraMutationParallelism{PerCPU: 1.0}, 64},
 	}
 
 	var ts uint64 = 1_000_000
@@ -351,10 +405,22 @@ func TestSchemaMatrixByteIdentical(t *testing.T) {
 		for _, bc := range budgets {
 			sc, bc, attrs := sc, bc, attrs
 			t.Run(sc.name+"/"+bc.name, func(t *testing.T) {
-				// Baseline: legacy one-goroutine-per-predicate (budget 0).
+				// Baseline: the REAL legacy path — a serial runMutation loop, the
+				// same per-edge call draft.go makes when
+				// intra-mutation-min-edges=0 sends a mutation around the pipeline.
+				//
+				// This used to be "the pipeline with the budget off", which was an
+				// in-pipeline replica of legacy semantics (locked AddDelta). Once
+				// the lock-free store stopped being tied to the worker grant that
+				// replica disappeared, and with it the only in-package proof that
+				// AddDeltaConcurrent agrees with AddDelta. Comparing against
+				// runMutation is strictly stronger: it is the alternative an
+				// operator can actually select, not a stand-in for it.
 				reset(t, sc.schema)
 				s0, c0, r0 := next()
-				conf0 := runMatrixBatch(t, 0, 1.0, 256, s0, c0, sc.edges(attrs))
+				// Conflict keys from the legacy run are intentionally unused — see
+				// the comparison notes below for why they are not asserted against.
+				_ = runMatrixLegacy(t, s0, c0, sc.edges(attrs))
 				base := snapshotPredicates(t, attrs, r0)
 				require.NotEmpty(t, base, "baseline wrote no keys for %s", sc.name)
 
@@ -373,16 +439,52 @@ func TestSchemaMatrixByteIdentical(t *testing.T) {
 					require.Positive(t, count, "expected count keys (%s)", sc.name)
 				}
 
-				// Candidate: the budget under test.
+				// The pipeline with no fan-out: the conflict-key reference. Conflict
+				// keys are compared pipeline-to-pipeline, NOT against legacy — see
+				// the subset assertion below for why.
+				reset(t, sc.schema)
+				sOff, cOff, _ := next()
+				confOff := runMatrixBatch(t, x.IntraMutationParallelism{}, 256,
+					sOff, cOff, sc.edges(attrs))
+
+				// Candidate: the parallelism setting under test.
 				reset(t, sc.schema)
 				s1, c1, r1 := next()
-				confN := runMatrixBatch(t, bc.budget, bc.fraction, bc.minEdges, s1, c1, sc.edges(attrs))
+				confN := runMatrixBatch(t, bc.par, bc.minEdges, s1, c1, sc.edges(attrs))
 				cand := snapshotPredicates(t, attrs, r1)
 
-				require.Equal(t, base, cand,
-					"committed state must be byte-identical (%s, %s)", sc.name, bc.name)
-				require.Equal(t, conf0, confN,
-					"conflict-key set must be identical (%s, %s)", sc.name, bc.name)
+				// The strong check: every posting list the pipeline commits is
+				// byte-identical to what the legacy per-edge path commits, for every
+				// schema and every tokenizer.
+				//
+				// Empty lists are excluded because legacy leaves behind emptied
+				// count buckets that the pipeline never creates — for
+				// `[uid] @reverse @count` legacy writes 726 keys to the pipeline's
+				// 607, and all 119 extras are empty with zero differing values. That
+				// predates this work (measured identically on the pre-change tree)
+				// and the pipeline's output is the cleaner of the two, so comparing
+				// non-empty state asserts the real invariant without pinning a
+				// difference this change did not introduce.
+				require.Equal(t, nonEmpty(base), nonEmpty(cand),
+					"committed state must be byte-identical to legacy (%s, %s)",
+					sc.name, bc.name)
+
+				// Conflict keys are compared pipeline-to-pipeline: parallel must
+				// agree with serial. This is the guarantee this branch's work has to
+				// preserve, and it is what the production abort-count parity rests
+				// on.
+				//
+				// They are deliberately NOT compared against legacy. The pipeline
+				// diverges from legacy in both directions there and has since before
+				// this work: `uid @reverse` gives 1200 pipeline keys to legacy's 600,
+				// and `@lang @index(fulltext)` gives 4800 to legacy's 3000 while
+				// dropping 600 that legacy emits. Both were measured on the
+				// pre-change tree. Worth its own investigation — see pipeline-todo.md
+				// — but pinning it here would assert a behavior this change neither
+				// caused nor fixed.
+				require.Equal(t, confOff, confN,
+					"conflict-key set must not depend on parallelism (%s, %s)",
+					sc.name, bc.name)
 			})
 		}
 	}
