@@ -151,14 +151,11 @@ func TestLargePredicateMove(t *testing.T) {
 		c.WaitForAnyZeroLog("Skipping automatic rebalancing of this tablet", 2*time.Minute, 5*time.Second),
 		"Zero must record the rebalancer backoff after an expensive failed move")
 
-	// The tablet must still be served by the source group, with all data intact.
-	tab, group := findTablet(t, hc)
-	require.Equal(t, srcGroup, group, "failed move must leave the tablet on the source group")
-	require.Equal(t, wantCount, countPayload(t, c, srcAlpha), "data must be intact after a failed move")
-
 	// Phase 3: recovery. Restart the destination and retry until the move goes through. Early
 	// retries may fail while Zero reconnects to the restarted group; those quick failures are
-	// expected and do not feed the backoff.
+	// expected and do not feed the backoff. State assertions about the failed move run after
+	// health returns: the killed alpha may be the very one serving the cluster's HTTP client,
+	// so poking /state during the outage would test our luck, not the move.
 	require.NoError(t, c.StartAlpha(dstAlpha))
 	// The killed Alpha replays its WAL and badger state on restart (it absorbed several GiB
 	// mid-move before dying), and re-establishes cluster connections; health can take minutes
@@ -174,6 +171,11 @@ func TestLargePredicateMove(t *testing.T) {
 		time.Sleep(10 * time.Second)
 	}
 	require.NoError(t, healthErr, "cluster did not become healthy within 10m of restarting alpha%d", dstAlpha)
+
+	// The failed move must have left the tablet on the source group, with all data intact.
+	_, group := findTablet(t, hc)
+	require.Equal(t, srcGroup, group, "failed move must leave the tablet on the source group")
+	require.Equal(t, wantCount, countPayload(t, c, srcAlpha), "data must be intact after a failed move")
 	start = time.Now()
 	deadline := time.Now().Add(90 * time.Minute)
 	for {
