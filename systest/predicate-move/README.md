@@ -22,7 +22,8 @@ tablets no larger than half the group size difference, which the payload tablet 
 ## Running
 
 ```bash
-make install   # builds the Linux binary dgraphtest mounts into containers (required on macOS)
+make install       # builds the binary dgraphtest mounts into containers
+make image-local   # dgraphtest boots containers from dgraph/dgraph:local; build it if absent
 go test -v -timeout=8h --tags=largemove -run TestLargePredicateMove ./systest/predicate-move/
 ```
 
