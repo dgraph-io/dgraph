@@ -160,7 +160,20 @@ func TestLargePredicateMove(t *testing.T) {
 	// retries may fail while Zero reconnects to the restarted group; those quick failures are
 	// expected and do not feed the backoff.
 	require.NoError(t, c.StartAlpha(dstAlpha))
-	require.NoError(t, c.HealthCheck(false))
+	// The killed Alpha replays its WAL and badger state on restart (it absorbed several GiB
+	// mid-move before dying), and re-establishes cluster connections; health can take minutes
+	// to come back. Poll instead of asserting once.
+	var healthErr error
+	for deadline := time.Now().Add(10 * time.Minute); ; {
+		if healthErr = c.HealthCheck(false); healthErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+	require.NoError(t, healthErr, "cluster did not become healthy within 10m of restarting alpha%d", dstAlpha)
 	start = time.Now()
 	deadline := time.Now().Add(90 * time.Minute)
 	for {
