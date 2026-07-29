@@ -61,6 +61,9 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+	// moveBackoff tracks tablets whose most recent move failed, so the automatic rebalancer
+	// does not immediately re-pick them. Maps predicate -> tabletBackoff.
+	moveBackoff *sync.Map
 
 	checkpointPerGroup map[uint32]uint64
 	// embedding the pb.UnimplementedZeroServer struct to ensure forward compatibility of the server.
@@ -88,6 +91,7 @@ func (s *Server) Init() {
 	s.closer = z.NewCloser(2) // grpc and http
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
+	s.moveBackoff = new(sync.Map)
 	s.checkpointPerGroup = make(map[uint32]uint64)
 	if opts.limiterConfig.UidLeaseLimit > 0 {
 		// rate limiting is not enabled when lease limit is set to zero.
