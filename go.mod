@@ -33,7 +33,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/graph-gophers/graphql-go v1.9.0
 	github.com/hashicorp/vault/api v1.23.0
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.7
 	github.com/mark3labs/mcp-go v0.49.0
 	github.com/minio/minio-go/v7 v7.1.0
 	github.com/paulmach/go.geojson v1.5.0
