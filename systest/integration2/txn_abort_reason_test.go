@@ -27,7 +27,8 @@ import (
 // real cluster. A transaction's start timestamp becomes "stale" when it predates the current
 // Zero leader's lease — i.e. after a leader change. We reproduce that deterministically by
 // opening a transaction, then restarting the (single) Zero: on restart Zero renews its lease and
-// advances startTxnTs past every previously-leased start ts, so committing the now-old txn aborts
+// advances startTxnTs past every previously-leased start timestamp, so committing the now-old
+// transaction aborts
 // with the stale-startts reason rather than a plain write-write conflict.
 //
 // As in the alpha-level reason tests, the commit goes through the raw CommitOrAbort stub so we
@@ -47,7 +48,7 @@ func TestStaleStartTsAbortReason(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, gc.Alter(ctx, &api.Operation{DropAll: true}))
 
-	// Open a transaction and mutate so it gets a real (soon-to-be-stale) start ts and keys.
+	// Open a transaction and mutate so it gets a real (soon-to-be-stale) start timestamp and keys.
 	txn := gc.NewTxn()
 	resp, err := txn.Mutate(ctx, &api.Mutation{SetJson: []byte(`{"name": "Manish"}`)})
 	require.NoError(t, err)
@@ -55,7 +56,8 @@ func TestStaleStartTsAbortReason(t *testing.T) {
 	require.NotZero(t, tc.GetStartTs(), "mutation must yield a start ts")
 
 	// Restart Zero. On coming back up it renews its lease and sets startTxnTs to MaxTxnTs+1,
-	// which is strictly greater than the start ts leased above — making our open txn stale.
+	// which is strictly greater than the start timestamp leased above — making our open
+	// transaction stale.
 	require.NoError(t, c.StopZero(0))
 	require.NoError(t, c.StartZero(0))
 	require.NoError(t, c.HealthCheck(false))
@@ -67,7 +69,7 @@ func TestStaleStartTsAbortReason(t *testing.T) {
 		return err == nil
 	}, 60*time.Second, time.Second, "zero leader did not re-establish after restart")
 
-	// Commit the stale txn via the raw stub to observe the categorized status.
+	// Commit the stale transaction via the raw stub to observe the categorized status.
 	port, err := c.GetAlphaGrpcPublicPort(0)
 	require.NoError(t, err)
 	conn, err := grpc.NewClient("0.0.0.0:"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))

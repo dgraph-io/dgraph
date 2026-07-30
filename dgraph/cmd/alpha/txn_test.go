@@ -314,7 +314,7 @@ func TestConflictAbortReason(t *testing.T) {
 // TestPredicateMoveAbortReason proves the "predicate-move" category is surfaced on the
 // gRPC status. Zero's checkPreds aborts a commit whose predicate keys don't match the
 // tablet's serving group (the same code path that rejects commits during a predicate
-// move). We reach it deterministically by committing a real txn context whose Preds have
+// move). We reach it deterministically by committing a real transaction context whose Preds have
 // been rewritten to claim a group that doesn't serve the predicate, with conflict Keys
 // cleared so hasConflict passes and checkPreds runs.
 //

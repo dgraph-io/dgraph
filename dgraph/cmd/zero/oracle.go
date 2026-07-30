@@ -342,10 +342,22 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 
 // Abort-reason codes. When Zero decides to abort a transaction it surfaces the category to the
 // client as the prefix of a codes.Aborted gRPC status message, formatted as "<code>: <detail>".
-// api.TxnContext (external dgo module) has no field for the reason, so it rides on the error;
-// the status code stays codes.Aborted, so existing abort handling is unaffected. The dgraph4j
-// client parses these prefixes into TxnConflictException.AbortReason — keep the two in sync.
+// api.TxnContext (external dgo module) has no field for the reason, so the reason rides on the
+// error instead; the status code stays codes.Aborted, so existing abort handling is unaffected.
+// The dgraph4j and pydgraph clients parse these prefixes into their AbortReason enums — keep all
+// three in sync.
+//
+// These three codes are the entire published vocabulary. A cause that cannot be mapped onto one of
+// them emits the detail with *no* prefix (abortReasonUncategorized) rather than borrowing a code
+// that would imply the wrong remedy. Both dgraph4j and pydgraph already degrade an absent or
+// unrecognized prefix to UNKNOWN, so "no category" is a supported and truthful answer. Withholding
+// also keeps a later phase purely additive: naming a new category then only adds precision to
+// something that was already UNKNOWN, and never reclassifies a code clients have shipped against.
 const (
+	// abortReasonUncategorized means the server knows what happened and says so in the detail,
+	// but the cause does not correspond to any published category. It is not "the server does not
+	// know" — it is "there is no code for this yet".
+	abortReasonUncategorized = ""
 	abortReasonConflict      = "conflict"
 	abortReasonStaleStartTs  = "stale-startts"
 	abortReasonPredicateMove = "predicate-move"
@@ -353,18 +365,29 @@ const (
 
 // Human-readable details paired with the conflict abort codes.
 const (
-	abortDetailConflict     = "Transaction has been aborted. Please retry"
-	abortDetailStaleStartTs = "Transaction has been aborted due to a leader change. Please retry"
+	abortDetailConflict = "Transaction has been aborted. Please retry"
+	// A start timestamp goes stale for two different reasons, so this detail deliberately names
+	// both rather than asserting one. Zero raises startTxnTs either when a Zero becomes leader and
+	// renews its leases (updateLeases, assign.go) or when it trims its conflict map while applying
+	// a snapshot (purgeBelow via applySnapshot, raft.go) — the second is not a leader change at
+	// all. Both mean the same thing to a caller: this transaction's start timestamp is older than
+	// the oldest timestamp Zero can still validate against, so retry with a fresh transaction.
+	abortDetailStaleStartTs = "Transaction start timestamp is older than the oldest timestamp " +
+		"Zero can still validate (Zero leader change, or its conflict map was trimmed at a " +
+		"snapshot). Please retry"
 )
 
-// abortReason builds the wire string the client parses: "<code>: <detail>".
+// abortReason builds the wire string the client parses: "<code>: <detail>". An empty code yields
+// the bare detail, which is exactly what a client receives from a server without this feature.
 func abortReason(code, detail string) string {
+	if code == abortReasonUncategorized {
+		return detail
+	}
 	return code + ": " + detail
 }
 
-// conflictAbortReason returns the wire reason for a hasConflict abort, distinguishing a
-// write-write conflict from a stale start timestamp (a txn that predates the current
-// leader's lease, i.e. a leader change rather than a real conflict).
+// conflictAbortReason returns the wire reason for an abort decided by hasConflict, distinguishing a
+// write-write conflict from a stale start timestamp. See isStaleStartTs for what "stale" means.
 func conflictAbortReason(stale bool) string {
 	if stale {
 		return abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)
@@ -372,16 +395,74 @@ func conflictAbortReason(stale bool) string {
 	return abortReason(abortReasonConflict, abortDetailConflict)
 }
 
+// isStaleStartTs reports whether this transaction's start timestamp (src.StartTs) is below the
+// floor Zero can still validate against (startTxnTs). hasConflict aborts such a transaction, but
+// the cause is not a write-write conflict, so it is reported under its own category. See
+// abortDetailStaleStartTs for the two ways that floor rises. Callers must hold at least a read
+// lock on the oracle.
+func (o *Oracle) isStaleStartTs(src *api.TxnContext) bool {
+	return src.StartTs < o.startTxnTs
+}
+
+// checkPreds reports whether any predicate this transaction touched is unusable, in which case the
+// transaction must be aborted. It returns the abort category alongside the error because its exits
+// are unrelated causes, not degrees of one cause: only a group mismatch and a blocked tablet are
+// predicate moves. A malformed entry in preds, or a predicate that no group serves, are different
+// failures needing different remedies — retrying a malformed predicate key can never succeed — so
+// those return abortReasonUncategorized rather than claiming a move that did not happen. Every exit
+// still aborts the transaction, exactly as before; only the reported category changes.
+//
+// Each entry in preds is a "<group id>-<predicate name>" string built by the Alpha.
+func (s *Server) checkPreds(preds []string) (string, error) {
+	for _, pkey := range preds {
+		splits := strings.SplitN(pkey, "-", 2)
+		if len(splits) < 2 {
+			return abortReasonUncategorized, errors.Errorf("Unable to find group id in %s", pkey)
+		}
+		gid, err := strconv.Atoi(splits[0])
+		if err != nil {
+			return abortReasonUncategorized, errors.Wrapf(err,
+				"unable to parse group id from %s", pkey)
+		}
+		pred := splits[1]
+		if strings.Contains(pred, hnsw.VecKeyword) {
+			pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
+		}
+		// Checked before the tablet lookup because blockTablet holds for the entire duration of a
+		// move: movePredicate defers its unblock past the tablet reassignment proposal, so this is
+		// the authoritative signal that a move is in flight. Checking it first means an in-flight
+		// move can never be reported as anything else, and it lets the tablet == nil case below mean
+		// only "no group serves this predicate" and never "it is moving".
+		if s.isBlocked(pred) {
+			return abortReasonPredicateMove, errors.Errorf(
+				"Commits on predicate %s are blocked due to predicate move", pred)
+		}
+		tablet := s.ServingTablet(pred)
+		if tablet == nil {
+			return abortReasonUncategorized, errors.Errorf("Tablet for %s is nil", pred)
+		}
+		// The predicate finished moving to another group while this transaction was open: the
+		// mutation was written against group gid, but the predicate now belongs elsewhere.
+		if tablet.GroupId != uint32(gid) {
+			return abortReasonPredicateMove, errors.Errorf(
+				"Mutation done in group: %d. Predicate %s assigned to %d",
+				gid, pred, tablet.GroupId)
+		}
+	}
+	return abortReasonUncategorized, nil
+}
+
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(attribute.Int64("startTs", int64(src.StartTs)))
 	if src.Aborted {
-		// Client-initiated discard (txn.Discard); not a server-decided abort, so no reason.
+		// The client discarded this transaction itself (a Discard call), so the server decided
+		// nothing and there is no reason to report.
 		return s.proposeTxn(ctx, src)
 	}
 
-	// abortWithReason marks the txn aborted, proposes it (advancing the watermark exactly as the
-	// previous code did), and then surfaces the categorized reason to the caller as a gRPC
+	// abortWithReason marks the transaction aborted, proposes it (advancing the watermark exactly as
+	// the previous code did), and then surfaces the categorized reason to the caller as a gRPC
 	// Aborted status. proposeTxn still runs identically — only the post-propose return changes.
 	abortWithReason := func(reason string) error {
 		span.SetAttributes(attribute.Bool("abort", true))
@@ -395,47 +476,18 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
 	s.orc.RLock()
 	conflict := s.orc.hasConflict(src)
-	// A txn whose startTs predates this leader's lease is aborted by hasConflict, but it's a
-	// leader change rather than a write-write conflict — report it distinctly.
-	stale := src.StartTs < s.orc.startTxnTs
+	// hasConflict also aborts a transaction whose start timestamp is too old to validate, which is
+	// not a write-write conflict, so it is reported under its own category. See isStaleStartTs.
+	stale := s.orc.isStaleStartTs(src)
 	s.orc.RUnlock()
 	if conflict {
 		return abortWithReason(conflictAbortReason(stale))
 	}
 
-	checkPreds := func() error {
-		// Check if any of these tablets is being moved. If so, abort the transaction.
-		for _, pkey := range src.Preds {
-			splits := strings.SplitN(pkey, "-", 2)
-			if len(splits) < 2 {
-				return errors.Errorf("Unable to find group id in %s", pkey)
-			}
-			gid, err := strconv.Atoi(splits[0])
-			if err != nil {
-				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
-			}
-			pred := splits[1]
-			if strings.Contains(pred, hnsw.VecKeyword) {
-				pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
-			}
-			tablet := s.ServingTablet(pred)
-			if tablet == nil {
-				return errors.Errorf("Tablet for %s is nil", pred)
-			}
-			if tablet.GroupId != uint32(gid) {
-				return errors.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
-					gid, pred, tablet.GroupId)
-			}
-			if s.isBlocked(pred) {
-				return errors.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
-			}
-		}
-		return nil
-	}
-	if err := checkPreds(); err != nil {
-		// checkPreds builds rich messages, e.g. "Commits on predicate %s are blocked due to
-		// predicate move" — forward them instead of swallowing the reason.
-		return abortWithReason(abortReason(abortReasonPredicateMove, err.Error()))
+	if reason, err := s.checkPreds(src.Preds); err != nil {
+		// checkPreds already builds a specific, human-readable message for each cause. Forward it
+		// instead of discarding it, tagged with whichever category that cause justifies.
+		return abortWithReason(abortReason(reason, err.Error()))
 	}
 
 	num := pb.Num{Val: 1, Type: pb.Num_TXN_TS}
@@ -450,15 +502,44 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span.SetAttributes(attribute.Int64("nodeId", int64(s.Node.Id)))
 	span.AddEvent(fmt.Sprintf("TXN Context: %+v", src))
 
+	// Past this point the transaction already holds a commit timestamp, so an abort here is a "late"
+	// abort. Two unrelated causes can trigger one, tracked separately because they report
+	// differently. A conflict found here takes precedence: if the oracle rejected the transaction it
+	// would have aborted whatever the context said, so that is the honest cause to report.
 	aborted := false
+	lateReason := abortReasonUncategorized
+	lateDetail := abortDetailConflict
 	if err := s.orc.commit(src); err != nil {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
 		aborted = true
+		// Oracle.commit re-runs hasConflict, which aborts a stale start timestamp just as readily as
+		// a genuine write-write conflict found in the keyCommit tree, and collapses both into
+		// x.ErrConflict. Re-check staleness here so this path can report stale-startts, instead of
+		// labelling every late abort a conflict. The early check at the top of commit() already
+		// draws that distinction; without this, the stale-startts category was only ever reachable
+		// from the early path.
+		s.orc.RLock()
+		stale := s.orc.isStaleStartTs(src)
+		s.orc.RUnlock()
+		lateReason = abortReasonConflict
+		if stale {
+			lateReason = abortReasonStaleStartTs
+			lateDetail = abortDetailStaleStartTs
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
+		if !aborted {
+			// The context was cancelled or timed out; no conflict occurred. No published category
+			// describes this, so report the context's own message with no category prefix rather
+			// than claiming a conflict that did not happen — the client degrades that to UNKNOWN.
+			// The gRPC status code stays codes.Aborted because the transaction genuinely did abort;
+			// switching to Canceled or DeadlineExceeded would change retry behaviour for clients
+			// that already treat Aborted as retryable.
+			lateDetail = err.Error()
+		}
 		aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
@@ -466,8 +547,7 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 		return err
 	}
 	if aborted {
-		// A late write-write conflict detected at commit time (keyCommit), or a cancelled ctx.
-		return status.Error(codes.Aborted, conflictAbortReason(false))
+		return status.Error(codes.Aborted, abortReason(lateReason, lateDetail))
 	}
 	return nil
 }
