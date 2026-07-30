@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,8 +22,33 @@ import (
 )
 
 const (
-	predicateMoveTimeout = 120 * time.Minute
+	// predicateMoveTimeout is the minimum time a predicate move may run before Zero cancels it.
+	// moveTimeout extends it for tablets too large to transfer within it at minMoveRate.
+	predicateMoveTimeout = 2 * time.Hour
+
+	// minMoveRate is the assumed floor throughput of a predicate move. It converts tablet size
+	// into time when computing the move timeout, so that a large tablet is not cancelled by a
+	// wall-clock limit it could never meet. The rate is deliberately conservative: the receiving
+	// group applies the whole stream through serial Raft proposals, so sustained rates are low.
+	minMoveRate = 256 << 10 // bytes per second
+
+	// moveFailureMinElapsed separates real move failures from quick validation ones: only
+	// attempts that ran at least this long feed the rebalancer's backoff.
+	moveFailureMinElapsed = time.Minute
+
+	// moveBackoffBase and moveBackoffMax bound the cooldown during which the automatic
+	// rebalancer skips a tablet whose last move failed. The cooldown doubles per consecutive
+	// failure, and is never shorter than the failed attempt itself.
+	moveBackoffBase = time.Hour
+	moveBackoffMax  = 24 * time.Hour
 )
+
+// moveTimeout returns how long a move of tab may run before Zero cancels it: at least base,
+// extended for large tablets assuming they transfer no faster than minMoveRate.
+func moveTimeout(base time.Duration, tab *pb.Tablet) time.Duration {
+	size := max(tab.OnDiskBytes, tab.UncompressedBytes)
+	return max(base, time.Duration(size/minMoveRate)*time.Second)
+}
 
 /*
 Steps to move predicate p from g1 to g2.
@@ -112,22 +137,34 @@ func (s *Server) MoveTablet(ctx context.Context, req *pb.MoveTabletRequest) (*pb
 // movePredicate is the main entry point for move predicate logic. This Zero must remain the leader
 // for the entire duration of predicate move. If this Zero stops being the leader, the final
 // proposal of reassigning the tablet to the destination would fail automatically.
-func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) error {
+func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) (err error) {
 	s.moveOngoing <- struct{}{}
 	defer func() {
 		<-s.moveOngoing
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), predicateMoveTimeout)
-	defer cancel()
-
-	span := trace.SpanFromContext(ctx)
-	defer span.End()
-
 	// Ensure that reserved predicates cannot be moved.
 	if x.IsReservedPredicate(predicate) {
 		return errors.Errorf("Unable to move reserved predicate %s", predicate)
 	}
+	tab := s.ServingTablet(predicate)
+	if tab == nil {
+		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
+	}
+
+	// Feed the outcome of this attempt back to the rebalancer, so it stops re-picking a tablet
+	// whose moves keep failing.
+	start := time.Now()
+	defer func() {
+		s.recordMoveResult(predicate, time.Since(start), err)
+	}()
+
+	timeout := moveTimeout(predicateMoveTimeout, tab)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	span := trace.SpanFromContext(ctx)
+	defer span.End()
 
 	// Ensure that I'm connected to the rest of the Zero group, and am the leader.
 	if _, err := s.latestMembershipState(ctx); err != nil {
@@ -136,13 +173,9 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 	if !s.Node.AmLeader() {
 		return errors.Errorf("I am not the Zero leader")
 	}
-	tab := s.ServingTablet(predicate)
-	if tab == nil {
-		return errors.Errorf("Tablet to be moved: [%v] is not being served", predicate)
-	}
 	msg := fmt.Sprintf("Going to move predicate: [%v], size: [ondisk: %v, uncompressed: %v]"+
-		" from group %d to %d\n", predicate, humanize.IBytes(uint64(tab.OnDiskBytes)),
-		humanize.IBytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup)
+		" from group %d to %d, timeout: %v\n", predicate, humanize.IBytes(uint64(tab.OnDiskBytes)),
+		humanize.IBytes(uint64(tab.UncompressedBytes)), srcGroup, dstGroup, timeout)
 	glog.Info(msg)
 	span.SetAttributes(attribute.String("tablet", predicate))
 	span.SetStatus(1, msg)
@@ -270,6 +303,11 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 			if x.IsReservedPredicate(tab.Predicate) {
 				continue
 			}
+			// Skip tablets whose recent moves failed; retrying right away would repeat hours of
+			// streaming and commit-blocking for the same outcome.
+			if s.skipMove(tab.Predicate) {
+				continue
+			}
 
 			// Finds a tablet as big a possible such that on moving it dstGroup's size is
 			// less than or equal to srcGroup.
@@ -283,4 +321,49 @@ func (s *Server) chooseTablet() (predicate string, srcGroup uint32, dstGroup uin
 		}
 	}
 	return
+}
+
+// tabletBackoff records the automatic rebalancer's backoff state for one tablet.
+type tabletBackoff struct {
+	failures int
+	until    time.Time
+}
+
+// moveCooldown returns how long the automatic rebalancer should skip a tablet after its
+// failures-th consecutive move failure, where elapsed is how long the failed attempt ran.
+func moveCooldown(failures int, elapsed time.Duration) time.Duration {
+	cooldown := moveBackoffMax
+	if shift := failures - 1; shift >= 0 && shift < 6 {
+		cooldown = min(moveBackoffBase<<shift, moveBackoffMax)
+	}
+	return max(cooldown, elapsed)
+}
+
+// recordMoveResult updates the rebalancer's backoff state for pred after a move attempt that
+// ran for elapsed. A successful move clears the state. A failed attempt that did real work
+// (ran at least moveFailureMinElapsed) pushes the next automatic attempt out by moveCooldown.
+// Only chooseTablet consults this state, so manual moves via MoveTablet are never held back.
+func (s *Server) recordMoveResult(pred string, elapsed time.Duration, err error) {
+	if err == nil {
+		s.moveBackoff.Delete(pred)
+		return
+	}
+	if elapsed < moveFailureMinElapsed {
+		return
+	}
+	failures := 1
+	if prev, ok := s.moveBackoff.Load(pred); ok {
+		failures = prev.(tabletBackoff).failures + 1
+	}
+	cooldown := moveCooldown(failures, elapsed)
+	s.moveBackoff.Store(pred, tabletBackoff{failures: failures, until: time.Now().Add(cooldown)})
+	glog.Infof("Move of tablet [%v] failed after %v (failure #%d). Skipping automatic"+
+		" rebalancing of this tablet for %v", pred, elapsed.Round(time.Second), failures, cooldown)
+}
+
+// skipMove reports whether the automatic rebalancer should currently leave pred alone because
+// its last move attempt failed.
+func (s *Server) skipMove(pred string) bool {
+	entry, ok := s.moveBackoff.Load(pred)
+	return ok && time.Now().Before(entry.(tabletBackoff).until)
 }
