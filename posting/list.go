@@ -1745,11 +1745,20 @@ func (l *List) calculateUids() error {
 	return nil
 }
 
-func (l *List) canUseCalculatedUids() bool {
+// canUseCalculatedUids reports whether calculatedUids can serve a read at readTs. The slice is
+// computed at committedUidsTime, so it reflects every commit up to that timestamp; serving it
+// to an older readTs would leak later commits into an earlier snapshot (issue #9795). When the
+// mutable layer has no committed entries (committedUidsTime == math.MaxUint64), the uids come
+// solely from the immutable layer, which any readTs that reaches this list may see.
+func (l *List) canUseCalculatedUids(readTs uint64) bool {
 	if l.mutationMap == nil {
 		return false
 	}
-	return l.mutationMap.isUidsCalculated && l.mutationMap.currentEntries == nil
+	if !l.mutationMap.isUidsCalculated || l.mutationMap.currentEntries != nil {
+		return false
+	}
+	return l.mutationMap.committedUidsTime == math.MaxUint64 ||
+		readTs >= l.mutationMap.committedUidsTime
 }
 
 // Uids returns the UIDs given some query params.
@@ -1761,7 +1770,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		if l.canUseCalculatedUids() {
+		if l.canUseCalculatedUids(opt.ReadTs) {
 			l.RLock()
 
 			afterIdx := 0
