@@ -6,6 +6,7 @@
 package zero
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,62 @@ func TestAbortReasonFormat(t *testing.T) {
 	require.Equal(t, "conflict: boom", abortReason(abortReasonConflict, "boom"))
 	require.Equal(t, "stale-startts: x", abortReason(abortReasonStaleStartTs, "x"))
 	require.Equal(t, "predicate-move: y", abortReason(abortReasonPredicateMove, "y"))
+}
+
+// TestAbortVocabulary pins the entire published surface: every category, and every detail a client
+// can receive for a server-decided abort, with the category each detail pairs with. Because the
+// details are declared in one block in oracle.go, adding a new abort message without deciding its
+// category — or quietly rewording an existing one that dgraph4j, pydgraph or the docs depend on —
+// fails here. The wording assertions are the pre-abort-reason text verbatim, so hoisting these to
+// constants is provably a move and not an edit.
+func TestAbortVocabulary(t *testing.T) {
+	// The three published codes, plus the withheld sentinel. Clients switch on exactly these.
+	require.Equal(t, "", abortReasonUncategorized)
+	require.Equal(t, "conflict", abortReasonConflict)
+	require.Equal(t, "stale-startts", abortReasonStaleStartTs)
+	require.Equal(t, "predicate-move", abortReasonPredicateMove)
+
+	for _, tc := range []struct {
+		name     string
+		category string
+		rendered string
+	}{
+		{"write-write conflict", abortReasonConflict,
+			abortDetailConflict},
+		{"stale start timestamp", abortReasonStaleStartTs,
+			abortDetailStaleStartTs},
+		{"move in flight", abortReasonPredicateMove,
+			fmt.Sprintf(abortDetailPredicateBlockedFmt, "friend")},
+		{"move completed", abortReasonPredicateMove,
+			fmt.Sprintf(abortDetailGroupMismatchFmt, 1, "friend", 2)},
+		{"predicate served by no group", abortReasonUncategorized,
+			fmt.Sprintf(abortDetailTabletNilFmt, "friend")},
+		{"malformed key, no separator", abortReasonUncategorized,
+			fmt.Sprintf(abortDetailMissingGroupIDFmt, "1foo")},
+		{"malformed key, bad group id", abortReasonUncategorized,
+			fmt.Sprintf(abortDetailBadGroupIDFmt, "xfoo")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wire := abortReason(tc.category, tc.rendered)
+			if tc.category == abortReasonUncategorized {
+				require.Equal(t, tc.rendered, wire, "a withheld cause must carry no prefix")
+				return
+			}
+			require.Equal(t, tc.category+": "+tc.rendered, wire)
+		})
+	}
+
+	// Wording of the checkPreds details, verbatim from before the abort-reason work.
+	require.Equal(t, "Unable to find group id in 1foo",
+		fmt.Sprintf(abortDetailMissingGroupIDFmt, "1foo"))
+	require.Equal(t, "unable to parse group id from xfoo",
+		fmt.Sprintf(abortDetailBadGroupIDFmt, "xfoo"))
+	require.Equal(t, "Tablet for friend is nil",
+		fmt.Sprintf(abortDetailTabletNilFmt, "friend"))
+	require.Equal(t, "Commits on predicate friend are blocked due to predicate move",
+		fmt.Sprintf(abortDetailPredicateBlockedFmt, "friend"))
+	require.Equal(t, "Mutation done in group: 1. Predicate friend assigned to 2",
+		fmt.Sprintf(abortDetailGroupMismatchFmt, 1, "friend", 2))
 }
 
 // TestAbortReasonUncategorized pins the withholding contract: when the server cannot substantiate

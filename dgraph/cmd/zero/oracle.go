@@ -363,7 +363,20 @@ const (
 	abortReasonPredicateMove = "predicate-move"
 )
 
-// Human-readable details paired with the conflict abort codes.
+// Human-readable details, one per cause. Every message a client can receive for a server-decided
+// abort is declared here rather than at its call site, so the published surface is a single block:
+// adding a new abort means adding a constant next to the existing vocabulary, where the category it
+// should pair with is visible. Entries ending in Fmt are format strings and must be given their
+// arguments; the other two are complete messages.
+//
+//	category         detail
+//	───────────────  ──────────────────────────────────────────────────────────
+//	conflict         abortDetailConflict
+//	stale-startts    abortDetailStaleStartTs
+//	predicate-move   abortDetailPredicateBlockedFmt, abortDetailGroupMismatchFmt
+//	(withheld)       abortDetailMissingGroupIDFmt, abortDetailBadGroupIDFmt,
+//	                 abortDetailTabletNilFmt, and ctx.Err() — the last supplied
+//	                 by the Go runtime, so it is not declared here
 const (
 	abortDetailConflict = "Transaction has been aborted. Please retry"
 	// A start timestamp goes stale for two different reasons, so this detail deliberately names
@@ -375,6 +388,14 @@ const (
 	abortDetailStaleStartTs = "Transaction start timestamp is older than the oldest timestamp " +
 		"Zero can still validate (Zero leader change, or its conflict map was trimmed at a " +
 		"snapshot). Please retry"
+
+	// Details produced by checkPreds. Wording is unchanged from before the abort-reason work; only
+	// the declaration moved here, so existing log-scrapers and docs still match.
+	abortDetailMissingGroupIDFmt   = "Unable to find group id in %s"
+	abortDetailBadGroupIDFmt       = "unable to parse group id from %s"
+	abortDetailTabletNilFmt        = "Tablet for %s is nil"
+	abortDetailPredicateBlockedFmt = "Commits on predicate %s are blocked due to predicate move"
+	abortDetailGroupMismatchFmt    = "Mutation done in group: %d. Predicate %s assigned to %d"
 )
 
 // abortReason builds the wire string the client parses: "<code>: <detail>". An empty code yields
@@ -417,12 +438,11 @@ func (s *Server) checkPreds(preds []string) (string, error) {
 	for _, pkey := range preds {
 		splits := strings.SplitN(pkey, "-", 2)
 		if len(splits) < 2 {
-			return abortReasonUncategorized, errors.Errorf("Unable to find group id in %s", pkey)
+			return abortReasonUncategorized, errors.Errorf(abortDetailMissingGroupIDFmt, pkey)
 		}
 		gid, err := strconv.Atoi(splits[0])
 		if err != nil {
-			return abortReasonUncategorized, errors.Wrapf(err,
-				"unable to parse group id from %s", pkey)
+			return abortReasonUncategorized, errors.Wrapf(err, abortDetailBadGroupIDFmt, pkey)
 		}
 		pred := splits[1]
 		if strings.Contains(pred, hnsw.VecKeyword) {
@@ -434,20 +454,19 @@ func (s *Server) checkPreds(preds []string) (string, error) {
 		// move can never be reported as anything else, and it lets the tablet == nil case below mean
 		// only "no group serves this predicate" and never "it is moving".
 		if s.isBlocked(pred) {
-			return abortReasonPredicateMove, errors.Errorf(
-				"Commits on predicate %s are blocked due to predicate move", pred)
+			return abortReasonPredicateMove, errors.Errorf(abortDetailPredicateBlockedFmt, pred)
 		}
 		tablet := s.ServingTablet(pred)
 		if tablet == nil {
-			return abortReasonUncategorized, errors.Errorf("Tablet for %s is nil", pred)
+			return abortReasonUncategorized, errors.Errorf(abortDetailTabletNilFmt, pred)
 		}
 		// The predicate finished moving to another group while this transaction was open: the
 		// mutation was written against group gid, but the predicate now belongs elsewhere.
 		if tablet.GroupId != uint32(gid) {
-			return abortReasonPredicateMove, errors.Errorf(
-				"Mutation done in group: %d. Predicate %s assigned to %d",
+			return abortReasonPredicateMove, errors.Errorf(abortDetailGroupMismatchFmt,
 				gid, pred, tablet.GroupId)
 		}
+
 	}
 	return abortReasonUncategorized, nil
 }
