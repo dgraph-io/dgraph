@@ -71,6 +71,23 @@ func TestAbortVocabulary(t *testing.T) {
 		})
 	}
 
+	// The conflict detail names what it cannot narrow — a conflict key is a one-way fingerprint by
+	// the time Zero matches it, so data, index, count and @upsert conflicts are indistinguishable.
+	// Callers who set one scalar value do not expect the keys derived from it to conflict, so the
+	// possibilities are spelled out.
+	for _, want := range []string{"index", "count", "@upsert"} {
+		require.Contains(t, abortDetailConflict, want,
+			"conflict detail should name the key kinds it cannot distinguish between")
+	}
+
+	// Backwards-compatibility guard. This exact sentence must remain a prefix of the conflict
+	// detail: dgraph/cmd/alpha/upsert_test.go loops while the live server error contains it (so a
+	// change would exit the loop immediately and fail), query/query4_test.go and
+	// systest/unique_test.go assert Contains on it, and it is verbatim the text of dgo.ErrAborted,
+	// which user log-scrapers key off. Extend abortDetailConflict by appending only.
+	require.True(t, strings.HasPrefix(abortDetailConflict, "Transaction has been aborted. Please retry"),
+		"conflict detail must keep the legacy sentence as its prefix; got %q", abortDetailConflict)
+
 	// Wording of the checkPreds details, verbatim from before the abort-reason work.
 	require.Equal(t, "Unable to find group id in 1foo",
 		fmt.Sprintf(abortDetailMissingGroupIDFmt, "1foo"))

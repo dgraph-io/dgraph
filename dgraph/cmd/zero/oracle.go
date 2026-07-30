@@ -378,7 +378,33 @@ const (
 //	                 abortDetailTabletNilFmt, and ctx.Err() — the last supplied
 //	                 by the Go runtime, so it is not declared here
 const (
-	abortDetailConflict = "Transaction has been aborted. Please retry"
+	// A conflict is the one category the server cannot narrow. Every conflict key reaching Zero is a
+	// farm.Fingerprint64(key)^uid produced by GetConflictKey (posting/list.go), so by the time
+	// hasConflict matches one, which key produced it is already unrecoverable. Naming the
+	// possibilities is therefore the most this category can honestly say, and it is worth saying: a
+	// caller who set a single scalar value has no reason to expect that the index and count keys
+	// *derived* from it can conflict too.
+	//
+	// Exactly three kinds of key carry a conflict — data, index and count. Reverse keys carry none:
+	// IsReverse is a distinct ByteType, so a reverse key matches no case in GetConflictKey's switch,
+	// falls to default, and addConflictKey drops the resulting zero. Do not add "reverse" here.
+	//
+	// @upsert is named separately because it is a *rule*, not a fourth kind of key. HasUpsert is
+	// tested ahead of every IsData/IsIndex case, so on an @upsert predicate the existing data and
+	// index keys switch to getKey(key, 0) — the uid drops out and any two transactions writing the
+	// same value collide on the shared index key. That is the uniqueness mechanism, and in
+	// upsert-heavy ingest it is the most likely cause of this abort, which is why it is worth the
+	// extra sentence.
+	//
+	// The leading sentence is load-bearing and must stay verbatim at the front. Three tests in this
+	// repo substring-match it against the live server message — including the retry loop at
+	// dgraph/cmd/alpha/upsert_test.go, which would exit immediately and fail if it stopped matching
+	// — and it is also the text of dgo.ErrAborted, so user log-scrapers key off it. Extend this
+	// detail only by appending.
+	abortDetailConflict = "Transaction has been aborted. Please retry. Another transaction " +
+		"committed to one of the same keys. The conflicting key cannot be identified: it may be " +
+		"the data key written directly, or an index or count key derived from it. On an @upsert " +
+		"predicate the uid is excluded, so any two transactions writing the same value conflict"
 	// A start timestamp goes stale for two different reasons, so this detail deliberately names
 	// both rather than asserting one. Zero raises startTxnTs either when a Zero becomes leader and
 	// renews its leases (updateLeases, assign.go) or when it trims its conflict map while applying
