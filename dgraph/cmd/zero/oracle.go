@@ -375,8 +375,9 @@ const (
 //	stale-startts    abortDetailStaleStartTs
 //	predicate-move   abortDetailPredicateBlockedFmt, abortDetailGroupMismatchFmt
 //	(withheld)       abortDetailMissingGroupIDFmt, abortDetailBadGroupIDFmt,
-//	                 abortDetailTabletNilFmt, and ctx.Err() — the last supplied
-//	                 by the Go runtime, so it is not declared here
+//	                 abortDetailTabletNilFmt, abortDetailPreAborted, and
+//	                 ctx.Err() — the last supplied by the Go runtime, so it is
+//	                 not declared here
 const (
 	// A conflict is the one category the server cannot narrow. Every conflict key reaching Zero is a
 	// farm.Fingerprint64(key)^uid produced by GetConflictKey (posting/list.go), so by the time
@@ -414,6 +415,26 @@ const (
 	abortDetailStaleStartTs = "Transaction start timestamp is older than the oldest timestamp " +
 		"Zero can still validate (Zero leader change, or its conflict map was trimmed at a " +
 		"snapshot). Please retry"
+
+	// Reported when proposeTxn comes back with the transaction already aborted while this commit
+	// decided nothing itself — i.e. something aborted it out of band, before the commit was
+	// arbitrated. Zero records no cause when that happens (TryAbort carries only timestamps), so the
+	// category is withheld and the detail names the possibilities instead of guessing. All three
+	// reach Zero through the same TryAbort RPC, and none of them is a predicate *move*, so
+	// predicate-move would be the wrong label:
+	//
+	//   - a schema or type update on a predicate the transaction touched, which cancels pending
+	//     transactions so the index can be rebuilt (detectPendingTxns, worker/draft.go)
+	//   - a drop-predicate (S * * delete) on a predicate the transaction touched (same function)
+	//   - the Alpha leader ageing out transactions idle longer than --limit "txn-abort-after"
+	//     (abortOldTransactions, worker/draft.go)
+	//
+	// Before this was handled, commit() returned nil here and the abort reached the client as a
+	// bare dgo.ErrAborted with no reason at all.
+	abortDetailPreAborted = "Transaction has been aborted. Please retry. It was already aborted " +
+		"before this commit was decided, which happens when a schema update or a drop-predicate " +
+		"cancels pending transactions on a predicate it touched, or when the server ages out " +
+		"transactions idle for longer than --limit \"txn-abort-after\""
 
 	// Details produced by checkPreds. Wording is unchanged from before the abort-reason work; only
 	// the declaration moved here, so existing log-scrapers and docs still match.
@@ -593,6 +614,17 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	if aborted {
 		return status.Error(codes.Aborted, abortReason(lateReason, lateDetail))
+	}
+	// proposeTxn sets src.Aborted when it finds no commit timestamp for this transaction, meaning
+	// something aborted it out of band while this commit was in flight — a TryAbort from a schema
+	// update, a drop-predicate, or the idle-transaction reaper. Nothing above set `aborted`, because
+	// this commit itself decided to proceed. Returning nil here (as this did previously) loses the
+	// abort entirely: CommitOverNetwork then sees tctx.Aborted with no error and falls through to a
+	// bare dgo.ErrAborted, so the caller learns nothing. Report it instead.
+	if src.Aborted {
+		span.SetAttributes(attribute.Bool("abort", true))
+		return status.Error(codes.Aborted,
+			abortReason(abortReasonUncategorized, abortDetailPreAborted))
 	}
 	return nil
 }

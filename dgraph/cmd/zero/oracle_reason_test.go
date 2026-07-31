@@ -60,6 +60,8 @@ func TestAbortVocabulary(t *testing.T) {
 			fmt.Sprintf(abortDetailMissingGroupIDFmt, "1foo")},
 		{"malformed key, bad group id", abortReasonUncategorized,
 			fmt.Sprintf(abortDetailBadGroupIDFmt, "xfoo")},
+		{"aborted out of band before commit", abortReasonUncategorized,
+			abortDetailPreAborted},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			wire := abortReason(tc.category, tc.rendered)
@@ -79,6 +81,17 @@ func TestAbortVocabulary(t *testing.T) {
 		require.Contains(t, abortDetailConflict, want,
 			"conflict detail should name the key kinds it cannot distinguish between")
 	}
+
+	// The out-of-band abort names its three causes rather than guessing a category. None of them is
+	// a predicate move — they all arrive via TryAbort, which records no cause — so labelling this
+	// predicate-move would be wrong. Before it was handled, commit() returned nil and the abort
+	// reached the client as a bare dgo.ErrAborted with no reason at all.
+	for _, want := range []string{"schema update", "drop-predicate", "txn-abort-after"} {
+		require.Contains(t, abortDetailPreAborted, want,
+			"pre-abort detail should name the causes it cannot distinguish between")
+	}
+	require.True(t, strings.HasPrefix(abortDetailPreAborted, "Transaction has been aborted. Please retry"),
+		"pre-abort detail must keep the legacy sentence as its prefix; got %q", abortDetailPreAborted)
 
 	// Backwards-compatibility guard. This exact sentence must remain a prefix of the conflict
 	// detail: dgraph/cmd/alpha/upsert_test.go loops while the live server error contains it (so a
