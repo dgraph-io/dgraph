@@ -94,9 +94,37 @@ func processBinary(mNode *mathTree) error {
 	}
 
 	if mpl.Len() != 0 || mpr.Len() != 0 {
-		var wg sync.WaitGroup
 		returnMap := types.NewShardedMap()
 
+		// For small inputs (the common case in DQL traversal where math operates on a
+		// handful of uids), launching 30 goroutines + a WaitGroup costs more than the
+		// work itself. Process inline below a threshold.
+		const parallelThreshold = 512
+		if mpl.Len()+mpr.Len() < parallelThreshold {
+			for i := range types.NumShards {
+				// PeekShard reads only — does not allocate an empty shard map.
+				mlps := mpl.PeekShard(i)
+				mprs := mpr.PeekShard(i)
+				if len(mlps) == 0 && len(mprs) == 0 {
+					continue
+				}
+				// destMapi is written to inside f, so we need GetShardOrNil.
+				destMapi := returnMap.GetShardOrNil(i)
+				for k := range mlps {
+					f(k, &mlps, &mprs, &destMapi)
+				}
+				for k := range mprs {
+					if _, ok := mlps[k]; ok {
+						continue
+					}
+					f(k, &mlps, &mprs, &destMapi)
+				}
+			}
+			mNode.Val = returnMap
+			return nil
+		}
+
+		var wg sync.WaitGroup
 		for i := range types.NumShards {
 			wg.Add(1)
 			mlps := mpl.GetShardOrNil(i)
