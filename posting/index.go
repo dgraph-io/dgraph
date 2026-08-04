@@ -2028,7 +2028,7 @@ func partitionedClusterCounts(rb *IndexRebuild) []int {
 			return
 		}
 		for _, spec := range su.IndexSpecs {
-			if spec.Name != partitioned_hnsw.PartitionedHNSW {
+			if !partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
 				continue
 			}
 			numClusters := 1000 // must match applyOptions' default

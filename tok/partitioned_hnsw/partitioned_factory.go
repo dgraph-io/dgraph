@@ -22,7 +22,6 @@ const (
 	NumProbesOpt      string = "numProbes"
 	vectorDimension   string = "vectorDimension"
 	PartitionStratOpt string = "partitionStratOpt"
-	PartitionedHNSW   string = "partionedhnsw"
 )
 
 type partitionedHNSWIndexFactory[T c.Float] struct {
@@ -41,7 +40,7 @@ func CreateFactory[T c.Float](floatBits int) index.IndexFactory[T] {
 }
 
 // Implements NamedFactory interface for use as a plugin.
-func (hf *partitionedHNSWIndexFactory[T]) Name() string { return PartitionedHNSW }
+func (hf *partitionedHNSWIndexFactory[T]) Name() string { return "partitioned-hnsw-internal" }
 
 // GetOptions returns the option string that participates in the factory
 // spec's identity (used by needsVectorIndexEdgesRebuild to decide whether a
