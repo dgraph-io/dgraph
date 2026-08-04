@@ -28,12 +28,12 @@ const (
 	testSchema             = `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
 	testSchemaWithoutIndex = `project_description_v: float32vector .`
 	pred                   = "project_description_v"
-	schemaVecDimension10   = `project_description_v: float32vector @index(partionedhnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "10", metric: "euclidean")) .`
+	schemaVecDimension10   = `project_description_v: float32vector @index(hnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "10", metric: "euclidean")) .`
 )
 
 var schemas = map[string]string{
 	"hnsw":            `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`,
-	"partitionedhnsw": `project_description_v: float32vector @index(partionedhnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "100", metric: "euclidean")) .`,
+	"partitionedhnsw": `project_description_v: float32vector @index(hnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "100", metric: "euclidean")) .`,
 }
 
 func testVectorQuery(t *testing.T, gc *dgraphapi.GrpcClient, vectors [][]float32, rdfs, pred string, topk int) {
@@ -594,7 +594,7 @@ func (vsuite *VectorTestSuite) TestPartitionedHNSWIndex() {
 		_, err = gc.Mutate(mu)
 		require.NoError(t, err)
 
-		s := `project_description_v: float32vector @index(partionedhnsw` +
+		s := `project_description_v: float32vector @index(hnsw` +
 			`(numClusters:"1000", partitionStratOpt: "kmeans",metric: "euclidean")) .`
 		err = gc.SetupSchema(s)
 		require.NoError(t, err)
@@ -668,9 +668,9 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 		dim                = 16
 		numVectors         = 1200
 		schemaWithoutIndex = `project_description_v: float32vector .`
-		indexSchema        = `project_description_v: float32vector @index(partionedhnsw` +
+		indexSchema        = `project_description_v: float32vector @index(hnsw` +
 			`(numClusters: "32", numProbes: "8", partitionStratOpt: "kmeans", metric: "euclidean")) .`
-		reindexSchema = `project_description_v: float32vector @index(partionedhnsw` +
+		reindexSchema = `project_description_v: float32vector @index(hnsw` +
 			`(numClusters: "8", numProbes: "4", partitionStratOpt: "kmeans", metric: "euclidean")) .`
 	)
 
@@ -828,7 +828,7 @@ func TestVectorSuite(t *testing.T) {
 	for _, schema := range schemas {
 		var ssuite VectorTestSuite
 		ssuite.schema = schema
-		if strings.Contains(schema, "partionedhnsw") {
+		if strings.Contains(schema, "numClusters") {
 			ssuite.schemaVecDimesion10 = schemaVecDimension10
 			ssuite.isForPartitionedIndex = true
 		} else {

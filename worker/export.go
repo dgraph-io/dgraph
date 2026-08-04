@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -823,7 +824,8 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 		}
 
-		if strings.Contains(pk.Attr, hnsw.VecKeyword) {
+		if strings.Contains(pk.Attr, hnsw.VecKeyword) ||
+			strings.Contains(pk.Attr, kmeans.CentroidPrefix) {
 			return false
 		}
 		return pk.IsData()

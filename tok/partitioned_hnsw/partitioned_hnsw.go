@@ -123,12 +123,13 @@ func (ph *partitionedHNSW[T]) Dimension() int {
 func (ph *partitionedHNSW[T]) SetDimension(schema *pb.SchemaUpdate, dimension int) {
 	ph.vectorDimension = dimension
 	for _, vs := range schema.IndexSpecs {
-		if vs.Name == "partionedhnsw" {
-			vs.Options = append(vs.Options, &pb.OptionPair{
-				Key:   "vectorDimension",
-				Value: strconv.Itoa(dimension),
-			})
+		if !SpecHasOption(vs, NumClustersOpt) {
+			continue
 		}
+		vs.Options = append(vs.Options, &pb.OptionPair{
+			Key:   vectorDimension,
+			Value: strconv.Itoa(dimension),
+		})
 	}
 }
 
