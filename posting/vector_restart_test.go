@@ -38,7 +38,7 @@ func TestPartitionedRestartHydration(t *testing.T) {
 		ValueType: pb.Posting_VFLOAT,
 		Directive: pb.SchemaUpdate_INDEX,
 		IndexSpecs: []*pb.VectorIndexSpec{{
-			Name: partitioned_hnsw.PartitionedHNSW,
+			Name: "hnsw",
 			Options: []*pb.OptionPair{
 				{Key: partitioned_hnsw.NumClustersOpt, Value: "4"},
 				{Key: partitioned_hnsw.NumProbesOpt, Value: "2"},
@@ -47,7 +47,7 @@ func TestPartitionedRestartHydration(t *testing.T) {
 		}},
 	}
 	require.NoError(t, schema.ParseBytes(
-		[]byte(`phrestart: float32vector @index(partionedhnsw(numClusters: "4", numProbes: "2", metric: "euclidean")) .`), 1))
+		[]byte(`phrestart: float32vector @index(hnsw(numClusters: "4", numProbes: "2", metric: "euclidean")) .`), 1))
 
 	// Four well-separated blobs in 4d, 15 vectors each.
 	corners := [][]float32{

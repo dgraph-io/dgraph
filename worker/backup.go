@@ -354,7 +354,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 		for _, pred := range schema {
 			if pred.Type == "float32vector" && len(pred.IndexSpecs) != 0 {
 				for _, spec := range pred.IndexSpecs {
-					if spec.Name == partitioned_hnsw.PartitionedHNSW {
+					if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
 						vecPredMap[gid] = append(vecPredMap[gid], pred.Predicate+kmeans.CentroidPrefix)
 						for _, opt := range spec.Options {
 							if opt.Key == partitioned_hnsw.NumClustersOpt {
