@@ -24,7 +24,7 @@ func partitionedSchema(attr string, numClusters string) *pb.SchemaUpdate {
 		ValueType: pb.Posting_VFLOAT,
 		Directive: pb.SchemaUpdate_INDEX,
 		IndexSpecs: []*pb.VectorIndexSpec{{
-			Name: partitioned_hnsw.PartitionedHNSW,
+			Name: "hnsw",
 			Options: []*pb.OptionPair{
 				{Key: partitioned_hnsw.NumClustersOpt, Value: numClusters},
 			},
@@ -93,4 +93,40 @@ func TestNumClustersChangeTriggersRebuild(t *testing.T) {
 	}
 	require.EqualValues(t, indexNoop, same.needsVectorIndexEdgesRebuild(),
 		"identical schema re-apply must be a no-op")
+}
+
+func plainHNSWSchema(attr string) *pb.SchemaUpdate {
+	return &pb.SchemaUpdate{
+		Predicate: attr,
+		ValueType: pb.Posting_VFLOAT,
+		Directive: pb.SchemaUpdate_INDEX,
+		IndexSpecs: []*pb.VectorIndexSpec{{
+			Name:    "hnsw",
+			Options: []*pb.OptionPair{{Key: "metric", Value: "euclidean"}},
+		}},
+	}
+}
+
+// TestPlainHNSWUnaffectedByUnification is the backward-compat pin at the
+// rebuild layer: after unifying under one "hnsw" name, a plain hnsw predicate
+// (no numClusters) re-applied identically must NOT re-index, while adding
+// numClusters to it must trigger a rebuild.
+func TestPlainHNSWUnaffectedByUnification(t *testing.T) {
+	attr := x.AttrInRootNamespace("vecpred")
+
+	same := &IndexRebuild{
+		Attr:          attr,
+		OldSchema:     plainHNSWSchema(attr),
+		CurrentSchema: plainHNSWSchema(attr),
+	}
+	require.EqualValues(t, indexNoop, same.needsVectorIndexEdgesRebuild(),
+		"re-applying an identical plain hnsw schema must not re-index")
+
+	upgrade := &IndexRebuild{
+		Attr:          attr,
+		OldSchema:     plainHNSWSchema(attr),
+		CurrentSchema: partitionedSchema(attr, "8"),
+	}
+	require.EqualValues(t, indexRebuild, upgrade.needsVectorIndexEdgesRebuild(),
+		"adding numClusters to a plain hnsw predicate must trigger a rebuild")
 }
