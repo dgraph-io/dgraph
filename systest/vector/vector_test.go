@@ -28,12 +28,16 @@ const (
 	testSchema             = `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
 	testSchemaWithoutIndex = `project_description_v: float32vector .`
 	pred                   = "project_description_v"
-	schemaVecDimension10   = `project_description_v: float32vector @index(hnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "10", metric: "euclidean")) .`
+	// numClusters is deliberately small relative to the ~1000-vector test
+	// datasets (~125 vectors/cluster). numClusters == numVectors would put ~1
+	// vector per cluster, so a default numProbes (numClusters/25) could only
+	// gather a handful of candidates and topK-count assertions would fail.
+	schemaVecDimension10 = `project_description_v: float32vector @index(hnsw(numClusters: "8", partitionStratOpt: "kmeans", vectorDimension: "10", metric: "euclidean")) .`
 )
 
 var schemas = map[string]string{
 	"hnsw":            `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`,
-	"partitionedhnsw": `project_description_v: float32vector @index(hnsw(numClusters: "1000", partitionStratOpt: "kmeans", vectorDimension: "100", metric: "euclidean")) .`,
+	"partitionedhnsw": `project_description_v: float32vector @index(hnsw(numClusters: "8", partitionStratOpt: "kmeans", vectorDimension: "100", metric: "euclidean")) .`,
 }
 
 func testVectorQuery(t *testing.T, gc *dgraphapi.GrpcClient, vectors [][]float32, rdfs, pred string, topk int) {
@@ -290,9 +294,7 @@ func (vsuite *VectorTestSuite) TestVectorIndexRebuilding() {
 	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		// Partitioned search caps results at the probed clusters' contents,
-		// so "ready" means results come back, not that topK is filled.
-		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
+		return err == nil && len(res) == 100
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	result, err = gc.Query(query)
@@ -396,9 +398,7 @@ func (vsuite *VectorTestSuite) TestVectorIndexDropPredicate() {
 	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		// Partitioned search caps results at the probed clusters' contents,
-		// so "ready" means results come back, not that topK is filled.
-		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
+		return err == nil && len(res) == 100
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	result, err = gc.Query(query)
@@ -408,19 +408,7 @@ func (vsuite *VectorTestSuite) TestVectorIndexDropPredicate() {
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		if vsuite.isForPartitionedIndex {
-			// A partitioned search returns up to topK from the probed
-			// clusters. These tests use numClusters == numVectors (~1 vector
-			// per cluster), so the result count is bounded by numProbes
-			// rather than filled to topK; assert the index is functional and
-			// every result is a real inserted vector.
-			require.NotEmpty(t, similarVects)
-			for _, similarVect := range similarVects {
-				require.Contains(t, vectors, similarVect)
-			}
-		} else {
-			require.Equal(t, 100, len(similarVects))
-		}
+		require.Equal(t, 100, len(similarVects))
 	}
 }
 
@@ -455,27 +443,13 @@ func (vsuite *VectorTestSuite) TestVectorIndexWithoutSchema() {
 	// duration, which is unreliable on slower CI runners.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		// Partitioned search caps results at the probed clusters' contents,
-		// so "ready" means results come back, not that topK is filled.
-		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
+		return err == nil && len(res) == 100
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		if vsuite.isForPartitionedIndex {
-			// A partitioned search returns up to topK from the probed
-			// clusters. These tests use numClusters == numVectors (~1 vector
-			// per cluster), so the result count is bounded by numProbes
-			// rather than filled to topK; assert the index is functional and
-			// every result is a real inserted vector.
-			require.NotEmpty(t, similarVects)
-			for _, similarVect := range similarVects {
-				require.Contains(t, vectors, similarVect)
-			}
-		} else {
-			require.Equal(t, 100, len(similarVects))
-		}
+		require.Equal(t, 100, len(similarVects))
 	}
 
 	query := `{
@@ -527,19 +501,7 @@ func (vsuite *VectorTestSuite) TestIndexRebuildingWithoutSchema() {
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		if vsuite.isForPartitionedIndex {
-			// A partitioned search returns up to topK from the probed
-			// clusters. These tests use numClusters == numVectors (~1 vector
-			// per cluster), so the result count is bounded by numProbes
-			// rather than filled to topK; assert the index is functional and
-			// every result is a real inserted vector.
-			require.NotEmpty(t, similarVects)
-			for _, similarVect := range similarVects {
-				require.Contains(t, vectors, similarVect)
-			}
-		} else {
-			require.Equal(t, 100, len(similarVects))
-		}
+		require.Equal(t, 100, len(similarVects))
 	}
 }
 
