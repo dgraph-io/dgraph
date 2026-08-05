@@ -28,6 +28,7 @@ vendor
 .minio.sys
 
 # Local test files
+.local/
 contrib/local-test/dql-data.json
 contrib/local-test/dql-data.rdf
 contrib/local-test/gql-data.json
