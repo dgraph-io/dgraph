@@ -290,7 +290,9 @@ func (vsuite *VectorTestSuite) TestVectorIndexRebuilding() {
 	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		return err == nil && len(res) == 100
+		// Partitioned search caps results at the probed clusters' contents,
+		// so "ready" means results come back, not that topK is filled.
+		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	result, err = gc.Query(query)
@@ -394,7 +396,9 @@ func (vsuite *VectorTestSuite) TestVectorIndexDropPredicate() {
 	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		return err == nil && len(res) == 100
+		// Partitioned search caps results at the probed clusters' contents,
+		// so "ready" means results come back, not that topK is filled.
+		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	result, err = gc.Query(query)
@@ -404,7 +408,19 @@ func (vsuite *VectorTestSuite) TestVectorIndexDropPredicate() {
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		require.Equal(t, 100, len(similarVects))
+		if vsuite.isForPartitionedIndex {
+			// A partitioned search returns up to topK from the probed
+			// clusters. These tests use numClusters == numVectors (~1 vector
+			// per cluster), so the result count is bounded by numProbes
+			// rather than filled to topK; assert the index is functional and
+			// every result is a real inserted vector.
+			require.NotEmpty(t, similarVects)
+			for _, similarVect := range similarVects {
+				require.Contains(t, vectors, similarVect)
+			}
+		} else {
+			require.Equal(t, 100, len(similarVects))
+		}
 	}
 }
 
@@ -439,13 +455,27 @@ func (vsuite *VectorTestSuite) TestVectorIndexWithoutSchema() {
 	// duration, which is unreliable on slower CI runners.
 	require.Eventually(t, func() bool {
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
-		return err == nil && len(res) == 100
+		// Partitioned search caps results at the probed clusters' contents,
+		// so "ready" means results come back, not that topK is filled.
+		return err == nil && (len(res) == 100 || (vsuite.isForPartitionedIndex && len(res) > 0))
 	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		require.Equal(t, 100, len(similarVects))
+		if vsuite.isForPartitionedIndex {
+			// A partitioned search returns up to topK from the probed
+			// clusters. These tests use numClusters == numVectors (~1 vector
+			// per cluster), so the result count is bounded by numProbes
+			// rather than filled to topK; assert the index is functional and
+			// every result is a real inserted vector.
+			require.NotEmpty(t, similarVects)
+			for _, similarVect := range similarVects {
+				require.Contains(t, vectors, similarVect)
+			}
+		} else {
+			require.Equal(t, 100, len(similarVects))
+		}
 	}
 
 	query := `{
@@ -497,7 +527,19 @@ func (vsuite *VectorTestSuite) TestIndexRebuildingWithoutSchema() {
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
 		require.NoError(t, err)
-		require.Equal(t, 100, len(similarVects))
+		if vsuite.isForPartitionedIndex {
+			// A partitioned search returns up to topK from the probed
+			// clusters. These tests use numClusters == numVectors (~1 vector
+			// per cluster), so the result count is bounded by numProbes
+			// rather than filled to topK; assert the index is functional and
+			// every result is a real inserted vector.
+			require.NotEmpty(t, similarVects)
+			for _, similarVect := range similarVects {
+				require.Contains(t, vectors, similarVect)
+			}
+		} else {
+			require.Equal(t, 100, len(similarVects))
+		}
 	}
 }
 
