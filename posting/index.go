@@ -13,7 +13,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -32,6 +34,9 @@ import (
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	tokIndex "github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -121,6 +126,20 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			// if a delete & dealing with vfloats, add this to dead node in persistent store.
 			// What we should do instead is invoke the factory.Remove(key) operation.
 			deadAttr := hnsw.ConcatStrings(info.edge.Attr, hnsw.VecDead)
+			indexer, err := info.factorySpecs[0].FindOrCreateIndex(attr)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// A partitioned index shards its dead lists: the delete must be
+			// recorded in the list of the cluster that indexed this vector.
+			if resolver, ok := indexer.(tokIndex.VectorDeadListResolver[float32]); ok {
+				delVec := types.BytesAsFloatArray(data[0].Value.([]byte))
+				tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
+				deadAttr, err = resolver.DeadAttrForVector(tc, delVec)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+			}
 			deadKey := x.DataKey(deadAttr, 1)
 			pl, err := txn.Get(deadKey)
 			if err != nil {
@@ -162,7 +181,7 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			// retrieve vector from inUuid save as inVec
 			inVec := types.BytesAsFloatArray(data[0].Value.([]byte))
 			tc := hnsw.NewTxnCache(NewViTxn(txn), txn.StartTs)
-			indexer, err := info.factorySpecs[0].CreateIndex(attr)
+			indexer, err := info.factorySpecs[0].FindOrCreateIndex(attr)
 			if err != nil {
 				return []*pb.DirectedEdge{}, err
 			}
@@ -1412,6 +1431,310 @@ func (rb *indexRebuildInfo) prefixesForTokIndexes() ([][]byte, error) {
 	return prefixes, nil
 }
 
+func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSpec, rb *IndexRebuild) error {
+	pk := x.ParsedKey{Attr: rb.Attr}
+
+	indexer, err := factorySpecs[0].CreateIndex(pk.Attr)
+	if err != nil {
+		return err
+	}
+
+	dimension := indexer.Dimension()
+	// If dimension is -1, it means that the dimension is not set through options in case of partitioned hnsw.
+	if dimension == -1 {
+		numVectorsToCheck := 100
+		lenFreq := make(map[int]int, numVectorsToCheck)
+		maxFreq := 0
+		MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+			Prefix:      pk.DataPrefix(),
+			ReadTs:      rb.StartTs,
+			AllVersions: false,
+			Reverse:     false,
+			CheckInclusion: func(uid uint64) error {
+				return nil
+			},
+			Function: func(l *List, pk x.ParsedKey) error {
+				val, err := l.Value(rb.StartTs)
+				if err != nil {
+					return err
+				}
+				inVec := types.BytesAsFloatArray(val.Value.([]byte))
+				lenFreq[len(inVec)] += 1
+				if lenFreq[len(inVec)] > maxFreq {
+					maxFreq = lenFreq[len(inVec)]
+					dimension = len(inVec)
+				}
+				numVectorsToCheck -= 1
+				if numVectorsToCheck <= 0 {
+					return ErrStopIteration
+				}
+				return nil
+			},
+			StartKey: x.DataKey(rb.Attr, 0),
+		})
+
+		indexer.SetDimension(rb.CurrentSchema, dimension)
+	}
+
+	glog.V(1).Infof("Rebuilding vector index for predicate %s: selected dimension %d", rb.Attr, dimension)
+
+	norm := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	norm.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+		val, err := pl.Value(rb.StartTs)
+		if err != nil {
+			return nil, err
+		}
+		if val.Tid == types.VFloatID {
+			return nil, nil
+		}
+
+		// Convert to VFloatID and persist as binary bytes.
+		sv, err := types.Convert(val, types.VFloatID)
+		if err != nil {
+			return nil, err
+		}
+		b := types.ValueForType(types.BinaryID)
+		if err = types.Marshal(sv, &b); err != nil {
+			return nil, err
+		}
+
+		edge := &pb.DirectedEdge{
+			Attr:      rb.Attr,
+			Entity:    uid,
+			Value:     b.Value.([]byte),
+			ValueType: types.VFloatID.Enum(),
+		}
+		inKey := x.DataKey(edge.Attr, uid)
+		p, err := txn.Get(inKey)
+		if err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+
+		if err := p.addMutation(ctx, txn, edge); err != nil {
+			return []*pb.DirectedEdge{}, err
+		}
+		return nil, nil
+	}
+
+	if err := norm.RunWithoutTemp(ctx); err != nil {
+		return err
+	}
+
+	count := 0
+
+	if numSeeds := indexer.NumSeedVectors(); numSeeds > 0 {
+		// Reservoir-sample the seeds over one full scan: taking the first N
+		// vectors would seed k-means with whatever happens to sort first in
+		// badger, biasing the initial centroids to one corner of the data.
+		// Seeded with StartTs so a retry of the same rebuild picks the same
+		// seeds.
+		seedRng := rand.New(rand.NewSource(int64(rb.StartTs)))
+		seeds := make([][]float32, 0, numSeeds)
+		err := MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+			Prefix:      pk.DataPrefix(),
+			ReadTs:      rb.StartTs,
+			AllVersions: false,
+			Reverse:     false,
+			CheckInclusion: func(uid uint64) error {
+				return nil
+			},
+			Function: func(l *List, pk x.ParsedKey) error {
+				val, err := l.Value(rb.StartTs)
+				if err != nil {
+					return err
+				}
+
+				if val.Tid != types.VFloatID {
+					// Here, we convert the defaultID type vector into vfloat.
+					sv, err := types.Convert(val, types.VFloatID)
+					if err != nil {
+						return err
+					}
+					b := types.ValueForType(types.BinaryID)
+					if err = types.Marshal(sv, &b); err != nil {
+						return err
+					}
+
+					val.Value = b.Value
+					val.Tid = types.VFloatID
+				}
+
+				inVec := types.BytesAsFloatArray(val.Value.([]byte))
+				if len(inVec) != dimension {
+					return fmt.Errorf("vector dimension mismatch expected dimension %d but got %d", dimension, len(inVec))
+				}
+				count += 1
+				if len(seeds) < numSeeds {
+					seeds = append(seeds, inVec)
+				} else if j := seedRng.Intn(count); j < numSeeds {
+					seeds[j] = inVec
+				}
+				return nil
+			},
+			StartKey: x.DataKey(rb.Attr, 0),
+		})
+		if err != nil {
+			return err
+		}
+		for _, seed := range seeds {
+			indexer.AddSeedVector(seed)
+		}
+	}
+
+	txns := make([]*Txn, indexer.NumThreads())
+	for i := range txns {
+		txns[i] = NewTxn(rb.StartTs)
+	}
+	caches := make([]tokIndex.CacheType, indexer.NumThreads())
+	for i := range caches {
+		caches[i] = hnsw.NewTxnCache(NewViTxn(txns[i]), rb.StartTs)
+	}
+
+	if count < indexer.NumSeedVectors() {
+		indexer.SetNumPasses(0)
+	}
+
+	for pass_idx := range indexer.NumBuildPasses() {
+		glog.V(1).Infof("Rebuilding vector index for predicate %s: build pass %d", rb.Attr, pass_idx)
+
+		indexer.StartBuild(caches)
+
+		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+			val, err := pl.Value(rb.StartTs)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			if len(inVec) != dimension {
+				return []*pb.DirectedEdge{}, nil
+			}
+			if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			return []*pb.DirectedEdge{}, nil
+		}
+
+		err := builder.RunWithoutTemp(ctx)
+		if err != nil {
+			return err
+		}
+
+		indexer.EndBuild()
+	}
+
+	centroids := indexer.GetCentroids()
+
+	if centroids != nil {
+		txn := NewTxn(rb.StartTs)
+
+		bCentroids, err := json.Marshal(centroids)
+		if err != nil {
+			return err
+		}
+
+		if err := addCentroidInDB(ctx, rb.Attr, bCentroids, txn); err != nil {
+			return err
+		}
+		txn.Update()
+		writer := NewTxnWriter(pstore)
+		if err := txn.CommitToDisk(writer, rb.StartTs); err != nil {
+			return err
+		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+	}
+
+	numIndexPasses := indexer.NumIndexPasses()
+
+	if count < indexer.NumSeedVectors() {
+		numIndexPasses = 1
+	}
+
+	for pass_idx := range numIndexPasses {
+		glog.V(1).Infof("Rebuilding vector index for predicate %s: index pass %d", rb.Attr, pass_idx)
+
+		indexer.StartBuild(caches)
+
+		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+			val, err := pl.Value(rb.StartTs)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			inVec := types.BytesAsFloatArray(val.Value.([]byte))
+			if len(inVec) != dimension && centroids != nil {
+				if pass_idx == 0 {
+					glog.Warningf("Skipping vector with invalid dimension uid: %d, dimension: %d", uid, len(inVec))
+				}
+				return []*pb.DirectedEdge{}, nil
+			}
+
+			if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			return []*pb.DirectedEdge{}, nil
+		}
+
+		err := builder.RunWithoutTemp(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, idx := range indexer.EndBuild() {
+			txns[idx].Update()
+			writer := NewTxnWriter(pstore)
+
+			// MaxRetries can be zero (unset) outside a running alpha;
+			// ExponentialRetry with zero attempts would silently skip the
+			// commit and lose the whole cluster's graph.
+			if err := x.ExponentialRetry(max(1, int(x.Config.MaxRetries)),
+				20*time.Millisecond, func() error {
+					err := txns[idx].CommitToDisk(writer, rb.StartTs)
+					if err == badger.ErrBannedKey {
+						glog.Errorf("Error while writing to banned namespace.")
+						return nil
+					}
+					return err
+				}); err != nil {
+				return err
+			}
+			if err := writer.Flush(); err != nil {
+				return err
+			}
+
+			txns[idx].cache.plists = nil
+			txns[idx] = nil
+		}
+	}
+
+	return nil
+}
+
+func addCentroidInDB(ctx context.Context, attr string, vec []byte, txn *Txn) error {
+	indexCountAttr := hnsw.ConcatStrings(attr, kmeans.CentroidPrefix)
+	countKey := x.DataKey(indexCountAttr, 1)
+	pl, err := txn.Get(countKey)
+	if err != nil {
+		return err
+	}
+
+	edge := &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      indexCountAttr,
+		Value:     vec,
+		ValueType: pb.Posting_ValType(12),
+	}
+	if err := pl.addMutation(ctx, txn, edge); err != nil {
+		return err
+	}
+	return nil
+}
+
 // rebuildTokIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
@@ -1443,6 +1766,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	}
 
 	runForVectors := (len(factorySpecs) != 0)
+	if runForVectors {
+		return rebuildVectorIndex(ctx, factorySpecs, rb)
+	}
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
@@ -1691,6 +2017,36 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 	return indexDelete
 }
 
+// partitionedClusterCounts collects the numClusters of every partitioned
+// index spec in the old and current schema, so dropping index data covers
+// the per-cluster keyspaces of both the outgoing and the incoming layout
+// (including a numClusters change in either direction).
+func partitionedClusterCounts(rb *IndexRebuild) []int {
+	counts := []int{}
+	collect := func(su *pb.SchemaUpdate) {
+		if su == nil {
+			return
+		}
+		for _, spec := range su.IndexSpecs {
+			if !partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
+				continue
+			}
+			numClusters := 1000 // must match applyOptions' default
+			for _, opt := range spec.Options {
+				if opt.Key == partitioned_hnsw.NumClustersOpt {
+					if n, err := strconv.Atoi(opt.Value); err == nil {
+						numClusters = n
+					}
+				}
+			}
+			counts = append(counts, numClusters)
+		}
+	}
+	collect(rb.OldSchema)
+	collect(rb.CurrentSchema)
+	return counts
+}
+
 // This needs to be moved to the implementation of vector-indexer API
 func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]byte {
 	// Exit early if indices do not need to be rebuilt.
@@ -1705,6 +2061,22 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 
 	for i := range hnsw.VectorIndexMaxLevels {
 		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))
+	}
+
+	// A partitioned index shards its aux data into per-cluster attrs
+	// (pred__vector_entry_<i> etc.). Attrs are length-prefixed in badger
+	// keys, so the unsplit prefixes above do NOT cover them — enumerate them
+	// for every cluster count seen in the old or current schema, plus the
+	// persisted centroid set.
+	for _, numClusters := range partitionedClusterCounts(rb) {
+		for i := range numClusters {
+			prefixes = append(prefixes,
+				x.PredicatePrefix(hnsw.SplitEntryAttr(rb.Attr, i)),
+				x.PredicatePrefix(hnsw.SplitVecAttr(rb.Attr, i)),
+				x.PredicatePrefix(hnsw.SplitDeadAttr(rb.Attr, i)))
+		}
+		prefixes = append(prefixes,
+			x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, kmeans.CentroidPrefix)))
 	}
 
 	return prefixes

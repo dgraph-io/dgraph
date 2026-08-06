@@ -112,6 +112,10 @@ func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
 }
 
+func EuclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
+	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
+}
+
 // Used for distance, since shorter distance is better
 func insortPersistentHeapAscending[T c.Float](
 	slice []persistentHeapElement[T],
@@ -361,6 +365,22 @@ func getInsertLayer(maxLevels int) int {
 }
 
 var emptyVec = []byte{}
+
+// GetVectorFromUid fetches the vector stored for uid under the data predicate
+// pred. A uid with no stored vector yields an empty slice and no error, so
+// callers can treat "no vector" as "no results".
+func GetVectorFromUid[T c.Float](pred string, uid uint64, floatBits int, c index.CacheType) ([]T, error) {
+	var vec []T
+	data, err := getDataFromKeyWithCacheType(pred, uid, c)
+	if err != nil {
+		if errors.Is(err, errFetchingPostingList) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	index.BytesAsFloatArray(data, &vec, floatBits)
+	return vec, nil
+}
 
 // adds the data corresponding to a uid to the given vec variable in the form of []T
 // this does not allocate memory for vec, so it must be allocated before calling this function

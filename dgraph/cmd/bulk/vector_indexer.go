@@ -20,6 +20,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/tok"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/golang/glog"
 )
@@ -208,6 +209,12 @@ func (vi *vectorIndexer) getOrCreateIndexer(pred string) (index.VectorIndex[floa
 	spec, ok := vi.indexSpecs[pred]
 	if !ok {
 		return nil, nil, fmt.Errorf("no vector index spec for predicate %s", pred)
+	}
+
+	if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
+		return nil, nil, fmt.Errorf("predicate %s uses the experimental partitioned vector index "+
+			"(numClusters); it is not supported by the bulk loader yet — load without the index "+
+			"and add it via schema alter afterwards", pred)
 	}
 
 	// Create the HNSW indexer
