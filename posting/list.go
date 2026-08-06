@@ -410,8 +410,27 @@ func (mm *MutableLayer) print() string {
 		mm.deleteAllMarker)
 }
 
+// printShort returns a summary of the mutable layer with the entry counts but not the entries themselves. Use it in
+// error messages and logs, where print() is unsafe because posting values are unbounded in size.
+func (mm *MutableLayer) printShort() string {
+	if mm == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("committed: %d, proposed: %t, deleteAllMarker: %d",
+		len(mm.committedEntries), mm.currentEntries != nil, mm.deleteAllMarker)
+}
+
+// Print dumps the entire list, posting values included. It is meant for interactive debugging only. Anything that
+// ends up in a log line or an error message should use debugString() instead.
 func (l *List) Print() string {
 	return fmt.Sprintf("minTs: %d, plist: %+v, mutationMap: %s", l.minTs, l.plist, l.mutationMap.print())
+}
+
+// debugString describes the list's shape without including any posting values. Rollup retries a failing key every
+// few seconds, so an error message built from Print() will repeatedly dump multi-megabyte values into the log.
+func (l *List) debugString() string {
+	return fmt.Sprintf("key: %x, minTs: %d, maxTs: %d, splits: %v, mutationMap: {%s}",
+		l.key, l.minTs, l.maxTs, l.plist.GetSplits(), l.mutationMap.printShort())
 }
 
 // Return if piterator needs to be searched or not after mutable map and the posting if found.
@@ -1153,7 +1172,7 @@ func (l *List) iterate(readTs uint64, afterUid uint64, f func(obj *pb.Posting) e
 	// pitr iterates through immutable postings
 	err = pitr.seek(l, afterUid, deleteBelowTs)
 	if err != nil {
-		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate %v", l.Print())
+		return errors.Wrapf(err, "cannot initialize iterator when calling List.iterate %s", l.debugString())
 	}
 
 loop:
@@ -2187,15 +2206,13 @@ func (l *List) findPostingWithItr(readTs uint64, uid uint64, pitr pIterator) (fo
 	err = pitr.seek(l, uid-1, 0)
 	if err != nil {
 		return false, nil, errors.Wrapf(err,
-			"cannot initialize iterator when calling List.iterate %s",
-			l.mutationMap.print())
+			"cannot initialize iterator when calling List.iterate %s", l.debugString())
 	}
 
 	valid, err := pitr.valid()
 	if err != nil {
 		return false, nil, errors.Wrapf(err,
-			"cannot initialize iterator when calling List.iterate %s",
-			l.mutationMap.print())
+			"cannot initialize iterator when calling List.iterate %s", l.debugString())
 	}
 	if valid {
 		pp := pitr.posting()
