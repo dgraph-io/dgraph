@@ -443,6 +443,17 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			if !has {
 				return errors.Errorf("Invalid tokenizer %s", t)
 			}
+			if schema.NoConflict && tokenizer.Name() == "bm25" {
+				// BM25 maintains corpus statistics (doc count, total terms) via a
+				// read-modify-write that relies on transaction conflict detection to
+				// serialize concurrent updates to the same stats bucket. @noconflict
+				// emits no conflict key, so concurrent updates would silently lose
+				// counts and drift avgDL/IDF. Reject the combination.
+				return errors.Errorf(
+					"Tokenizer bm25 cannot be used with @noconflict on predicate %s: "+
+						"BM25 corpus statistics require conflict detection to stay consistent",
+					x.ParseAttr(schema.Predicate))
+			}
 			tokenizerType, ok := types.TypeForName(tokenizer.Type())
 			x.AssertTrue(ok) // Type is validated during tokenizer loading.
 			if tokenizerType != typ {
