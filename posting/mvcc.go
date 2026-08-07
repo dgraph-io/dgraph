@@ -409,6 +409,10 @@ func (ml *MemoryLayer) UpdateMaxCost(maxCost int64) {
 	ml.cache.data.UpdateMaxCost(maxCost)
 }
 
+func (ml *MemoryLayer) hasCache() bool {
+	return ml != nil && ml.cache != nil && ml.cache.data != nil
+}
+
 type IterateDiskArgs struct {
 	Prefix         []byte
 	Prefetch       bool
@@ -792,7 +796,7 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	if err != nil {
 		return l, err
 	}
-	if readUids {
+	if readUids && ml.hasCache() {
 		if err := l.calculateUids(); err != nil {
 			return nil, err
 		}

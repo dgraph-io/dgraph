@@ -1784,12 +1784,13 @@ func (l *List) canUseCalculatedUids(readTs uint64) bool {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+	requestedFirst := opt.First
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		if l.canUseCalculatedUids(opt.ReadTs) {
+		if opt.Intersect == nil && requestedFirst <= 0 && l.canUseCalculatedUids(opt.ReadTs) {
 			l.RLock()
 
 			afterIdx := 0
@@ -1816,8 +1817,6 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		// Pre-assign length to make it faster.
 		l.RLock()
 		defer l.RUnlock()
-		// Use approximate length for initial capacity.
-		res := make([]uint64, 0, l.ApproxLen())
 		out := &pb.List{}
 
 		if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
@@ -1828,9 +1827,19 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
+		approxLen := l.ApproxLen()
+		resCap := approxLen
+		if opt.Intersect != nil && len(opt.Intersect.Uids) < resCap {
+			resCap = len(opt.Intersect.Uids)
+		}
+		if requestedFirst > 0 && requestedFirst < resCap {
+			resCap = requestedFirst
+		}
+		res := make([]uint64, 0, resCap)
+
 		// If we need to intersect and the number of elements are small, in that case it's better to
 		// just check each item is present or not.
-		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+		if opt.Intersect != nil && len(opt.Intersect.Uids) < approxLen {
 			// Cache the iterator as it makes the search space smaller each time.
 			var pitr pIterator
 			for _, uid := range opt.Intersect.Uids {
