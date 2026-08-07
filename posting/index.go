@@ -706,7 +706,7 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
-	stream.NumGo = 16
+	stream.NumGo = max(16, runtime.GOMAXPROCS(0))
 	txn := NewTxn(r.startTs)
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
@@ -1150,6 +1150,12 @@ type IndexRebuild struct {
 	// a second txn would silently overwrite the reduce output (same key,
 	// same ts).
 	SkipVFloatConversion bool
+
+	// SampledKMeans enables sampling-based k-means training for partitioned
+	// vector indexes. The bulk loader sets this to true: sampling removes 5
+	// full disk scans and (1−S/N) of the assignment flops. Alpha alter path
+	// leaves it false (can be enabled later via flag after validation).
+	SampledKMeans bool
 }
 
 type indexOp int
@@ -1492,6 +1498,8 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 
 	glog.V(1).Infof("Rebuilding vector index for predicate %s: selected dimension %d", rb.Attr, dimension)
 
+	var sampledVectors [][]float32 // For sampled k-means training
+
 	if !rb.SkipVFloatConversion {
 		norm := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
 		norm.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
@@ -1539,13 +1547,30 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	count := 0
 
 	if numSeeds := indexer.NumSeedVectors(); numSeeds > 0 {
-		// Reservoir-sample the seeds over one full scan: taking the first N
-		// vectors would seed k-means with whatever happens to sort first in
-		// badger, biasing the initial centroids to one corner of the data.
-		// Seeded with StartTs so a retry of the same rebuild picks the same
-		// seeds.
+		// Reservoir-sample the seeds (and full sample if sampled k-means enabled)
+		// over one full scan: taking the first N vectors would seed k-means with
+		// whatever happens to sort first in badger, biasing the initial centroids
+		// to one corner of the data. Seeded with StartTs so a retry of the same
+		// rebuild picks the same seeds.
 		seedRng := rand.New(rand.NewSource(int64(rb.StartTs)))
-		seeds := make([][]float32, 0, numSeeds)
+
+		// For sampled k-means, collect more vectors: estimate 256 points per
+		// centroid, capped at 1GB sample RAM (S·d·4B).
+		const maxSampleRAM = 1 << 30 // 1GB
+		sampleSize := numSeeds
+		if rb.SampledKMeans && indexer.NumBuildPasses() > 0 {
+			// Estimate: 256 points per centroid; cap RAM at 1GB
+			numClusters := indexer.NumThreads() // proxies to cluster count for hnsw
+			estimatedSize := 256 * numClusters
+			if estimatedSize > 0 && dimension > 0 {
+				maxByRAM := maxSampleRAM / (dimension * 4)
+				sampleSize = min(estimatedSize, int(maxByRAM))
+				// Floor: at least numSeeds, but never below 32*k
+				sampleSize = max(numSeeds, max(32*numClusters, 1))
+			}
+		}
+
+		seeds := make([][]float32, 0, sampleSize)
 		err := MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
 			Prefix:      pk.DataPrefix(),
 			ReadTs:      rb.StartTs,
@@ -1580,9 +1605,9 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 					return fmt.Errorf("vector dimension mismatch expected dimension %d but got %d", dimension, len(inVec))
 				}
 				count += 1
-				if len(seeds) < numSeeds {
+				if len(seeds) < sampleSize {
 					seeds = append(seeds, inVec)
-				} else if j := seedRng.Intn(count); j < numSeeds {
+				} else if j := seedRng.Intn(count); j < sampleSize {
 					seeds[j] = inVec
 				}
 				return nil
@@ -1592,8 +1617,15 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		if err != nil {
 			return err
 		}
-		for _, seed := range seeds {
-			indexer.AddSeedVector(seed)
+
+		// Add seeds to indexer for k-means initialization
+		for i := 0; i < min(numSeeds, len(seeds)); i++ {
+			indexer.AddSeedVector(seeds[i])
+		}
+
+		// Keep sampled vectors for sampled k-means path
+		if rb.SampledKMeans && len(seeds) > numSeeds {
+			sampledVectors = seeds
 		}
 	}
 
@@ -1615,30 +1647,56 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 
 		indexer.StartBuild(caches)
 
-		builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-		builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
-			val, err := pl.Value(rb.StartTs)
-			if err != nil {
-				return []*pb.DirectedEdge{}, err
+		// Sampled k-means: use in-memory sample instead of full disk scan
+		if rb.SampledKMeans && len(sampledVectors) > 0 && count >= indexer.NumSeedVectors() {
+			// Process sampled vectors with parallelism across NumGo goroutines
+			numGo := max(16, runtime.GOMAXPROCS(0))
+			eg := &errgroup.Group{}
+			eg.SetLimit(numGo)
+
+			for i := 0; i < len(sampledVectors); i++ {
+				i := i // Capture loop variable
+				eg.Go(func() error {
+					if err := indexer.BuildInsert(ctx, 0, sampledVectors[i]); err != nil {
+						return err
+					}
+					return nil
+				})
 			}
 
-			inVec := types.BytesAsFloatArray(val.Value.([]byte))
-			if len(inVec) != dimension {
+			if err := eg.Wait(); err != nil {
+				return err
+			}
+		} else {
+			// Standard k-means: full disk scan
+			builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+			builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+				val, err := pl.Value(rb.StartTs)
+				if err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
+
+				inVec := types.BytesAsFloatArray(val.Value.([]byte))
+				if len(inVec) != dimension {
+					return []*pb.DirectedEdge{}, nil
+				}
+				if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
+					return []*pb.DirectedEdge{}, err
+				}
 				return []*pb.DirectedEdge{}, nil
 			}
-			if err := indexer.BuildInsert(ctx, uid, inVec); err != nil {
-				return []*pb.DirectedEdge{}, err
-			}
-			return []*pb.DirectedEdge{}, nil
-		}
 
-		err := builder.RunWithoutTemp(ctx)
-		if err != nil {
-			return err
+			err := builder.RunWithoutTemp(ctx)
+			if err != nil {
+				return err
+			}
 		}
 
 		indexer.EndBuild()
 	}
+
+	// Free sampled vectors after k-means training
+	sampledVectors = nil
 
 	centroids := indexer.GetCentroids()
 
@@ -1911,6 +1969,7 @@ func RebuildVectorIndexForBulk(ctx context.Context, attr string,
 			Predicate: attr, ValueType: currentSchema.ValueType},
 		CurrentSchema:        currentSchema,
 		SkipVFloatConversion: true,
+		SampledKMeans:        true,
 	}
 	return rebuildTokIndex(ctx, rb)
 }
