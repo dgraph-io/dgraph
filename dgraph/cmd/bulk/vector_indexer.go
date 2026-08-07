@@ -31,13 +31,14 @@ import (
 // The shared DB approach avoids the global pstore race condition.
 type vectorIndexer struct {
 	*reducer
-	tmpDb       *badger.DB                            // Shared vector tmpDb for read-write operations
-	indexSpecs  map[string]*pb.VectorIndexSpec        // pred -> vector index spec (all specs)
-	indexers    map[string]index.VectorIndex[float32] // pred -> HNSW indexer instance (lazily created)
-	txnCaches   map[string]*hnsw.TxnCache             // pred -> transaction cache (lazily created)
-	txns        map[string]*posting.Txn               // pred -> posting txn (for CommitToDisk)
-	vectorPreds map[string]bool                       // Track predicates with vectors for copy phase
-	dimensions  map[string]int                        // Track expected dimensions per predicate
+	tmpDb         *badger.DB                            // Shared vector tmpDb for read-write operations
+	indexSpecs    map[string]*pb.VectorIndexSpec        // pred -> vector index spec (all specs)
+	indexers      map[string]index.VectorIndex[float32] // pred -> HNSW indexer instance (lazily created)
+	txnCaches     map[string]*hnsw.TxnCache             // pred -> transaction cache (lazily created)
+	txns          map[string]*posting.Txn               // pred -> posting txn (for CommitToDisk)
+	vectorPreds   map[string]bool                       // Track predicates with vectors for copy phase
+	dimensions    map[string]int                        // Track expected dimensions per predicate
+	deferredPreds map[string]bool                       // Track predicates with deferred (partitioned) builds
 
 	// For tracking predicate → output shard mapping
 	shardId           int            // This shard's ID
@@ -185,6 +186,7 @@ func newVectorIndexerShared(r *reducer, sharedVectorDb *badger.DB, indexSpecs ma
 		txns:              make(map[string]*posting.Txn),
 		vectorPreds:       make(map[string]bool),
 		dimensions:        make(map[string]int),
+		deferredPreds:     make(map[string]bool),
 		shardId:           shardId,
 		predToShardMu:     predToShardMu,
 		predToOutputShard: predToOutputShard,
@@ -209,12 +211,6 @@ func (vi *vectorIndexer) getOrCreateIndexer(pred string) (index.VectorIndex[floa
 	spec, ok := vi.indexSpecs[pred]
 	if !ok {
 		return nil, nil, fmt.Errorf("no vector index spec for predicate %s", pred)
-	}
-
-	if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
-		return nil, nil, fmt.Errorf("predicate %s uses the experimental partitioned vector index "+
-			"(numClusters); it is not supported by the bulk loader yet — load without the index "+
-			"and add it via schema alter afterwards", pred)
 	}
 
 	// Create the HNSW indexer
@@ -247,6 +243,42 @@ func (vi *vectorIndexer) getOrCreateIndexer(pred string) (index.VectorIndex[floa
 func (vi *vectorIndexer) isVectorPredicate(pred string) bool {
 	_, ok := vi.indexSpecs[pred]
 	return ok
+}
+
+// isDeferredPred reports whether the predicate uses a partitioned (deferred) vector index.
+func (vi *vectorIndexer) isDeferredPred(pred string) bool {
+	vi.mu.Lock()
+	defer vi.mu.Unlock()
+
+	if deferred, ok := vi.deferredPreds[pred]; ok {
+		return deferred
+	}
+
+	spec, ok := vi.indexSpecs[pred]
+	if !ok {
+		return false
+	}
+
+	isDeferred := partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt)
+	vi.deferredPreds[pred] = isDeferred
+	return isDeferred
+}
+
+// trackPredShard records the shard assignment for a predicate, enforcing the invariant
+// that each predicate lives in exactly one shard.
+func (vi *vectorIndexer) trackPredShard(pred string) bool {
+	vi.predToShardMu.Lock()
+	defer vi.predToShardMu.Unlock()
+
+	if existingShard, exists := vi.predToOutputShard[pred]; exists {
+		if existingShard != vi.shardId {
+			return false // Invariant violation: predicate in multiple shards
+		}
+	} else {
+		vi.predToOutputShard[pred] = vi.shardId
+		glog.Infof("Predicate %s assigned to output shard %d", pred, vi.shardId)
+	}
+	return true
 }
 
 const batchFlushThreshold = 1000 // Flush write batch after this many entries
@@ -397,6 +429,20 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 		return
 	}
 
+	// Deferred predicates (partitioned indexes) are skipped during streaming;
+	// they will be built post-reduce via RebuildVectorIndexForBulk.
+	if vi.isDeferredPred(ve.pred) {
+		if !vi.trackPredShard(ve.pred) {
+			vi.handleError(
+				fmt.Errorf("predicate %s invariant violation: same predicate in multiple shards",
+					ve.pred),
+				fmt.Sprintf("predicate=%s shard=%d", ve.pred, vi.shardId),
+				"<vector_invariant>",
+			)
+		}
+		return
+	}
+
 	// Validate vector dimension
 	if !vi.validateVectorDimension(ve.pred, ve.vector, ve.uid) {
 		return
@@ -413,26 +459,13 @@ func (vi *vectorIndexer) addVectorEntry(ve *vectorEntry) {
 
 	// Track predicate → shard mapping (for copy phase)
 	// INVARIANT: Each predicate should only appear in ONE shard
-	if vi.predToShardMu != nil && vi.predToOutputShard != nil {
-		vi.predToShardMu.Lock()
-		if existingShard, exists := vi.predToOutputShard[ve.pred]; exists {
-			if existingShard != vi.shardId {
-				// This is a serious invariant violation - same predicate in multiple shards
-				// This could lead to data corruption as HNSW graph would be split
-				vi.predToShardMu.Unlock()
-				vi.handleError(
-					fmt.Errorf("predicate %s already assigned to shard %d, but shard %d also received vectors",
-						ve.pred, existingShard, vi.shardId),
-					fmt.Sprintf("predicate=%s existing_shard=%d current_shard=%d", ve.pred, existingShard, vi.shardId),
-					"<vector_invariant>",
-				)
-				return // Skip this vector to prevent further corruption
-			}
-		} else {
-			vi.predToOutputShard[ve.pred] = vi.shardId
-			glog.Infof("Predicate %s assigned to output shard %d", ve.pred, vi.shardId)
-		}
-		vi.predToShardMu.Unlock()
+	if !vi.trackPredShard(ve.pred) {
+		vi.handleError(
+			fmt.Errorf("predicate %s already assigned to a different shard", ve.pred),
+			fmt.Sprintf("predicate=%s shard=%d", ve.pred, vi.shardId),
+			"<vector_invariant>",
+		)
+		return
 	}
 
 	// Insert into HNSW index
