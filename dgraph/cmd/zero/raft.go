@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	raftDefaults = "idx=1; learner=false;"
+	raftDefaults = "idx=1; learner=false; election-tick=20;"
 )
 
 var proposalKey uint64

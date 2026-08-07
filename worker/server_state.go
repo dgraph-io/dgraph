@@ -31,7 +31,7 @@ const (
 	AuditDefaults  = `compress=false; days=10; size=100; dir=; output=; encrypt-file=;`
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
-		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
+		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=; election-tick=20;`
 	SecurityDefaults = `token=; whitelist=;`
 	CDCDefaults      = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
 		`client_key=; sasl-mechanism=PLAIN; tls=false;`
