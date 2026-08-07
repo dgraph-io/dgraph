@@ -50,6 +50,7 @@ const (
 	IdentBigFloat  = 0xD
 	IdentVFloat    = 0xE
 	IdentNGram     = 0xF
+	IdentBM25      = 0x10
 	IdentCustom    = 0x80
 	IdentDelimiter = 0x1f // ASCII 31 - Unit separator
 )
@@ -101,6 +102,7 @@ func init() {
 	registerTokenizer(TermTokenizer{})
 	registerTokenizer(FullTextTokenizer{})
 	registerTokenizer(NGramTokenizer{})
+	registerTokenizer(BM25Tokenizer{})
 	registerTokenizer(Sha256Tokenizer{})
 	setupBleve()
 }
@@ -575,6 +577,47 @@ func (t FullTextTokenizer) Tokens(v interface{}) ([]string, error) {
 func (t FullTextTokenizer) Identifier() byte { return IdentFullText }
 func (t FullTextTokenizer) IsSortable() bool { return false }
 func (t FullTextTokenizer) IsLossy() bool    { return true }
+
+// BM25Tokenizer generates tokens for BM25 ranked text search.
+// It uses the same pipeline as FullTextTokenizer (normalize, stopwords, stem)
+// but preserves duplicates for term frequency counting.
+type BM25Tokenizer struct{ lang string }
+
+func (t BM25Tokenizer) Name() string { return "bm25" }
+func (t BM25Tokenizer) Type() string { return "string" }
+func (t BM25Tokenizer) Tokens(v interface{}) ([]string, error) {
+	str, ok := v.(string)
+	if !ok || str == "" {
+		return []string{}, nil
+	}
+	lang := LangBase(t.lang)
+	tokens := fulltextAnalyzer.Analyze([]byte(str))
+	tokens = filterStopwords(lang, tokens)
+	tokens = filterStemmers(lang, tokens)
+	// Return all tokens with duplicates preserved (for TF counting).
+	result := make([]string, 0, len(tokens))
+	for _, t := range tokens {
+		result = append(result, string(t.Term))
+	}
+	return result, nil
+}
+func (t BM25Tokenizer) Identifier() byte { return IdentBM25 }
+func (t BM25Tokenizer) IsSortable() bool { return false }
+func (t BM25Tokenizer) IsLossy() bool    { return true }
+
+// TokensWithFrequency tokenizes the input and returns term frequencies and doc length.
+func (t BM25Tokenizer) TokensWithFrequency(v interface{}, lang string) (map[string]uint32, uint32, error) {
+	tok := BM25Tokenizer{lang: lang}
+	allTokens, err := tok.Tokens(v)
+	if err != nil {
+		return nil, 0, err
+	}
+	termFreqs := make(map[string]uint32, len(allTokens))
+	for _, t := range allTokens {
+		termFreqs[t]++
+	}
+	return termFreqs, uint32(len(allTokens)), nil
+}
 
 // Sha256Tokenizer generates tokens for the sha256 hash part from string data.
 type Sha256Tokenizer struct{ _ string }
