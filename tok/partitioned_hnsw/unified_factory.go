@@ -8,6 +8,7 @@ package partitioned_hnsw
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/golang/glog"
 
@@ -47,6 +48,26 @@ func SpecHasOption(spec *pb.VectorIndexSpec, key string) bool {
 		}
 	}
 	return false
+}
+
+// NumClustersFromSpec returns the cluster count of a partitioned spec and
+// whether the spec is partitioned. Returns (1000, true) as the default for
+// partitioned specs with no explicit numClusters option. Returns (0, false)
+// for non-partitioned specs.
+func NumClustersFromSpec(spec *pb.VectorIndexSpec) (int, bool) {
+	if !SpecHasOption(spec, NumClustersOpt) {
+		return 0, false
+	}
+	for _, o := range spec.Options {
+		if o.Key == NumClustersOpt {
+			n, err := strconv.Atoi(o.Value)
+			if err != nil || n < 1 {
+				return 1000, true
+			}
+			return n, true
+		}
+	}
+	return 1000, true
 }
 
 // isPartitioned reports whether o selects the partitioned implementation,

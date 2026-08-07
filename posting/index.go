@@ -15,7 +15,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -802,7 +801,9 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 
 	ResetCache()
 
-	return x.ExponentialRetry(int(x.Config.MaxRetries),
+	// MaxRetries can be zero (unset) outside a running alpha; retry at least
+	// once or the commit is silently skipped and the writes are lost.
+	if err := x.ExponentialRetry(max(1, int(x.Config.MaxRetries)),
 		20*time.Millisecond, func() error {
 			err := txn.CommitToDisk(writer, r.startTs)
 			if err == badger.ErrBannedKey {
@@ -810,7 +811,10 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 				return nil
 			}
 			return err
-		})
+		}); err != nil {
+		return err
+	}
+	return writer.Flush()
 }
 
 func printTreeStats(txn *Txn) {
@@ -1136,6 +1140,13 @@ type IndexRebuild struct {
 	StartTs       uint64
 	OldSchema     *pb.SchemaUpdate
 	CurrentSchema *pb.SchemaUpdate
+
+	// SkipVFloatConversion skips the normalization pre-pass that converts
+	// default-typed values to vfloat. The bulk loader sets this: its map
+	// phase already stores vfloat, and re-writing data keys at writeTs from
+	// a second txn would silently overwrite the reduce output (same key,
+	// same ts).
+	SkipVFloatConversion bool
 }
 
 type indexOp int
@@ -1478,46 +1489,48 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 
 	glog.V(1).Infof("Rebuilding vector index for predicate %s: selected dimension %d", rb.Attr, dimension)
 
-	norm := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
-	norm.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
-		val, err := pl.Value(rb.StartTs)
-		if err != nil {
-			return nil, err
-		}
-		if val.Tid == types.VFloatID {
+	if !rb.SkipVFloatConversion {
+		norm := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+		norm.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
+			val, err := pl.Value(rb.StartTs)
+			if err != nil {
+				return nil, err
+			}
+			if val.Tid == types.VFloatID {
+				return nil, nil
+			}
+
+			// Convert to VFloatID and persist as binary bytes.
+			sv, err := types.Convert(val, types.VFloatID)
+			if err != nil {
+				return nil, err
+			}
+			b := types.ValueForType(types.BinaryID)
+			if err = types.Marshal(sv, &b); err != nil {
+				return nil, err
+			}
+
+			edge := &pb.DirectedEdge{
+				Attr:      rb.Attr,
+				Entity:    uid,
+				Value:     b.Value.([]byte),
+				ValueType: types.VFloatID.Enum(),
+			}
+			inKey := x.DataKey(edge.Attr, uid)
+			p, err := txn.Get(inKey)
+			if err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+
+			if err := p.addMutation(ctx, txn, edge); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
 			return nil, nil
 		}
 
-		// Convert to VFloatID and persist as binary bytes.
-		sv, err := types.Convert(val, types.VFloatID)
-		if err != nil {
-			return nil, err
+		if err := norm.RunWithoutTemp(ctx); err != nil {
+			return err
 		}
-		b := types.ValueForType(types.BinaryID)
-		if err = types.Marshal(sv, &b); err != nil {
-			return nil, err
-		}
-
-		edge := &pb.DirectedEdge{
-			Attr:      rb.Attr,
-			Entity:    uid,
-			Value:     b.Value.([]byte),
-			ValueType: types.VFloatID.Enum(),
-		}
-		inKey := x.DataKey(edge.Attr, uid)
-		p, err := txn.Get(inKey)
-		if err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-
-		if err := p.addMutation(ctx, txn, edge); err != nil {
-			return []*pb.DirectedEdge{}, err
-		}
-		return nil, nil
-	}
-
-	if err := norm.RunWithoutTemp(ctx); err != nil {
-		return err
 	}
 
 	count := 0
@@ -1866,6 +1879,24 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
+// RebuildVectorIndexForBulk builds a vector index for attr from the data
+// already present in pstore, committing graph and centroid keys at startTs.
+// currentSchema must carry Directive_INDEX and the vector IndexSpecs; the
+// caller must pass a private copy (SetDimension mutates IndexSpecs).
+func RebuildVectorIndexForBulk(ctx context.Context, attr string,
+	currentSchema *pb.SchemaUpdate, startTs uint64) error {
+	Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: startTs})
+	rb := &IndexRebuild{
+		Attr:    attr,
+		StartTs: startTs,
+		OldSchema: &pb.SchemaUpdate{
+			Predicate: attr, ValueType: currentSchema.ValueType},
+		CurrentSchema:        currentSchema,
+		SkipVFloatConversion: true,
+	}
+	return rebuildTokIndex(ctx, rb)
+}
+
 func (rb *IndexRebuild) needsCountIndexRebuild() indexOp {
 	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
@@ -2028,18 +2059,9 @@ func partitionedClusterCounts(rb *IndexRebuild) []int {
 			return
 		}
 		for _, spec := range su.IndexSpecs {
-			if !partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
-				continue
+			if n, ok := partitioned_hnsw.NumClustersFromSpec(spec); ok {
+				counts = append(counts, n)
 			}
-			numClusters := 1000 // must match applyOptions' default
-			for _, opt := range spec.Options {
-				if opt.Key == partitioned_hnsw.NumClustersOpt {
-					if n, err := strconv.Atoi(opt.Value); err == nil {
-						numClusters = n
-					}
-				}
-			}
-			counts = append(counts, numClusters)
 		}
 	}
 	collect(rb.OldSchema)

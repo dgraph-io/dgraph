@@ -130,3 +130,35 @@ func TestPlainHNSWUnaffectedByUnification(t *testing.T) {
 	require.EqualValues(t, indexRebuild, upgrade.needsVectorIndexEdgesRebuild(),
 		"adding numClusters to a plain hnsw predicate must trigger a rebuild")
 }
+
+// TestNumClustersFromSpec verifies the helper correctly extracts cluster counts.
+func TestNumClustersFromSpec(t *testing.T) {
+	attr := x.AttrInRootNamespace("vecpred")
+
+	// Non-partitioned spec
+	nonPart := plainHNSWSchema(attr)
+	n, ok := partitioned_hnsw.NumClustersFromSpec(nonPart.IndexSpecs[0])
+	require.EqualValues(t, 0, n)
+	require.False(t, ok)
+
+	// Partitioned spec with explicit numClusters
+	part4 := partitionedSchema(attr, "4")
+	n, ok = partitioned_hnsw.NumClustersFromSpec(part4.IndexSpecs[0])
+	require.EqualValues(t, 4, n)
+	require.True(t, ok)
+
+	// Partitioned spec with default numClusters (1000)
+	partDefault := &pb.SchemaUpdate{
+		Predicate: attr,
+		ValueType: pb.Posting_VFLOAT,
+		Directive: pb.SchemaUpdate_INDEX,
+		IndexSpecs: []*pb.VectorIndexSpec{{
+			Name:    "hnsw",
+			Options: []*pb.OptionPair{}, // No numClusters option
+		}},
+	}
+	// Since this has no NumClustersOpt, it should not be partitioned
+	n, ok = partitioned_hnsw.NumClustersFromSpec(partDefault.IndexSpecs[0])
+	require.EqualValues(t, 0, n)
+	require.False(t, ok)
+}
