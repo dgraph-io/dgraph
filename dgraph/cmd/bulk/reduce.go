@@ -36,6 +36,8 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -47,6 +49,15 @@ type reducer struct {
 	mu        sync.RWMutex
 	streamIds map[string]uint32
 }
+
+// vectorIndexKind describes the type of vector index for a predicate.
+type vectorIndexKind int
+
+const (
+	vecNone      vectorIndexKind = iota // No vector index
+	vecStreaming                        // Monolithic index, build during streaming
+	vecDeferred                         // Partitioned index, build post-reduce
+)
 
 func (r *reducer) run() error {
 	dirs := readShardDirs(filepath.Join(r.opt.TmpDir, reduceShardDir))
@@ -156,10 +167,13 @@ func (r *reducer) run() error {
 		return err
 	}
 
-	// After all shards complete, copy vector data to correct output DBs
+	// After all shards complete, build deferred (partitioned) vector indexes
 	if sharedVectorDb != nil && len(predToOutputShard) > 0 {
+		if err := r.buildDeferredVectorIndexes(sharedVectorDb, vectorIndexSpecs, predToOutputShard); err != nil {
+			return err
+		}
 		fmt.Println("Copying vector data to output shards...")
-		r.copyVectorDataToShards(sharedVectorDb, predToOutputShard)
+		r.copyVectorDataToShards(sharedVectorDb, vectorIndexSpecs, predToOutputShard)
 	}
 
 	return nil
@@ -502,9 +516,44 @@ func (r *reducer) writeSplitLists(db, tmpDb *badger.DB, writer *badger.StreamWri
 	x.Check(stream.Orchestrate(context.Background()))
 }
 
+// buildDeferredVectorIndexes builds partitioned vector indexes for all deferred predicates
+// that have partitioned specs. It reads raw vectors from vectorDb, runs the multi-pass build,
+// and commits the resulting graphs and centroid keys back to vectorDb.
+func (r *reducer) buildDeferredVectorIndexes(vectorDb *badger.DB, specs map[string]*pb.VectorIndexSpec, predToShard map[string]int) error {
+	var deferredPreds []string
+	for pred := range predToShard {
+		if spec, ok := specs[pred]; ok {
+			if _, isPartitioned := partitioned_hnsw.NumClustersFromSpec(spec); isPartitioned {
+				deferredPreds = append(deferredPreds, pred)
+			}
+		}
+	}
+
+	if len(deferredPreds) == 0 {
+		return nil
+	}
+
+	// Sort for determinism
+	sort.Strings(deferredPreds)
+
+	// Build each deferred predicate sequentially to bound peak memory
+	for _, pred := range deferredPreds {
+		// Clone the schema to avoid mutating the user-visible version
+		su := proto.Clone(r.schema.getSchema(pred)).(*pb.SchemaUpdate)
+		su.Predicate = pred
+
+		fmt.Printf("Building deferred vector index for predicate %s...\n", pred)
+		if err := posting.RebuildVectorIndexForBulk(context.Background(), pred, su, r.state.writeTs); err != nil {
+			return fmt.Errorf("error building vector index for %s: %w", pred, err)
+		}
+	}
+
+	return nil
+}
+
 // copyVectorDataToShards copies vector data from the shared vectorTmpDb to the correct output DBs.
 // It uses the predToOutputShard map to determine which predicate goes to which shard.
-func (r *reducer) copyVectorDataToShards(vectorDb *badger.DB, predToShard map[string]int) {
+func (r *reducer) copyVectorDataToShards(vectorDb *badger.DB, specs map[string]*pb.VectorIndexSpec, predToShard map[string]int) {
 	if len(predToShard) == 0 {
 		return
 	}
@@ -531,6 +580,19 @@ func (r *reducer) copyVectorDataToShards(vectorDb *badger.DB, predToShard map[st
 			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecKeyword)) // __vector_
 			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecEntry))   // __vector_entry
 			allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecDead))    // __vector_dead
+
+			// Add partitioned index keys if this predicate uses partitioning
+			if spec, ok := specs[pred]; ok {
+				if n, isPartitioned := partitioned_hnsw.NumClustersFromSpec(spec); isPartitioned {
+					for i := range n {
+						allPreds = append(allPreds, hnsw.SplitVecAttr(pred, i))
+						allPreds = append(allPreds, hnsw.SplitEntryAttr(pred, i))
+						allPreds = append(allPreds, hnsw.SplitDeadAttr(pred, i))
+					}
+					// Add the centroid key
+					allPreds = append(allPreds, hnsw.ConcatStrings(pred, kmeans.CentroidPrefix))
+				}
+			}
 		}
 		sort.Strings(allPreds)
 
@@ -780,7 +842,7 @@ func (r *reducer) toList(req *encodeRequest, vi *vectorIndexer) {
 	}()
 
 	start, end, num := cbuf.StartOffset(), cbuf.StartOffset(), 0
-	trackVectorIndex := make(map[string]bool) // Track predicates with vector indexes
+	trackVectorIndex := make(map[string]vectorIndexKind) // Track predicate vector index types
 
 	appendToList := func() {
 		if num == 0 {
@@ -830,13 +892,26 @@ func (r *reducer) toList(req *encodeRequest, vi *vectorIndexer) {
 
 				// Extract vectors for vector indexing
 				if pk.IsData() && req.vectorBuf != nil {
-					doVector, ok := trackVectorIndex[pk.Attr]
+					kind, ok := trackVectorIndex[pk.Attr]
 					if !ok {
-						// Check if this predicate has a vector index
-						doVector = r.schema.hasVectorIndex(pk.Attr)
-						trackVectorIndex[pk.Attr] = doVector
+						// Classify the vector index type on first encounter
+						if !r.schema.hasVectorIndex(pk.Attr) {
+							kind = vecNone
+						} else if vi != nil && vi.isDeferredPred(pk.Attr) {
+							kind = vecDeferred
+						} else {
+							kind = vecStreaming
+						}
+						trackVectorIndex[pk.Attr] = kind
+
+						// Track the predicate shard on first classification
+						if (kind == vecStreaming || kind == vecDeferred) && vi != nil {
+							vi.trackPredShard(pk.Attr)
+						}
 					}
-					if doVector {
+
+					// Only append to streaming buffer for monolithic indexes
+					if kind == vecStreaming {
 						// Check if this is a vector value (vfloat type)
 						if types.TypeID(p.ValType) == types.VFloatID && len(p.Value) > 0 {
 							vector := types.BytesAsFloatArray(p.Value)
