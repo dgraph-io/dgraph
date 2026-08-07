@@ -776,6 +776,95 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
 	return nil
 }
 
+// ReadManyData is the batched counterpart of ReadData: it resolves many keys to
+// their *List in one shared read. Keys already warm in the process-global cache
+// are served from there; the cold remainder is read from disk by reusing a single
+// transaction and a single AllVersions iterator across the whole batch (amortizing
+// txn/iterator construction over the frontier) and folded by the same
+// ReadPostingList used for single-key reads. It mirrors ReadData's two-phase read
+// (full chain at MaxUint64 to populate the cache, then a readTs-bounded re-read
+// only for keys whose complete posting is newer than readTs). Returned lists are
+// aligned with keys.
+func (ml *MemoryLayer) ReadManyData(keys [][]byte, pstore *badger.DB, readTs uint64) ([]*List, error) {
+	if pstore.IsClosed() {
+		return nil, badger.ErrDBClosed
+	}
+	lists := make([]*List, len(keys))
+
+	// Phase 0: serve warm keys from the global cache.
+	var missIdx []int
+	var missKeys [][]byte
+	for i, key := range keys {
+		if l := ml.readFromCache(key, readTs); l != nil {
+			l.mutationMap.setTs(readTs)
+			lists[i] = l
+			continue
+		}
+		missIdx = append(missIdx, i)
+		missKeys = append(missKeys, key)
+	}
+	if len(missKeys) == 0 {
+		return lists, nil
+	}
+
+	// Phase 1: full version chains at MaxUint64 (so the cached list stays valid
+	// for a range of read timestamps, as ReadData relies on), populate cache.
+	readChains := func(ks [][]byte, ts uint64) ([]*List, error) {
+		txn := pstore.NewTransactionAt(ts, false)
+		defer txn.Discard()
+		// One AllVersions iterator reused across the batch amortizes iterator/txn
+		// construction over the whole frontier; ReadPostingList folds each key's
+		// version chain exactly as the single-key disk read (readFromDisk) does.
+		// PrefetchValues is off to match readFromDisk.
+		iterOpts := badger.DefaultIteratorOptions
+		iterOpts.AllVersions = true
+		iterOpts.PrefetchValues = false
+		it := txn.NewIterator(iterOpts)
+		defer it.Close()
+		out := make([]*List, len(ks))
+		for j, key := range ks {
+			it.Seek(key)
+			l, err := ReadPostingList(key, it)
+			if err != nil {
+				return nil, err
+			}
+			out[j] = l
+		}
+		return out, nil
+	}
+
+	full, err := readChains(missKeys, math.MaxUint64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Phase 2: keys whose complete posting is newer than readTs need a
+	// readTs-bounded re-read (mirrors ReadData's second readFromDisk).
+	var reIdx []int
+	var reKeys [][]byte
+	for j, l := range full {
+		ml.saveInCache(missKeys[j], l)
+		if l.minTs == 0 || readTs >= l.minTs {
+			l.mutationMap.setTs(readTs)
+			lists[missIdx[j]] = l
+			continue
+		}
+		reIdx = append(reIdx, j)
+		reKeys = append(reKeys, missKeys[j])
+	}
+	if len(reKeys) > 0 {
+		bounded, err := readChains(reKeys, readTs)
+		if err != nil {
+			return nil, err
+		}
+		for k, l := range bounded {
+			l.mutationMap.setTs(readTs)
+			lists[missIdx[reIdx[k]]] = l
+		}
+	}
+	return lists, nil
+}
+
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64, readUids bool) (*List, error) {
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
