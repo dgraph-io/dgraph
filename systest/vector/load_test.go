@@ -783,3 +783,125 @@ func TestBulkLoadVectorEdgeCases(t *testing.T) {
 	require.JSONEq(t, `{"q":[{"count":0}]}`, string(result.GetJson()))
 
 }
+
+func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
+	// Partitioned vector index schema (numClusters set)
+	partitionedSchema := `
+		project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .
+	`
+
+	// Step 1: Create a source cluster and load vectors into it
+	sourceConf := dgraphtest.NewClusterConfig().
+		WithNumAlphas(1).
+		WithNumZeros(1).
+		WithReplicas(1).
+		WithACL(time.Hour)
+	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
+	require.NoError(t, err)
+	defer func() { sourceCluster.Cleanup(t.Failed()) }()
+	require.NoError(t, sourceCluster.Start())
+
+	gc, cleanup, err := sourceCluster.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+	hc, err := sourceCluster.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.RootNamespace))
+
+	// Set up partitioned vector schema and load vectors
+	require.NoError(t, gc.SetupSchema(partitionedSchema))
+
+	numVectors := 1000
+	pred := "project_description_v"
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
+
+	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+	_, err = gc.Mutate(mu)
+	require.NoError(t, err)
+
+	// Verify vectors are loaded and queryable in source cluster
+	for _, vector := range vectors[:3] { // Test first 3 vectors
+		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(similarVectors), 2, "similar_to query should return results")
+	}
+
+	// Step 2: Export the data from source cluster
+	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+
+	// Step 3: Set up a cluster for bulk loading and run bulk load on exported data
+	bulkOutDir := t.TempDir()
+	bulkConf := dgraphtest.NewClusterConfig().
+		WithNumAlphas(1).
+		WithNumZeros(1).
+		WithReplicas(1).
+		WithACL(time.Hour).
+		WithBulkLoadOutDir(bulkOutDir)
+
+	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
+	require.NoError(t, err)
+	defer func() { bulkCluster.Cleanup(t.Failed()) }()
+
+	// Start only Zero for bulk loading
+	require.NoError(t, bulkCluster.StartZero(0))
+	require.NoError(t, bulkCluster.HealthCheck(true))
+
+	// Copy exported files from source cluster container to host for bulk load
+	exportHostDir := t.TempDir()
+	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, dataFiles, "should have exported data files")
+	require.NotEmpty(t, schemaFiles, "should have exported schema files")
+
+	// Run bulk load with exported data
+	opts := dgraphtest.BulkOpts{
+		DataFiles:   dataFiles,
+		SchemaFiles: schemaFiles,
+		OutDir:      bulkOutDir,
+	}
+	require.NoError(t, bulkCluster.BulkLoad(opts))
+
+	// Step 4: Create a new cluster that uses the bulk loaded p directory
+	targetConf := dgraphtest.NewClusterConfig().
+		WithNumAlphas(1).
+		WithNumZeros(1).
+		WithReplicas(1).
+		WithACL(time.Hour).
+		WithBulkLoadOutDir(bulkOutDir)
+
+	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
+	require.NoError(t, err)
+	defer func() { targetCluster.Cleanup(t.Failed()) }()
+
+	// Start the target cluster (both Zero and Alphas)
+	require.NoError(t, targetCluster.Start())
+
+	// Get a client to verify the data
+	targetGc, targetCleanup, err := targetCluster.Client()
+	require.NoError(t, err)
+	defer targetCleanup()
+	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+	// Step 5: Verify vector count
+	query := `{
+		vector(func: has(project_description_v)) {
+			count(uid)
+		}
+	}`
+	result, err := targetGc.Query(query)
+	require.NoError(t, err)
+	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+
+	// Step 6: Verify vector similarity queries work (tests that partitioned index was built correctly)
+	for i, vector := range vectors {
+		similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(similarVectors), 2,
+			"similar_to query should return results for vector %d", i)
+	}
+}
