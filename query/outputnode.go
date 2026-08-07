@@ -120,7 +120,19 @@ type node struct {
 	child *node
 }
 
-var nodeSize = int(unsafe.Sizeof(node{}))
+var (
+	nodeSize  = int(unsafe.Sizeof(node{}))
+	nodeAlign = int(unsafe.Alignof(node{}))
+)
+
+// init enforces that nodeSize is a multiple of nodeAlign so that consecutive
+// bump-allocations from a base-aligned buffer all return aligned slices. This
+// is what makes the AllocateAligned-free fast path in newNode safe.
+func init() {
+	if nodeSize%nodeAlign != 0 {
+		panic("query: nodeSize must be a multiple of nodeAlign")
+	}
+}
 
 func newEncoder() *encoder {
 	idSlice := make([]string, 1)
@@ -300,8 +312,18 @@ type fastJsonNode *node
 
 // newNode returns a fastJsonNode with its attr set to attr,
 // and all other meta set to their default value.
+//
+// We use Allocate (no zeroing) rather than AllocateAligned because:
+//  1. The underlying allocator buffers come from z.Calloc and are zero-initialized.
+//  2. The allocator is freshly created per encoder (not pooled) and never reuses
+//     space within its lifetime (Allocate is a strict-forward bump allocator).
+//  3. nodeSize (24 on 64-bit) is a multiple of nodeAlign — see init() — so
+//     consecutive Allocate(nodeSize) calls preserve alignment.
+//
+// Skipping the per-node memclr eliminates the runtime.memclrNoHeapPointers
+// hotspot (66% of CPU in BenchmarkFastJsonNode2Chilren).
 func (enc *encoder) newNode(attr uint16) fastJsonNode {
-	b := enc.alloc.AllocateAligned(nodeSize)
+	b := enc.alloc.Allocate(nodeSize)
 	n := (*node)(unsafe.Pointer(&b[0]))
 	enc.setAttr(n, attr)
 	return n
