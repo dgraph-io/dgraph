@@ -96,8 +96,6 @@ func initCmds() {
 			"overridden to values set with environment variables and flags.")
 	RootCmd.PersistentFlags().Bool("bindall", true,
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
-	RootCmd.PersistentFlags().Bool("expose_trace", false,
-		"Allow trace endpoint to be accessible from remote")
 	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
