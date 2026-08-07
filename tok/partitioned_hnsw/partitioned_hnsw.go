@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
 )
+
+const maxRouteMemoEntries = 32 << 20 // Cap routing memo at ~32M entries (~150MB per 1M vectors)
 
 type partitionedHNSW[T c.Float] struct {
 	floatBits int
@@ -39,6 +42,9 @@ type partitionedHNSW[T c.Float] struct {
 	caches        []index.CacheType
 	buildPass     int
 	buildSyncMaps map[int]*sync.Mutex
+
+	routeMemo      *sync.Map    // Memoize uuid -> cluster routing during index passes
+	routeMemoCount atomic.Int64 // Track memo size to enforce cap
 }
 
 func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
@@ -91,10 +97,34 @@ func (ph *partitionedHNSW[T]) BuildInsert(ctx context.Context, uuid uint64, vec 
 		return ph.partition.AddVector(vec)
 	}
 	// The build populated the centroids in memory; no cache needed.
-	index, err := ph.partition.FindIndexForInsert(nil, vec)
-	if err != nil {
-		return err
+	var index int
+	var err error
+
+	// During index passes with routing memo, check memo first to avoid redundant routing
+	if ph.routeMemo != nil {
+		if memoIdx, ok := ph.routeMemo.Load(uuid); ok {
+			index = memoIdx.(int)
+		} else {
+			// Cache miss: compute and store (if within cap)
+			index, err = ph.partition.FindIndexForInsert(nil, vec)
+			if err != nil {
+				return err
+			}
+			// Only store if we haven't exceeded the cap
+			if ph.routeMemoCount.Add(1) <= maxRouteMemoEntries {
+				ph.routeMemo.Store(uuid, index)
+			} else {
+				ph.routeMemoCount.Add(-1) // Undo the increment if we hit the cap
+			}
+		}
+	} else {
+		// No memo: compute routing normally
+		index, err = ph.partition.FindIndexForInsert(nil, vec)
+		if err != nil {
+			return err
+		}
 	}
+
 	if index%ph.numPasses != passIdx {
 		return nil
 	}
@@ -152,6 +182,12 @@ func (ph *partitionedHNSW[T]) StartBuild(caches []index.CacheType) {
 		return
 	}
 
+	// Initialize routing memo on entry to the first index pass (when centroids are frozen)
+	if ph.buildPass == ph.partition.NumPasses() && ph.partition.NumPasses() > 0 {
+		ph.routeMemo = &sync.Map{}
+		ph.routeMemoCount.Store(0)
+	}
+
 	for i := range ph.clusterMap {
 		ph.buildSyncMaps[i] = &sync.Mutex{}
 		if i%ph.numPasses != (ph.buildPass - ph.partition.NumPasses()) {
@@ -175,6 +211,12 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 	}
 
 	ph.buildPass += 1
+
+	// Free routing memo after all index passes complete
+	if ph.routeMemo != nil && ph.buildPass >= ph.partition.NumPasses()+ph.numPasses {
+		ph.routeMemo = nil
+		ph.routeMemoCount.Store(0)
+	}
 
 	if len(res) > 0 {
 		return res

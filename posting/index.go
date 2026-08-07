@@ -15,10 +15,13 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -1698,30 +1701,45 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			return err
 		}
 
-		for _, idx := range indexer.EndBuild() {
-			txns[idx].Update()
-			writer := NewTxnWriter(pstore)
+		finished := indexer.EndBuild()
+		if len(finished) > 0 {
+			// Parallelize per-cluster commits with a limited concurrency
+			eg := &errgroup.Group{}
+			eg.SetLimit(min(len(finished), runtime.GOMAXPROCS(0)))
 
-			// MaxRetries can be zero (unset) outside a running alpha;
-			// ExponentialRetry with zero attempts would silently skip the
-			// commit and lose the whole cluster's graph.
-			if err := x.ExponentialRetry(max(1, int(x.Config.MaxRetries)),
-				20*time.Millisecond, func() error {
-					err := txns[idx].CommitToDisk(writer, rb.StartTs)
-					if err == badger.ErrBannedKey {
-						glog.Errorf("Error while writing to banned namespace.")
-						return nil
+			for _, idx := range finished {
+				idx := idx // Capture loop variable
+				eg.Go(func() error {
+					txns[idx].Update()
+					writer := NewTxnWriter(pstore)
+
+					// MaxRetries can be zero (unset) outside a running alpha;
+					// ExponentialRetry with zero attempts would silently skip the
+					// commit and lose the whole cluster's graph.
+					if err := x.ExponentialRetry(max(1, int(x.Config.MaxRetries)),
+						20*time.Millisecond, func() error {
+							err := txns[idx].CommitToDisk(writer, rb.StartTs)
+							if err == badger.ErrBannedKey {
+								glog.Errorf("Error while writing to banned namespace.")
+								return nil
+							}
+							return err
+						}); err != nil {
+						return err
 					}
-					return err
-				}); err != nil {
-				return err
-			}
-			if err := writer.Flush(); err != nil {
-				return err
+					if err := writer.Flush(); err != nil {
+						return err
+					}
+
+					txns[idx].cache.plists = nil
+					txns[idx] = nil
+					return nil
+				})
 			}
 
-			txns[idx].cache.plists = nil
-			txns[idx] = nil
+			if err := eg.Wait(); err != nil {
+				return err
+			}
 		}
 	}
 
