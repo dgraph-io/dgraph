@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -263,10 +263,14 @@ func TestVectorIndexRebuilding(t *testing.T) {
 	// drop index
 	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
 
-	time.Sleep(5 * time.Second)
 	// rebuild index
 	require.NoError(t, gc.SetupSchema(testSchema))
-	time.Sleep(5 * time.Second)
+
+	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
+	require.Eventually(t, func() bool {
+		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
+		return err == nil && len(res) == 100
+	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	result, err = gc.Query(query)
 	require.NoError(t, err)
@@ -309,8 +313,8 @@ func TestVectorIndexDropPredicate(t *testing.T) {
 	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
@@ -365,6 +369,12 @@ func TestVectorIndexDropPredicate(t *testing.T) {
 	// add index back
 	require.NoError(t, gc.SetupSchema(testSchema))
 
+	// Rebuilding the HNSW index over pre-existing data is async; poll until ready.
+	require.Eventually(t, func() bool {
+		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
+		return err == nil && len(res) == 100
+	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
+
 	result, err = gc.Query(query)
 	require.NoError(t, err)
 	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
@@ -385,8 +395,8 @@ func TestVectorIndexWithoutSchema(t *testing.T) {
 	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
@@ -400,6 +410,14 @@ func TestVectorIndexWithoutSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, gc.SetupSchema(testSchema))
+
+	// Building the HNSW index over pre-existing nodes is async. Poll a
+	// sample query until the index is ready rather than sleeping a fixed
+	// duration, which is unreliable on slower CI runners.
+	require.Eventually(t, func() bool {
+		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
+		return err == nil && len(res) == 100
+	}, 30*time.Second, 500*time.Millisecond, "vector index not ready after 30s")
 
 	for _, vect := range vectors {
 		similarVects, err := gc.QueryMultipleVectorsUsingSimilarTo(vect, pred, 100)
@@ -427,8 +445,8 @@ func TestVectorIndexWithoutSchemaWithoutIndex(t *testing.T) {
 	require.NoError(t, c.Start())
 
 	gc, cleanup, err := c.Client()
-	defer cleanup()
 	require.NoError(t, err)
+	defer cleanup()
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))

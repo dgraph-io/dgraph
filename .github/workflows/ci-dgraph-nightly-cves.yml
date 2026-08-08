@@ -39,3 +39,8 @@ jobs:
           format: table
           exit-code: 1
           severity: CRITICAL,HIGH
+        env:
+          # openvex.json suppresses CVEs already fixed in main whose advisory
+          # fix-version is higher than the pseudo-version embedded in nightly
+          # builds (v25.0.0-YYYYMMDD...), which causes false Trivy positives.
+          TRIVY_VEX: openvex.json

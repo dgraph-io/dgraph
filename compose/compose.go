@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -251,6 +251,12 @@ func getZero(idx int, raft string) service {
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	if opts.Vmodule != "" {
 		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
+	}
+	if opts.WhiteList {
+		// Zero versions that guard their admin HTTP endpoints read the security whitelist
+		// from the environment. It is not passed as a --security flag because older zero
+		// versions would fail to start on an unrecognized flag.
+		svc.Environment = append(svc.Environment, "DGRAPH_ZERO_SECURITY=whitelist=0.0.0.0/0")
 	}
 	if idx == 1 {
 		svc.Command += " --bindall"

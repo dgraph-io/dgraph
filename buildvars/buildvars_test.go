@@ -158,7 +158,6 @@ func TestPackageDefaults(t *testing.T) {
 		{BuildTag, "24.04"},
 		{RuntimeImage, "ubuntu"},
 		{RuntimeTag, "24.04"},
-		{ComposeBuildDir, ""},
 		{GoBinDgraphPath, "/gobin/dgraph"},
 	}
 	for _, c := range cases {

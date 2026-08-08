@@ -15,15 +15,14 @@ permissions:
   contents: read
 
 jobs:
-  check-changes:
-    uses: ./.github/workflows/check-changes.yml
+  changes:
+    uses: ./.github/workflows/detect-changes.yml
 
   dgraph-load-tests:
-    needs: check-changes
-    if:
-      github.event.pull_request.draft == false && needs.check-changes.outputs.should-skip != 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
+    needs: changes
+    if: github.event.pull_request.draft == false && needs.changes.outputs.code == 'true'
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 

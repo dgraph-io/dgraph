@@ -1,7 +1,7 @@
 //go:build integration || upgrade
 
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -2931,4 +2931,175 @@ func (ssuite *SystestTestSuite) TestAddAndQueryZeroTimeValue() {
 		  }
 		]
 	  }`, string(resp.Json))
+}
+
+// TestOldTxnReadUnaffectedByLaterMutations is a regression test for
+// https://github.com/dgraph-io/dgraph/issues/9795: a query running at an earlier
+// start_ts must not see mutations committed after that timestamp.
+//
+// It follows the exact path of the reporter's failing test (spark-dgraph-connector
+// TestTransaction): seed a small Star Wars graph, pin a read-only transaction's
+// start_ts with a first query, then in separate committed transactions (1) delete a
+// <film> <starring> <leia> edge, (2) rename leia, and (3) insert a new person wired
+// into <film> <starring>. Re-reading through the pinned transaction must return
+// exactly the pre-mutation snapshot.
+//
+// The regression (bisected to 934a203f6, first bad in v25.3.0) leaked uid-list
+// predicates only: the deleted starring edge disappeared and the inserted one showed
+// up at the old start_ts, while the scalar rename stayed invisible. Root cause was
+// the timestamp-blind calculatedUids fast path in posting/list.go.
+func (ssuite *SystestTestSuite) TestOldTxnReadUnaffectedByLaterMutations() {
+	t := ssuite.T()
+	gcli, cleanup, err := doGrpcLogin(ssuite)
+	defer cleanup()
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.NoError(t, gcli.Alter(ctx, &api.Operation{Schema: `
+		name: string @index(term) @lang .
+		title: string @lang .
+		release_date: datetime @index(year) .
+		revenue: float .
+		running_time: int .
+		starring: [uid] .
+		director: [uid] @reverse .
+
+		type Person {
+			name
+		}
+		type Film {
+			title
+			release_date
+			revenue
+			running_time
+			starring
+			director
+		}
+	`}))
+
+	resp, err := gcli.Mutate(&api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+			_:han <name> "Han Solo" .
+			_:han <dgraph.type> "Person" .
+			_:leia <name> "Princess Leia" .
+			_:leia <dgraph.type> "Person" .
+			_:luke <name> "Luke Skywalker" .
+			_:luke <dgraph.type> "Person" .
+			_:lucas <name> "George Lucas" .
+			_:lucas <dgraph.type> "Person" .
+			_:sw1 <title> "Star Wars: Episode IV - A New Hope" .
+			_:sw1 <release_date> "1977-05-25" .
+			_:sw1 <revenue> "775000000" .
+			_:sw1 <running_time> "121" .
+			_:sw1 <dgraph.type> "Film" .
+			_:sw1 <starring> _:han .
+			_:sw1 <starring> _:leia .
+			_:sw1 <starring> _:luke .
+			_:sw1 <director> _:lucas .
+		`),
+	})
+	require.NoError(t, err)
+	film, leia := resp.Uids["sw1"], resp.Uids["leia"]
+	require.NotEmpty(t, film)
+	require.NotEmpty(t, leia)
+
+	// snapshotView mirrors what the reporter's test reads back: the film's starring
+	// edges (both via the film's uid and via has(starring), the enumeration path the
+	// connector uses) and everyone's names.
+	type snapshotView struct {
+		Film []struct {
+			Title    string `json:"title"`
+			Starring []struct {
+				Name string `json:"name"`
+			} `json:"starring"`
+		} `json:"film"`
+		Edges []struct {
+			Starring []struct {
+				Name string `json:"name"`
+			} `json:"starring"`
+		} `json:"edges"`
+		People []struct {
+			Name string `json:"name"`
+		} `json:"people"`
+	}
+	query := fmt.Sprintf(`{
+		film(func: uid(%s)) {
+			title
+			starring(orderasc: name) { name }
+		}
+		edges(func: has(starring)) {
+			starring(orderasc: name) { name }
+		}
+		people(func: has(name), orderasc: name) { name }
+	}`, film)
+
+	read := func(txn *dgo.Txn) (string, snapshotView, uint64) {
+		resp, err := txn.Query(ctx, query)
+		require.NoError(t, err)
+		var v snapshotView
+		require.NoError(t, json.Unmarshal(resp.Json, &v))
+		return string(resp.Json), v, resp.Txn.StartTs
+	}
+	starringNames := func(v snapshotView) []string {
+		require.Len(t, v.Film, 1)
+		names := make([]string, 0, len(v.Film[0].Starring))
+		for _, p := range v.Film[0].Starring {
+			names = append(names, p.Name)
+		}
+		return names
+	}
+
+	// Pin the snapshot: the first query fixes the read-only txn's start_ts, and dgo
+	// sends that same start_ts with every later query in the txn — the same mechanism
+	// the reporter uses (dgraph4j sets start_ts on each query).
+	snapshot := gcli.NewReadOnlyTxn()
+	defer func() { _ = snapshot.Discard(ctx) }()
+	beforeJSON, before, startTs := read(snapshot)
+	require.NotZero(t, startTs)
+	require.Equal(t, []string{"Han Solo", "Luke Skywalker", "Princess Leia"}, starringNames(before))
+
+	// The three mutations from the issue, each committed in its own transaction after
+	// the snapshot's start_ts.
+	_, err = gcli.Mutate(&api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf(`<%s> <starring> <%s> .`, film, leia)),
+	})
+	require.NoError(t, err)
+
+	_, err = gcli.Mutate(&api.Mutation{
+		CommitNow: true,
+		DelNquads: []byte(fmt.Sprintf(`<%s> <name> "Princess Leia" .`, leia)),
+		SetNquads: []byte(fmt.Sprintf(`<%s> <name> "Princess Leia Organa" .`, leia)),
+	})
+	require.NoError(t, err)
+
+	_, err = gcli.Mutate(&api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(fmt.Sprintf(`
+			_:obi <name> "Obi-Wan 'Ben' Kenobi" .
+			_:obi <dgraph.type> "Person" .
+			<%s> <starring> _:obi .
+		`, film)),
+	})
+	require.NoError(t, err)
+
+	// A fresh transaction must see the new state. This proves the mutations landed
+	// before we assert anything about the old snapshot.
+	latest := gcli.NewReadOnlyTxn()
+	defer func() { _ = latest.Discard(ctx) }()
+	_, after, latestTs := read(latest)
+	require.Greater(t, latestTs, startTs)
+	require.Equal(t, []string{"Han Solo", "Luke Skywalker", "Obi-Wan 'Ben' Kenobi"},
+		starringNames(after), "control read: mutations must be visible at the latest start_ts")
+
+	// The pinned transaction must still see the world exactly as it was at its
+	// start_ts. On the broken versions the starring list leaks: Princess Leia is
+	// gone and Obi-Wan shows up.
+	againJSON, again, againTs := read(snapshot)
+	require.Equal(t, startTs, againTs, "read-only txn must keep using its pinned start_ts")
+	require.Equal(t, []string{"Han Solo", "Luke Skywalker", "Princess Leia"}, starringNames(again),
+		"later mutations leaked into a read at an earlier start_ts (issue #9795)")
+	require.JSONEq(t, beforeJSON, againJSON,
+		"full snapshot read at the pinned start_ts must be identical before and after the mutations")
 }

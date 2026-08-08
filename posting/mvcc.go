@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -189,7 +189,7 @@ func (ir *incrRollupi) Process(closer *z.Closer, getNewTs func(bool) uint64) {
 				// Add/Update map and rollup.
 				m[hash] = currTs
 				if err := ir.rollUpKey(writer, key); err != nil {
-					glog.Warningf("Error rolling up key [%v]: %v", err, key)
+					glog.Warningf("Error rolling up key [%x]: %v", key, err)
 				}
 			}
 		}

@@ -1,0 +1,90 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/dgraph-io/dgraph/blob/main/openvex.json",
+  "author": "Dgraph maintainers",
+  "timestamp": "2026-07-30T00:00:00Z",
+  "version": 3,
+  "statements": [
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-34976",
+        "name": "CVE-2026-34976"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fixed by commit b15c87e935 (2026-04-01), released in 25.3.1. GHSA-p5rh-vmhp-gvcw records no patched version and names the affected package as github.com/dgraph-io/dgraph without the /v25 module suffix, so Trivy cannot clear it by version comparison on either release or nightly builds."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-40173",
+        "name": "CVE-2026-40173"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch, released in 25.3.2. GHSA-95mq-xwj4-r47p records the patched version as \"None\" and omits the /v25 module suffix, so Trivy cannot clear it by version comparison."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41327",
+        "name": "CVE-2026-41327"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch, released in 25.3.3. GHSA-mrxx-39g5-ph77 records no patched version, so Trivy cannot clear it by version comparison."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41328",
+        "name": "CVE-2026-41328"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch, released in 25.3.3. GHSA-x92x-px7w-4gx4 records no patched version, so Trivy cannot clear it by version comparison."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-41492",
+        "name": "CVE-2026-41492"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fix is present in the main branch, released in 25.3.3. GHSA-vvf7-6rmr-m29q records the patched version as \"None\", so Trivy cannot clear it by version comparison."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-44840",
+        "name": "CVE-2026-44840"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fixed by commit cee702c93 (2026-05-11), released in 25.3.4. GHSA-q2m9-6jp9-c6mc records that fixed version, so this statement covers only nightly CI builds, which embed a Go pseudo-version (v25.0.0-YYYYMMDDHHMMSS-<commit>) that sorts below the tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-54061",
+        "name": "CVE-2026-54061"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fixed by commit aba579ace (2026-06-11), released in 25.3.5. GHSA-rrwh-6jrq-wp5v records that fixed version, so this statement covers only nightly CI builds, which embed a Go pseudo-version that sorts below the tag."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-63637",
+        "name": "CVE-2026-63637"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Fixed by commit aaff09ab9 (2026-07-06), released in 25.3.8. GHSA-33p8-wc97-5qcj records no patched version and names the affected package as github.com/dgraph-io/dgraph without the /v25 module suffix, so Trivy cannot clear it by version comparison."
+    },
+    {
+      "vulnerability": {
+        "@id": "https://github.com/advisories/GHSA-qj98-gp63-54xj",
+        "name": "GHSA-qj98-gp63-54xj"
+      },
+      "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
+      "status": "fixed",
+      "impact_statement": "Zero's administrative HTTP endpoints were registered without authentication, allowing an unauthenticated caller who could reach the HTTP port (default 6080) to take down the control plane via /removeNode. Fixed by commit c32f60413 (2026-07-23), released in 25.4.0. No CVE has been assigned and the advisory is unpublished as of this document's timestamp, so this statement is pre-emptive."
+    }
+  ]
+}

@@ -17,13 +17,12 @@ permissions:
   contents: read
 
 jobs:
-  check-changes:
-    uses: ./.github/workflows/check-changes.yml
+  changes:
+    uses: ./.github/workflows/detect-changes.yml
 
   dgraph-vector-tests:
-    needs: check-changes
-    if:
-      needs.check-changes.outputs.should-skip != 'true' && github.event.pull_request.draft == false
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:

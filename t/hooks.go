@@ -21,12 +21,10 @@ var EnvForCompose = defaultEnvForCompose
 // unchanged, matching upstream behavior where the pristine compose file
 // passes straight through.
 //
-// A fork running a compose-file generator may override this to rewrite
-// the path to a generated overlay (e.g. under $DGRAPH_COMPOSE_BUILD_DIR)
-// and add "--project-directory <original-dir>" so relative bind-mount
-// sources resolve against the pristine test package dir rather than the
-// overlay output dir. Unknown paths or an empty $DGRAPH_COMPOSE_BUILD_DIR
-// fall through to the upstream-compatible "-f <path>" form.
+// A fork may override this to layer additional `-f <overlay>` files,
+// switch the compose-file path, or add `--project-directory <dir>` so
+// relative bind-mount sources resolve against the pristine test package
+// dir rather than wherever the override emits its base file.
 var ComposeFileArgs = defaultComposeFileArgs
 
 func defaultEnvForCompose() []string { return nil }

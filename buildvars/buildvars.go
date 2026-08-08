@@ -74,8 +74,7 @@ type Var struct {
 	// override is set. Mutually exclusive with defaulter: when
 	// defaulter is non-nil, it computes the default and defaultValue
 	// is empty; when defaulter is nil, defaultValue holds the answer
-	// (possibly the empty string, which is a valid default for vars
-	// like ComposeBuildDir).
+	// (the empty string is a valid default).
 	defaultValue string
 
 	// defaulter, when non-nil, computes the default at Get() time.
@@ -201,12 +200,6 @@ var (
 
 	// RuntimeTag is the tag for RuntimeImage.
 	RuntimeTag = newVar("RUNTIME_TAG", "24.04")
-
-	// ComposeBuildDir holds generated docker-compose overlays produced
-	// by a compose-rewriting build step. Test harnesses route
-	// docker-compose invocations through this directory when set.
-	// Upstream default: empty (no overlay).
-	ComposeBuildDir = newVar("DGRAPH_COMPOSE_BUILD_DIR", "")
 
 	// BuildTags is the space-separated list of Go build tags passed to
 	// `go build` via -tags. The upstream default composes "jemalloc"
@@ -340,7 +333,6 @@ var All = []*Var{
 	BuildTag,
 	RuntimeImage,
 	RuntimeTag,
-	ComposeBuildDir,
 	BuildTags,
 	CustomBuildTags,
 	GoRunTags,

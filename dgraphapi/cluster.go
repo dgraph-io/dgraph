@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,6 +57,9 @@ type HttpToken struct {
 // HTTPClient allows doing operations on Dgraph over http
 type HTTPClient struct {
 	*HttpToken
+	// AuthToken is the --security auth-token (poor man's auth). When set, it is sent as the
+	// X-Dgraph-AuthToken header so admin requests are accepted on a token-protected cluster.
+	AuthToken     string
 	adminURL      string
 	graphqlURL    string
 	stateURL      string
@@ -259,6 +262,9 @@ func (hc *HTTPClient) doPost(body []byte, url string, contentType string) ([]byt
 
 	if hc.HttpToken != nil {
 		req.Header.Add("X-Dgraph-AccessToken", hc.AccessJwt)
+	}
+	if hc.AuthToken != "" {
+		req.Header.Add("X-Dgraph-AuthToken", hc.AuthToken)
 	}
 
 	return DoReq(req)
@@ -513,14 +519,41 @@ func (hc *HTTPClient) RestoreTenant(c Cluster, backupPath string, backupId strin
 	return nil
 }
 
-// WaitForRestore waits for restore to complete on all alphas
+// transientClusterErr reports whether err looks like a temporary cluster condition that a poll
+// loop should retry through rather than fail on. Under load a restore can briefly put an alpha into
+// draining mode, time out its health endpoint, or drop quorum; none of these mean the restore failed.
+func transientClusterErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, s := range []string{
+		"the server is in draining mode",
+		"i/o timeout",
+		"connection refused",
+		"connection reset",
+		"EOF",
+		"context deadline exceeded",
+		"no such host",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// WaitForRestore waits for restore to complete on all alphas. A restore under load can transiently
+// fail health checks or lose quorum, so poll for a bounded time and retry through transient errors,
+// failing only on an unexpected error or if the restore never completes.
 func WaitForRestore(c Cluster) error {
+	const maxWaitAttempts = 300 // waitDurBeforeRetry (1s) apart => ~5m
 loop:
-	for {
+	for range maxWaitAttempts {
 		time.Sleep(waitDurBeforeRetry)
 
 		resp, err := c.AlphasHealth()
-		if err != nil && strings.Contains(err.Error(), "the server is in draining mode") {
+		if transientClusterErr(err) {
 			continue loop
 		} else if err != nil {
 			return err
@@ -542,7 +575,9 @@ loop2:
 		time.Sleep(waitDurBeforeRetry)
 
 		alphasLogs, err := c.AlphasLogs()
-		if err != nil {
+		if transientClusterErr(err) {
+			continue loop2
+		} else if err != nil {
 			return err
 		}
 
