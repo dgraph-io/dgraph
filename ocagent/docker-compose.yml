@@ -36,7 +36,7 @@ services:
       --my=zero1:5180 --replicas=3 --logtostderr -v=2 --bindall --trace
       "jaeger=http://ocagent:14268;"
   ocagent:
-    image: omnition/opencensus-agent:1.0.15
+    image: docker.io/omnition/opencensus-agent:1.0.15
     container_name: ocagent
     labels:
       cluster: test
@@ -51,7 +51,7 @@ services:
         read_only: true
     command: --config /conf/ocagent-config.yaml
   datadog:
-    image: datadog/agent:latest
+    image: docker.io/datadog/agent:latest
     container_name: datadog
     working_dir: /working/datadog
     volumes:

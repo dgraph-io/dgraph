@@ -41,7 +41,20 @@ RUN set -eu; \
 
 ADD linux /usr/local/bin
 
-RUN mkdir /dgraph
+# Pre-create every working_dir used by the test docker-compose files. Podman's
+# crun OCI runtime does not auto-create a container's working_dir at startup
+# (unlike Docker's runc), so a missing directory leaves the container stuck in
+# the "Created" state. Keep this list in sync with the output of:
+#   grep -rh 'working_dir: /data/' --include='docker-compose*.yml' .
+# (minio and datadog services also declare working_dir but run their own
+# images, not this one — do not add their directories here.)
+RUN mkdir /dgraph && \
+    mkdir -p \
+        /data/zero1 /data/zero2 /data/zero3 /data/zero4 \
+        /data/zero5 /data/zero6 /data/zero7 /data/zero8 \
+        /data/alpha1 /data/alpha2 /data/alpha3 /data/alpha4 \
+        /data/alpha5 /data/alpha6 /data/alpha7 /data/alpha8 \
+        /data/dg1 /data/dg0.1
 WORKDIR /dgraph
 
 ENV GODEBUG=madvdontneed=1

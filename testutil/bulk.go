@@ -158,9 +158,10 @@ func freePort(port int) int {
 
 func StartAlphas(compose string) error {
 	composeArgs := ComposeArgs(compose)
-	cmd := exec.Command("docker", append([]string{"compose", "--compatibility"},
-		append(composeArgs, "-p", DockerPrefix, "up", "-d", "--force-recreate")...)...)
-	cmd.Env = append(os.Environ(), EnvForCompose()...)
+	pfx := ContainerComposeCmdPrefix()
+	allArgs := append(pfx[1:], append(composeArgs, "-p", DockerPrefix, "up", "-d", "--force-recreate")...)
+	cmd := exec.Command(pfx[0], allArgs...)
+	cmd.Env = EnsureCoverageOutput(append(os.Environ(), EnvForCompose()...))
 
 	fmt.Println("Starting alphas with: ", cmd.String())
 
@@ -184,10 +185,10 @@ func StartAlphas(compose string) error {
 
 func StopAlphasForCoverage(composeFile string) {
 	composeArgs := ComposeArgs(composeFile)
-	args := append([]string{"compose", "--compatibility"},
-		append(composeArgs, "-p", DockerPrefix, "stop")...)
-	cmd := exec.CommandContext(context.Background(), "docker", args...)
-	cmd.Env = append(os.Environ(), EnvForCompose()...)
+	pfx := ContainerComposeCmdPrefix()
+	args := append(pfx[1:], append(composeArgs, "-p", DockerPrefix, "stop")...)
+	cmd := exec.CommandContext(context.Background(), pfx[0], args...)
+	cmd.Env = EnsureCoverageOutput(append(os.Environ(), EnvForCompose()...))
 	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
@@ -196,9 +197,11 @@ func StopAlphasForCoverage(composeFile string) {
 
 func StopAlphasAndDetectRace(alphas []string) (raceDetected bool) {
 	raceDetected = DetectRaceInAlphas(DockerPrefix)
-	args := []string{"compose", "-p", DockerPrefix, "rm", "-f", "-s", "-v"}
+	pfx := ContainerComposeCmdPrefix()
+	args := append(pfx[1:], "-p", DockerPrefix, "rm", "-f", "-s", "-v")
 	args = append(args, alphas...)
-	cmd := exec.CommandContext(context.Background(), "docker", args...)
+	cmd := exec.CommandContext(context.Background(), pfx[0], args...)
+	cmd.Env = EnsureCoverageOutput(os.Environ())
 	fmt.Printf("Running: %s with %s\n", cmd, DockerPrefix)
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error while bringing down cluster. Prefix: %s. Error: %v\n", DockerPrefix, err)
