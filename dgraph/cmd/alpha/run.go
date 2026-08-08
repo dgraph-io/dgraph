@@ -272,6 +272,46 @@ they form a Raft group and provide synchronous replication.
 			"with structured fields including trace ID for correlation with distributed traces. "+
 			"Disabled by default (0). Note: enabling this logs query text which may contain "+
 			"sensitive data; do not enable in deployments with strict data privacy requirements.").
+		Flag("intra-mutation-min-edges",
+			"Minimum edge count for a mutation to take the parallel apply path, "+
+				"which spreads the predicates in ONE mutation across goroutines. "+
+				"0 disables that path entirely (all mutations take the legacy path) "+
+				"and is the single kill switch for intra-mutation parallelism. "+
+				"1 (default) always takes it. A value N>1 takes it only when "+
+				"len(edges) >= N, leaving small interactive mutations on the legacy "+
+				"path — the parallel path pays per-predicate goroutine spin-up cost, "+
+				"so tiny mutations are slightly slower on it; bulk multi-predicate "+
+				"mutations are faster (crossover ~100 edges in benchmarks here).").
+		Flag("intra-mutation-parallelism",
+			"Concurrent worker goroutines used INSIDE a single mutation, shared "+
+				"across the predicates it touches and apportioned by edge count so a "+
+				"hot predicate is granted most of them and tiny predicates get one "+
+				"each. 'off' = one worker per predicate, no fan-out. 'N' = exactly N "+
+				"workers. 'Fx' = F workers per CPU available to Go (GOMAXPROCS, which "+
+				"respects container CPU limits), e.g. '1.5x'. 'auto' (default) = '1x'. "+
+				"Always further capped by intra-mutation-edges-per-worker. NOTE this "+
+				"parallelizes ONE mutation — transactions still apply serially, so it "+
+				"will not relieve a many-concurrent-writers bottleneck.").
+		Flag("intra-mutation-edges-per-worker",
+			"Minimum edges a worker should have to justify existing: the pool set by "+
+				"intra-mutation-parallelism is capped at totalEdges divided by this, "+
+				"so small mutations do not over-spawn. Mirrors the 256-edge "+
+				"DivideAndRule rule. Applies to every sizing mode, not just 'Fx'. On a "+
+				"large box this is frequently the BINDING constraint — at the default "+
+				"a 20k-edge mutation caps at 78 workers however many cores exist — so "+
+				"lower it, not the multiplier, to get more parallelism there. "+
+				"Default 256.").
+		Flag("cross-txn-apply-workers",
+			"EXPERIMENTAL. How many SEPARATE transactions may have their mutation "+
+				"pre-writes applied concurrently in the Raft apply loop. 0 (default) "+
+				"applies one entry at a time, the historical behaviour. This is a "+
+				"different axis from intra-mutation-parallelism, which parallelizes "+
+				"the inside of a single mutation: the serial apply loop measures at "+
+				"~88% of wall clock on a production-replica corpus, so it is the "+
+				"ceiling that intra-mutation work cannot lift. Only plain mutations "+
+				"run concurrently -- drop, schema and type operations, snapshots, "+
+				"key-value restores and commit deltas all stay serial and in Raft log "+
+				"order.").
 		String())
 
 	RegisterFlags(flag)
@@ -744,6 +784,15 @@ func run() {
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
 	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
+	x.WorkerConfig.IntraMutationMinEdges = int(featureFlagsConf.GetInt64("intra-mutation-min-edges"))
+	// The superflag layer cannot validate this one — it is off|auto|N|Fx, not a
+	// plain int — so a typo must fail here at startup rather than silently
+	// resolve to the zero value and disable fan-out for the life of the process.
+	parallelism, err := x.ParseIntraMutationParallelism(
+		featureFlagsConf.GetString("intra-mutation-parallelism"))
+	x.Checkf(err, "while parsing --feature-flags")
+	x.WorkerConfig.IntraMutationParallelism = parallelism
+	x.WorkerConfig.IntraMutationEdgesPerWorker = int(featureFlagsConf.GetInt64("intra-mutation-edges-per-worker"))
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
