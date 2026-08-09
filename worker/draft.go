@@ -970,6 +970,12 @@ func (n *node) processApplyCh() {
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	x.PrintOracleDelta(delta)
+	if len(delta.Txns) > 0 {
+		// Zero's batching depth per Raft entry. Skipping empty
+		// (MaxAssigned-only) deltas keeps the histogram readable at light
+		// write load; see the measure's doc for how to interpret it.
+		ostats.Record(context.Background(), x.TxnsPerDelta.M(int64(len(delta.Txns))))
+	}
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
