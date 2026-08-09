@@ -301,17 +301,6 @@ they form a Raft group and provide synchronous replication.
 				"a 20k-edge mutation caps at 78 workers however many cores exist — so "+
 				"lower it, not the multiplier, to get more parallelism there. "+
 				"Default 256.").
-		Flag("cross-txn-apply-workers",
-			"EXPERIMENTAL. How many SEPARATE transactions may have their mutation "+
-				"pre-writes applied concurrently in the Raft apply loop. 0 (default) "+
-				"applies one entry at a time, the historical behaviour. This is a "+
-				"different axis from intra-mutation-parallelism, which parallelizes "+
-				"the inside of a single mutation: the serial apply loop measures at "+
-				"~88% of wall clock on a production-replica corpus, so it is the "+
-				"ceiling that intra-mutation work cannot lift. Only plain mutations "+
-				"run concurrently -- drop, schema and type operations, snapshots, "+
-				"key-value restores and commit deltas all stay serial and in Raft log "+
-				"order.").
 		String())
 
 	RegisterFlags(flag)
