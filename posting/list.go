@@ -1712,37 +1712,57 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
+	return l.approxLen()
+}
+
+func (l *List) approxLen() int {
+	l.AssertRLock()
 	return l.mutationMap.len() + codec.ApproxLen(l.plist.Pack)
 }
 
 func (l *List) calculateUids() error {
-	l.RLock()
-	if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
-		l.RUnlock()
-		return nil
-	}
-	res := make([]uint64, 0, l.ApproxLen())
-
-	err := l.iterate(l.mutationMap.committedUidsTime, 0, func(p *pb.Posting) error {
-		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+	for {
+		l.RLock()
+		if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
+			l.RUnlock()
+			return nil
 		}
+		calculatedAt := l.mutationMap.committedUidsTime
+		res := make([]uint64, 0, l.approxLen())
+
+		err := l.iterate(calculatedAt, 0, func(p *pb.Posting) error {
+			if p.PostingType == pb.Posting_REF {
+				res = append(res, p.Uid)
+			}
+			return nil
+		})
+
+		l.RUnlock()
+
+		if err != nil {
+			return err
+		}
+
+		l.Lock()
+		if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
+			l.Unlock()
+			return nil
+		}
+		if l.mutationMap.currentEntries != nil {
+			l.Unlock()
+			return nil
+		}
+		if l.mutationMap.committedUidsTime != calculatedAt {
+			l.Unlock()
+			continue
+		}
+
+		l.mutationMap.calculatedUids = res
+		l.mutationMap.isUidsCalculated = true
+		l.Unlock()
+
 		return nil
-	})
-
-	l.RUnlock()
-
-	if err != nil {
-		return err
 	}
-
-	l.Lock()
-	defer l.Unlock()
-
-	l.mutationMap.calculatedUids = res
-	l.mutationMap.isUidsCalculated = true
-
-	return nil
 }
 
 // canUseCalculatedUids reports whether calculatedUids can serve a read at readTs. The slice is
@@ -1766,12 +1786,13 @@ func (l *List) canUseCalculatedUids(readTs uint64) bool {
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	requestedFirst := opt.First
+	bounded := requestedFirst > 0 && requestedFirst < math.MaxInt32
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		if opt.Intersect == nil && requestedFirst <= 0 && l.canUseCalculatedUids(opt.ReadTs) {
+		if opt.Intersect == nil && !bounded && l.canUseCalculatedUids(opt.ReadTs) {
 			l.RLock()
 
 			afterIdx := 0
@@ -1793,7 +1814,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			out := &pb.List{Uids: copyArr}
 			l.RUnlock()
 
-			return out, nil, opt.Intersect != nil
+			return out, nil, false
 		}
 		// Pre-assign length to make it faster.
 		l.RLock()
@@ -1808,20 +1829,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
-		approxLen := l.ApproxLen()
-		resCap := approxLen
-		if opt.Intersect != nil && len(opt.Intersect.Uids) < resCap {
-			resCap = len(opt.Intersect.Uids)
-		}
-		if requestedFirst > 0 && requestedFirst < resCap {
-			resCap = requestedFirst
-		}
-		res := make([]uint64, 0, resCap)
+		approxLen := l.approxLen()
 
 		// If we need to intersect and the number of elements are small, in that case it's better to
 		// just check each item is present or not.
 		if opt.Intersect != nil && len(opt.Intersect.Uids) < approxLen {
 			// Cache the iterator as it makes the search space smaller each time.
+			res := make([]uint64, 0, len(opt.Intersect.Uids))
 			var pitr pIterator
 			for _, uid := range opt.Intersect.Uids {
 				ok, _, err := l.findPostingWithItr(opt.ReadTs, uid, pitr)
@@ -1844,6 +1858,12 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			uidMin = opt.Intersect.Uids[0]
 			uidMax = opt.Intersect.Uids[len(opt.Intersect.Uids)-1]
 		}
+
+		resCap := approxLen
+		if bounded && requestedFirst+1 < resCap {
+			resCap = requestedFirst + 1
+		}
+		res := make([]uint64, 0, resCap)
 
 		err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_REF {

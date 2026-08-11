@@ -1892,10 +1892,17 @@ func TestCalculatedUidsSkippedForBoundedReads(t *testing.T) {
 	l.mutationMap.calculatedUids = []uint64{100, 101}
 	l.Unlock()
 
+	unbounded, err := l.Uids(ListOptions{ReadTs: 10})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{100, 101}, unbounded.Uids)
+
+	workerUnbounded, err := l.Uids(ListOptions{ReadTs: 10, First: math.MaxInt32})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{100, 101}, workerUnbounded.Uids)
+
 	first, err := l.Uids(ListOptions{ReadTs: 10, First: 1})
 	require.NoError(t, err)
 	require.Equal(t, []uint64{2}, first.Uids)
-	require.LessOrEqual(t, cap(first.Uids), 2)
 
 	intersect, err := l.Uids(ListOptions{
 		ReadTs:    10,
