@@ -778,6 +778,22 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	return uidList, fcsList, nil
 }
 
+func shouldPrecalculateUids(q *pb.Query, srcFn *functionContext, facetsTree *facetsTree,
+	opts posting.ListOptions) bool {
+	if q.DoCount || q.FacetParam != nil || facetsTree != nil {
+		return false
+	}
+	if opts.Intersect != nil || opts.First > 0 {
+		return false
+	}
+	switch srcFn.fnType {
+	case compareScalarFn, hasFn, uidInFn:
+		return false
+	default:
+		return true
+	}
+}
+
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
 func (qs *queryState) handleUidPostings(
@@ -855,7 +871,13 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := qs.cache.GetUids(key)
+			var pl *posting.List
+			var err error
+			if shouldPrecalculateUids(q, srcFn, facetsTree, opts) {
+				pl, err = qs.cache.GetUids(key)
+			} else {
+				pl, err = qs.cache.Get(key)
+			}
 			if err != nil {
 				return err
 			}
