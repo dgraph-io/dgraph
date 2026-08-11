@@ -299,6 +299,38 @@ func TestReadUidsHonorsPostingListCache(t *testing.T) {
 		"readUids should still warm calculated UIDs when posting-list cache is enabled")
 }
 
+func TestReadUidsWarmsCachedPostingList(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+
+	origMemLayer := MemLayerInstance
+	MemLayerInstance = initMemoryLayer(10<<20, false)
+	t.Cleanup(func() {
+		MemLayerInstance = origMemLayer
+	})
+
+	attr := x.AttrInRootNamespace("readUidsCacheHit")
+	key := x.DataKey(attr, 1)
+	addEdgeToUID(t, attr, 1, 2, 1, 2)
+	addEdgeToUID(t, attr, 1, 3, 3, 4)
+
+	l, err := getNew(key, pstore, math.MaxUint64, false)
+	require.NoError(t, err)
+	require.False(t, l.mutationMap.isUidsCalculated)
+	MemLayerInstance.wait()
+
+	cacheItem, ok := MemLayerInstance.cache.get(key)
+	require.True(t, ok)
+	require.False(t, cacheItem.list.mutationMap.isUidsCalculated)
+
+	l, err = getNew(key, pstore, math.MaxUint64, true)
+	require.NoError(t, err)
+	require.True(t, l.mutationMap.isUidsCalculated)
+
+	cacheItem, ok = MemLayerInstance.cache.get(key)
+	require.True(t, ok)
+	require.True(t, cacheItem.list.mutationMap.isUidsCalculated)
+}
+
 func TestPostingListRead(t *testing.T) {
 	attr := x.AttrInRootNamespace("emptypl")
 	key := x.DataKey(attr, 1)

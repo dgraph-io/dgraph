@@ -765,19 +765,24 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 	}
 }
 
-func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
+func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64, readUids bool) (*List, error) {
 	cacheItem, ok := ml.cache.get(key)
 
 	// Issue #9597 fix: Cache is only valid if minTs <= readTs AND maxTs >= readTs.
 	// If maxTs < readTs, the cache is missing mutations committed after maxTs.
 	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs && cacheItem.list.maxTs >= readTs {
+		if readUids && ml.hasCache() {
+			if err := cacheItem.list.calculateUids(); err != nil {
+				return nil, err
+			}
+		}
 		cacheItem.list.RLock()
 		lCopy := copyList(cacheItem.list)
 		cacheItem.list.RUnlock()
 		checkForRollup(key, lCopy)
-		return lCopy
+		return lCopy, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64, readUids bool) (*List, error) {
@@ -818,12 +823,15 @@ func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64, re
 	// We first try to read the data from cache, if it is present. If it's not present, then we would read the
 	// latest data from the disk. This would get stored in the cache. If this read has a minTs > readTs then
 	// we would have to read the correct timestamp from the disk.
-	l := ml.readFromCache(key, readTs)
+	l, err := ml.readFromCache(key, readTs, readUids)
+	if err != nil {
+		return nil, err
+	}
 	if l != nil {
 		l.mutationMap.setTs(readTs)
 		return l, nil
 	}
-	l, err := ml.readFromDisk(key, pstore, math.MaxUint64, readUids)
+	l, err = ml.readFromDisk(key, pstore, math.MaxUint64, readUids)
 	if err != nil {
 		return nil, err
 	}

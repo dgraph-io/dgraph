@@ -783,7 +783,7 @@ func shouldPrecalculateUids(q *pb.Query, srcFn *functionContext, facetsTree *fac
 	if q.DoCount || q.FacetParam != nil || facetsTree != nil {
 		return false
 	}
-	if opts.Intersect != nil || opts.First > 0 {
+	if opts.Intersect != nil || (opts.First > 0 && opts.First < math.MaxInt32) {
 		return false
 	}
 	switch srcFn.fnType {
@@ -840,6 +840,7 @@ func (qs *queryState) handleUidPostings(
 	isList := schema.State().IsList(q.Attr)
 
 	outputs := make([]*pb.Result, numGo)
+	precalculateUids := shouldPrecalculateUids(q, srcFn, facetsTree, opts)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	calculate := func(start, end int) error {
@@ -873,7 +874,7 @@ func (qs *queryState) handleUidPostings(
 			// Get or create the posting list for an entity, attribute combination.
 			var pl *posting.List
 			var err error
-			if shouldPrecalculateUids(q, srcFn, facetsTree, opts) {
+			if precalculateUids {
 				pl, err = qs.cache.GetUids(key)
 			} else {
 				pl, err = qs.cache.Get(key)
