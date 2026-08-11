@@ -273,6 +273,32 @@ func TestCacheStaleWhenMaxTsLessThanReadTs(t *testing.T) {
 	require.True(t, hasUid2, "UID 2 missing - cache returned stale data (maxTs < readTs)")
 }
 
+func TestReadUidsHonorsPostingListCache(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+
+	origMemLayer := MemLayerInstance
+	MemLayerInstance = initMemoryLayer(0, false)
+	t.Cleanup(func() {
+		MemLayerInstance = origMemLayer
+	})
+
+	attr := x.AttrInRootNamespace("readUidsCache")
+	key := x.DataKey(attr, 1)
+	addEdgeToUID(t, attr, 1, 2, 1, 2)
+	addEdgeToUID(t, attr, 1, 3, 3, 4)
+
+	l, err := getNew(key, pstore, math.MaxUint64, true)
+	require.NoError(t, err)
+	require.False(t, l.mutationMap.isUidsCalculated,
+		"readUids should not materialize UIDs when posting-list cache is disabled")
+
+	MemLayerInstance = initMemoryLayer(10<<20, false)
+	l, err = getNew(key, pstore, math.MaxUint64, true)
+	require.NoError(t, err)
+	require.True(t, l.mutationMap.isUidsCalculated,
+		"readUids should still warm calculated UIDs when posting-list cache is enabled")
+}
+
 func TestPostingListRead(t *testing.T) {
 	attr := x.AttrInRootNamespace("emptypl")
 	key := x.DataKey(attr, 1)
