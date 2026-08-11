@@ -487,7 +487,10 @@ func (s *Server) checkPreds(preds []string) (string, error) {
 		if len(splits) < 2 {
 			return abortReasonUncategorized, errors.Errorf(abortDetailMissingGroupIDFmt, pkey)
 		}
-		gid, err := strconv.Atoi(splits[0])
+		// ParseUint with bitSize 32 rather than Atoi: group ids are uint32 everywhere, so this
+		// bounds the value to the type it is compared against below and rejects negatives, which
+		// Atoi accepted and the uint32 conversion silently wrapped (CodeQL go/incorrect-integer-conversion).
+		gid, err := strconv.ParseUint(splits[0], 10, 32)
 		if err != nil {
 			return abortReasonUncategorized, errors.Wrapf(err, abortDetailBadGroupIDFmt, pkey)
 		}
