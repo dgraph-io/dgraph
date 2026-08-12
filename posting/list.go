@@ -1721,9 +1721,18 @@ func (l *List) approxLen() int {
 }
 
 func (l *List) calculateUids() (bool, error) {
+	l.RLock()
+	skip := l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
+		l.mutationMap.currentEntries != nil
+	l.RUnlock()
+	if skip {
+		return false, nil
+	}
+
 	l.Lock()
 	defer l.Unlock()
 
+	// Another reader may have warmed the list while this call waited for the write lock.
 	if l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
 		l.mutationMap.currentEntries != nil {
 		return false, nil
