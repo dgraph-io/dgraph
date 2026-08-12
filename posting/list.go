@@ -1720,49 +1720,29 @@ func (l *List) approxLen() int {
 	return l.mutationMap.len() + codec.ApproxLen(l.plist.Pack)
 }
 
-func (l *List) calculateUids() error {
-	for {
-		l.RLock()
-		if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
-			l.RUnlock()
-			return nil
-		}
-		calculatedAt := l.mutationMap.committedUidsTime
-		res := make([]uint64, 0, l.approxLen())
+func (l *List) calculateUids() (bool, error) {
+	l.Lock()
+	defer l.Unlock()
 
-		err := l.iterate(calculatedAt, 0, func(p *pb.Posting) error {
-			if p.PostingType == pb.Posting_REF {
-				res = append(res, p.Uid)
-			}
-			return nil
-		})
-
-		l.RUnlock()
-
-		if err != nil {
-			return err
-		}
-
-		l.Lock()
-		if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
-			l.Unlock()
-			return nil
-		}
-		if l.mutationMap.currentEntries != nil {
-			l.Unlock()
-			return nil
-		}
-		if l.mutationMap.committedUidsTime != calculatedAt {
-			l.Unlock()
-			continue
-		}
-
-		l.mutationMap.calculatedUids = res
-		l.mutationMap.isUidsCalculated = true
-		l.Unlock()
-
-		return nil
+	if l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
+		l.mutationMap.currentEntries != nil {
+		return false, nil
 	}
+
+	res := make([]uint64, 0, l.approxLen())
+	err := l.iterate(l.mutationMap.committedUidsTime, 0, func(p *pb.Posting) error {
+		if p.PostingType == pb.Posting_REF {
+			res = append(res, p.Uid)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	l.mutationMap.calculatedUids = res
+	l.mutationMap.isUidsCalculated = true
+	return true, nil
 }
 
 // canUseCalculatedUids reports whether calculatedUids can serve a read at readTs. The slice is

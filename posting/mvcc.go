@@ -771,9 +771,14 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64, readUids bool) (
 	// Issue #9597 fix: Cache is only valid if minTs <= readTs AND maxTs >= readTs.
 	// If maxTs < readTs, the cache is missing mutations committed after maxTs.
 	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs && cacheItem.list.maxTs >= readTs {
-		if readUids && ml.hasCache() {
-			if err := cacheItem.list.calculateUids(); err != nil {
+		if readUids {
+			calculated, err := cacheItem.list.calculateUids()
+			if err != nil {
 				return nil, err
+			}
+			if calculated {
+				// Re-set the entry so ristretto accounts for the calculated UID slice.
+				ml.cache.set(key, cacheItem)
 			}
 		}
 		cacheItem.list.RLock()
@@ -802,7 +807,7 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 		return l, err
 	}
 	if readUids && ml.hasCache() {
-		if err := l.calculateUids(); err != nil {
+		if _, err := l.calculateUids(); err != nil {
 			return nil, err
 		}
 	}
