@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/dgraph/v25/codec"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -321,14 +322,80 @@ func TestReadUidsWarmsCachedPostingList(t *testing.T) {
 	cacheItem, ok := MemLayerInstance.cache.get(key)
 	require.True(t, ok)
 	require.False(t, cacheItem.list.mutationMap.isUidsCalculated)
+	readTs := cacheItem.list.maxTs
+	cacheSizeBefore := cacheItem.list.ApproximateSize()
+	remainingCostBefore := MemLayerInstance.cache.data.RemainingCost()
 
-	l, err = getNew(key, pstore, math.MaxUint64, true)
+	l, err = getNew(key, pstore, readTs, true)
 	require.NoError(t, err)
 	require.True(t, l.mutationMap.isUidsCalculated)
+	MemLayerInstance.wait()
 
 	cacheItem, ok = MemLayerInstance.cache.get(key)
 	require.True(t, ok)
 	require.True(t, cacheItem.list.mutationMap.isUidsCalculated)
+	cacheSizeAfter := cacheItem.list.ApproximateSize()
+	require.Greater(t, cacheSizeAfter, cacheSizeBefore)
+	require.Equal(t, int64(cacheSizeAfter-cacheSizeBefore),
+		remainingCostBefore-MemLayerInstance.cache.data.RemainingCost())
+}
+
+func TestReadUidsWarmsCachedPostingListConcurrently(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+
+	const uidCount = 4096
+	encoder := codec.Encoder{BlockSize: 256}
+	for uid := uint64(1); uid <= uidCount; uid++ {
+		encoder.Add(uid)
+	}
+	pack := encoder.Done()
+	t.Cleanup(func() {
+		codec.FreePack(pack)
+	})
+
+	origMemLayer := MemLayerInstance
+	MemLayerInstance = initMemoryLayer(10<<20, false)
+	t.Cleanup(func() {
+		MemLayerInstance = origMemLayer
+	})
+
+	key := x.DataKey(x.AttrInRootNamespace("readUidsConcurrentCacheHit"), 1)
+	MemLayerInstance.saveInCache(key, &List{
+		key:         key,
+		plist:       &pb.PostingList{Pack: pack},
+		mutationMap: newMutableLayer(),
+		minTs:       1,
+		maxTs:       1,
+	})
+	MemLayerInstance.wait()
+
+	const readers = 32
+	start := make(chan struct{})
+	type readResult struct {
+		list *List
+		err  error
+	}
+	results := make(chan readResult, readers)
+	for i := 0; i < readers; i++ {
+		go func() {
+			<-start
+			l, err := getNew(key, pstore, 1, true)
+			results <- readResult{list: l, err: err}
+		}()
+	}
+	close(start)
+
+	for i := 0; i < readers; i++ {
+		result := <-results
+		require.NoError(t, result.err)
+		require.True(t, result.list.canUseCalculatedUids(1))
+		require.Len(t, result.list.mutationMap.calculatedUids, uidCount)
+	}
+
+	MemLayerInstance.wait()
+	cacheItem, ok := MemLayerInstance.cache.get(key)
+	require.True(t, ok)
+	require.True(t, cacheItem.list.canUseCalculatedUids(1))
 }
 
 func TestPostingListRead(t *testing.T) {

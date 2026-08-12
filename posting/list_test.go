@@ -1855,7 +1855,8 @@ func TestCalculatedUidsRespectReadTs(t *testing.T) {
 	require.NoError(t, l.commitMutation(15, 20))
 
 	// Precompute the uid slice. It represents the newest state (commit ts 20).
-	require.NoError(t, l.calculateUids())
+	_, err = l.calculateUids()
+	require.NoError(t, err)
 	require.True(t, l.canUseCalculatedUids(20))
 	require.True(t, l.canUseCalculatedUids(25))
 	require.False(t, l.canUseCalculatedUids(15),
@@ -1885,7 +1886,8 @@ func TestCalculatedUidsSkippedForBoundedReads(t *testing.T) {
 		addMutationHelper(t, l, &pb.DirectedEdge{ValueId: uid}, Set, txn)
 	}
 	require.NoError(t, l.commitMutation(5, 10))
-	require.NoError(t, l.calculateUids())
+	_, err = l.calculateUids()
+	require.NoError(t, err)
 	require.True(t, l.canUseCalculatedUids(10))
 
 	l.Lock()
