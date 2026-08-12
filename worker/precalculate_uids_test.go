@@ -88,3 +88,24 @@ func TestShouldPrecalculateUids(t *testing.T) {
 		})
 	}
 }
+
+func TestUidReadFirst(t *testing.T) {
+	tests := []struct {
+		name   string
+		first  int32
+		offset int32
+		want   int
+	}{
+		{name: "bounded read includes offset", first: 10, offset: 5, want: 15},
+		{name: "unbounded read keeps zero", first: 0, offset: 5, want: 0},
+		{name: "negative first ignores offset", first: -2, offset: 5, want: -2},
+		{name: "unbounded sentinel ignores offset", first: math.MaxInt32, offset: 5,
+			want: math.MaxInt32},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, uidReadFirst(&pb.Query{First: tc.first, Offset: tc.offset}))
+		})
+	}
+}

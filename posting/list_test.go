@@ -1913,3 +1913,20 @@ func TestCalculatedUidsSkippedForBoundedReads(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uint64{3}, intersect.Uids)
 }
+
+func TestUidsNegativeFirstWithoutCalculatedUids(t *testing.T) {
+	key := x.DataKey(x.AttrInRootNamespace("negativeFirstWithoutCalculatedUids"), 7)
+
+	txn := NewTxn(5)
+	l, err := txn.Get(key)
+	require.NoError(t, err)
+	for _, uid := range []uint64{2, 4, 6, 8} {
+		addMutationHelper(t, l, &pb.DirectedEdge{ValueId: uid}, Set, txn)
+	}
+	require.NoError(t, l.commitMutation(5, 10))
+	require.False(t, l.mutationMap.isUidsCalculated)
+
+	last, err := l.Uids(ListOptions{ReadTs: 10, First: -2})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{6, 8}, last.Uids)
+}
