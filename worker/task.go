@@ -794,6 +794,15 @@ func shouldPrecalculateUids(q *pb.Query, srcFn *functionContext, facetsTree *fac
 	}
 }
 
+// Negative first ignores offset, while zero and MaxInt32 both mean that the worker must read
+// the whole list. Only positive bounded reads can safely stop after first + offset entries.
+func uidReadFirst(q *pb.Query) int {
+	if q.First <= 0 || q.First == math.MaxInt32 {
+		return int(q.First)
+	}
+	return int(int64(q.First) + int64(q.Offset))
+}
+
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
 func (qs *queryState) handleUidPostings(
@@ -1143,7 +1152,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
-		First:    int(q.First + q.Offset),
+		First:    uidReadFirst(q),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {

@@ -1883,7 +1883,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				}
 				res = append(res, p.Uid)
 
-				if opt.First != 0 && len(res) > opt.First {
+				if opt.First > 0 && len(res) > opt.First {
 					return ErrStopIteration
 				}
 			}
