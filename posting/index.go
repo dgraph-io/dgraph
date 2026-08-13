@@ -1564,9 +1564,11 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			estimatedSize := 256 * numClusters
 			if estimatedSize > 0 && dimension > 0 {
 				maxByRAM := maxSampleRAM / (dimension * 4)
-				sampleSize = min(estimatedSize, int(maxByRAM))
-				// Floor: at least numSeeds, but never below 32*k
-				sampleSize = max(numSeeds, max(32*numClusters, 1))
+				// Target 256*k, capped by the RAM budget, but never below a
+				// floor of max(numSeeds, 32*k) so a tiny-dimension RAM cap
+				// can't starve training.
+				sampleSize = max(numSeeds, max(32*numClusters,
+					min(estimatedSize, int(maxByRAM))))
 			}
 		}
 
