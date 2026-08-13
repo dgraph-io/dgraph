@@ -1834,3 +1834,43 @@ func BenchmarkAddMutations(b *testing.B) {
 		}
 	}
 }
+
+// TestCalculatedUidsRespectReadTs is a regression test for issue #9795: calculatedUids is
+// computed at the newest commit in the list (committedUidsTime), so a read at an older
+// timestamp must not be served from it, or later mutations leak into an earlier snapshot.
+func TestCalculatedUidsRespectReadTs(t *testing.T) {
+	key := x.DataKey(x.AttrInRootNamespace("calculatedUidsReadTs"), 7)
+
+	txn := NewTxn(5)
+	l, err := txn.Get(key)
+	require.NoError(t, err)
+	for _, uid := range []uint64{3, 4, 10} {
+		addMutationHelper(t, l, &pb.DirectedEdge{ValueId: uid}, Set, txn)
+	}
+	require.NoError(t, l.commitMutation(5, 10))
+
+	txn = NewTxn(15)
+	addMutationHelper(t, l, &pb.DirectedEdge{ValueId: 4}, Del, txn)
+	addMutationHelper(t, l, &pb.DirectedEdge{ValueId: 13}, Set, txn)
+	require.NoError(t, l.commitMutation(15, 20))
+
+	// Precompute the uid slice. It represents the newest state (commit ts 20).
+	require.NoError(t, l.calculateUids())
+	require.True(t, l.canUseCalculatedUids(20))
+	require.True(t, l.canUseCalculatedUids(25))
+	require.False(t, l.canUseCalculatedUids(15),
+		"a read below the timestamp the slice was computed at must not use it")
+
+	uidsAt := func(readTs uint64) []uint64 {
+		out, err := l.Uids(ListOptions{ReadTs: readTs})
+		require.NoError(t, err)
+		return out.Uids
+	}
+	// Reads at or after the newest commit see the newest state.
+	require.Equal(t, []uint64{3, 10, 13}, uidsAt(20))
+	require.Equal(t, []uint64{3, 10, 13}, uidsAt(25))
+	// A read between the two commits must see the ts=10 state, not the precomputed one.
+	require.Equal(t, []uint64{3, 4, 10}, uidsAt(15))
+	// A read before every commit sees nothing.
+	require.Empty(t, uidsAt(5))
+}
