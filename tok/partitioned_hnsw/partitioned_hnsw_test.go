@@ -10,6 +10,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
@@ -76,5 +77,44 @@ func TestDeadAttrForVectorMatchesInsertRouting(t *testing.T) {
 			t.Fatalf("vector %v: delete routed to %q, insert routed to cluster %d (%q)",
 				vec, deadAttr, wantIdx, want)
 		}
+	}
+}
+
+// TestSetDimensionDoesNotMutateSchema pins that SetDimension records the
+// dimension on the instance only and never appends a vectorDimension option
+// into the schema — otherwise derived state (including a "-1" for empty
+// predicates, and duplicates across rebuilds) would leak into schema queries
+// and exports.
+func TestSetDimensionDoesNotMutateSchema(t *testing.T) {
+	pred := "0-vec"
+	o := opt.NewOptions()
+	o.SetOpt(NumClustersOpt, 3)
+	f := CreateFactory[float32](32)
+	vi, err := f.FindOrCreate(pred, o, 32)
+	if err != nil {
+		t.Fatalf("FindOrCreate: %v", err)
+	}
+
+	schema := &pb.SchemaUpdate{
+		Predicate: pred,
+		ValueType: pb.Posting_VFLOAT,
+		Directive: pb.SchemaUpdate_INDEX,
+		IndexSpecs: []*pb.VectorIndexSpec{{
+			Name:    "hnsw",
+			Options: []*pb.OptionPair{{Key: NumClustersOpt, Value: "3"}},
+		}},
+	}
+	before := len(schema.IndexSpecs[0].Options)
+
+	vi.SetDimension(schema, 10)
+
+	if got := len(schema.IndexSpecs[0].Options); got != before {
+		t.Fatalf("SetDimension mutated schema options: had %d, now %d", before, got)
+	}
+	if SpecHasOption(schema.IndexSpecs[0], vectorDimension) {
+		t.Fatal("SetDimension leaked a vectorDimension option into the schema")
+	}
+	if got := vi.Dimension(); got != 10 {
+		t.Fatalf("Dimension() = %d, want 10", got)
 	}
 }
