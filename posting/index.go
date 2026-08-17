@@ -1723,6 +1723,26 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		}
 	}
 
+	// Persist the index dimension as internal metadata for partitioned indexes.
+	// Written even in the degenerate single-cluster case (no centroids), as long
+	// as a dimension was inferred; a fresh instance hydrates it to validate
+	// inserts after restart, and schema alters use it to reject a contradicting
+	// vectorDimension. Monolithic hnsw is unaffected (no numClusters).
+	if dimension > 0 && isPartitionedSchema(rb.CurrentSchema) {
+		txn := NewTxn(rb.StartTs)
+		if err := addDimensionMetaInDB(ctx, rb.Attr, dimension, txn); err != nil {
+			return err
+		}
+		txn.Update()
+		writer := NewTxnWriter(pstore)
+		if err := txn.CommitToDisk(writer, rb.StartTs); err != nil {
+			return err
+		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+	}
+
 	numIndexPasses := indexer.NumIndexPasses()
 
 	if count < indexer.NumSeedVectors() {
@@ -1824,6 +1844,30 @@ func addCentroidInDB(ctx context.Context, attr string, vec []byte, txn *Txn) err
 		return err
 	}
 	return nil
+}
+
+// addDimensionMetaInDB persists the index dimension as internal metadata under
+// the VecMeta key (entity 1). This lets a fresh instance validate inserts after
+// a restart and lets schema alters reject a contradicting vectorDimension —
+// dimension is derived from the data, not a user-declared schema option.
+func addDimensionMetaInDB(ctx context.Context, attr string, dimension int, txn *Txn) error {
+	metaAttr := hnsw.ConcatStrings(attr, hnsw.VecMeta)
+	key := x.DataKey(metaAttr, 1)
+	pl, err := txn.Get(key)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(hnsw.VectorIndexMeta{Dimension: dimension})
+	if err != nil {
+		return err
+	}
+	edge := &pb.DirectedEdge{
+		Entity:    1,
+		Attr:      metaAttr,
+		Value:     b,
+		ValueType: pb.Posting_ValType(12),
+	}
+	return pl.addMutation(ctx, txn, edge)
 }
 
 // rebuildTokIndex rebuilds index for a given attribute.
@@ -2132,6 +2176,20 @@ func (rb *IndexRebuild) needsVectorIndexEdgesRebuild() indexOp {
 // index spec in the old and current schema, so dropping index data covers
 // the per-cluster keyspaces of both the outgoing and the incoming layout
 // (including a numClusters change in either direction).
+// isPartitionedSchema reports whether the schema declares a partitioned vector
+// index (a spec carrying numClusters).
+func isPartitionedSchema(su *pb.SchemaUpdate) bool {
+	if su == nil {
+		return false
+	}
+	for _, spec := range su.IndexSpecs {
+		if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
+			return true
+		}
+	}
+	return false
+}
+
 func partitionedClusterCounts(rb *IndexRebuild) []int {
 	counts := []int{}
 	collect := func(su *pb.SchemaUpdate) {
@@ -2160,6 +2218,9 @@ func prefixesToDropVectorIndexEdges(ctx context.Context, rb *IndexRebuild) [][]b
 	prefixes := append([][]byte{}, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecEntry)))
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecDead)))
 	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword)))
+	// VecMeta is a distinct length-prefixed attr, so the VecKeyword prefix above
+	// does not cover it — enumerate it so a rebuild replaces (not duplicates) it.
+	prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecMeta)))
 
 	for i := range hnsw.VectorIndexMaxLevels {
 		prefixes = append(prefixes, x.PredicatePrefix(hnsw.ConcatStrings(rb.Attr, hnsw.VecKeyword, fmt.Sprint(i))))

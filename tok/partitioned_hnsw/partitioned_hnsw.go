@@ -5,6 +5,7 @@ package partitioned_hnsw
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime"
@@ -20,6 +21,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 const maxRouteMemoEntries = 32 << 20 // Cap routing memo at ~32M entries (~150MB per 1M vectors)
@@ -226,9 +228,37 @@ func (ph *partitionedHNSW[T]) EndBuild() []int {
 	return []int{}
 }
 
+// hydrateDimension reads the dimension the last build persisted as internal
+// metadata. Returns 0 when there is no cache, no persisted metadata (index
+// never built), or the payload is unreadable — callers then fall back to
+// inferring the dimension from the data.
+func (ph *partitionedHNSW[T]) hydrateDimension(c index.CacheType) int {
+	if c == nil {
+		return 0
+	}
+	key := x.DataKey(hnsw.ConcatStrings(ph.pred, hnsw.VecMeta), 1)
+	b, err := c.Get(key)
+	if err != nil || len(b) == 0 {
+		return 0
+	}
+	var meta hnsw.VectorIndexMeta
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return 0
+	}
+	return meta.Dimension
+}
+
 func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) ([]*index.KeyValue, error) {
 	if ph.vectorDimension <= 0 {
-		ph.vectorDimension = len(vec)
+		// A fresh instance (e.g. after restart) has no dimension in memory.
+		// Prefer the dimension persisted by the last build so this insert is
+		// validated against it; fall back to defining it from this vector when
+		// the index was never built.
+		if d := ph.hydrateDimension(txn); d > 0 {
+			ph.vectorDimension = d
+		} else {
+			ph.vectorDimension = len(vec)
+		}
 	}
 
 	if len(vec) != ph.vectorDimension {
