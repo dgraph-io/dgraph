@@ -17,6 +17,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
@@ -250,4 +251,34 @@ func TestTypeSanityCheck(t *testing.T) {
 	err = typeSanityCheck(typeDef)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Field in type definition cannot have tokenizers")
+}
+
+// TestValidateVectorDimension pins the parse-level rejection of a user-set
+// vectorDimension: it must be a positive integer. (The contradicts-existing-
+// data path needs a populated store and is covered by the systest.) These
+// cases return before any store read, so they run without pstore.
+func TestValidateVectorDimension(t *testing.T) {
+	mk := func(dim string, present bool) *pb.SchemaUpdate {
+		opts := []*pb.OptionPair{{Key: partitioned_hnsw.NumClustersOpt, Value: "8"}}
+		if present {
+			opts = append(opts, &pb.OptionPair{Key: partitioned_hnsw.VectorDimensionOpt, Value: dim})
+		}
+		return &pb.SchemaUpdate{
+			Predicate:  x.AttrInRootNamespace("vec"),
+			ValueType:  pb.Posting_VFLOAT,
+			Directive:  pb.SchemaUpdate_INDEX,
+			IndexSpecs: []*pb.VectorIndexSpec{{Name: "hnsw", Options: opts}},
+		}
+	}
+
+	for _, bad := range []string{"abc", "0", "-5", "3.5", ""} {
+		if err := validateVectorDimension(mk(bad, true)); err == nil {
+			t.Fatalf("vectorDimension %q should be rejected", bad)
+		}
+	}
+
+	// Absent option: nothing to validate (no store access).
+	if err := validateVectorDimension(mk("", false)); err != nil {
+		t.Fatalf("absent vectorDimension should be accepted, got %v", err)
+	}
 }
