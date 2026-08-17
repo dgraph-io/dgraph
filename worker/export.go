@@ -824,6 +824,13 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 		}
 
+		// Vector indexes (monolithic and partitioned) are fully supported by
+		// export: only the raw vectors and the schema are emitted, and the
+		// index is rebuilt on (live/bulk) import. The internal index keys are
+		// intentionally skipped here — every one contains VecKeyword
+		// ("__vector_"), which covers the per-cluster split attrs
+		// (pred__vector__i, __vector_entry_i, __vector_dead_i) and the
+		// dimension metadata (__vector_meta_); centroids use CentroidPrefix.
 		if strings.Contains(pk.Attr, hnsw.VecKeyword) ||
 			strings.Contains(pk.Attr, kmeans.CentroidPrefix) {
 			return false
