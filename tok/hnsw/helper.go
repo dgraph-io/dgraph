@@ -35,6 +35,10 @@ const (
 	searchTime           = "vector_search_time"
 	VecEntry             = "__vector_entry"
 	VecDead              = "__vector_dead"
+	// VecMeta names the internal per-predicate metadata key (dimension, etc.).
+	// It contains VecKeyword ("__vector_") so it is skipped by export, rejected
+	// on user mutations, and handled by backup like the other vector aux keys.
+	VecMeta              = "__vector_meta_"
 	VectorIndexMaxLevels = 5
 	EfConstruction       = 16
 	EfSearch             = 12
@@ -50,6 +54,14 @@ var (
 	errNilVector           = errors.New("nil vector returned")
 	errFetchingPostingList = errors.New("error fetching posting list")
 )
+
+// VectorIndexMeta is the JSON payload stored under the VecMeta key: derived,
+// build-time facts about a vector index that are NOT part of the user-declared
+// schema (e.g. the dimension inferred from the data). Persisted by the build,
+// read on instance hydration and at schema-alter validation.
+type VectorIndexMeta struct {
+	Dimension int `json:"dimension"`
+}
 
 type SearchResult struct {
 	nnUids        []uint64
