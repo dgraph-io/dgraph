@@ -81,7 +81,7 @@ func (uf *unifiedHNSWFactory[T]) isPartitioned(o opt.Options) (bool, error) {
 		return false, err
 	}
 	if !ok {
-		for _, dependent := range []string{NumProbesOpt, PartitionStratOpt, vectorDimension} {
+		for _, dependent := range []string{NumProbesOpt, PartitionStratOpt, VectorDimensionOpt} {
 			if _, present := opt.GetInterfaceOpt(o, dependent); present {
 				return false, fmt.Errorf("%s requires numClusters (the partitioned index); "+
 					"add numClusters or remove %s", dependent, dependent)

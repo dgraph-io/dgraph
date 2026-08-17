@@ -1846,6 +1846,53 @@ func addCentroidInDB(ctx context.Context, attr string, vec []byte, txn *Txn) err
 	return nil
 }
 
+// ExistingVectorDimension returns the dimension of an already-built or
+// already-populated vector predicate: the dimension persisted as index
+// metadata by the last build if present, otherwise the length of the first
+// stored vector. Returns (0, false) when the predicate is empty and was never
+// built. Used at schema-alter time to reject a contradicting vectorDimension.
+func ExistingVectorDimension(ctx context.Context, attr string) (int, bool) {
+	readTs := uint64(math.MaxUint64)
+
+	// 1. Authoritative: the dimension the last build persisted.
+	metaKey := x.DataKey(hnsw.ConcatStrings(attr, hnsw.VecMeta), 1)
+	if pl, err := GetNoStore(metaKey, readTs); err == nil {
+		if val, err := pl.Value(readTs); err == nil {
+			if b, ok := val.Value.([]byte); ok {
+				var meta hnsw.VectorIndexMeta
+				if json.Unmarshal(b, &meta) == nil && meta.Dimension > 0 {
+					return meta.Dimension, true
+				}
+			}
+		}
+	}
+
+	// 2. Fall back to the first stored vector (never-built predicate with data).
+	dim := 0
+	pk := x.ParsedKey{Attr: attr}
+	_ = MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+		Prefix:         pk.DataPrefix(),
+		ReadTs:         readTs,
+		AllVersions:    false,
+		CheckInclusion: func(uint64) error { return nil },
+		Function: func(l *List, _ x.ParsedKey) error {
+			val, err := l.Value(readTs)
+			if err != nil {
+				return nil
+			}
+			if b, ok := val.Value.([]byte); ok {
+				dim = len(types.BytesAsFloatArray(b))
+			}
+			return ErrStopIteration
+		},
+		StartKey: x.DataKey(attr, 0),
+	})
+	if dim > 0 {
+		return dim, true
+	}
+	return 0, false
+}
+
 // addDimensionMetaInDB persists the index dimension as internal metadata under
 // the VecMeta key (entity 1). This lets a fresh instance validate inserts after
 // a restart and lets schema alters reject a contradicting vectorDimension —
