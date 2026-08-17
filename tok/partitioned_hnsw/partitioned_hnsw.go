@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -150,17 +149,16 @@ func (ph *partitionedHNSW[T]) Dimension() int {
 	return ph.vectorDimension
 }
 
+// SetDimension records the inferred dimension on the instance only. It
+// deliberately does NOT write a vectorDimension option into the schema: the
+// alter path persists the schema update after the rebuild, so an appended
+// option would leak derived state into schema queries and exports — including
+// a nonsensical "-1" when the predicate is empty, and duplicate entries across
+// rebuilds (a predicate has exactly one dimension). The dimension is persisted
+// separately as internal index metadata (see addDimensionMetaInDB) and
+// re-hydrated where a fresh instance needs it.
 func (ph *partitionedHNSW[T]) SetDimension(schema *pb.SchemaUpdate, dimension int) {
 	ph.vectorDimension = dimension
-	for _, vs := range schema.IndexSpecs {
-		if !SpecHasOption(vs, NumClustersOpt) {
-			continue
-		}
-		vs.Options = append(vs.Options, &pb.OptionPair{
-			Key:   vectorDimension,
-			Value: strconv.Itoa(dimension),
-		})
-	}
 }
 
 func (ph *partitionedHNSW[T]) NumIndexPasses() int {
