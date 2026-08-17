@@ -354,7 +354,7 @@ func formatVectorSchema(schema *pb.SchemaUpdate) string {
 			}
 		}
 		x.Check2(buf.WriteRune(')'))
-		if len(schema.IndexSpecs)-1 < j {
+		if len(schema.IndexSpecs)-1 > j {
 			x.Check2(buf.WriteString(","))
 		}
 	}
