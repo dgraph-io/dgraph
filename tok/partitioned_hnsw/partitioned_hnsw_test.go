@@ -111,7 +111,7 @@ func TestSetDimensionDoesNotMutateSchema(t *testing.T) {
 	if got := len(schema.IndexSpecs[0].Options); got != before {
 		t.Fatalf("SetDimension mutated schema options: had %d, now %d", before, got)
 	}
-	if SpecHasOption(schema.IndexSpecs[0], vectorDimension) {
+	if SpecHasOption(schema.IndexSpecs[0], VectorDimensionOpt) {
 		t.Fatal("SetDimension leaked a vectorDimension option into the schema")
 	}
 	if got := vi.Dimension(); got != 10 {

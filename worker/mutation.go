@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
@@ -423,6 +425,10 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		}
 	}
 
+	if err := validateVectorDimension(s); err != nil {
+		return err
+	}
+
 	t, err := schema.State().TypeOf(s.Predicate)
 	if err != nil {
 		// No schema previously defined, so no need to do checks about schema conversions.
@@ -451,6 +457,37 @@ func checkSchema(s *pb.SchemaUpdate) error {
 		if hasEdges(s.Predicate, math.MaxUint64) {
 			return errors.Errorf("Schema change not allowed from scalar to uid or vice versa"+
 				" while there is data for pred: %s", x.ParseAttr(s.Predicate))
+		}
+	}
+	return nil
+}
+
+// validateVectorDimension rejects a user-set vectorDimension option that is not
+// a positive integer, or that contradicts the dimension of an already-built
+// index or existing data. A vector predicate has exactly one dimension, so
+// silently accepting a wrong value would brick inserts and fail the rebuild.
+func validateVectorDimension(s *pb.SchemaUpdate) error {
+	for _, spec := range s.GetIndexSpecs() {
+		var raw string
+		found := false
+		for _, o := range spec.GetOptions() {
+			if o.Key == partitioned_hnsw.VectorDimensionOpt {
+				raw, found = o.Value, true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		d, err := strconv.Atoi(raw)
+		if err != nil || d <= 0 {
+			return errors.Errorf("vectorDimension for [%s] must be a positive integer, got %q",
+				x.ParseAttr(s.Predicate), raw)
+		}
+		if existing, ok := posting.ExistingVectorDimension(context.Background(), s.Predicate); ok && existing != d {
+			return errors.Errorf("vectorDimension %d for [%s] contradicts the existing vector "+
+				"dimension %d; drop the data/index or set vectorDimension to %d",
+				d, x.ParseAttr(s.Predicate), existing, existing)
 		}
 	}
 	return nil
