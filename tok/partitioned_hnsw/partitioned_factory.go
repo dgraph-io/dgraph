@@ -46,10 +46,11 @@ func (hf *partitionedHNSWIndexFactory[T]) Name() string { return "partitioned-hn
 // spec's identity (used by needsVectorIndexEdgesRebuild to decide whether a
 // schema change requires a rebuild). numClusters and partitionStratOpt
 // change the on-disk layout, so they must be part of the identity.
-// vectorDimension is deliberately excluded — SetDimension auto-appends it to
-// the stored schema during a rebuild, so including it would make every
-// re-apply of the user's original schema look like a change and trigger
-// spurious rebuilds. numProbes is query-time tuning only.
+// vectorDimension is deliberately excluded — it is a property of the data, not
+// of the on-disk layout, so it must not affect rebuild identity. (It is also
+// excluded for backward compatibility with schemas persisted by older builds
+// that auto-appended it during rebuild; those must not re-index on upgrade.)
+// numProbes is query-time tuning only.
 func (hf *partitionedHNSWIndexFactory[T]) GetOptions(o opt.Options) string {
 	base := hnsw.GetPersistantOptions[T](o)
 

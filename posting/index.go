@@ -1959,8 +1959,9 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 // RebuildVectorIndexForBulk builds a vector index for attr from the data
 // already present in pstore, committing graph and centroid keys at startTs.
-// currentSchema must carry Directive_INDEX and the vector IndexSpecs; the
-// caller must pass a private copy (SetDimension mutates IndexSpecs).
+// currentSchema must carry Directive_INDEX and the vector IndexSpecs. The bulk
+// caller passes a proto.Clone as defensive isolation; SetDimension no longer
+// mutates the schema, so this is belt-and-suspenders rather than required.
 func RebuildVectorIndexForBulk(ctx context.Context, attr string,
 	currentSchema *pb.SchemaUpdate, startTs uint64) error {
 	Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: startTs})
