@@ -7,6 +7,7 @@ package posting
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -223,4 +224,107 @@ func TestPartitionedRestartHydration(t *testing.T) {
 	replayed, err := cspec.CreateIndex(attr)
 	require.NoError(t, err)
 	selfRecall(t, replayed)
+}
+
+// TestDimensionMetaPersisted pins the internal dimension-metadata contract: a
+// partitioned build persists the inferred dimension under the VecMeta key, a
+// rebuild replaces (not duplicates) it, and dropping the index prefixes removes
+// it. The dimension is derived from the data, so it must live here — not as a
+// user-visible schema option.
+func TestDimensionMetaPersisted(t *testing.T) {
+	ctx := context.Background()
+	attr := x.AttrInRootNamespace("phmeta")
+
+	indexedSchema := &pb.SchemaUpdate{
+		Predicate: attr,
+		ValueType: pb.Posting_VFLOAT,
+		Directive: pb.SchemaUpdate_INDEX,
+		IndexSpecs: []*pb.VectorIndexSpec{{
+			Name: "hnsw",
+			Options: []*pb.OptionPair{
+				{Key: partitioned_hnsw.NumClustersOpt, Value: "4"},
+				{Key: "metric", Value: "euclidean"},
+			},
+		}},
+	}
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`phmeta: float32vector @index(hnsw(numClusters: "4", metric: "euclidean")) .`), 1))
+
+	ts := uint64(1)
+	nextTs := func() uint64 { ts++; return ts }
+
+	// Write 40 six-dimensional vectors.
+	const dim = 6
+	for uid := uint64(1); uid <= 40; uid++ {
+		vec := make([]float32, dim)
+		for j := range vec {
+			vec[j] = float32(uid) + float32(j)*0.1
+		}
+		startTs := nextTs()
+		txn := Oracle().RegisterStartTs(startTs)
+		l, err := GetNoStore(x.DataKey(attr, uid), math.MaxUint64)
+		require.NoError(t, err)
+		l = txn.Store(l)
+		l.SetTs(startTs)
+		require.NoError(t, l.addMutation(ctx, txn, &pb.DirectedEdge{
+			Attr: attr, Entity: uid, Value: types.FloatArrayAsBytes(vec),
+			ValueType: pb.Posting_VFLOAT, Op: pb.DirectedEdge_SET,
+		}))
+		commitTs := nextTs()
+		Oracle().ProcessDelta(&pb.OracleDelta{
+			Txns:        []*pb.TxnStatus{{StartTs: startTs, CommitTs: commitTs}},
+			MaxAssigned: commitTs,
+		})
+		txn.Update()
+		writer := NewTxnWriter(pstore)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+	}
+
+	readMeta := func() (hnsw.VectorIndexMeta, bool) {
+		readTs := nextTs()
+		Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: readTs})
+		key := x.DataKey(hnsw.ConcatStrings(attr, hnsw.VecMeta), 1)
+		pl, err := GetNoStore(key, readTs)
+		require.NoError(t, err)
+		val, err := pl.Value(readTs)
+		if err != nil {
+			return hnsw.VectorIndexMeta{}, false
+		}
+		var meta hnsw.VectorIndexMeta
+		require.NoError(t, json.Unmarshal(val.Value.([]byte), &meta))
+		return meta, true
+	}
+
+	buildRb := func() *IndexRebuild {
+		rebuildTs := nextTs()
+		Oracle().ProcessDelta(&pb.OracleDelta{MaxAssigned: rebuildTs})
+		rb := &IndexRebuild{
+			Attr:          attr,
+			StartTs:       rebuildTs,
+			OldSchema:     &pb.SchemaUpdate{Predicate: attr, ValueType: pb.Posting_VFLOAT},
+			CurrentSchema: indexedSchema,
+		}
+		require.NoError(t, rebuildTokIndex(ctx, rb))
+		return rb
+	}
+
+	// Build → meta present with the inferred dimension.
+	rb := buildRb()
+	meta, ok := readMeta()
+	require.True(t, ok, "dimension metadata must exist after a partitioned build")
+	require.Equal(t, dim, meta.Dimension)
+
+	// Rebuild → meta replaced, still a single correct value (not duplicated).
+	buildRb()
+	meta, ok = readMeta()
+	require.True(t, ok)
+	require.Equal(t, dim, meta.Dimension)
+
+	// Drop the index prefixes → meta removed.
+	for _, prefix := range prefixesToDropVectorIndexEdges(ctx, rb) {
+		require.NoError(t, pstore.DropPrefix(prefix))
+	}
+	_, ok = readMeta()
+	require.False(t, ok, "dimension metadata must be dropped with the index")
 }

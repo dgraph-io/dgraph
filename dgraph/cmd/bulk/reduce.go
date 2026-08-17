@@ -589,8 +589,9 @@ func (r *reducer) copyVectorDataToShards(vectorDb *badger.DB, specs map[string]*
 						allPreds = append(allPreds, hnsw.SplitEntryAttr(pred, i))
 						allPreds = append(allPreds, hnsw.SplitDeadAttr(pred, i))
 					}
-					// Add the centroid key
+					// Add the centroid key and the dimension metadata key.
 					allPreds = append(allPreds, hnsw.ConcatStrings(pred, kmeans.CentroidPrefix))
+					allPreds = append(allPreds, hnsw.ConcatStrings(pred, hnsw.VecMeta))
 				}
 			}
 		}
