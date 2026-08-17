@@ -547,6 +547,64 @@ func TestToSchema(t *testing.T) {
 			},
 			expected: "[0x0] <data.base>:string @lang . \n",
 		},
+		{
+			// Partitioned vector index: every option round-trips verbatim.
+			skv: &skv{
+				attr: x.AttrInRootNamespace("vectors"),
+				schema: pb.SchemaUpdate{
+					ValueType: pb.Posting_VFLOAT,
+					Directive: pb.SchemaUpdate_INDEX,
+					IndexSpecs: []*pb.VectorIndexSpec{{
+						Name: "hnsw",
+						Options: []*pb.OptionPair{
+							{Key: "metric", Value: "euclidean"},
+							{Key: "numClusters", Value: "8"},
+							{Key: "numProbes", Value: "4"},
+							{Key: "partitionStratOpt", Value: "kmeans"},
+						},
+					}},
+				},
+			},
+			expected: "[0x0] <vectors>:float32vector " +
+				`@index(hnsw(metric:"euclidean",numClusters:"8",numProbes:"4",partitionStratOpt:"kmeans")) . ` + "\n",
+		},
+		{
+			// A user-set vectorDimension is a normal option and must round-trip.
+			skv: &skv{
+				attr: x.AttrInRootNamespace("vectors"),
+				schema: pb.SchemaUpdate{
+					ValueType: pb.Posting_VFLOAT,
+					Directive: pb.SchemaUpdate_INDEX,
+					IndexSpecs: []*pb.VectorIndexSpec{{
+						Name: "hnsw",
+						Options: []*pb.OptionPair{
+							{Key: "metric", Value: "euclidean"},
+							{Key: "numClusters", Value: "8"},
+							{Key: "vectorDimension", Value: "128"},
+						},
+					}},
+				},
+			},
+			expected: "[0x0] <vectors>:float32vector " +
+				`@index(hnsw(metric:"euclidean",numClusters:"8",vectorDimension:"128")) . ` + "\n",
+		},
+		{
+			// Multiple index specs must be comma-separated (regression: the
+			// separator condition was inverted and emitted no comma).
+			skv: &skv{
+				attr: x.AttrInRootNamespace("vectors"),
+				schema: pb.SchemaUpdate{
+					ValueType: pb.Posting_VFLOAT,
+					Directive: pb.SchemaUpdate_INDEX,
+					IndexSpecs: []*pb.VectorIndexSpec{
+						{Name: "hnsw", Options: []*pb.OptionPair{{Key: "metric", Value: "euclidean"}}},
+						{Name: "hnsw2", Options: []*pb.OptionPair{{Key: "foo", Value: "bar"}}},
+					},
+				},
+			},
+			expected: "[0x0] <vectors>:float32vector " +
+				`@index(hnsw(metric:"euclidean"),hnsw2(foo:"bar")) . ` + "\n",
+		},
 	}
 	for _, testCase := range testCases {
 		kv := toSchema(testCase.skv.attr, &testCase.skv.schema)
