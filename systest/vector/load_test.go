@@ -812,8 +812,10 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
 		dgraphapi.DefaultPassword, x.RootNamespace))
 
-	// Set up partitioned vector schema and load vectors
-	require.NoError(t, gc.SetupSchema(partitionedSchema))
+	// Load the vectors FIRST (predicate typed but not indexed), then alter to
+	// add the partitioned index. The alter-with-data path is the one that used
+	// to leak an internal vectorDimension option into the persisted schema.
+	require.NoError(t, gc.SetupSchema(`project_description_v: float32vector .`))
 
 	numVectors := 1000
 	pred := "project_description_v"
@@ -822,6 +824,8 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
+
+	require.NoError(t, gc.SetupSchema(partitionedSchema))
 
 	// Verify vectors are loaded and queryable in source cluster
 	for _, vector := range vectors[:3] { // Test first 3 vectors
@@ -897,6 +901,14 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
 
+	// Regression lock: the round-tripped schema (source alter -> export -> bulk
+	// -> target) must keep the user's numClusters and must NOT carry the
+	// internal, derived vectorDimension option.
+	schemaResp, err := targetGc.Query(`schema(pred: [project_description_v]) {type index tokenizer}`)
+	require.NoError(t, err)
+	require.Contains(t, string(schemaResp.GetJson()), "numClusters")
+	require.NotContains(t, string(schemaResp.GetJson()), "vectorDimension")
+
 	// Step 6: Verify vector similarity queries work (tests that partitioned index was built correctly)
 	for i, vector := range vectors {
 		similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
@@ -904,4 +916,45 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 		require.GreaterOrEqual(t, len(similarVectors), 2,
 			"similar_to query should return results for vector %d", i)
 	}
+}
+
+// TestPartitionedVectorDimensionValidation pins the schema-alter validation of
+// a user-set vectorDimension: a value contradicting the existing data must be
+// rejected, while a matching value (and an absent one) is accepted.
+func TestPartitionedVectorDimensionValidation(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().
+		WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+	const pred = "project_description_v"
+	const dim = 10
+	require.NoError(t, gc.SetupSchema(pred+`: float32vector .`))
+	rdfs, _ := dgraphapi.GenerateRandomVectors(0, 200, dim, pred)
+	_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
+	require.NoError(t, err)
+
+	idx := func(opts string) string {
+		return pred + `: float32vector @index(hnsw(metric: "euclidean", numClusters: "4"` + opts + `)) .`
+	}
+
+	// Contradicts the 10-d data → rejected.
+	err = gc.SetupSchema(idx(`, vectorDimension: "7"`))
+	require.Error(t, err, "a vectorDimension contradicting existing data must be rejected")
+
+	// Non-positive → rejected.
+	require.Error(t, gc.SetupSchema(idx(`, vectorDimension: "0"`)),
+		"a non-positive vectorDimension must be rejected")
+
+	// Matching the data → accepted.
+	require.NoError(t, gc.SetupSchema(idx(`, vectorDimension: "10"`)),
+		"a vectorDimension matching the data must be accepted")
 }
