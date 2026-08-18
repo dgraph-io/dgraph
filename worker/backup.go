@@ -355,7 +355,14 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest) error {
 			if pred.Type == "float32vector" && len(pred.IndexSpecs) != 0 {
 				for _, spec := range pred.IndexSpecs {
 					if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
-						vecPredMap[gid] = append(vecPredMap[gid], pred.Predicate+kmeans.CentroidPrefix)
+						// The centroid set and the per-predicate dimension metadata
+						// (__vector_meta_) are single entity-1 keys, unlike the
+						// per-cluster split attrs below. Restore is byte-replay with
+						// no rebuild, so any internal vector key that is not listed
+						// here silently vanishes on restore.
+						vecPredMap[gid] = append(vecPredMap[gid],
+							pred.Predicate+kmeans.CentroidPrefix,
+							pred.Predicate+hnsw.VecMeta)
 						for _, opt := range spec.Options {
 							if opt.Key == partitioned_hnsw.NumClustersOpt {
 								numClusters, err := strconv.Atoi(opt.Value)
