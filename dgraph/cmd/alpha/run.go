@@ -393,11 +393,15 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
 
-	unary := []grpc.UnaryServerInterceptor{audit.AuditRequestGRPC}
+	// Identity resolution runs first so every later interceptor and handler sees
+	// the same verified Principal instead of re-parsing the credential. It never
+	// rejects — see x.WithResolvedIdentity — so ordering it ahead of audit cannot
+	// suppress an audit record.
+	unary := []grpc.UnaryServerInterceptor{x.IdentityUnaryInterceptor(), audit.AuditRequestGRPC}
 	if zi := ZanzibarUnaryInterceptor(); zi != nil {
 		unary = append(unary, zi)
 	}
-	stream := []grpc.StreamServerInterceptor{audit.AuditStreamGRPC}
+	stream := []grpc.StreamServerInterceptor{x.IdentityStreamInterceptor(), audit.AuditStreamGRPC}
 	if zs := ZanzibarStreamInterceptor(); zs != nil {
 		stream = append(stream, zs)
 	}
@@ -725,6 +729,11 @@ func run() {
 		Badger:              bopts,
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
+
+	// Install deployment-specific authentication and authorization now: the config
+	// is parsed, and nothing is serving yet. A misconfiguration here is fatal, which
+	// is why it runs before any listener rather than lazily on the first request.
+	ConfigureIdentity()
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)

@@ -175,6 +175,18 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo)
 	var namespace uint64
 	var err error
 	extractUser := func(md metadata.MD) {
+		// Prefer the identity the interceptor already verified. Without this,
+		// auditing a request re-parses and re-verifies its access token, a second
+		// full JWT verification per RPC purely to recover a username the identity
+		// interceptor has already extracted.
+		//
+		// The fallback below is unchanged and still covers every case where no
+		// Principal exists: poor-man's auth, a token that failed to verify
+		// (UnknownUser), and no credential at all (UnauthorisedUser under ACL).
+		if p := x.PrincipalFrom(ctx); p != nil {
+			user = p.Subject
+			return
+		}
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {

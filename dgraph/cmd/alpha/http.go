@@ -652,10 +652,9 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
-	// Pass in PoorMan's auth, ACL and IP information if present.
-	ctx := x.AttachAuthToken(context.Background(), r)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present, and resolve the
+	// caller's identity from it.
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
@@ -737,9 +736,7 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	adminServer admin.IServeGraphQL) *schema.Response {
 	md := metadata.New(nil)
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
-	ctx = x.AttachAuthToken(ctx, r)
+	ctx = x.AttachRequestIdentity(ctx, r)
 	ctx, err := x.ResolveTenant(ctx)
 	if err != nil {
 		return schema.ErrorResponse(err)

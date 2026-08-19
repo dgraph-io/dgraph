@@ -245,10 +245,9 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pass in PoorMan's auth, ACL and IP information if present.
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
-	ctx = x.AttachAuthToken(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present, and resolve the
+	// caller's identity from it.
+	ctx = x.AttachRequestIdentity(ctx, r)
 	ctx, err := x.ResolveTenant(ctx)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
