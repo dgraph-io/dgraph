@@ -521,7 +521,22 @@ func setupServer(closer *z.Closer, enableMcp bool) {
 	mainServer, adminServer, gqlHealthStore = admin.NewServers(introspection,
 		globalEpoch, closer)
 	baseMux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
-		namespace := x.ExtractNamespaceHTTP(r)
+		// Strict here because this handler routes by the resolved namespace: it sets
+		// the resolver header that selects which namespace's GraphQL schema serves
+		// the request, so a token it cannot resolve must be refused rather than
+		// quietly served the root namespace's. A request with no token still
+		// resolves to the root namespace — see x.ResolveTenantHTTPStrict.
+		//
+		// Two limits, neither of which this closes. The strict variant only rejects a
+		// token that was *presented* and could not be resolved, and its "was one
+		// presented" probe reads the ACL accessJwt channel, so an installed
+		// non-ACL resolver is not covered. And the graphql-ws subscription handler
+		// routes by the same header while still using the lenient resolver.
+		namespace, err := x.ResolveTenantHTTPStrict(r)
+		if err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
 		r.Header.Set("resolver", strconv.FormatUint(namespace, 10))
 		if err := admin.LazyLoadSchema(namespace); err != nil {
 			admin.WriteErrorResponse(w, r, err)
@@ -536,7 +551,12 @@ func setupServer(closer *z.Closer, enableMcp bool) {
 		r.Header.Set("resolver", "0")
 		// We don't need to load the schema for all the admin operations.
 		// Only a few like getUser, queryGroup require this. So, this can be optimized.
-		if err := admin.LazyLoadSchema(x.ExtractNamespaceHTTP(r)); err != nil {
+		namespace, err := x.ResolveTenantHTTP(r)
+		if err != nil {
+			admin.WriteErrorResponse(w, r, err)
+			return
+		}
+		if err := admin.LazyLoadSchema(namespace); err != nil {
 			admin.WriteErrorResponse(w, r, err)
 			return
 		}

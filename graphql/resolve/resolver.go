@@ -501,7 +501,12 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) (
 		return
 	}
 
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err = x.ResolveTenant(ctx)
+	if err != nil {
+		resp.Errors = schema.AsGQLErrors(err)
+		return
+	}
+
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		resp.Errors = schema.AsGQLErrors(err)

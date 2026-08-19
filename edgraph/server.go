@@ -113,7 +113,11 @@ type existingGQLSchemaQryResp struct {
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
-	ctx = x.AttachNamespace(ctx, namespace)
+	// Trusted attribution: this runs on a hand-built background context with no
+	// request credential to present, and it crosses the tenant seam via
+	// QueryNoGrpc. Marking it keeps ResolveTenant from trying to derive a
+	// namespace that was never going to be there.
+	ctx = x.AttachTrustedTenant(ctx, namespace)
 	resp, err := (&Server{}).QueryNoGrpc(ctx,
 		&api.Request{
 			Query: `
@@ -353,7 +357,18 @@ func InsertDropRecord(ctx context.Context, dropOp string) error {
 // Alter handles requests to change the schema or remove parts or all of the
 // data. It enforces the admin-IP-whitelist and ACL authorization checks.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	return s.alter(ctx, op, NeedAuthorize)
+	// Entry point: drop the namespace the client sent before resolving.
+	//
+	// md["namespace"] is client-controlled on the server side, and the built-in
+	// resolver leaves whatever is there when it cannot derive one from the access
+	// JWT — so an unattributable request would otherwise proceed on the tenant the
+	// caller named. Authorization currently catches that, because it reads the signed
+	// claim, but that is an invariant held by call-site ordering, and relying on
+	// ordering is what produced the escalations this guards against.
+	//
+	// Deliberately here and not in the shared continuation below: alter also serves AlterNoAuth, which the
+	// in-process callers reach with a context they have already attributed.
+	return s.alter(x.ClearIncomingNamespace(ctx), op, NeedAuthorize)
 }
 
 // AlterNoAuth is Alter without the admin-IP-whitelist and ACL authorization
@@ -376,7 +391,10 @@ func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) 
 	ctx, span := otel.Tracer("").Start(ctx, "Server.Alter")
 	defer span.End()
 
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	span.AddEvent("Alter operation", trace.WithAttributes(attribute.String("op", op.String())))
 
 	// Always print out Alter operations because they are important and rare.
@@ -1344,7 +1362,18 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	resp, err := s.QueryNoGrpc(ctx, req)
+	// Entry point: drop the namespace the client sent before resolving.
+	//
+	// md["namespace"] is client-controlled on the server side, and the built-in
+	// resolver leaves whatever is there when it cannot derive one from the access
+	// JWT — so an unattributable request would otherwise proceed on the tenant the
+	// caller named. Authorization currently catches that, because it reads the signed
+	// claim, but that is an invariant held by call-site ordering, and relying on
+	// ordering is what produced the escalations this guards against.
+	//
+	// Deliberately here and not in the shared continuation below: QueryNoGrpc also serves the two HTTP
+	// handlers and GetGQLSchema, which attaches its own trusted tenancy.
+	resp, err := s.QueryNoGrpc(x.ClearIncomingNamespace(ctx), req)
 	if err != nil {
 		return resp, err
 	}
@@ -1357,7 +1386,10 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // Query handles queries or mutations
 func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
 		// A fresh StartTs is assigned if it is 0.
 		ns, err := x.ExtractNamespace(ctx)
@@ -2118,7 +2150,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
-	if ns, err := x.ExtractNamespaceFrom(ctx); err == nil {
+	if ns, err := x.ExtractNamespace(ctx); err == nil {
 		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)

@@ -705,7 +705,12 @@ func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch m
 		w.Header().Set("Content-Type", "application/json")
 		// lazy load the schema so that just by making a probe request,
 		// one can boot up GraphQL for their namespace
-		namespace := x.ExtractNamespaceHTTP(r)
+		namespace, err := x.ResolveTenantHTTP(r)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.Check2(fmt.Fprintf(w, `{"error":"%s"}`, err))
+			return
+		}
 		if err := admin.LazyLoadSchema(namespace); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
@@ -735,7 +740,10 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return schema.ErrorResponse(err)
+	}
 
 	return adminServer.ResolveWithNs(ctx, x.RootNamespace, gqlReq)
 }

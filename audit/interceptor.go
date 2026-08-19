@@ -230,9 +230,24 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		user = getUser("", false)
 	}
 
+	// Audit must never reject a request, so a resolver error becomes the explicit
+	// unknown sentinel rather than a failure.
+	//
+	// Worth knowing what this does and does not achieve today: the built-in resolver
+	// tolerates a token it cannot parse and reports no error, so a malformed
+	// credential is still recorded against the root namespace and this branch is
+	// reached only by an installed resolver that fails closed. Attributing a
+	// malformed token accurately needs the resolver to distinguish "no credential"
+	// from "unusable credential", which it cannot yet do: /admin and the login
+	// mutation legitimately carry no credential at all.
+	namespace, err := x.ResolveTenantHTTP(r)
+	if err != nil {
+		namespace = UnknownNamespace
+	}
+
 	auditor.Audit(&AuditEvent{
 		User:        user,
-		Namespace:   x.ExtractNamespaceHTTP(r),
+		Namespace:   namespace,
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
