@@ -253,7 +253,7 @@ func parseSchemaFromAlterOperation(ctx context.Context, sch string) (
 	if x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapAssumeTenant); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
 				"Non superadmin user cannot bypass namespaces. "+s.Message())
@@ -421,7 +421,7 @@ func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) 
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapClusterAdmin); err != nil {
 			s := status.Convert(err)
 			return empty, status.Error(s.Code(),
 				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
@@ -1248,7 +1248,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 	var healthAll []pb.HealthInfo
 	if all {
-		if err := AuthorizeGuardians(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 			return nil, err
 		}
 		pool := conn.GetPools().GetAll()
@@ -1288,6 +1288,10 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
+	// The signed claim, not the resolved namespace: this decides which tenant's
+	// tablets the CALLER may see, and State reaches here with no ResolveTenant
+	// ahead of it, so md["namespace"] would be whatever the caller sent. Reading it
+	// let a guardian of any tenant ask for namespace 0 and skip filtering entirely.
 	namespace, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
@@ -1315,7 +1319,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := AuthorizeGuardians(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 		return nil, err
 	}
 
@@ -1513,7 +1517,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	if req.doAuth == NeedAuthorize && x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapAssumeTenant); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
 				"Non superadmin user cannot bypass namespaces. "+s.Message())
@@ -2095,7 +2099,7 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 	// it is protected under ACL and under an --security auth-token. Each gate fails open when
 	// its feature is unconfigured, so the arming requirement on the stream path backstops the
 	// bare-OSS case.
-	if err := AuthorizeGuardians(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 		return nil, err
 	}
 	if err := hasPoormansAuth(ctx); err != nil {
@@ -2122,7 +2126,7 @@ func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) er
 
 	// Authorize at stream start, before any data is consumed. Stream auth metadata rides on the
 	// stream's context, so the same gates used for the unary entry point apply here.
-	if err := AuthorizeGuardians(stream.Context()); err != nil {
+	if err := AuthorizeCapability(stream.Context(), CapTenantAdmin); err != nil {
 		return err
 	}
 	if err := hasPoormansAuth(stream.Context()); err != nil {

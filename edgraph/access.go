@@ -604,7 +604,40 @@ func upsertGroot(ctx context.Context, passwd string) error {
 }
 
 // extract the userId, groupIds from the accessJwt in the context
+// extractUserAndGroups reports the ACL identity and tenant claim of the calling
+// request.
+//
+// It prefers the Principal the identity interceptor already resolved, and parses
+// the token itself only when there is none. Before that interceptor existed there
+// was one JWT verification per request; adding it made two under ACL, and for the
+// RS/PS/ES algorithms that is asymmetric crypto on every RPC.
+//
+// Two conditions on the fast path, both load-bearing:
+//
+// The Method must be MethodACL. Principal.Groups is whatever the issuer asserted,
+// and x.IsSuperAdmin consults it by name, so accepting an external issuer's
+// membership here would let anything that can mint a `guardians` group become
+// superadmin. Only Dgraph's own token speaks for Dgraph's own groups.
+//
+// The namespace claim must be present. aclAuthenticator deliberately ignores it —
+// tenancy is the resolver's concern — so the Principal alone cannot say whether
+// the token carried one. validateToken requires it, and that requirement is doing
+// real work: aclTenantResolver tolerates a token it cannot extract a namespace
+// from and leaves whatever namespace the context already carries, which on the
+// server side is client-controlled. It gets away with that precisely because this
+// function rejects the same token a moment later. Reading the namespace from the
+// resolved tenancy instead would remove the check the resolver depends on, and
+// hand the caller their own namespace.
+//
+// So the value comes from the claim, exactly as validateToken produces it. Keying
+// authorization on the resolved namespace is the right end state and it is a
+// behavior change, so it belongs with the others rather than inside a change whose
+// whole claim is that nothing moved. authorizePreds already keys on the resolved
+// namespace; the remaining reader is shouldAllowAcls.
 func extractUserAndGroups(ctx context.Context) (*userData, error) {
+	if ud, ok := userDataFromPrincipal(ctx); ok {
+		return ud, nil
+	}
 	accessJwt, err := x.ExtractJwt(ctx)
 	if err != nil {
 		return nil, err
@@ -612,49 +645,21 @@ func extractUserAndGroups(ctx context.Context) (*userData, error) {
 	return validateToken(accessJwt)
 }
 
-type authPredResult struct {
-	allowed []string
-	blocked map[string]struct{}
-}
-
-func authorizePreds(ctx context.Context, userData *userData, preds []string,
-	aclOp *acl.Operation) *authPredResult {
-
-	if !worker.AclCachePtr.Loaded() {
-		RefreshACLs(ctx)
+// userDataFromPrincipal rebuilds userData from an already-verified Principal,
+// reporting false when the fast path does not apply so the caller falls back to
+// parsing — and to the error message parsing would have produced.
+func userDataFromPrincipal(ctx context.Context) (*userData, bool) {
+	p := x.PrincipalFrom(ctx)
+	if p == nil || p.Method != x.MethodACL {
+		return nil, false
 	}
-
-	userId := userData.userId
-	groupIds := userData.groupIds
-	ns := userData.namespace
-	blockedPreds := make(map[string]struct{})
-	for _, pred := range preds {
-		nsPred := x.NamespaceAttr(ns, pred)
-		if err := worker.AclCachePtr.AuthorizePredicate(groupIds, nsPred, aclOp); err != nil {
-			logAccess(&accessEntry{
-				userId:    userId,
-				groups:    groupIds,
-				preds:     preds,
-				operation: aclOp,
-				allowed:   false,
-			})
-			blockedPreds[pred] = struct{}{}
-		}
+	// float64 because JSON numbers are, which is also why validateToken caps the
+	// usable namespace at 1<<52; asserting the same type keeps that identical.
+	ns, ok := p.Claims["namespace"].(float64)
+	if !ok {
+		return nil, false
 	}
-	if worker.HasAccessToAllPreds(ns, groupIds, aclOp) {
-		// Setting allowed to nil allows access to all predicates. Note that the access to ACL
-		// predicates will still be blocked.
-		return &authPredResult{allowed: nil, blocked: blockedPreds}
-	}
-	// User can have multiple permission for same predicate, add predicate
-	allowedPreds := make([]string, 0, len(worker.AclCachePtr.GetUserPredPerms(userId)))
-	// only if the acl.Op is covered in the set of permissions for the user
-	for predicate, perm := range worker.AclCachePtr.GetUserPredPerms(userId) {
-		if (perm & aclOp.Code) > 0 {
-			allowedPreds = append(allowedPreds, predicate)
-		}
-	}
-	return &authPredResult{allowed: allowedPreds, blocked: blockedPreds}
+	return &userData{namespace: uint64(ns), userId: p.Subject, groupIds: p.Groups}, true
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -709,10 +714,13 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		result := authorizePreds(ctx, userData, preds, acl.Modify)
-		if len(result.blocked) > 0 {
+		result, err := AuthorizePredicates(ctx, preds, acl.Modify)
+		if err != nil {
+			return err
+		}
+		if len(result.Blocked) > 0 {
 			var msg strings.Builder
-			for key := range result.blocked {
+			for key := range result.Blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
@@ -828,17 +836,20 @@ func authorizeMutation(ctx context.Context, gmu *dql.Mutation) error {
 			}
 			return nil
 		}
-		result := authorizePreds(ctx, userData, preds, acl.Write)
-		if len(result.blocked) > 0 {
+		result, err := AuthorizePredicates(ctx, preds, acl.Write)
+		if err != nil {
+			return err
+		}
+		if len(result.Blocked) > 0 {
 			var msg strings.Builder
-			for key := range result.blocked {
+			for key := range result.Blocked {
 				x.Check2(msg.WriteString(key))
 				x.Check2(msg.WriteString(" "))
 			}
 			return status.Errorf(codes.PermissionDenied,
 				"unauthorized to mutate following predicates: %s\n", msg.String())
 		}
-		gmu.AllowedPreds = result.allowed
+		gmu.AllowedPreds = result.Allowed
 		return nil
 	}
 
@@ -992,8 +1003,11 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 			return blockedPreds(preds), nil, nil
 		}
 
-		result := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, result.allowed, nil
+		result, err := AuthorizePredicates(ctx, preds, acl.Read)
+		if err != nil {
+			return nil, nil, err
+		}
+		return result.Blocked, result.Allowed, nil
 	}
 
 	blockedPreds, allowedPreds, err := doAuthorizeQuery()
@@ -1014,7 +1028,7 @@ func authorizeQuery(ctx context.Context, parsedReq *dql.Result, graphql bool) er
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
-		if graphql && shouldAllowAcls(namespace) {
+		if graphql && shouldAllowAcls(namespace) { // namespace is the token claim, as above
 			for _, gq := range parsedReq.Query {
 				addUserFilterToQuery(gq, userId, groupIds)
 			}
@@ -1081,8 +1095,11 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			}
 			return blockedPreds(preds), nil
 		}
-		result := authorizePreds(ctx, userData, preds, acl.Read)
-		return result.blocked, nil
+		result, err := AuthorizePredicates(ctx, preds, acl.Read)
+		if err != nil {
+			return nil, err
+		}
+		return result.Blocked, nil
 	}
 
 	// find the predicates which are blocked for the schema query
@@ -1109,61 +1126,6 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 				}
 			}
 			typeNode.Fields = respFields
-		}
-	}
-
-	return nil
-}
-
-// AuthSuperAdmin authorizes the operations for the users who belong to the guardians
-// group in the galaxy namespace. This authorization is used for admin usages like creation and
-// deletion of a namespace, resetting passwords across namespaces etc.
-// NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
-func AuthSuperAdmin(ctx context.Context) error {
-	if !x.WorkerConfig.AclEnabled {
-		return nil
-	}
-	ns, err := x.ExtractNamespaceFrom(ctx)
-	if err != nil {
-		return errors.Wrap(err, "Authorize guardian of the galaxy, extracting jwt token, error:")
-	}
-	if ns != 0 {
-		return status.Error(
-			codes.PermissionDenied, "Only superadmin is allowed to do this operation")
-	}
-	// AuthorizeGuardians will extract (user, []groups) from the JWT claims and will check if
-	// any of the group to which the user belongs is "guardians" or not.
-	if err := AuthorizeGuardians(ctx); err != nil {
-		s := status.Convert(err)
-		return status.Error(
-			s.Code(), "AuthSuperAdmin: failed to authorize guardians. "+s.Message())
-	}
-	glog.V(3).Info("Successfully authorised guardian of the galaxy")
-	return nil
-}
-
-// AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
-// NOTE: The caller should not wrap the error returned. If needed, propagate the GRPC error code.
-func AuthorizeGuardians(ctx context.Context) error {
-	if worker.Config.AclSecretKey == nil {
-		// the user has not turned on the acl feature
-		return nil
-	}
-
-	userData, err := extractUserAndGroups(ctx)
-	switch {
-	case err == x.ErrNoJwt:
-		return status.Error(codes.PermissionDenied, err.Error())
-	case err != nil:
-		return status.Error(codes.Unauthenticated, err.Error())
-	default:
-		userId := userData.userId
-		groupIds := userData.groupIds
-
-		if !x.IsSuperAdmin(groupIds) {
-			// Deny access for members of non-guardian groups
-			return status.Error(codes.PermissionDenied, fmt.Sprintf("Only guardians are "+
-				"allowed access. User '%v' is not a member of guardians group.", userId))
 		}
 	}
 
