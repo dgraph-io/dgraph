@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	"github.com/dgraph-io/dgraph/v25/worker"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
@@ -343,6 +344,27 @@ func assertVecSupportingPreds(t *testing.T, preds []string, vecPreds []string, c
 	}
 }
 
+// assertPartitionedVecSupportingPreds checks that a partitioned (numClusters)
+// vector predicate's backup predicate set carries every internal key family:
+// the centroid set, the per-predicate dimension metadata (__vector_meta_), and
+// the per-cluster split attrs. Restore is byte-replay with no rebuild, so any
+// one of these missing from the manifest silently vanishes on restore.
+func assertPartitionedVecSupportingPreds(t *testing.T, preds []string, vecPred string,
+	numClusters int, ctx string) {
+	t.Helper()
+	require.Containsf(t, preds, vecPred, "%s: missing base predicate %q", ctx, vecPred)
+	require.Containsf(t, preds, vecPred+kmeans.CentroidPrefix, "%s: missing centroid for %q", ctx, vecPred)
+	require.Containsf(t, preds, vecPred+hnsw.VecMeta, "%s: missing %s for %q", ctx, hnsw.VecMeta, vecPred)
+	for i := 0; i < numClusters; i++ {
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecEntry, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecEntry, i, vecPred)
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecKeyword, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecKeyword, i, vecPred)
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecDead, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecDead, i, vecPred)
+	}
+}
+
 func assertNoDuplicates(t *testing.T, preds []string, ctx string) {
 	t.Helper()
 	seen := make(map[string]int)
@@ -414,6 +436,28 @@ func TestVectorBackupManifestPredicates(t *testing.T) {
 		require.Contains(t, preds, "0-name")
 		assertVecSupportingPreds(t, preds, []string{"0-vec1"}, "0-single-vec")
 		assertNoDuplicates(t, preds, "single-vec")
+	})
+
+	t.Run("partitioned vector predicate", func(t *testing.T) {
+		require.NoError(t, gc.DropAll())
+
+		const numClusters = 4
+		schema := fmt.Sprintf(`vecp: float32vector @index(hnsw(metric: "euclidean", numClusters: "%d")) .
+			name: string @index(exact) .`, numClusters)
+		require.NoError(t, gc.SetupSchema(schema))
+
+		insertVectors(t, gc, []string{"vecp"}, 0, 20)
+
+		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+
+		manifest := readBackupManifest(t, c)
+		preds := allUserPreds(manifest.Manifests[len(manifest.Manifests)-1])
+
+		require.Contains(t, preds, "0-name")
+		// A partitioned index's backup set must carry the centroid, the
+		// dimension metadata (__vector_meta_), and every per-cluster split attr.
+		assertPartitionedVecSupportingPreds(t, preds, "0-vecp", numClusters, "partitioned-vec")
+		assertNoDuplicates(t, preds, "partitioned-vec")
 	})
 
 	t.Run("multiple vector predicates in same group", func(t *testing.T) {
