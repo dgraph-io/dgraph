@@ -182,7 +182,10 @@ func (gs *graphqlSubscription) Subscribe(
 	}
 
 	audit.AuditWebSockets(ctx, req)
-	namespace := x.ExtractNamespaceHTTP(&http.Request{Header: reqHeader})
+	namespace, err := x.ResolveTenantHTTP(&http.Request{Header: reqHeader})
+	if err != nil {
+		return nil, err
+	}
 	glog.V(2).Infof("namespace: %d. Got GraphQL request over HTTP.", namespace)
 	// first load the schema, then do anything else
 	if err := LazyLoadSchema(namespace); err != nil {
@@ -246,7 +249,11 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = x.AttachAccessJwt(ctx, r)
 	ctx = x.AttachRemoteIP(ctx, r)
 	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		WriteErrorResponse(w, r, err)
+		return
+	}
 
 	var res *schema.Response
 	gqlReq, err := getRequest(r)
