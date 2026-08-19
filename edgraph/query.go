@@ -29,6 +29,11 @@ func (s *Server) RunDQL(ctx context.Context, req *api.RunDQLRequest) (*api.Respo
 		apiReq.CommitNow = true
 	}
 
-	ctx = x.AttachJWTNamespace(ctx)
+	// Entry point: see Server.Query. The namespace the client sent has no standing
+	// here, and the resolver leaves it in place when it cannot derive one.
+	ctx, err = x.ResolveTenant(x.ClearIncomingNamespace(ctx))
+	if err != nil {
+		return nil, err
+	}
 	return (&Server{}).doQuery(ctx, &Request{req: apiReq})
 }
