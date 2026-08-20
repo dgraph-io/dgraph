@@ -148,8 +148,17 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 		AclCachePtr.predPerms[k] = v
 	}
 
-	for k, v := range userPredPerms {
-		AclCachePtr.userPredPerms[k] = v
+	// User IDs are namespace-local, so the same ID can exist in multiple namespaces. Merge the
+	// namespaced predicates instead of replacing permissions collected from another namespace.
+	for userID, newPerms := range userPredPerms {
+		perms, found := AclCachePtr.userPredPerms[userID]
+		if !found {
+			perms = make(map[string]int32)
+			AclCachePtr.userPredPerms[userID] = perms
+		}
+		for predicate, permission := range newPerms {
+			perms[predicate] = permission
+		}
 	}
 }
 
