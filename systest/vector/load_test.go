@@ -88,119 +88,142 @@ func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportForma
 }
 
 func TestBulkLoadVectorIndex(t *testing.T) {
-	// Step 1: Create a source cluster and load vectors into it
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	// Set up vector schema and load vectors
-	require.NoError(t, gc.SetupSchema(testSchema))
-
 	numVectors := 1000
-	pred := "project_description_v"
-	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
-	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
-	require.NoError(t, err)
-
-	// Verify vectors are loaded and queryable in source cluster
-	for _, vector := range vectors[:5] { // Test first 5 vectors
-		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(similarVectors), 3, "similar_to query should return results")
+	// Run the same bulk-load round trip for both the monolithic HNSW index and
+	// the partitioned (numClusters) index. numClusters == 4 over 1000 vectors
+	// keeps clustering meaningful (~250 vectors/cluster). Partitioned search is
+	// approximate (IVF), so its recall thresholds are lower than monolithic's.
+	modes := []struct {
+		name             string
+		schema           string
+		minSourceSimilar int
+		minTargetSimilar int
+	}{
+		{"monolithic", testSchema, 3, 4},
+		{
+			"partitioned",
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .`,
+			2, 2,
+		},
 	}
 
-	// Step 2: Export the data from source cluster
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+	for _, mode := range modes {
+		t.Run(mode.name, func(t *testing.T) {
+			// Step 1: Create a source cluster and load vectors into it
+			sourceConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour)
+			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
+			require.NoError(t, err)
+			defer func() { sourceCluster.Cleanup(t.Failed()) }()
+			require.NoError(t, sourceCluster.Start())
 
-	// Step 3: Set up a cluster for bulk loading and run bulk load on exported data
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
+			gc, cleanup, err := sourceCluster.Client()
+			require.NoError(t, err)
+			defer cleanup()
+			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
+			hc, err := sourceCluster.HTTPClient()
+			require.NoError(t, err)
+			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+				dgraphapi.DefaultPassword, x.RootNamespace))
 
-	// Start only Zero for bulk loading
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
+			// Set up vector schema and load vectors
+			require.NoError(t, gc.SetupSchema(mode.schema))
 
-	// Copy exported files from source cluster container to host for bulk load
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
-	require.NotEmpty(t, dataFiles, "should have exported data files")
-	require.NotEmpty(t, schemaFiles, "should have exported schema files")
+			rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
-	// Run bulk load with exported data
-	opts := dgraphtest.BulkOpts{
-		DataFiles:   dataFiles,
-		SchemaFiles: schemaFiles,
-		OutDir:      bulkOutDir,
-	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
+			mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+			_, err = gc.Mutate(mu)
+			require.NoError(t, err)
 
-	// Step 4: Create a new cluster that uses the bulk loaded p directory
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
+			// Verify vectors are loaded and queryable in source cluster
+			for _, vector := range vectors[:5] { // Test first 5 vectors
+				similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
+				require.NoError(t, err)
+				require.GreaterOrEqual(t, len(similarVectors), mode.minSourceSimilar,
+					"similar_to query should return results")
+			}
 
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
+			// Step 2: Export the data from source cluster
+			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
 
-	// Start the target cluster (both Zero and Alphas)
-	require.NoError(t, targetCluster.Start())
+			// Step 3: Set up a cluster for bulk loading and run bulk load on exported data
+			bulkOutDir := t.TempDir()
+			bulkConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
 
-	// Get a client to verify the data
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
+			require.NoError(t, err)
+			defer func() { bulkCluster.Cleanup(t.Failed()) }()
 
-	// Step 5: Verify vector count
-	query := `{
-		vector(func: has(project_description_v)) {
-			count(uid)
-		}
-	}`
-	result, err := targetGc.Query(query)
-	require.NoError(t, err)
-	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+			// Start only Zero for bulk loading
+			require.NoError(t, bulkCluster.StartZero(0))
+			require.NoError(t, bulkCluster.HealthCheck(true))
 
-	// Step 6: Verify vector similarity queries work (tests that vector index was built correctly)
-	for i, vector := range vectors {
-		similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(similarVectors), 4,
-			"similar_to query should return results for vector %d", i)
+			// Copy exported files from source cluster container to host for bulk load
+			exportHostDir := t.TempDir()
+			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
+			require.NoError(t, err)
+			require.NotEmpty(t, dataFiles, "should have exported data files")
+			require.NotEmpty(t, schemaFiles, "should have exported schema files")
+
+			// Run bulk load with exported data
+			opts := dgraphtest.BulkOpts{
+				DataFiles:   dataFiles,
+				SchemaFiles: schemaFiles,
+				OutDir:      bulkOutDir,
+			}
+			require.NoError(t, bulkCluster.BulkLoad(opts))
+
+			// Step 4: Create a new cluster that uses the bulk loaded p directory
+			targetConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
+
+			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
+			require.NoError(t, err)
+			defer func() { targetCluster.Cleanup(t.Failed()) }()
+
+			// Start the target cluster (both Zero and Alphas)
+			require.NoError(t, targetCluster.Start())
+
+			// Get a client to verify the data
+			targetGc, targetCleanup, err := targetCluster.Client()
+			require.NoError(t, err)
+			defer targetCleanup()
+			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+			// Step 5: Verify vector count
+			query := `{
+				vector(func: has(project_description_v)) {
+					count(uid)
+				}
+			}`
+			result, err := targetGc.Query(query)
+			require.NoError(t, err)
+			require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
+
+			// Step 6: Verify vector similarity queries work (tests that vector index was built correctly)
+			for i, vector := range vectors {
+				similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 5)
+				require.NoError(t, err)
+				require.GreaterOrEqual(t, len(similarVectors), mode.minTargetSimilar,
+					"similar_to query should return results for vector %d", i)
+			}
+		})
 	}
 }
 
@@ -211,142 +234,164 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 	vectorDim := 10
 	numShards := 3
 
-	// Schema with 3 vector predicates
-	multiPredSchema := `
+	// Schema with 3 vector predicates. numClusters == 4 over 1000 vectors per
+	// predicate keeps clustering meaningful; partitioned search is approximate
+	// (IVF), so its recall thresholds are lower than monolithic's.
+	monolithicSchema := `
 		vec_pred_alpha: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 		vec_pred_beta: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 		vec_pred_gamma: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 	`
+	partitionedSchema := `
+		vec_pred_alpha: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .
+		vec_pred_beta: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .
+		vec_pred_gamma: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .
+	`
 
-	// Step 1: Create a source cluster and load vectors into it
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	// Set up schema with multiple vector predicates
-	require.NoError(t, gc.SetupSchema(multiPredSchema))
-
-	// Generate and load vectors for each predicate
-	allVectors := make(map[string][][]float32)
-	for _, pred := range predicates {
-		rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectorsPerPred, vectorDim, pred)
-		allVectors[pred] = vectors
-
-		mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-		_, err = gc.Mutate(mu)
-		require.NoError(t, err)
+	modes := []struct {
+		name             string
+		schema           string
+		minSourceSimilar int
+		minTargetSimilar int
+	}{
+		{"monolithic", monolithicSchema, 3, 4},
+		{"partitioned", partitionedSchema, 2, 2},
 	}
 
-	// Verify vectors are loaded and queryable in source cluster
-	for _, pred := range predicates {
-		vectors := allVectors[pred]
-		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 5)
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(similarVectors), 3, "similar_to query should return results for %s", pred)
-	}
-
-	// Step 2: Export the data from source cluster
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
-
-	// Step 3: Set up a cluster for bulk loading with multiple shards
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(numShards). // 3 alphas for 3 shards
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-	// Start only Zero for bulk loading
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
-
-	// Copy exported files from source cluster container to host for bulk load
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
-	require.NotEmpty(t, dataFiles, "should have exported data files")
-	require.NotEmpty(t, schemaFiles, "should have exported schema files")
-
-	// Run bulk load with explicit shard configuration
-	opts := dgraphtest.BulkOpts{
-		DataFiles:    dataFiles,
-		SchemaFiles:  schemaFiles,
-		OutDir:       bulkOutDir,
-		MapShards:    numShards,
-		ReduceShards: numShards,
-	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
-
-	// Step 4: Create a new cluster that uses the bulk loaded p directories
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(numShards). // Must match the number of shards
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
-
-	// Start the target cluster (both Zero and Alphas)
-	require.NoError(t, targetCluster.Start())
-
-	// Get a client to verify the data
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	// Step 5: Verify vector counts for each predicate
-	for _, pred := range predicates {
-		query := fmt.Sprintf(`{
-			vector(func: has(%s)) {
-				count(uid)
-			}
-		}`, pred)
-		result, err := targetGc.Query(query)
-		require.NoError(t, err)
-		require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectorsPerPred), string(result.GetJson()),
-			"Predicate %s should have %d vectors", pred, numVectorsPerPred)
-	}
-
-	// Step 6: Verify vector similarity queries work for each predicate
-	for _, pred := range predicates {
-		vectors := allVectors[pred]
-
-		// Test a sample of vectors from each predicate
-		sampleSize := 10
-
-		for i := 0; i < sampleSize; i++ {
-			similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vectors[i], pred, 5)
+	for _, mode := range modes {
+		t.Run(mode.name, func(t *testing.T) {
+			// Step 1: Create a source cluster and load vectors into it
+			sourceConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour)
+			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
 			require.NoError(t, err)
-			require.GreaterOrEqual(t, len(similarVectors), 4,
-				"similar_to query should return results for predicate %s vector %d", pred, i)
-		}
+			defer func() { sourceCluster.Cleanup(t.Failed()) }()
+			require.NoError(t, sourceCluster.Start())
+
+			gc, cleanup, err := sourceCluster.Client()
+			require.NoError(t, err)
+			defer cleanup()
+			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+			hc, err := sourceCluster.HTTPClient()
+			require.NoError(t, err)
+			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+				dgraphapi.DefaultPassword, x.RootNamespace))
+
+			// Set up schema with multiple vector predicates
+			require.NoError(t, gc.SetupSchema(mode.schema))
+
+			// Generate and load vectors for each predicate
+			allVectors := make(map[string][][]float32)
+			for _, pred := range predicates {
+				rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectorsPerPred, vectorDim, pred)
+				allVectors[pred] = vectors
+
+				mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
+				_, err = gc.Mutate(mu)
+				require.NoError(t, err)
+			}
+
+			// Verify vectors are loaded and queryable in source cluster
+			for _, pred := range predicates {
+				vectors := allVectors[pred]
+				similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 5)
+				require.NoError(t, err)
+				require.GreaterOrEqual(t, len(similarVectors), mode.minSourceSimilar,
+					"similar_to query should return results for %s", pred)
+			}
+
+			// Step 2: Export the data from source cluster
+			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+
+			// Step 3: Set up a cluster for bulk loading with multiple shards
+			bulkOutDir := t.TempDir()
+			bulkConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(numShards). // 3 alphas for 3 shards
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
+
+			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
+			require.NoError(t, err)
+			defer func() { bulkCluster.Cleanup(t.Failed()) }()
+
+			// Start only Zero for bulk loading
+			require.NoError(t, bulkCluster.StartZero(0))
+			require.NoError(t, bulkCluster.HealthCheck(true))
+
+			// Copy exported files from source cluster container to host for bulk load
+			exportHostDir := t.TempDir()
+			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
+			require.NoError(t, err)
+			require.NotEmpty(t, dataFiles, "should have exported data files")
+			require.NotEmpty(t, schemaFiles, "should have exported schema files")
+
+			// Run bulk load with explicit shard configuration
+			opts := dgraphtest.BulkOpts{
+				DataFiles:    dataFiles,
+				SchemaFiles:  schemaFiles,
+				OutDir:       bulkOutDir,
+				MapShards:    numShards,
+				ReduceShards: numShards,
+			}
+			require.NoError(t, bulkCluster.BulkLoad(opts))
+
+			// Step 4: Create a new cluster that uses the bulk loaded p directories
+			targetConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(numShards). // Must match the number of shards
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
+
+			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
+			require.NoError(t, err)
+			defer func() { targetCluster.Cleanup(t.Failed()) }()
+
+			// Start the target cluster (both Zero and Alphas)
+			require.NoError(t, targetCluster.Start())
+
+			// Get a client to verify the data
+			targetGc, targetCleanup, err := targetCluster.Client()
+			require.NoError(t, err)
+			defer targetCleanup()
+			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+			// Step 5: Verify vector counts for each predicate
+			for _, pred := range predicates {
+				query := fmt.Sprintf(`{
+					vector(func: has(%s)) {
+						count(uid)
+					}
+				}`, pred)
+				result, err := targetGc.Query(query)
+				require.NoError(t, err)
+				require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectorsPerPred), string(result.GetJson()),
+					"Predicate %s should have %d vectors", pred, numVectorsPerPred)
+			}
+
+			// Step 6: Verify vector similarity queries work for each predicate
+			for _, pred := range predicates {
+				vectors := allVectors[pred]
+
+				// Test a sample of vectors from each predicate
+				sampleSize := 10
+
+				for i := 0; i < sampleSize; i++ {
+					similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vectors[i], pred, 5)
+					require.NoError(t, err)
+					require.GreaterOrEqual(t, len(similarVectors), mode.minTargetSimilar,
+						"similar_to query should return results for predicate %s vector %d", pred, i)
+				}
+			}
+		})
 	}
 }
 
@@ -354,183 +399,215 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 // predicate types (string with index, int with index, uid edges) to ensure
 // vector indexing doesn't break existing functionality.
 func TestBulkLoadMixedPredicates(t *testing.T) {
-	// Schema with vectors AND other indexed predicates
-	mixedSchema := `
-		project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
-		name: string @index(term, fulltext) .
-		age: int @index(int) .
-		score: float .
-		friend: [uid] @reverse .
-		dgraph.type: [string] @index(exact) .
-	`
-
 	numVectors := 500
 	vectorDim := 10
 
-	// Step 1: Create source cluster and load mixed data
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	require.NoError(t, gc.SetupSchema(mixedSchema))
-
-	// Generate mixed RDF data: vectors + strings + ints + edges
-	var rdfBuilder strings.Builder
-	vectors := make([][]float32, numVectors)
-
-	for i := 0; i < numVectors; i++ {
-		uid := i + 10
-		// Generate random vector
-		vec := dgraphapi.GenerateRandomVector(vectorDim)
-		vectors[i] = vec
-		vecStr := fmt.Sprintf(`"[%s]"`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(vec)), ", "), "[]"))
-
-		// Add vector predicate
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <project_description_v> %s .\n", uid, vecStr))
-		// Add string predicate
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <name> \"Person %d\" .\n", uid, i))
-		// Add int predicate
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <age> \"%d\"^^<xs:int> .\n", uid, 20+i%50))
-		// Add float predicate
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <score> \"%f\"^^<xs:float> .\n", uid, float64(i)*1.5))
-		// Add dgraph.type
-		rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <dgraph.type> \"Person\" .\n", uid))
-		// Add friend edge (to create some graph structure)
-		if i > 0 {
-			friendUid := 10 + (i-1)%numVectors
-			rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <friend> <0x%x> .\n", uid, friendUid))
-		}
+	// The vector predicate is exercised as both a monolithic and a partitioned
+	// (numClusters) index; the surrounding non-vector predicates are unchanged.
+	// numClusters == 4 over 500 vectors keeps clustering meaningful. The
+	// similarity assertion here only checks the query returns a uid, which holds
+	// for approximate (IVF) search too, so no recall loosening is needed.
+	modes := []struct {
+		name        string
+		vectorIndex string
+	}{
+		{"monolithic", `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`},
+		{"partitioned", `project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .`},
 	}
 
-	mu := &api.Mutation{SetNquads: []byte(rdfBuilder.String()), CommitNow: true}
-	_, err = gc.Mutate(mu)
-	require.NoError(t, err)
+	for _, mode := range modes {
+		t.Run(mode.name, func(t *testing.T) {
+			// Schema with vectors AND other indexed predicates
+			mixedSchema := fmt.Sprintf(`
+				%s
+				name: string @index(term, fulltext) .
+				age: int @index(int) .
+				score: float .
+				friend: [uid] @reverse .
+				dgraph.type: [string] @index(exact) .
+			`, mode.vectorIndex)
 
-	// Verify source data
-	query := `{ q(func: type(Person)) { count(uid) } }`
-	result, err := gc.Query(query)
-	require.NoError(t, err)
-	require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()))
+			// Step 1: Create source cluster and load mixed data
+			sourceConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour)
+			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
+			require.NoError(t, err)
+			defer func() { sourceCluster.Cleanup(t.Failed()) }()
+			require.NoError(t, sourceCluster.Start())
 
-	// Step 2: Export data
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+			gc, cleanup, err := sourceCluster.Client()
+			require.NoError(t, err)
+			defer cleanup()
+			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
-	// Step 3: Bulk load
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
+			hc, err := sourceCluster.HTTPClient()
+			require.NoError(t, err)
+			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+				dgraphapi.DefaultPassword, x.RootNamespace))
 
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
+			require.NoError(t, gc.SetupSchema(mixedSchema))
 
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
+			// Generate mixed RDF data: vectors + strings + ints + edges
+			var rdfBuilder strings.Builder
+			vectors := make([][]float32, numVectors)
 
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
+			for i := 0; i < numVectors; i++ {
+				uid := i + 10
+				// Generate random vector
+				vec := dgraphapi.GenerateRandomVector(vectorDim)
+				vectors[i] = vec
+				vecStr := fmt.Sprintf(`"[%s]"`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(vec)), ", "), "[]"))
 
-	opts := dgraphtest.BulkOpts{
-		DataFiles:   dataFiles,
-		SchemaFiles: schemaFiles,
-		OutDir:      bulkOutDir,
+				// Add vector predicate
+				rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <project_description_v> %s .\n", uid, vecStr))
+				// Add string predicate
+				rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <name> \"Person %d\" .\n", uid, i))
+				// Add int predicate
+				rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <age> \"%d\"^^<xs:int> .\n", uid, 20+i%50))
+				// Add float predicate
+				rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <score> \"%f\"^^<xs:float> .\n", uid, float64(i)*1.5))
+				// Add dgraph.type
+				rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <dgraph.type> \"Person\" .\n", uid))
+				// Add friend edge (to create some graph structure)
+				if i > 0 {
+					friendUid := 10 + (i-1)%numVectors
+					rdfBuilder.WriteString(fmt.Sprintf("<0x%x> <friend> <0x%x> .\n", uid, friendUid))
+				}
+			}
+
+			mu := &api.Mutation{SetNquads: []byte(rdfBuilder.String()), CommitNow: true}
+			_, err = gc.Mutate(mu)
+			require.NoError(t, err)
+
+			// Verify source data
+			query := `{ q(func: type(Person)) { count(uid) } }`
+			result, err := gc.Query(query)
+			require.NoError(t, err)
+			require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()))
+
+			// Step 2: Export data
+			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+
+			// Step 3: Bulk load
+			bulkOutDir := t.TempDir()
+			bulkConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
+
+			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
+			require.NoError(t, err)
+			defer func() { bulkCluster.Cleanup(t.Failed()) }()
+
+			require.NoError(t, bulkCluster.StartZero(0))
+			require.NoError(t, bulkCluster.HealthCheck(true))
+
+			exportHostDir := t.TempDir()
+			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
+			require.NoError(t, err)
+
+			opts := dgraphtest.BulkOpts{
+				DataFiles:   dataFiles,
+				SchemaFiles: schemaFiles,
+				OutDir:      bulkOutDir,
+			}
+			require.NoError(t, bulkCluster.BulkLoad(opts))
+
+			// Step 4: Start target cluster
+			targetConf := dgraphtest.NewClusterConfig().
+				WithNumAlphas(1).
+				WithNumZeros(1).
+				WithReplicas(1).
+				WithACL(time.Hour).
+				WithBulkLoadOutDir(bulkOutDir)
+
+			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
+			require.NoError(t, err)
+			defer func() { targetCluster.Cleanup(t.Failed()) }()
+			require.NoError(t, targetCluster.Start())
+
+			targetGc, targetCleanup, err := targetCluster.Client()
+			require.NoError(t, err)
+			defer targetCleanup()
+			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
+				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+			// Step 5: Verify all predicate types work
+
+			// Verify count
+			result, err = targetGc.Query(query)
+			require.NoError(t, err)
+			require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()))
+
+			// Verify string index (term search)
+			termQuery := `{ q(func: anyofterms(name, "Person 50")) { name } }`
+			result, err = targetGc.Query(termQuery)
+			require.NoError(t, err)
+			require.Contains(t, string(result.GetJson()), "Person 50")
+
+			// Verify int index
+			intQuery := `{ q(func: eq(age, 25)) { count(uid) } }`
+			result, err = targetGc.Query(intQuery)
+			require.NoError(t, err)
+			require.Contains(t, string(result.GetJson()), "count")
+
+			// Verify reverse edges
+			reverseQuery := `{ q(func: has(~friend)) { count(uid) } }`
+			result, err = targetGc.Query(reverseQuery)
+			require.NoError(t, err)
+			require.Contains(t, string(result.GetJson()), "count")
+
+			// Verify vector similarity query
+			similarQuery := fmt.Sprintf(`{
+				vector(func: similar_to(project_description_v, 5, "%v")) {
+					uid
+					name
+				}
+			}`, vectors[0])
+			result, err = targetGc.Query(similarQuery)
+			require.NoError(t, err)
+			require.Contains(t, string(result.GetJson()), "uid")
+		})
 	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
-
-	// Step 4: Start target cluster
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, targetCluster.Start())
-
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	// Step 5: Verify all predicate types work
-
-	// Verify count
-	result, err = targetGc.Query(query)
-	require.NoError(t, err)
-	require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()))
-
-	// Verify string index (term search)
-	termQuery := `{ q(func: anyofterms(name, "Person 50")) { name } }`
-	result, err = targetGc.Query(termQuery)
-	require.NoError(t, err)
-	require.Contains(t, string(result.GetJson()), "Person 50")
-
-	// Verify int index
-	intQuery := `{ q(func: eq(age, 25)) { count(uid) } }`
-	result, err = targetGc.Query(intQuery)
-	require.NoError(t, err)
-	require.Contains(t, string(result.GetJson()), "count")
-
-	// Verify reverse edges
-	reverseQuery := `{ q(func: has(~friend)) { count(uid) } }`
-	result, err = targetGc.Query(reverseQuery)
-	require.NoError(t, err)
-	require.Contains(t, string(result.GetJson()), "count")
-
-	// Verify vector similarity query
-	similarQuery := fmt.Sprintf(`{
-		vector(func: similar_to(project_description_v, 5, "%v")) {
-			uid
-			name
-		}
-	}`, vectors[0])
-	result, err = targetGc.Query(similarQuery)
-	require.NoError(t, err)
-	require.Contains(t, string(result.GetJson()), "uid")
 }
 
 func TestBulkLoadVectorDimensions(t *testing.T) {
 	// Test different dimension sizes: small (3D), medium (128D), large (512D)
+	// against both the monolithic HNSW index and the partitioned (numClusters)
+	// index. numClusters is kept small relative to the vector count so clustering
+	// stays meaningful (4 for >=100 vectors, 2 otherwise). Partitioned search is
+	// approximate (IVF), so its recall threshold (minSimilar) is lower than
+	// monolithic's.
 	testCases := []struct {
-		name      string
-		dimension int
-		numVecs   int
+		name       string
+		dimension  int
+		numVecs    int
+		schema     string
+		minSimilar int
 	}{
-		{"small_3d", 3, 100},
-		{"medium_128d", 128, 100},
-		{"large_512d", 512, 50}, // Fewer vectors for large dimensions
+		{"small_3d/monolithic", 3, 100,
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`, 4},
+		{"small_3d/partitioned", 3, 100,
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .`, 2},
+		{"medium_128d/monolithic", 128, 100,
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`, 4},
+		{"medium_128d/partitioned", 128, 100,
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .`, 2},
+		{"large_512d/monolithic", 512, 50, // Fewer vectors for large dimensions
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`, 4},
+		{"large_512d/partitioned", 512, 50, // 50 vectors -> 2 clusters keeps clustering meaningful
+			`project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "2")) .`, 2},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			predName := "project_description_v"
-			schema := fmt.Sprintf(`%s: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`, predName)
 
 			// Step 1: Create source cluster
 			sourceConf := dgraphtest.NewClusterConfig().
@@ -554,7 +631,7 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
 				dgraphapi.DefaultPassword, x.RootNamespace))
 
-			require.NoError(t, gc.SetupSchema(schema))
+			require.NoError(t, gc.SetupSchema(tc.schema))
 
 			// Generate vectors with specific dimension
 			rdfs, vectors := dgraphapi.GenerateRandomVectors(0, tc.numVecs, tc.dimension, predName)
@@ -617,11 +694,13 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 			require.NoError(t, err)
 			require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, tc.numVecs), string(result.GetJson()))
 
-			// Verify similarity query works
+			// Verify similarity query works. Partitioned (IVF) search is
+			// approximate, so its recall threshold is lower than monolithic's;
+			// the count equality above stays strict for both.
 			for _, vector := range vectors {
 				similarVectors, err := targetGc.QueryMultipleVectorsUsingSimilarTo(vector, predName, 5)
 				require.NoError(t, err)
-				require.GreaterOrEqual(t, len(similarVectors), 4,
+				require.GreaterOrEqual(t, len(similarVectors), tc.minSimilar,
 					"similar_to query should return results for vector")
 			}
 
@@ -957,4 +1036,50 @@ func TestPartitionedVectorDimensionValidation(t *testing.T) {
 	// Matching the data → accepted.
 	require.NoError(t, gc.SetupSchema(idx(`, vectorDimension: "10"`)),
 		"a vectorDimension matching the data must be accepted")
+}
+
+// TestPartitionedVectorDimensionValidationUntyped is the regression lock for the
+// "insert-before-declare" path: vectors are mutated BEFORE the predicate is typed
+// float32vector, so they are stored in their raw text form, not packed float32.
+// ExistingVectorDimension must NOT treat those text bytes as a float array (which
+// would yield a bogus dimension of len(text)/4 and wrongly reject the alter); it
+// must leave the dimension unknown and let the alter through, so the build can
+// establish the true dimension. Before the fix this failed with a spurious
+// "contradicts the existing vector dimension" error.
+func TestPartitionedVectorDimensionValidationUntyped(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().
+		WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+	require.NoError(t, c.Start())
+
+	gc, cleanup, err := c.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+	const pred = "project_description_v"
+	const dim = 100
+
+	// Mutate BEFORE declaring the predicate as float32vector: the values are
+	// stored as their default text form, e.g. "[0.5, 7.8, ...]".
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, 500, dim, pred)
+	_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
+	require.NoError(t, err)
+
+	// Now attach the partitioned index declaring the matching vectorDimension.
+	// This must be accepted (the text-stored data must not be misread as
+	// dimension len(text)/4).
+	idx := pred + `: float32vector @index(hnsw(metric: "euclidean", numClusters: "4", vectorDimension: "100")) .`
+	require.NoError(t, gc.SetupSchema(idx),
+		"attaching the index after loading untyped vectors must not be rejected as a dimension contradiction")
+
+	// The index built over the (now typed) data must be queryable.
+	for _, vector := range vectors {
+		similar, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 10)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(similar), 1)
+	}
 }
