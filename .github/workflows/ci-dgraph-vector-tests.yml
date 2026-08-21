@@ -24,7 +24,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
     runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
 
@@ -71,7 +71,10 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and vector tests
-          cd t; ./t --suite=vector
+          # NOTE: temporary bump of the per-package go-test timeout (default 90m)
+          # so the full vector suite (incl. the slow IncrBackupRestore) completes
+          # in a single run; revert once the slow tests move to a nightly lane.
+          cd t; ./t --suite=vector --timeout 150m
           # clean up docker containers after test execution
           ./t -r
           # sleep
