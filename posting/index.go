@@ -1868,6 +1868,12 @@ func ExistingVectorDimension(ctx context.Context, attr string) (int, bool) {
 	}
 
 	// 2. Fall back to the first stored vector (never-built predicate with data).
+	// Only a genuinely vfloat-typed value can be measured: its bytes are packed
+	// float32 (4 bytes/number), so len(bytes)/4 is the dimension. If the value
+	// was mutated before the predicate was typed float32vector it is stored as
+	// its raw text form (e.g. "[0.5, ...]"); dividing that byte length by 4
+	// yields a bogus dimension, so such values must be skipped and the dimension
+	// left unknown (the build will establish and persist the true dimension).
 	dim := 0
 	pk := x.ParsedKey{Attr: attr}
 	_ = MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
@@ -1880,8 +1886,10 @@ func ExistingVectorDimension(ctx context.Context, attr string) (int, bool) {
 			if err != nil {
 				return nil
 			}
-			if b, ok := val.Value.([]byte); ok {
-				dim = len(types.BytesAsFloatArray(b))
+			if val.Tid == types.VFloatID {
+				if b, ok := val.Value.([]byte); ok {
+					dim = len(types.BytesAsFloatArray(b))
+				}
 			}
 			return ErrStopIteration
 		},
