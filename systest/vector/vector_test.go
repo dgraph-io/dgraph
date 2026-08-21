@@ -58,9 +58,6 @@ func testVectorQuery(t *testing.T, gc *dgraphapi.GrpcClient, vectors [][]float32
 
 func (vsuite *VectorTestSuite) TestVectorDropAll() {
 	t := vsuite.T()
-	if vsuite.isForPartitionedIndex {
-		t.Skip("Skipping TestVectorDropAll for partitioned index")
-	}
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
@@ -78,7 +75,7 @@ func (vsuite *VectorTestSuite) TestVectorDropAll() {
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
 		dgraphapi.DefaultPassword, x.RootNamespace))
 
-	numVectors := 10
+	numVectors := 50
 
 	testVectorSimilarTo := func(vectors [][]float32) {
 		for _, vector := range vectors {
@@ -118,9 +115,6 @@ func (vsuite *VectorTestSuite) TestVectorDropAll() {
 
 func (vsuite *VectorTestSuite) TestVectorSnapshot() {
 	t := vsuite.T()
-	if vsuite.isForPartitionedIndex {
-		t.Skip("Skipping TestVectorSnapshot for partitioned index")
-	}
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(3).WithNumZeros(3).WithReplicas(3).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
@@ -191,13 +185,21 @@ func (vsuite *VectorTestSuite) TestVectorSnapshot() {
 	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors), string(result.GetJson()))
 
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+
+	// Self-recall on the restarted alpha: every indexed vector must find
+	// itself. If the restart's replayed index rebuild raced the replayed
+	// mutations, some vectors are permanently unreachable via similar_to
+	// (the known reindex-vs-mutation restart race).
+	for i, vector := range vectors {
+		similar, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
+		require.NoError(t, err)
+		require.Containsf(t, similar, vector,
+			"vector %d not found via similar_to after restart (reindex-vs-mutation race?)", i)
+	}
 }
 
 func (vsuite *VectorTestSuite) TestVectorDropNamespace() {
 	t := vsuite.T()
-	if vsuite.isForPartitionedIndex {
-		t.Skip("Skipping TestVectorDropNamespace for partitioned index")
-	}
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
 	c, err := dgraphtest.NewLocalCluster(conf)
 	require.NoError(t, err)
@@ -636,8 +638,13 @@ func (vsuite *VectorTestSuite) TestPartitionedHNSWIndex() {
 		_, err = gc.Mutate(mu)
 		require.NoError(t, err)
 
+		// The predicate already holds dimension-8 vectors. A float32vector
+		// predicate has exactly one dimension, so declaring an index with
+		// vectorDimension:100 is a genuine contradiction and must be rejected at
+		// alter time, leaving the schema unchanged.
 		err = gc.SetupSchema(vsuite.schema)
-		require.NoError(t, err)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "contradicts the existing vector dimension")
 
 		// here check schema it should not be changed
 		q = `schema {}`
@@ -756,7 +763,6 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 		// Needs the mutation-pipeline serialization fix. Centroid
 		// hydration itself is covered deterministically by
 		// posting/vector_restart_test.go.
-		t.Skip("Skipping: restart replays the index rebuild and races replayed mutations (pre-existing reindex-vs-mutation race)")
 
 		require.NoError(t, c.StopAlpha(0))
 		require.NoError(t, c.StartAlpha(0))
@@ -839,8 +845,11 @@ func TestVectorSuite(t *testing.T) {
 			ssuite.schemaVecDimesion10 = schema
 		}
 		suite.Run(t, &ssuite)
-		if t.Failed() {
-			x.Panic(errors.New("vector tests failed"))
-		}
+	}
+	// Panic only after every schema iteration has run so that a failure in one
+	// index mode does not skip the remaining tests; the process still exits
+	// loudly if anything failed.
+	if t.Failed() {
+		x.Panic(errors.New("vector tests failed"))
 	}
 }
