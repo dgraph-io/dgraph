@@ -31,6 +31,21 @@ const (
 	vectorSchemaWithoutIndex = `%v: float32vector .`
 )
 
+type vecIndexMode struct {
+	name   string
+	approx bool // partitioned/IVF: relax exact-recall assertions only
+	schema func(pred, metric string) string
+}
+
+var vecIndexModes = []vecIndexMode{
+	{name: "monolithic", approx: false, schema: func(pred, metric string) string {
+		return fmt.Sprintf(`%v: float32vector @index(hnsw(exponent: "4", metric: "%v")) .`, pred, metric)
+	}},
+	{name: "partitioned", approx: true, schema: func(pred, metric string) string {
+		return fmt.Sprintf(`%v: float32vector @index(hnsw(numClusters: "2", partitionStratOpt: "kmeans", metric: "%v")) .`, pred, metric)
+	}},
+}
+
 var client *dgraphapi.GrpcClient
 var dc dgraphapi.Cluster
 
@@ -383,239 +398,306 @@ func testVectorMutationDiffrentLength(t *testing.T, err string) {
 }
 
 func TestInvalidVectorIndex(t *testing.T) {
-	dropPredicate("vtest")
-	schema := fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidan")
-	var err error
-	for retry := 0; retry < 10; retry++ {
-		err = client.Alter(context.Background(), &api.Operation{Schema: schema})
-		if err == nil {
-			require.Error(t, err)
-		}
-		if strings.Contains(err.Error(), "Can't create a vector index for euclidan") {
-			return
-		}
-		time.Sleep(time.Second)
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			dropPredicate("vtest")
+			defer dropPredicate("vtest")
+			schema := mode.schema("vtest", "euclidan")
+			var err error
+			for retry := 0; retry < 10; retry++ {
+				err = client.Alter(context.Background(), &api.Operation{Schema: schema})
+				if err == nil {
+					require.Error(t, err)
+				}
+				if strings.Contains(err.Error(), "Can't create a vector index for euclidan") {
+					return
+				}
+				time.Sleep(time.Second)
+			}
+			require.Error(t, nil)
+		})
 	}
-	require.Error(t, nil)
 }
 
 func TestVectorIndexRebuildWhenChange(t *testing.T) {
-	dropPredicate("vtest")
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			dropPredicate("vtest")
+			defer dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "euclidean"))
 
-	numVectors := 9000
-	vectorSize := 100
+			numVectors := 9000
+			vectorSize := 100
 
-	randomVectors, _ := generateRandomVectors(numVectors, vectorSize, "vtest")
-	require.NoError(t, addTriplesToCluster(randomVectors))
+			randomVectors, _ := generateRandomVectors(numVectors, vectorSize, "vtest")
+			require.NoError(t, addTriplesToCluster(randomVectors))
 
-	startTime := time.Now()
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "6", "euclidean"))
+			startTime := time.Now()
+			// Trigger a rebuild by changing a mode-appropriate index option.
+			var changed string
+			if mode.approx {
+				changed = `vtest: float32vector @index(hnsw(numClusters: "3", partitionStratOpt: "kmeans", metric: "euclidean")) .`
+			} else {
+				changed = fmt.Sprintf(vectorSchemaWithIndex, "vtest", "6", "euclidean")
+			}
+			setSchema(changed)
 
-	dur := time.Since(startTime)
-	// Easy way to check that the index was actually rebuilt
-	require.Greater(t, dur, time.Second*4)
+			dur := time.Since(startTime)
+			// Easy way to check that the index was actually rebuilt
+			require.Greater(t, dur, time.Second*4)
+		})
+	}
 }
 
 func TestSimilarToOptionsIntegration(t *testing.T) {
-	const pred = "voptions"
-	dropPredicate(pred)
-	t.Cleanup(func() { dropPredicate(pred) })
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			const pred = "voptions"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+			setSchema(mode.schema(pred, "euclidean"))
 
-	rdf := `<0x1> <voptions> "[0,0]" .
+			rdf := `<0x1> <voptions> "[0,0]" .
 	<0x2> <voptions> "[1,0]" .
 	<0x3> <voptions> "[2,0]" .
 	<0x4> <voptions> "[5,0]" .`
-	require.NoError(t, addTriplesToCluster(rdf))
+			require.NoError(t, addTriplesToCluster(rdf))
 
-	t.Run("ef_override_named_param", func(t *testing.T) {
-		query := `{
+			// full inserted set, and the set of vectors within the distance threshold
+			inserted := map[string]struct{}{"0x1": {}, "0x2": {}, "0x3": {}, "0x4": {}}
+
+			t.Run("ef_override_named_param", func(t *testing.T) {
+				query := `{
 			results(func: similar_to(voptions, 3, "[0,0]", ef: 2)) {
 				uid
 			}
 		}`
-		resp := processQueryNoErr(t, query)
+				resp := processQueryNoErr(t, query)
 
-		var result struct {
-			Data struct {
-				Results []struct {
-					UID string `json:"uid"`
-				} `json:"results"`
-			} `json:"data"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(resp), &result))
-		require.Len(t, result.Data.Results, 3)
+				var result struct {
+					Data struct {
+						Results []struct {
+							UID string `json:"uid"`
+						} `json:"results"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(resp), &result))
 
-		expected := map[string]struct{}{"0x1": {}, "0x2": {}, "0x3": {}}
-		for _, r := range result.Data.Results {
-			_, ok := expected[r.UID]
-			require.Truef(t, ok, "unexpected uid %s", r.UID)
-			delete(expected, r.UID)
-		}
-		require.Empty(t, expected)
-	})
+				if !mode.approx {
+					require.Len(t, result.Data.Results, 3)
 
-	t.Run("distance_threshold_named_param", func(t *testing.T) {
-		query := `{
+					expected := map[string]struct{}{"0x1": {}, "0x2": {}, "0x3": {}}
+					for _, r := range result.Data.Results {
+						_, ok := expected[r.UID]
+						require.Truef(t, ok, "unexpected uid %s", r.UID)
+						delete(expected, r.UID)
+					}
+					require.Empty(t, expected)
+				} else {
+					require.LessOrEqual(t, len(result.Data.Results), 3)
+					for _, r := range result.Data.Results {
+						_, ok := inserted[r.UID]
+						require.Truef(t, ok, "unexpected uid %s", r.UID)
+					}
+				}
+			})
+
+			t.Run("distance_threshold_named_param", func(t *testing.T) {
+				query := `{
 			results(func: similar_to(voptions, 4, "[0,0]", distance_threshold: 1.5)) {
 				uid
 			}
 		}`
-		resp := processQueryNoErr(t, query)
+				resp := processQueryNoErr(t, query)
 
-		var result struct {
-			Data struct {
-				Results []struct {
-					UID string `json:"uid"`
-				} `json:"results"`
-			} `json:"data"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(resp), &result))
-		require.Len(t, result.Data.Results, 2)
+				var result struct {
+					Data struct {
+						Results []struct {
+							UID string `json:"uid"`
+						} `json:"results"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(resp), &result))
 
-		expected := map[string]struct{}{"0x1": {}, "0x2": {}}
-		for _, r := range result.Data.Results {
-			_, ok := expected[r.UID]
-			require.Truef(t, ok, "unexpected uid %s", r.UID)
-			delete(expected, r.UID)
-		}
-		require.Empty(t, expected)
-	})
+				within := map[string]struct{}{"0x1": {}, "0x2": {}}
+				if !mode.approx {
+					require.Len(t, result.Data.Results, 2)
+
+					expected := map[string]struct{}{"0x1": {}, "0x2": {}}
+					for _, r := range result.Data.Results {
+						_, ok := expected[r.UID]
+						require.Truef(t, ok, "unexpected uid %s", r.UID)
+						delete(expected, r.UID)
+					}
+					require.Empty(t, expected)
+				} else {
+					// distance_threshold filters results, so any returned uid must be
+					// within the true threshold set; approximate search may return fewer.
+					require.LessOrEqual(t, len(result.Data.Results), 2)
+					for _, r := range result.Data.Results {
+						_, ok := within[r.UID]
+						require.Truef(t, ok, "unexpected uid %s", r.UID)
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestVectorInQueryArgument(t *testing.T) {
-	dropPredicate("vtest")
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			dropPredicate("vtest")
+			defer dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "euclidean"))
 
-	numVectors := 100
-	vectorSize := 4
+			numVectors := 100
+			vectorSize := 4
 
-	randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, "vtest")
-	require.NoError(t, addTriplesToCluster(randomVectors))
+			randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, "vtest")
+			require.NoError(t, addTriplesToCluster(randomVectors))
 
-	query := `query demo($v: float32vector) {
+			query := `query demo($v: float32vector) {
 		 vector(func: similar_to(vtest, 1, $v)) {
 				uid
 		 }
 	}`
 
-	vectorString := fmt.Sprintf(`[%s]`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(allVectors[0])), ", "), "[]"))
-	vars := map[string]string{
-		"$v": vectorString,
-	}
+			vectorString := fmt.Sprintf(`[%s]`, strings.Trim(strings.Join(strings.Fields(fmt.Sprint(allVectors[0])), ", "), "[]"))
+			vars := map[string]string{
+				"$v": vectorString,
+			}
 
-	_, err := processQueryWithVars(t, query, vars)
-	require.NoError(t, err)
+			_, err := processQueryWithVars(t, query, vars)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestVectorsMutateFixedLengthWithDiffrentIndexes(t *testing.T) {
-	dropPredicate("vtest")
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
-	testVectorMutationSameLength(t)
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "euclidean"))
+			testVectorMutationSameLength(t)
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "cosine"))
-	testVectorMutationSameLength(t)
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "cosine"))
+			testVectorMutationSameLength(t)
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
-	testVectorMutationSameLength(t)
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "dotproduct"))
+			testVectorMutationSameLength(t)
+			dropPredicate("vtest")
+		})
+	}
 }
 
 func TestVectorDeadlockwithTimeout(t *testing.T) {
-	pred := "vtest1"
-	dc = dgraphtest.NewComposeCluster()
-	var cleanup func()
-	client, cleanup, err := dc.Client()
-	x.Panic(err)
-	defer cleanup()
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "vtest1"
+			defer dropPredicate(pred)
+			dc = dgraphtest.NewComposeCluster()
+			var cleanup func()
+			client, cleanup, err := dc.Client()
+			x.Panic(err)
+			defer cleanup()
 
-	for i := 0; i < 5; i++ {
-		fmt.Println("Testing iteration: ", i)
-		ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel2()
-		err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
-			dgraphapi.DefaultPassword, x.RootNamespace)
-		require.NoError(t, err)
+			for i := 0; i < 5; i++ {
+				fmt.Println("Testing iteration: ", i)
+				ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel2()
+				err = client.LoginIntoNamespace(ctx, dgraphapi.DefaultUser,
+					dgraphapi.DefaultPassword, x.RootNamespace)
+				require.NoError(t, err)
 
-		err = client.Alter(context.Background(), &api.Operation{
-			DropAttr: pred,
+				err = client.Alter(context.Background(), &api.Operation{
+					DropAttr: pred,
+				})
+				dropPredicate(pred)
+				setSchema(mode.schema(pred, "euclidean"))
+				numVectors := 10000
+				vectorSize := 1000
+
+				randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
+
+				txn := client.NewTxn()
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer func() { _ = txn.Discard(ctx) }()
+				defer cancel()
+
+				_, err = txn.Mutate(ctx, &api.Mutation{
+					SetNquads: []byte(randomVectors),
+					CommitNow: true,
+				})
+				require.Error(t, err)
+
+				err = txn.Commit(ctx)
+				require.Contains(t, err.Error(), "Transaction has already been committed or discarded")
+			}
 		})
-		dropPredicate(pred)
-		setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
-		numVectors := 10000
-		vectorSize := 1000
-
-		randomVectors, _ := generateRandomVectors(numVectors, vectorSize, pred)
-
-		txn := client.NewTxn()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer func() { _ = txn.Discard(ctx) }()
-		defer cancel()
-
-		_, err = txn.Mutate(ctx, &api.Mutation{
-			SetNquads: []byte(randomVectors),
-			CommitNow: true,
-		})
-		require.Error(t, err)
-
-		err = txn.Commit(ctx)
-		require.Contains(t, err.Error(), "Transaction has already been committed or discarded")
 	}
 }
 
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
-	dropPredicate("vtest")
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "euclidean"))
-	testVectorMutationDiffrentLength(t, "can not compute euclidean distance on vectors of different lengths")
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "euclidean"))
+			testVectorMutationDiffrentLength(t, "can not compute euclidean distance on vectors of different lengths")
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "cosine"))
-	testVectorMutationDiffrentLength(t, "can not compute cosine distance on vectors of different lengths")
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "cosine"))
+			testVectorMutationDiffrentLength(t, "can not compute cosine distance on vectors of different lengths")
+			dropPredicate("vtest")
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, "vtest", "4", "dotproduct"))
-	testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
-	dropPredicate("vtest")
+			setSchema(mode.schema("vtest", "dotproduct"))
+			testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
+			dropPredicate("vtest")
+		})
+	}
 }
 
 func TestVectorReindex(t *testing.T) {
-	dropPredicate("vtest")
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "vtest"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	pred := "vtest"
+			setSchema(mode.schema(pred, "euclidean"))
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+			numVectors := 100
+			vectorSize := 4
 
-	numVectors := 100
-	vectorSize := 4
+			randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, pred)
+			require.NoError(t, addTriplesToCluster(randomVectors))
 
-	randomVectors, allVectors := generateRandomVectors(numVectors, vectorSize, pred)
-	require.NoError(t, addTriplesToCluster(randomVectors))
+			setSchema(fmt.Sprintf(vectorSchemaWithoutIndex, pred))
 
-	setSchema(fmt.Sprintf(vectorSchemaWithoutIndex, pred))
-
-	query := `{
+			query := `{
 		 vector(func: has(vtest)) {
 				count(uid)
 			 }
 	 }`
 
-	result := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
+			result := processQueryNoErr(t, query)
+			require.JSONEq(t, `{"data": {"vector":[{"count":100}]}}`, result)
 
-	triple := strings.Split(randomVectors, "\n")[0]
-	_, err := querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
-	require.NotNil(t, err)
+			triple := strings.Split(randomVectors, "\n")[0]
+			_, err := querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
+			require.NotNil(t, err)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
-	vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
-	require.NoError(t, err)
-	require.Contains(t, allVectors, vector)
+			setSchema(mode.schema(pred, "euclidean"))
+			vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
+			require.NoError(t, err)
+			require.Contains(t, allVectors, vector)
+		})
+	}
 }
 
 func TestVectorMutationWithoutIndex(t *testing.T) {
@@ -659,101 +741,115 @@ func TestVectorMutationWithoutIndex(t *testing.T) {
 }
 
 func TestVectorDelete(t *testing.T) {
-	pred := "vtest"
-	dropPredicate(pred)
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "vtest"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+			setSchema(mode.schema(pred, "euclidean"))
 
-	numVectors := 1000
-	rdf, vectors := generateRandomVectors(numVectors, 10, "vtest")
-	require.NoError(t, addTriplesToCluster(rdf))
+			numVectors := 1000
+			rdf, vectors := generateRandomVectors(numVectors, 10, "vtest")
+			require.NoError(t, addTriplesToCluster(rdf))
 
-	query := `{
+			query := `{
 		 vector(func: has(vtest)) {
 				count(uid)
 			 }
 	 }`
 
-	result := processQueryNoErr(t, query)
-	require.JSONEq(t, fmt.Sprintf(`{"data": {"vector":[{"count":%d}]}}`, numVectors), result)
+			result := processQueryNoErr(t, query)
+			require.JSONEq(t, fmt.Sprintf(`{"data": {"vector":[{"count":%d}]}}`, numVectors), result)
 
-	allVectors, err := queryAllVectorsPred(t, "vtest")
-	require.NoError(t, err)
+			allVectors, err := queryAllVectorsPred(t, "vtest")
+			require.NoError(t, err)
 
-	require.Equal(t, vectors, allVectors)
+			require.Equal(t, vectors, allVectors)
 
-	triples := strings.Split(rdf, "\n")
+			triples := strings.Split(rdf, "\n")
 
-	deleteTriple := func(idx int) string {
-		triple := triples[idx]
+			deleteTriple := func(idx int) string {
+				triple := triples[idx]
 
-		deleteTriplesInCluster(triple)
-		uid := strings.Split(triple, " ")[0]
-		query = fmt.Sprintf(`{
+				deleteTriplesInCluster(triple)
+				uid := strings.Split(triple, " ")[0]
+				query = fmt.Sprintf(`{
 		  vector(func: uid(%s)) {
 		   vtest
 		  }
 		}`, uid[1:len(uid)-1])
 
-		result = processQueryNoErr(t, query)
-		require.JSONEq(t, `{"data": {"vector":[]}}`, result)
-		return triple
+				result = processQueryNoErr(t, query)
+				require.JSONEq(t, `{"data": {"vector":[]}}`, result)
+				return triple
 
+			}
+
+			for i := 0; i < len(triples)-2; i++ {
+				triple := deleteTriple(i)
+				vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
+				require.NoError(t, err)
+				require.Contains(t, allVectors, vector)
+			}
+
+			triple := deleteTriple(len(triples) - 2)
+			// after deleteing all vectors, we should get an empty array of vectors in response when we do silimar_to query
+			_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
+			require.NoError(t, err)
+		})
 	}
-
-	for i := 0; i < len(triples)-2; i++ {
-		triple := deleteTriple(i)
-		vector, err := querySingleVector(t, strings.Split(triple, `"`)[1], "vtest")
-		require.NoError(t, err)
-		require.Contains(t, allVectors, vector)
-	}
-
-	triple := deleteTriple(len(triples) - 2)
-	// after deleteing all vectors, we should get an empty array of vectors in response when we do silimar_to query
-	_, err = querySingleVectorError(t, strings.Split(triple, `"`)[1], "vtest", false)
-	require.NoError(t, err)
 }
 
 func TestVectorUpdate(t *testing.T) {
-	pred := "vtest"
-	dropPredicate(pred)
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "vtest"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+			setSchema(mode.schema(pred, "euclidean"))
 
-	numVectors := 1000
-	rdf, vectors := generateRandomVectors(1000, 10, "vtest")
-	require.NoError(t, addTriplesToCluster(rdf))
+			numVectors := 1000
+			rdf, vectors := generateRandomVectors(1000, 10, "vtest")
+			require.NoError(t, addTriplesToCluster(rdf))
 
-	allVectors, err := queryAllVectorsPred(t, "vtest")
-	require.NoError(t, err)
+			allVectors, err := queryAllVectorsPred(t, "vtest")
+			require.NoError(t, err)
 
-	require.Equal(t, vectors, allVectors)
+			require.Equal(t, vectors, allVectors)
 
-	updateVectorQuery := func(idx int) {
-		triple := strings.Split(rdf, "\n")[idx]
-		updatedVec := updateVector(t, triple, "vtest")
-		allVectors[idx] = updatedVec
+			updateVectorQuery := func(idx int) {
+				triple := strings.Split(rdf, "\n")[idx]
+				updatedVec := updateVector(t, triple, "vtest")
+				allVectors[idx] = updatedVec
 
-		updatedVectors, err := queryMultipleVectorsUsingSimilarTo(t, allVectors[0], "vtest", 100)
-		require.NoError(t, err)
+				updatedVectors, err := queryMultipleVectorsUsingSimilarTo(t, allVectors[0], "vtest", 100)
+				require.NoError(t, err)
 
-		for _, i := range updatedVectors {
-			require.Contains(t, allVectors, i)
-		}
-	}
+				for _, i := range updatedVectors {
+					require.Contains(t, allVectors, i)
+				}
+			}
 
-	for i := 0; i < 1000; i++ {
-		idx := rand.Intn(numVectors)
-		updateVectorQuery(idx)
+			for i := 0; i < 1000; i++ {
+				idx := rand.Intn(numVectors)
+				updateVectorQuery(idx)
+			}
+		})
 	}
 }
 
 func TestVectorWithoutQuote(t *testing.T) {
-	pred := "test-ve"
-	dropPredicate(pred)
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "test-ve"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	setJson := `
+			setSchema(mode.schema(pred, "euclidean"))
+
+			setJson := `
 {
    "set": [
      {
@@ -783,41 +879,58 @@ func TestVectorWithoutQuote(t *testing.T) {
    ]
  }
 	`
-	txn1 := client.NewTxn()
-	_, err := txn1.Mutate(context.Background(), &api.Mutation{
-		SetJson: []byte(setJson),
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Input for predicate \"test-ve\" of type vector is not vector")
+			txn1 := client.NewTxn()
+			_, err := txn1.Mutate(context.Background(), &api.Mutation{
+				SetJson: []byte(setJson),
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "Input for predicate \"test-ve\" of type vector is not vector")
+		})
+	}
 }
 
 func TestVectorTwoTxnWithoutCommit(t *testing.T) {
-	pred := "vtest"
-	dropPredicate(pred)
+	for _, mode := range vecIndexModes {
+		t.Run(mode.name, func(t *testing.T) {
+			pred := "vtest"
+			dropPredicate(pred)
+			defer dropPredicate(pred)
 
-	setSchema(fmt.Sprintf(vectorSchemaWithIndex, pred, "4", "euclidean"))
+			setSchema(mode.schema(pred, "euclidean"))
 
-	rdf, vectors := generateRandomVectors(5, 5, "vtest")
-	txn1 := client.NewTxn()
-	_, err := txn1.Mutate(context.Background(), &api.Mutation{
-		SetNquads: []byte(rdf),
-	})
-	require.NoError(t, err)
+			rdf, vectors := generateRandomVectors(5, 5, "vtest")
+			txn1 := client.NewTxn()
+			_, err := txn1.Mutate(context.Background(), &api.Mutation{
+				SetNquads: []byte(rdf),
+			})
+			require.NoError(t, err)
 
-	rdf, _ = generateRandomVectors(5, 5, "vtest")
-	txn2 := client.NewTxn()
-	_, err = txn2.Mutate(context.Background(), &api.Mutation{
-		SetNquads: []byte(rdf),
-	})
-	require.NoError(t, err)
+			rdf, _ = generateRandomVectors(5, 5, "vtest")
+			txn2 := client.NewTxn()
+			_, err = txn2.Mutate(context.Background(), &api.Mutation{
+				SetNquads: []byte(rdf),
+			})
+			require.NoError(t, err)
 
-	require.NoError(t, txn1.Commit(context.Background()))
-	require.Error(t, txn2.Commit(context.Background()))
-	resp, err := queryMultipleVectorsUsingSimilarTo(t, vectors[0], "vtest", 5)
-	require.NoError(t, err)
+			require.NoError(t, txn1.Commit(context.Background()))
+			require.Error(t, txn2.Commit(context.Background()))
+			resp, err := queryMultipleVectorsUsingSimilarTo(t, vectors[0], "vtest", 5)
+			require.NoError(t, err)
 
-	for i := 0; i < len(vectors); i++ {
-		require.Contains(t, resp, vectors[i])
+			if !mode.approx {
+				for i := 0; i < len(vectors); i++ {
+					require.Contains(t, resp, vectors[i])
+				}
+			} else {
+				// approximate search may not return every committed vector; require the
+				// self vector, and that every returned vector is a committed member.
+				require.Contains(t, resp, vectors[0])
+				require.LessOrEqual(t, len(resp), 5)
+				for _, r := range resp {
+					require.Contains(t, vectors, r)
+				}
+			}
+		})
 	}
 }
 
