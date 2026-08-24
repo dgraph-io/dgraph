@@ -65,7 +65,7 @@ docker run -it -p 8080:8080 -p 9080:9080 -v ~/dgraph:/dgraph dgraph/standalone:l
 
 ## Install from Source
 
-If you want to install from source, install Go 1.24+ or later and the following dependencies:
+If you want to install from source, install Go 1.27+ or later and the following dependencies:
 
 ### Ubuntu
 

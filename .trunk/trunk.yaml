@@ -16,7 +16,7 @@ runtimes:
   enabled:
     - node@22.16.0
     - python@3.10.8
-    - go@1.26.1
+    - go@1.27.0
 
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
@@ -28,7 +28,7 @@ lint:
   enabled:
     - taplo@0.10.0
     - svgo@4.0.1
-    - golangci-lint2@2.11.4
+    - golangci-lint2@2.13.1
     - trivy@0.69.3
     - actionlint@1.7.11
     - checkov@3.2.513
