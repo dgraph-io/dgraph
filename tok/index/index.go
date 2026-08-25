@@ -147,6 +147,29 @@ type OptionalSearchOptions[T c.Float] interface {
 		maxResults int, opts VectorIndexOptions[T]) ([]uint64, error)
 }
 
+// ScoredSearchOptions extends search to also return a higher-is-better similarity
+// score for each returned uid (positionally aligned). These power native hybrid
+// search: the score is bound to a DQL value variable so vector results can be a
+// fusion channel alongside BM25. Scores carry the same higher-is-better convention
+// as BM25 (cosine/dot as-is; euclidean as 1/(1+dist)).
+//
+// SearchScored / SearchWithUidScored preserve the exact neighbor selection of
+// Search / SearchWithUid (so scoring a plain query does not change its results),
+// while the *Options* variants apply per-call ef/distance-threshold controls.
+type ScoredSearchOptions[T c.Float] interface {
+	SearchScored(ctx context.Context, c CacheType, query []T,
+		maxResults int, filter SearchFilter[T]) ([]uint64, []float64, error)
+
+	SearchWithUidScored(ctx context.Context, c CacheType, queryUid uint64,
+		maxResults int, filter SearchFilter[T]) ([]uint64, []float64, error)
+
+	SearchWithOptionsScored(ctx context.Context, c CacheType, query []T,
+		maxResults int, opts VectorIndexOptions[T]) ([]uint64, []float64, error)
+
+	SearchWithUidAndOptionsScored(ctx context.Context, c CacheType, queryUid uint64,
+		maxResults int, opts VectorIndexOptions[T]) ([]uint64, []float64, error)
+}
+
 // A Txn is an interface representation of a persistent storage transaction,
 // where multiple operations are performed on a database
 type Txn interface {

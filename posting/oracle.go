@@ -54,6 +54,22 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+
+	// bm25Acc, when non-nil, redirects BM25 corpus-statistics updates into a shared
+	// accumulator instead of the per-transaction read-modify-write counter. Index
+	// rebuild sets this on its per-thread transactions so stats survive the streaming
+	// rebuild's independent caches and periodic resets, which would otherwise drop
+	// updates and undercount the corpus. nil on normal live transactions.
+	bm25Acc *bm25StatsAccum
+
+	// bm25StatsMu serializes the BM25 corpus-statistics read-modify-write within
+	// this transaction. A large proposal is applied by parallel goroutines batched
+	// so that no two batches share an (attr, entity) DATA key — but stats buckets
+	// are keyed by uid%numBM25StatsBuckets, so DIFFERENT entities in different
+	// batches legitimately hit the SAME bucket concurrently, and an unserialized
+	// RMW loses one goroutine's delta (last write wins). Cross-transaction safety
+	// is unaffected (value-independent conflict keys still serialize commits).
+	bm25StatsMu sync.Mutex
 }
 
 // struct to implement Txn interface from vector-indexer
