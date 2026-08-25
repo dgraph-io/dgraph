@@ -685,9 +685,17 @@ func valToBytes(v types.Val) ([]byte, error) {
 		b := v.Value.(big.Float)
 		return b.MarshalText()
 	case types.UidID:
-		return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
+		// Pre-sized: opening quote + "0x" + up to 16 hex digits + closing quote = 20.
+		uid, ok := v.Value.(uint64)
+		if !ok {
+			return []byte(fmt.Sprintf("\"%#x\"", v.Value)), nil
+		}
+		buf := make([]byte, 0, 20)
+		buf = append(buf, '"', '0', 'x')
+		buf = strconv.AppendUint(buf, uid, 16)
+		return append(buf, '"'), nil
 	case types.PasswordID:
-		return []byte(fmt.Sprintf("%q", v.Value.(string))), nil
+		return stringJsonMarshal(v.Value.(string)), nil
 	case types.VFloatID:
 		return json.Marshal(v.Value.([]float32))
 	default:
