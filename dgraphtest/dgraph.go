@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,7 +79,6 @@ type dnode interface {
 	ports() nat.PortSet
 	bindings(int) nat.PortMap
 	cmd(*LocalCluster) []string
-	env(*LocalCluster) []string
 	workingDir() string
 	mounts(*LocalCluster) ([]mount.Mount, error)
 	healthURL(*LocalCluster) (string, error)
@@ -151,14 +150,6 @@ func (z *zero) cmd(c *LocalCluster) []string {
 	}
 
 	return zcmd
-}
-
-func (z *zero) env(c *LocalCluster) []string {
-	// Zero binaries that guard their admin HTTP endpoints read the security whitelist from
-	// the environment; older binaries used in upgrade tests simply ignore the variable. An
-	// env var is used instead of a --security flag because older zero binaries would fail
-	// to start on an unrecognized flag.
-	return []string{"DGRAPH_ZERO_SECURITY=whitelist=0.0.0.0/0"}
 }
 
 func (z *zero) workingDir() string {
@@ -256,9 +247,9 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
-		acmd = append(acmd, `--whitelist=0.0.0.0/0`, "--telemetry=false")
+		acmd = append(acmd, fmt.Sprintf(`--whitelist=%s`, c.conf.whitelist), "--telemetry=false")
 	} else {
-		security := `--security=whitelist=0.0.0.0/0`
+		security := fmt.Sprintf(`--security=whitelist=%s`, c.conf.whitelist)
 		if c.conf.securityToken != "" {
 			security += fmt.Sprintf(`;token=%s`, c.conf.securityToken)
 		}
@@ -320,10 +311,6 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 	acmd = append(acmd, c.conf.startupArgs...)
 
 	return acmd
-}
-
-func (a *alpha) env(c *LocalCluster) []string {
-	return nil
 }
 
 func (a *alpha) workingDir() string {

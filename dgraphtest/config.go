@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// defaultWhitelist is the --security whitelist every dgraphtest cluster gets
+// unless a test overrides it with WithWhitelist. It has to stay wide open:
+// LocalCluster.Start() probes GraphQL with an admin mutation, and every admin
+// GraphQL operation carries IpWhitelistingMW, so a narrower default would break
+// every existing test rather than only the ones doing admin work.
+const defaultWhitelist = "0.0.0.0/0"
 
 // UpgradeCombo represents a version combination before and
 // after the upgrade, and the strategy for upgrading
@@ -112,6 +119,7 @@ type ClusterConfig struct {
 	repoDir               string
 	mcp                   bool
 	securityToken         string
+	whitelist             string
 }
 
 // NewClusterConfig generates a default ClusterConfig
@@ -132,6 +140,7 @@ func NewClusterConfig() ClusterConfig {
 		portOffset:     -1,
 		customPlugins:  false,
 		mcp:            false,
+		whitelist:      defaultWhitelist,
 	}
 }
 
@@ -171,6 +180,27 @@ func (cc ClusterConfig) WithVerbosity(v int) ClusterConfig {
 // WithSecurityToken sets the --security auth-token (poor man's auth) for admin operations.
 func (cc ClusterConfig) WithSecurityToken(token string) ClusterConfig {
 	cc.securityToken = token
+	return cc
+}
+
+// WithWhitelist sets the Alpha's --security whitelist for admin operations,
+// REPLACING the wide-open default rather than adding to it. Zero is unaffected: it
+// keeps its own hard-coded open whitelist, so this narrows the Alpha's admin surface
+// and nothing else. The value is the flag's own syntax: a
+// comma-separated list of IP addresses, a.b.c.d:w.x.y.z ranges, CIDR blocks, or
+// hostnames, e.g. "192.168.0.0/16,host.docker.internal".
+//
+// Replacing is the point. The default is 0.0.0.0/0, so an additive option could
+// never express a cluster that denies anyone, which is the only configuration worth
+// a test. Note that loopback is admitted unconditionally by x.isIpWhitelisted
+// regardless of this setting, so a test that wants a denial has to reach the alpha
+// over a non-loopback source — which a published Docker port gives it.
+//
+// Setting a whitelist other than the default makes Start() wait on /probe/graphql
+// instead of the admin GraphQL mutation it normally probes with; see
+// LocalCluster.waitUntilGraphqlHealthCheck for why.
+func (cc ClusterConfig) WithWhitelist(spec string) ClusterConfig {
+	cc.whitelist = spec
 	return cc
 }
 
