@@ -72,18 +72,26 @@ func (predicateACL) AuthorizeCapability(ctx context.Context, c Capability) error
 // goal here needs it.
 //
 // With ACL disabled, the old rule granted cluster authority to *everyone*. That
-// is the hole: CreateNamespace, DropNamespace, ListNamespaces, and AllocateIDs
-// gate on this capability and nothing else, so on an ACL-off cluster they were
-// reachable by any client that could open a connection. Now the same controls
-// alter already requires — a whitelisted source IP, plus the --security auth
-// token when one is configured — are what grant it.
+// is the hole: CreateNamespace, DropNamespace, and ListNamespaces gate on this
+// capability and nothing else, so on an ACL-off cluster they were reachable by any
+// client that could open a connection. Now the same controls alter already
+// requires — a whitelisted source IP, plus the --security auth token when one is
+// configured — are what grant it.
+//
+// AllocateIDs is deliberately not in that list. It gated on the same
+// AuthSuperAdmin before the split and now gates on CapLeaseUIDs instead
+// (Server.AllocateIDs in zero.go), which stays open with ACL off because
+// `dgraph live` leases a UID block on every run and has never needed a credential
+// to do it.
 //
 // This is a real behavior change and the only one in this stage. It is defensible
 // unflagged because it makes namespace lifecycle no stricter than schema change:
-// alter has always called hasAdminAuth, so any deployment that alters a schema
-// already has a working whitelist or token configuration, and the operations
-// being closed are the more destructive ones. A deployment that genuinely wants
-// the old behavior sets the same whitelist it already sets for alter.
+// validateAlterOperation has always called hasAdminAuth, and that is the same
+// HasWhitelistedIP-plus-hasPoormansAuth pair break-glass consults — so any
+// deployment that alters a schema already has a working whitelist or token
+// configuration, and the operations being closed are the more destructive ones. A
+// deployment that genuinely wants the old behavior sets the same whitelist it
+// already sets for alter.
 func authorizeClusterAdmin(ctx context.Context) error {
 	if x.WorkerConfig.AclEnabled {
 		// Guardianship of the root namespace is the first route, and the only one an
