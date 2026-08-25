@@ -516,6 +516,21 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 	m := proposal.Mutations
 
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	if txn.ShouldAbort() {
+		span.AddEvent("Txn should abort.", trace.WithAttributes(
+			attribute.Int64("start_ts", int64(m.StartTs)),
+		))
+		return x.ErrConflict
+	}
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
+
+	if t := x.WorkerConfig.IntraMutationMinEdges; t > 0 && len(m.Edges) >= t {
+		mp := posting.NewMutationPipeline(txn)
+		return mp.Process(ctx, m.Edges)
+	}
+
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
 	// by the user.
@@ -527,16 +542,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
-
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	if txn.ShouldAbort() {
-		span.AddEvent("Txn should abort.", trace.WithAttributes(
-			attribute.Int64("start_ts", int64(m.StartTs)),
-		))
-		return x.ErrConflict
-	}
-	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
@@ -965,6 +970,12 @@ func (n *node) processApplyCh() {
 // TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey uint64, delta *pb.OracleDelta) error {
 	x.PrintOracleDelta(delta)
+	if len(delta.Txns) > 0 {
+		// Zero's batching depth per Raft entry. Skipping empty
+		// (MaxAssigned-only) deltas keeps the histogram readable at light
+		// write load; see the measure's doc for how to interpret it.
+		ostats.Record(context.Background(), x.TxnsPerDelta.M(int64(len(delta.Txns))))
+	}
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
