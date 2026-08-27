@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -185,16 +185,19 @@ func (cc ClusterConfig) WithSecurityToken(token string) ClusterConfig {
 
 // WithWhitelist sets the Alpha's --security whitelist for admin operations,
 // REPLACING the wide-open default rather than adding to it. Zero is unaffected: it
-// keeps its own hard-coded open whitelist, so this narrows the Alpha's admin surface
-// and nothing else. The value is the flag's own syntax: a
-// comma-separated list of IP addresses, a.b.c.d:w.x.y.z ranges, CIDR blocks, or
-// hostnames, e.g. "192.168.0.0/16,host.docker.internal".
+// reads its own whitelist from DGRAPH_ZERO_SECURITY, because older zero binaries used
+// in upgrade tests would fail to start on an unrecognized flag.
 //
-// Replacing is the point. The default is 0.0.0.0/0, so an additive option could
-// never express a cluster that denies anyone, which is the only configuration worth
-// a test. Note that loopback is admitted unconditionally by x.isIpWhitelisted
-// regardless of this setting, so a test that wants a denial has to reach the alpha
-// over a non-loopback source — which a published Docker port gives it.
+// The value is the flag's own syntax: a comma-separated list of IP addresses,
+// a.b.c.d:w.x.y.z ranges, CIDR blocks, or hostnames, e.g.
+// "192.168.0.0/16,host.docker.internal".
+//
+// Replacing is the point. The default is 0.0.0.0/0, so an additive option could never
+// express a cluster that denies anyone, which is the only configuration worth a test.
+// Note that loopback is admitted unconditionally by x.isIpWhitelisted regardless of
+// this setting, so a test that wants a denial has to reach the alpha over a
+// non-loopback source — which a published Docker port gives it on Linux, though not
+// necessarily on Docker Desktop.
 //
 // Setting a whitelist other than the default makes Start() wait on /probe/graphql
 // instead of the admin GraphQL mutation it normally probes with; see
