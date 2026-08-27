@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -317,7 +317,8 @@ func (c *LocalCluster) createContainer(dc dnode) (string, error) {
 		}
 	}
 
-	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(), ExposedPorts: dc.ports()}
+	cconf := &container.Config{Cmd: cmd, Image: image, WorkingDir: dc.workingDir(),
+		ExposedPorts: dc.ports(), Env: dc.env(c)}
 	// ApplyContainerUser is a public hook in dgraphtest/hooks.go; the
 	// default is no-op. Downstream consumers that run dgraph as a
 	// non-root user inside the test container override it to set
