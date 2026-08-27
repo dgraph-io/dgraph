@@ -142,6 +142,21 @@ func (z *zero) cmd(c *LocalCluster) []string {
 	if c.lowerThanV21 {
 		zcmd = append(zcmd, fmt.Sprintf(`--idx=%v`, z.id+1), "--telemetry=false")
 	} else {
+		// Zero's destructive admin endpoints (/moveTablet, /removeNode) are guarded
+		// unconditionally: with neither a token nor a whitelist configured, only a
+		// loopback caller is admitted. A test reaching Zero through a published
+		// container port is not loopback, so without this the harness cannot exercise
+		// those endpoints at all — see adminAuthHandler in dgraph/cmd/zero/admin.go.
+		//
+		// Same value the Alpha already gets, for the same reason: the harness is not
+		// the place to enforce network policy, and a test cluster that refuses its own
+		// control plane fails in a way that looks nothing like its cause.
+		security := `--security=whitelist=0.0.0.0/0`
+		if c.conf.securityToken != "" {
+			security += fmt.Sprintf(`;token=%s`, c.conf.securityToken)
+		}
+		zcmd = append(zcmd, security)
+
 		zcmd = append(zcmd, fmt.Sprintf(`--raft=idx=%v`, z.id+1), "--telemetry=reports=false;",
 			fmt.Sprintf(`--limit=refill-interval=%v;uid-lease=%v`, c.conf.refillInterval, c.conf.uidLease))
 	}
