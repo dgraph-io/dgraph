@@ -1,0 +1,5 @@
+# Example override for projects using Dgraph standalone (e.g. raggen).
+# Copy to docker-compose.override.yml or merge into your compose file.
+services:
+  dgraph:
+    image: dgraph/dgraph:nested-auth-fix
