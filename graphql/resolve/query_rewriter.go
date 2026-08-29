@@ -2101,7 +2101,7 @@ func buildFilter(typ schema.Type, filter map[string]interface{}) *dql.FilterTree
 					}
 				case "between":
 					// numLikes: { between : { min : 10,  max:100 }} should be rewritten into
-					// 	between(numLikes,10,20). Order of arguments (min,max) is neccessary or
+					// 	between(numLikes,10,20). Order of arguments (min,max) is necessary or
 					// it will return empty
 					vals := val.(map[string]interface{})
 					args = append(args, dql.Arg{Value: maybeQuoteArg(fn, vals["min"])},
