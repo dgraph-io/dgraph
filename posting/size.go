@@ -28,6 +28,7 @@ func (l *List) ApproximateSize() uint64 {
 		1*8 + // plist pointer consists of 1 word.
 		1*8 + // mutation map pointer  consists of 1 word.
 		2*8 + // minTs and maxTs take 1 word each.
+		1*8 + // uidWarmState takes 1 word including alignment.
 		3*8 + // array take 3 words. so key array is 3 words.
 		3*8 + // array take 3 words. so cache array is 3 words.
 		1*8 // So far 11 words, in order to round the slab we're adding one more word.
