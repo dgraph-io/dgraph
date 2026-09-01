@@ -1929,4 +1929,8 @@ func TestUidsNegativeFirstWithoutCalculatedUids(t *testing.T) {
 	last, err := l.Uids(ListOptions{ReadTs: 10, First: -2})
 	require.NoError(t, err)
 	require.Equal(t, []uint64{6, 8}, last.Uids)
+
+	// A negative first has no early stop, so the walk materialized all four uids. Returning a view
+	// onto that slice would pin the whole thing to hand back two uids.
+	require.Equal(t, len(last.Uids), cap(last.Uids))
 }
