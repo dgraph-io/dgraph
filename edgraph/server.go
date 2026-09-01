@@ -1846,7 +1846,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 					"Please drop the unique constraint and re-add it after fixing the predicate data", pred.Predicate)
 			} else if queryResult.Uids.Uids[0] != subjectUid {
 				// Determine whether the mutation is a swap mutation
-				isSwap, err := isSwap(qc, queryResult.Uids.Uids[0], pred.Predicate)
+				isSwap, err := isSwap(qc, queryResult.Uids.Uids[0], pred.Predicate, pred.Lang)
 				if err != nil {
 					return err
 				}
@@ -2469,7 +2469,8 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 			if pred2.ObjectValue == nil {
 				continue
 			}
-			if pred2.Predicate == pred1.Predicate && dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
+			if pred2.Predicate == pred1.Predicate && pred2.Lang == pred1.Lang &&
+				dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
 				pred2.Subject != pred1.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
 					pred1Value, pred1.Predicate)
@@ -2489,7 +2490,7 @@ func isUpsertCondTrue(qc *queryContext, gmuIndex int) bool {
 	return ok && len(uids) == 1
 }
 
-func isSwap(qc *queryContext, pred1SubjectUid uint64, pred1Predicate string) (bool, error) {
+func isSwap(qc *queryContext, pred1SubjectUid uint64, pred1Predicate, pred1Lang string) (bool, error) {
 	for i := range qc.uniqueVars {
 		gmuIndex, rdfIndex := decodeIndex(i)
 		pred2 := qc.gmuList[gmuIndex].Set[rdfIndex]
@@ -2504,7 +2505,8 @@ func isSwap(qc *queryContext, pred1SubjectUid uint64, pred1Predicate string) (bo
 			pred2SubjectUid = 0
 		}
 
-		if pred2SubjectUid == pred1SubjectUid && pred1Predicate == pred2.Predicate {
+		if pred2SubjectUid == pred1SubjectUid && pred1Predicate == pred2.Predicate &&
+			pred1Lang == pred2.Lang {
 			return true, nil
 		}
 	}

@@ -503,8 +503,17 @@ func TestUniqueForLangDirective(t *testing.T) {
 	           email: string .`
 	dg := setUpDgraph(t)
 	require.NoError(t, dg.SetupSchema(schema))
-	rdf := `_:a <name@hi> "अमित" .	`
+	// Regression test for https://github.com/dgraph-io/dgraph/issues/9815. Language is part of
+	// value identity, so equal values under different language tags can coexist.
 	_, err := dg.Mutate(&api.Mutation{
+		SetNquads: []byte(`_:english <name@en> "same" .
+		                      _:french <name@fr> "same" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	rdf := `_:a <name@hi> "अमित" .	`
+	_, err = dg.Mutate(&api.Mutation{
 		SetNquads: []byte(rdf),
 		CommitNow: true,
 	})
