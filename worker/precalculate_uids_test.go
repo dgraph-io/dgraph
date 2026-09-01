@@ -101,6 +101,8 @@ func TestUidReadFirst(t *testing.T) {
 		{name: "negative first ignores offset", first: -2, offset: 5, want: -2},
 		{name: "unbounded sentinel ignores offset", first: math.MaxInt32, offset: 5,
 			want: math.MaxInt32},
+		{name: "bounded read near the sentinel does not overflow int32",
+			first: math.MaxInt32 - 1, offset: 5, want: math.MaxInt32 + 4},
 	}
 
 	for _, tc := range tests {

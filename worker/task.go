@@ -968,7 +968,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First + args.q.Offset),
+					First:     uidReadFirst(args.q),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
