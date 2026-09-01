@@ -13,6 +13,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"sync/atomic"
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -65,11 +66,12 @@ const (
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
-	key         []byte
-	plist       *pb.PostingList
-	mutationMap *MutableLayer
-	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
-	maxTs       uint64 // max commit timestamp seen for this list.
+	key          []byte
+	plist        *pb.PostingList
+	mutationMap  *MutableLayer
+	minTs        uint64       // commit timestamp of immutable layer, reject reads before this ts.
+	maxTs        uint64       // max commit timestamp seen for this list.
+	uidWarmState atomic.Int32 // 1 while a reader is materializing calculatedUids for this list.
 
 	cache []byte
 }
@@ -1739,21 +1741,19 @@ func (l *List) approxLen() int {
 	return l.mutationMap.len() + codec.ApproxLen(l.plist.Pack)
 }
 
+// calculateUids materializes the uid slice for l and stores it on l's own mutable layer, reporting
+// whether it did the work.
+//
+// The caller must own l exclusively. This walks the entire list and, for a multi-part list, reads
+// every split from Badger (readListPart), all while holding l's write lock. A list published in the
+// posting-list cache is shared with the commit path, which takes the same write lock from the serial
+// Raft apply loop, so never run this on one; warm a private copy and hand the result over with
+// publishCalculatedUids instead.
 func (l *List) calculateUids() (bool, error) {
-	l.RLock()
-	skip := l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
-		l.mutationMap.currentEntries != nil
-	l.RUnlock()
-	if skip {
-		return false, nil
-	}
-
 	l.Lock()
 	defer l.Unlock()
 
-	// Another reader may have warmed the list while this call waited for the write lock.
-	if l.mutationMap == nil || l.mutationMap.isUidsCalculated ||
-		l.mutationMap.currentEntries != nil {
+	if !l.mutationMap.needsUidWarm() {
 		return false, nil
 	}
 
@@ -1771,6 +1771,42 @@ func (l *List) calculateUids() (bool, error) {
 	l.mutationMap.calculatedUids = res
 	l.mutationMap.isUidsCalculated = true
 	return true, nil
+}
+
+// needsUidWarm reports whether materializing calculatedUids for this layer would be useful. An
+// uncommitted mutation (currentEntries) rules it out because canUseCalculatedUids refuses to serve a
+// slice in that state anyway.
+func (mm *MutableLayer) needsUidWarm() bool {
+	return mm != nil && !mm.isUidsCalculated && mm.currentEntries == nil
+}
+
+// tryStartUidWarm elects a single warmer for l, reporting whether the caller won. Materializing
+// calculatedUids is an optimization and never a correctness requirement, so a reader that loses the
+// election serves its read unwarmed rather than queueing behind the winner. Pair a win with
+// finishUidWarm.
+func (l *List) tryStartUidWarm() bool {
+	return l.uidWarmState.CompareAndSwap(0, 1)
+}
+
+// finishUidWarm releases the election won by tryStartUidWarm.
+func (l *List) finishUidWarm() {
+	l.uidWarmState.Store(0)
+}
+
+// publishCalculatedUids installs uids, materialized from a private copy of l taken at
+// committedUidsTime, onto l itself, reporting whether it published. It drops the result if l moved on
+// while the copy was being walked, and it holds l's write lock only for the handover.
+func (l *List) publishCalculatedUids(committedUidsTime uint64, uids []uint64) bool {
+	l.Lock()
+	defer l.Unlock()
+
+	if !l.mutationMap.needsUidWarm() || l.mutationMap.committedUidsTime != committedUidsTime {
+		return false
+	}
+
+	l.mutationMap.calculatedUids = uids
+	l.mutationMap.isUidsCalculated = true
+	return true
 }
 
 // canUseCalculatedUids reports whether calculatedUids can serve a read at readTs. The slice is
@@ -1910,7 +1946,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	if opt.First != 0 {
 		if opt.First < 0 {
 			if len(out.Uids) > -opt.First {
-				out.Uids = out.Uids[(len(out.Uids) + opt.First):]
+				// Copy the tail out rather than re-slicing. A negative first has no early stop, so
+				// the walk above materialized the whole list, and a re-slice would pin all of it to
+				// return -opt.First uids.
+				tail := out.Uids[len(out.Uids)+opt.First:]
+				out.Uids = append(make([]uint64, 0, len(tail)), tail...)
 			}
 		} else if len(out.Uids) > opt.First {
 			out.Uids = out.Uids[:opt.First]
