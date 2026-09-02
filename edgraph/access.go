@@ -647,9 +647,10 @@ func authorizePreds(ctx context.Context, userData *userData, preds []string,
 		return &authPredResult{allowed: nil, blocked: blockedPreds}
 	}
 	// User can have multiple permission for same predicate, add predicate
-	allowedPreds := make([]string, 0, len(worker.AclCachePtr.GetUserPredPerms(userId)))
+	userPredPerms := worker.AclCachePtr.GetUserPredPerms(userId)
+	allowedPreds := make([]string, 0, len(userPredPerms))
 	// only if the acl.Op is covered in the set of permissions for the user
-	for predicate, perm := range worker.AclCachePtr.GetUserPredPerms(userId) {
+	for predicate, perm := range userPredPerms {
 		if (perm & aclOp.Code) > 0 {
 			allowedPreds = append(allowedPreds, predicate)
 		}
