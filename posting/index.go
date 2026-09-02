@@ -1195,6 +1195,24 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 	if rb.needsReverseEdgesRebuild() == indexRebuild {
 		querySchema.Directive = pb.SchemaUpdate_NONE
 	}
+
+	// Vector index specs under (re)construction must not be served: the old
+	// graph is dropped at build start, so an unmasked spec would run
+	// similar_to against a half-built graph and silently return partial
+	// results. Mask them like tokenizers; unchanged specs keep serving.
+	if len(info.vectorIndexesToRebuild) > 0 {
+		rebuilt := make(map[string]struct{}, len(info.vectorIndexesToRebuild))
+		for _, s := range info.vectorIndexesToRebuild {
+			rebuilt[s.Name] = struct{}{}
+		}
+		interimSpecs := make([]*pb.VectorIndexSpec, 0, len(querySchema.IndexSpecs))
+		for _, s := range querySchema.IndexSpecs {
+			if _, ok := rebuilt[s.Name]; !ok {
+				interimSpecs = append(interimSpecs, s)
+			}
+		}
+		querySchema.IndexSpecs = interimSpecs
+	}
 	return &querySchema
 }
 
