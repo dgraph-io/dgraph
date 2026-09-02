@@ -114,6 +114,39 @@ func TestAclCacheMergesSameUserAcrossNamespaces(t *testing.T) {
 				x.NamespaceAttr(nsTwo, "pred-two"): acl.Write.Code,
 			}, AclCachePtr.GetUserPredPerms(userID),
 				"clearing one namespace should preserve permissions from other namespaces")
+
+			AclCachePtr.Update(nsTwo, nil)
+			require.NotContains(t, AclCachePtr.userPredPerms, userID,
+				"clearing the last namespace should remove the empty user entry")
 		})
 	}
+}
+
+func TestGetUserPredPermsReturnsSnapshot(t *testing.T) {
+	resetAclCacheForTest(t)
+
+	const (
+		userID = "alice"
+		ns     = uint64(1)
+	)
+	groups := func(predicate string, permission int32) []acl.Group {
+		return []acl.Group{{
+			GroupID: "dev",
+			Users:   []acl.User{{UserID: userID}},
+			Rules:   []acl.Acl{{Predicate: predicate, Perm: permission}},
+		}}
+	}
+
+	oldPredicate := x.NamespaceAttr(ns, "old-predicate")
+	AclCachePtr.Update(ns, groups("old-predicate", acl.Read.Code))
+	snapshot := AclCachePtr.GetUserPredPerms(userID)
+
+	AclCachePtr.Update(ns, groups("new-predicate", acl.Write.Code))
+	require.Equal(t, map[string]int32{oldPredicate: acl.Read.Code}, snapshot,
+		"updating the cache should not mutate a previously returned snapshot")
+
+	snapshot[x.NamespaceAttr(ns, "caller-only")] = acl.Modify.Code
+	require.NotContains(t, AclCachePtr.GetUserPredPerms(userID),
+		x.NamespaceAttr(ns, "caller-only"),
+		"mutating a snapshot should not mutate the cache")
 }
