@@ -200,6 +200,11 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild, c *z.Closer) {
 		// In case background indexing is running, we should call it here again.
 		defer stopIndexing(c)
+		// A successful vector build drains and closes its capture gate
+		// itself; this cleans up after a failed build, where the captured
+		// mutations are discarded together with the aborted alter (the
+		// rolled-back schema has no index to replay them into). Idempotent.
+		defer posting.FinishVectorRebuildCapture(update.Predicate)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
@@ -270,6 +275,14 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 
 		if shouldRebuild {
+			// A vector build commits its graph at startTs, so mutations that
+			// apply while it runs would win last-writer-wins and corrupt it.
+			// Raise the capture gate here, inside the proposal's serial
+			// application, so no later raft entry can apply an index write
+			// before the gate is up. The build drains and closes it.
+			if rebuild.NeedsVectorIndexRebuild() {
+				posting.StartVectorRebuildCapture(su.Predicate)
+			}
 			go buildIndexes(su, rebuild, closer)
 		} else if err := updateSchema(su, rebuild.StartTs); err != nil {
 			return err
