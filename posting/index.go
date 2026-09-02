@@ -719,6 +719,9 @@ func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
 	stream.NumGo = max(16, runtime.GOMAXPROCS(0))
+	if testingVectorRebuildNumGo > 0 {
+		stream.NumGo = testingVectorRebuildNumGo
+	}
 	txn := NewTxn(r.startTs)
 	stream.KeyToList = func(key []byte, it *badger.Iterator) (*bpb.KVList, error) {
 		// We should return quickly if the context is no longer valid.
