@@ -720,6 +720,9 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
 				// Without the source vector we can't score edges reliably.
 				// Fall back to "append then truncate" after a cheap de-dupe.
+				// NOTE: on a row already at the efConstruction cap this
+				// silently discards the new neighbors — callers must ensure
+				// the transaction's read view can see the vectors involved.
 				allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
 				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
 				if len(allLayerEdges[level]) > ph.efConstruction {

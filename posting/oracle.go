@@ -241,6 +241,17 @@ func (o *oracle) CacheAt(ts uint64) *LocalCache {
 }
 
 // MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
+// TxnPending reports whether the transaction that started at startTs is
+// still awaiting its commit/abort delta from zero. Used by the vector
+// rebuild drain to decide between "wait for this capture's commit" and
+// "resolved without a value: nothing to index".
+func (o *oracle) TxnPending(startTs uint64) bool {
+	o.RLock()
+	defer o.RUnlock()
+	_, ok := o.pendingTxns[startTs]
+	return ok
+}
+
 func (o *oracle) MinPendingStartTs() uint64 {
 	o.RLock()
 	defer o.RUnlock()
