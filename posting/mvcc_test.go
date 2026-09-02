@@ -449,9 +449,11 @@ func TestWarmCachedUidsWalksWithoutTheCachedListsWriteLock(t *testing.T) {
 	<-warmed
 
 	// The handover is the only part that needs the write lock, and it hands over the same slice.
+	// require.Same rather than require.Equal: Equal follows both pointers and compares the uids
+	// they address, so it passes for two distinct arrays that happen to start with the same uid.
 	require.True(t, cached.canUseCalculatedUids(1))
 	require.Len(t, cached.mutationMap.calculatedUids, uidCount)
-	require.Equal(t, &lCopy.mutationMap.calculatedUids[0], &cached.mutationMap.calculatedUids[0])
+	require.Same(t, &lCopy.mutationMap.calculatedUids[0], &cached.mutationMap.calculatedUids[0])
 }
 
 func TestReadUidsDoesNotWaitForAnInFlightWarm(t *testing.T) {
