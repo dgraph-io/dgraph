@@ -477,6 +477,82 @@ func TestReadUidsDoesNotWaitForAnInFlightWarm(t *testing.T) {
 	require.Len(t, uids.Uids, uidCount)
 }
 
+func TestWarmCachedUidsGivesUpAfterAFailedWalk(t *testing.T) {
+	require.NoError(t, pstore.DropAll())
+	useMemoryLayer(t, 10<<20)
+
+	key := x.DataKey(x.AttrInRootNamespace("readUidsWarmFailure"), 1)
+
+	// A list that claims a split which was never written, so every walk of it fails on the Badger
+	// read for that part. This is the shape of the failure the give-up exists for.
+	MemLayerInstance.saveInCache(key, &List{
+		key:         key,
+		plist:       &pb.PostingList{Splits: []uint64{1}},
+		mutationMap: newMutableLayer(),
+		minTs:       1,
+		maxTs:       1,
+	})
+	MemLayerInstance.wait()
+
+	cacheItem, ok := MemLayerInstance.cache.get(key)
+	require.True(t, ok)
+	cached := cacheItem.list
+
+	// The read still succeeds, unmaterialized, and the failure is not reported to the caller.
+	l, err := getNew(key, pstore, 1, true)
+	require.NoError(t, err)
+	require.False(t, l.canUseCalculatedUids(1))
+	require.Equal(t, uidWarmAbandoned, cached.uidWarmState.Load(),
+		"a failed walk should give up on the entry instead of leaving it open to retries")
+
+	// A later reader neither retries the walk nor wins an election, so the cost is paid once for
+	// the entry rather than once per read.
+	require.False(t, cached.tryStartUidWarm())
+	l, err = getNew(key, pstore, 1, true)
+	require.NoError(t, err)
+	require.False(t, l.canUseCalculatedUids(1))
+	require.Equal(t, uidWarmAbandoned, cached.uidWarmState.Load())
+
+	// Giving up is per List, so a fresh entry for the same key starts willing to try again.
+	replacement := cacheUidList(t, key, 8)
+	require.Equal(t, uidWarmIdle, replacement.list.uidWarmState.Load())
+}
+
+func TestCommitLetsAnAbandonedWarmTryAgain(t *testing.T) {
+	l := &List{key: x.DataKey(x.AttrInRootNamespace("abandonedWarmReset"), 1), mutationMap: newMutableLayer()}
+
+	require.True(t, l.tryStartUidWarm())
+	l.abandonUidWarm()
+	require.False(t, l.tryStartUidWarm())
+
+	// A commit applies in place on the cached list, because remove-on-update defaults to false, so
+	// the give-up has to lift here or a single failure would stick for the life of the entry.
+	l.setMutationAfterCommit(5, 10, &pb.PostingList{
+		Postings: []*pb.Posting{{Uid: 2, PostingType: pb.Posting_REF, Op: Set}},
+	}, true)
+
+	require.Equal(t, uidWarmIdle, l.uidWarmState.Load(),
+		"a commit changes the list, so a warm that failed against the old state should get another try")
+	require.True(t, l.tryStartUidWarm())
+}
+
+func TestFinishUidWarmLeavesAnAbandonedListAlone(t *testing.T) {
+	l := &List{mutationMap: newMutableLayer()}
+
+	require.True(t, l.tryStartUidWarm())
+	l.abandonUidWarm()
+	// finishUidWarm is deferred on the same path that abandons, so it must not reopen the list.
+	l.finishUidWarm()
+	require.Equal(t, uidWarmAbandoned, l.uidWarmState.Load())
+	require.False(t, l.tryStartUidWarm())
+
+	other := &List{mutationMap: newMutableLayer()}
+	require.True(t, other.tryStartUidWarm())
+	other.finishUidWarm()
+	require.Equal(t, uidWarmIdle, other.uidWarmState.Load())
+	require.True(t, other.tryStartUidWarm())
+}
+
 func TestPublishCalculatedUidsDropsAStaleWalk(t *testing.T) {
 	l := &List{mutationMap: newMutableLayer()}
 	l.mutationMap.committedUidsTime = 7

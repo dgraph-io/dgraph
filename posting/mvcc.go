@@ -814,7 +814,13 @@ func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *Lis
 	if err != nil {
 		// Warming is an optimization, so a failure here must not fail a read the cache can otherwise
 		// serve. lCopy keeps its uids unmaterialized and the reader walks the list as before.
-		glog.Warningf("Error materializing calculated UIDs for key [%x]: %v", key, err)
+		//
+		// Give up on this list rather than letting the next reader repeat the walk. Everyone who
+		// gets here holds a cache hit on a list that cannot be read, so otherwise both the wasted
+		// walk and this log line recur at read QPS. Abandoning caps them at one per commit to the
+		// key, which is the bound doRollup gets from its own per-key dedupe.
+		cached.abandonUidWarm()
+		glog.Warningf("Giving up on materializing calculated UIDs for key [%x]: %v", key, err)
 		return
 	}
 	if !calculated {
@@ -859,7 +865,9 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	if readUids && ml.hasCache() {
 		if _, err := l.calculateUids(); err != nil {
 			// Same as on the cache path: the list itself read fine, so serve it unmaterialized rather
-			// than failing the read for the sake of an optimization.
+			// than failing the read for the sake of an optimization. This one keeps its warning
+			// unconditionally, because it runs per cache miss rather than per read, and it is where
+			// an operator should first see that a list has stopped being readable.
 			glog.Warningf("Error materializing calculated UIDs for key [%x]: %v", key, err)
 		}
 	}

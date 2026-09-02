@@ -71,7 +71,7 @@ type List struct {
 	mutationMap  *MutableLayer
 	minTs        uint64       // commit timestamp of immutable layer, reject reads before this ts.
 	maxTs        uint64       // max commit timestamp seen for this list.
-	uidWarmState atomic.Int32 // 1 while a reader is materializing calculatedUids for this list.
+	uidWarmState atomic.Int32 // One of the uidWarm* states below. See tryStartUidWarm.
 
 	cache []byte
 }
@@ -1055,6 +1055,11 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	l.mutationMap.currentUids = nil
 	l.mutationMap.isUidsCalculated = false
 	l.mutationMap.calculatedUids = nil
+	// The list just changed, so a warm that failed against the old state may well succeed against
+	// this one. Reads reach a cached list through this path rather than through a fresh copy, since
+	// remove-on-update defaults to false, so without this a single failure would stick for the life
+	// of the cache entry.
+	l.uidWarmState.CompareAndSwap(uidWarmAbandoned, uidWarmIdle)
 
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
@@ -1780,17 +1785,35 @@ func (mm *MutableLayer) needsUidWarm() bool {
 	return mm != nil && !mm.isUidsCalculated && mm.currentEntries == nil
 }
 
+// The states of List.uidWarmState. A list starts idle, and copyList builds a fresh List, so a copy
+// never inherits an election or a give-up from the list it was copied from.
+const (
+	uidWarmIdle      int32 = iota // No warm in flight, and none has failed against the list's current state.
+	uidWarmRunning                // A reader is materializing calculatedUids for this list.
+	uidWarmAbandoned              // A warm failed against the current state. Do not retry until it changes.
+)
+
 // tryStartUidWarm elects a single warmer for l, reporting whether the caller won. Materializing
 // calculatedUids is an optimization and never a correctness requirement, so a reader that loses the
 // election serves its read unwarmed rather than queueing behind the winner. Pair a win with
-// finishUidWarm.
+// finishUidWarm or abandonUidWarm.
 func (l *List) tryStartUidWarm() bool {
-	return l.uidWarmState.CompareAndSwap(0, 1)
+	return l.uidWarmState.CompareAndSwap(uidWarmIdle, uidWarmRunning)
 }
 
-// finishUidWarm releases the election won by tryStartUidWarm.
+// finishUidWarm releases the election won by tryStartUidWarm, leaving l open to being warmed again.
+// It leaves an abandoned list abandoned, so that it is safe to defer alongside abandonUidWarm.
 func (l *List) finishUidWarm() {
-	l.uidWarmState.Store(0)
+	l.uidWarmState.CompareAndSwap(uidWarmRunning, uidWarmIdle)
+}
+
+// abandonUidWarm gives up on materializing l's uids, so that no later reader retries it. A walk
+// fails when the list itself cannot be read -- a multi-part list with an unreadable split, say --
+// and retrying costs another full walk plus a Badger read per split, for a slice that reads do not
+// need. setMutationAfterCommit lifts this on the next commit to the list, so a failure suppresses
+// one attempt per state rather than permanently.
+func (l *List) abandonUidWarm() {
+	l.uidWarmState.Store(uidWarmAbandoned)
 }
 
 // publishCalculatedUids installs uids, materialized from a private copy of l taken at
