@@ -800,7 +800,10 @@ func uidReadFirst(q *pb.Query) int {
 	if q.First <= 0 || q.First == math.MaxInt32 {
 		return int(q.First)
 	}
-	return int(int64(q.First) + int64(q.Offset))
+	// A negative offset counts as no offset, which is how x.PageRange reads one when it paginates
+	// the result. Adding it instead would read fewer uids than were asked for, and a large enough
+	// one would push the read negative, which drops the bound altogether.
+	return int(int64(q.First) + int64(max(q.Offset, 0)))
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
