@@ -79,6 +79,17 @@ func (fcs *FactoryCreateSpec) FindOrCreateIndex(name string) (index.VectorIndex[
 	return fcs.factory.FindOrCreate(name, fcs.opts, 32)
 }
 
+// Remove evicts the long-lived in-memory VectorIndex cached under name (if any).
+// Callers use this when a predicate is dropped so a later re-create starts from
+// a fresh instance rather than inheriting stale in-memory state (e.g. a cached
+// vector dimension or routing centroids) on a long-running Alpha.
+func (fcs *FactoryCreateSpec) Remove(name string) error {
+	if fcs == nil || fcs.factory == nil {
+		return nil
+	}
+	return fcs.factory.Remove(name)
+}
+
 func createIndexFactory(f index.IndexFactory[float32]) IndexFactory {
 	return &indexFactory{delegate: f}
 }
