@@ -903,7 +903,8 @@ func TestUniqueWithNonLatinPredName(t *testing.T) {
 		CommitNow: true,
 	})
 	require.Error(t, err)
-	require.ErrorContains(t, err, "could not insert duplicate value [example@email.com] for predicate [ईमेल#$%&]")
+	require.ErrorContains(t, err,
+		"could not insert duplicate value [example@email.com] for predicate [ईमेल#$%&@hi]")
 }
 
 func TestUniqueMultipleMutationsInSingleReqWithDelNqd(t *testing.T) {
