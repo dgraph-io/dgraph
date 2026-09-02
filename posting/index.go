@@ -107,6 +107,18 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		return []*pb.DirectedEdge{}, errors.New("invalid UID with value 0")
 	}
 
+	// While a rebuild owns this predicate's vector keyspace, live index
+	// writes are suppressed and captured for post-build replay: the builder
+	// commits the graph at the alter's startTs, so a write here — which
+	// commits above it — would win last-writer-wins and corrupt the build
+	// (worst case, hijacking the entry point of the still-empty graph). The
+	// base-data mutation is unaffected. The builder's own writes carry the
+	// rebuild context and pass through.
+	if len(info.factorySpecs) > 0 && !isVectorRebuildContext(ctx) &&
+		captureVectorMutation(attr, uid, info.op, txn.StartTs) {
+		return []*pb.DirectedEdge{}, nil
+	}
+
 	if len(info.factorySpecs) > 0 {
 		inKey := x.DataKey(info.edge.Attr, uid)
 		pl, err := txn.Get(inKey)
@@ -1253,6 +1265,13 @@ func (rb *IndexRebuild) NeedIndexRebuild() bool {
 		rb.needsCountIndexRebuild() == indexRebuild
 }
 
+// NeedsVectorIndexRebuild reports whether this schema change (re)builds a
+// vector index — the case where mutations must be gated against the
+// in-flight build (see StartVectorRebuildCapture).
+func (rb *IndexRebuild) NeedsVectorIndexRebuild() bool {
+	return len(rb.needsTokIndexRebuild().vectorIndexesToRebuild) > 0
+}
+
 // BuildIndexes builds indexes.
 func (rb *IndexRebuild) BuildIndexes(ctx context.Context) error {
 	if err := rebuildTokIndex(ctx, rb); err != nil {
@@ -1718,6 +1737,8 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 	// Free sampled vectors after k-means training
 	sampledVectors = nil
 
+	vectorRebuildStage("training_done")
+
 	centroids := indexer.GetCentroids()
 
 	if centroids != nil {
@@ -1841,6 +1862,13 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		}
 	}
 
+	// The graph is built and durable: replay the mutations captured while it
+	// ran, then close the gate so subsequent mutations write live.
+	if err := drainVectorRebuildCapture(ctx, rb, factorySpecs[0]); err != nil {
+		return err
+	}
+
+	vectorRebuildStage("build_done")
 	return nil
 }
 
@@ -1946,6 +1974,11 @@ func addDimensionMetaInDB(ctx context.Context, attr string, dimension int, txn *
 // rebuildTokIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
 func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
+	// Mark every write this build performs as the builder's own, so the
+	// vector capture gate lets them through while suppressing live ones.
+	// Explicit by design — not the accident that today's vector builder
+	// happens to use BuildInsert instead of the live Insert path.
+	ctx = WithVectorRebuildContext(ctx)
 	rebuildInfo := rb.needsTokIndexRebuild()
 	if rebuildInfo.op != indexRebuild {
 		return nil

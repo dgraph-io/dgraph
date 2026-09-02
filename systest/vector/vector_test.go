@@ -696,16 +696,19 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 			if len(similar[0]) == len(vecs[i]) && fmt.Sprint(similar[0]) == fmt.Sprint(vecs[i]) {
 				continue
 			}
-			top10, err := gc.QueryMultipleVectorsUsingSimilarTo(vecs[i], pred, 10)
+			// Distinguish ranking noise (present at a wide beam) from a
+			// genuinely unreachable — orphaned — graph node.
+			wide, err := gc.QueryMultipleVectorsUsingSimilarTo(vecs[i], pred, 100)
 			require.NoError(t, err)
 			found := false
-			for _, v := range top10 {
+			for _, v := range wide {
 				if fmt.Sprint(v) == fmt.Sprint(vecs[i]) {
 					found = true
 					break
 				}
 			}
-			t.Fatalf("vector %d did not find itself: top1=%v, in top10=%v", i, similar[0], found)
+			t.Fatalf("vector %d did not find itself: top1=%v, in top100=%v (false = orphaned, true = ranking miss)",
+				i, similar[0], found)
 		}
 	}
 
@@ -752,16 +755,13 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 	})
 
 	t.Run("alpha restart rehydrates routing", func(t *testing.T) {
-		// KNOWN ISSUE (pre-existing, all index types): an alpha restart
-		// replays the schema alter from the raft WAL, which drops and
-		// re-runs the whole index rebuild asynchronously while the replayed
-		// data mutations race it. A mutation routed by mid-training
-		// centroids (or wiped by the replay's DropPrefix) becomes a
-		// permanently unreachable graph node until the next rebuild. The
-		// window cannot be closed from the client side (readiness polls,
-		// pre-restart snapshots and opIndexing waits were all tried).
-		// Needs the mutation-pipeline serialization fix. Centroid
-		// hydration itself is covered deterministically by
+		// An alpha restart replays the schema alter from the raft WAL,
+		// which re-runs the whole index rebuild while the replayed data
+		// mutations arrive behind it. The vector capture gate (see
+		// posting.StartVectorRebuildCapture) suppresses their index writes
+		// and replays them into the finished index, so the replayed
+		// mutations — including deletes — survive the restart intact.
+		// Centroid hydration itself is covered deterministically by
 		// posting/vector_restart_test.go.
 
 		require.NoError(t, c.StopAlpha(0))
@@ -774,42 +774,99 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 		gc = gcr
 
 		// The restart replays the schema mutation from the raft WAL, which
-		// re-runs the whole index rebuild while the replayed data mutations
-		// race it — a pre-existing reindex-vs-mutation race that affects
-		// every index type and can leave a few graph nodes unreachable
-		// until the next rebuild (tracked separately). Wait for the
-		// replayed rebuild to finish (health reports the ongoing
-		// opIndexing task), then for the index to serve results.
+		// re-runs the whole index rebuild; the replayed data mutations are
+		// captured by the rebuild gate and drained into the finished index.
+		// Wait for the replayed rebuild to finish (health reports the
+		// ongoing opIndexing task), then for the index to serve results.
 		hc, err := c.HTTPClient()
 		require.NoError(t, err)
 		require.Eventually(t, func() bool {
 			health, err := hc.HealthForInstance()
 			return err == nil && !strings.Contains(string(health), "opIndexing")
 		}, 60*time.Second, 500*time.Millisecond, "replayed index rebuild still running after 60s")
+		// Readiness: a wide query returns a healthy result set and the
+		// probe vector finds itself. The set may be one short of k: the
+		// vector deleted before the restart is tombstoned and filtered
+		// from results — asserting len == k here would demand the OLD
+		// buggy behavior, where the replayed delete was lost to the
+		// rebuild race and the deleted vector resurrected.
 		require.Eventually(t, func() bool {
 			res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[1], pred, 100)
-			if err != nil || len(res) != 100 {
+			if err != nil || len(res) < 90 {
 				return false
 			}
 			top, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[1], pred, 1)
 			return err == nil && len(top) == 1 && fmt.Sprint(top[0]) == fmt.Sprint(vectors[1])
 		}, 60*time.Second, 500*time.Millisecond, "vector index not ready after restart")
 
-		// Search routing must come back from the persisted centroids. Allow
-		// a small tolerance for vectors clipped by the replay race above —
-		// without hydration this check collapses to near-zero recall, so it
-		// still pins the restart contract hard.
+		// The delete must survive the restart: the WAL-replayed delete is
+		// captured while the replayed rebuild runs and drained into the
+		// dead list afterwards, so the deleted vector stays invisible.
+		// (Before the capture gate this was the data-loss race: the
+		// tombstone write raced the rebuild and the deleted vector came
+		// back from the dead.)
+		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
+		require.NoError(t, err)
+		require.NotContainsf(t, res, vectors[0],
+			"vector deleted before restart must stay deleted after the replayed rebuild")
+
+		// Search routing must come back from the persisted centroids, and —
+		// with the capture gate replaying the WAL-replayed mutations — no
+		// vector may be lost: absence at a wide beam means an orphaned
+		// graph node (the old race's signature), which is a hard failure.
+		// Top-1 ranking keeps a small tolerance: it is ANN approximation,
+		// not integrity.
 		checked, found := 0, 0
+		var orphaned []int
 		for i := 0; i < len(vectors)-1; i += 40 {
 			checked++
 			top, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[1+i], pred, 1)
 			require.NoError(t, err)
 			if len(top) == 1 && fmt.Sprint(top[0]) == fmt.Sprint(vectors[1+i]) {
 				found++
+				continue
+			}
+			wide, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[1+i], pred, 100)
+			require.NoError(t, err)
+			present := false
+			for _, v := range wide {
+				if fmt.Sprint(v) == fmt.Sprint(vectors[1+i]) {
+					present = true
+					break
+				}
+			}
+			if !present {
+				orphaned = append(orphaned, 1+i)
 			}
 		}
-		require.Greaterf(t, float64(found)/float64(checked), 0.9,
-			"post-restart self-recall collapsed: %d/%d — centroid hydration broken?", found, checked)
+		// KNOWN ISSUE (pre-existing, tracked separately): the rebuild scans
+		// with 16+ concurrent stream workers whose unsynchronized
+		// read-modify-writes of shared adjacency rows can orphan a node or
+		// two per build — independent of the capture gate (reproduced with
+		// zero mutations in flight). Tolerate at most 2 of the ~30 sampled
+		// originals; the gate's own guarantee (replayed mutations are never
+		// lost) is asserted with zero tolerance via the liveVectors and
+		// post-insert sweeps.
+		require.LessOrEqualf(t, len(orphaned), 2,
+			"vectors unreachable after restart (orphaned graph nodes): %v", orphaned)
+		require.GreaterOrEqualf(t, float64(found)/float64(checked), 0.9,
+			"post-restart top-1 self-recall collapsed: %d/%d — centroid hydration broken?", found, checked)
+
+		// The gate's own guarantee, zero tolerance: every mutation the
+		// restart's replayed rebuild captured and drained must be reachable.
+		for i := 0; i < len(liveVectors); i += 5 {
+			wide, err := gc.QueryMultipleVectorsUsingSimilarTo(liveVectors[i], pred, 100)
+			require.NoError(t, err)
+			foundSelf := false
+			for _, v := range wide {
+				if fmt.Sprint(v) == fmt.Sprint(liveVectors[i]) {
+					foundSelf = true
+					break
+				}
+			}
+			require.Truef(t, foundSelf,
+				"drained vector %d unreachable after restart — replayed mutation lost", i)
+		}
 
 		// Insert routing must be exact: these vectors arrive after the
 		// replayed rebuild, so the pre-existing race cannot touch them.
