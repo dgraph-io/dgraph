@@ -1943,18 +1943,14 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
 
-	if opt.First != 0 {
-		if opt.First < 0 {
-			if len(out.Uids) > -opt.First {
-				// Copy the tail out rather than re-slicing. A negative first has no early stop, so
-				// the walk above materialized the whole list, and a re-slice would pin all of it to
-				// return -opt.First uids.
-				tail := out.Uids[len(out.Uids)+opt.First:]
-				out.Uids = append(make([]uint64, 0, len(tail)), tail...)
-			}
-		} else if len(out.Uids) > opt.First {
-			out.Uids = out.Uids[:opt.First]
-		}
+	// Only a positive first is applied here, and only because it is paired with the early stop in
+	// the walk above, which makes it an optimization that pays for itself. A negative first has no
+	// early stop, so trimming to the last n buys nothing and is not sound: for an index read the
+	// worker post-filters this list against the real values afterwards -- handleCompareFunction for
+	// a lossy tokenizer, filterGeoFunction for geo -- and rows dropped there cannot come back. The
+	// query layer applies the negative count itself, over the filtered result, with x.PageRange.
+	if opt.First > 0 && len(out.Uids) > opt.First {
+		out.Uids = out.Uids[:opt.First]
 	}
 	return out, nil
 }

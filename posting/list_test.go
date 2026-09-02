@@ -1906,6 +1906,13 @@ func TestCalculatedUidsSkippedForBoundedReads(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []uint64{2}, first.Uids)
 
+	// A negative first is unbounded as far as the read is concerned, so it is served from the
+	// memoized slice, whole. The poisoned values are what tell the paths apart: {100, 101} could
+	// only have come from the memo, and both of them coming back is what shows it is not trimmed.
+	negative, err := l.Uids(ListOptions{ReadTs: 10, First: -1})
+	require.NoError(t, err)
+	require.Equal(t, []uint64{100, 101}, negative.Uids)
+
 	intersect, err := l.Uids(ListOptions{
 		ReadTs:    10,
 		Intersect: &pb.List{Uids: []uint64{3}},
@@ -1914,23 +1921,47 @@ func TestCalculatedUidsSkippedForBoundedReads(t *testing.T) {
 	require.Equal(t, []uint64{3}, intersect.Uids)
 }
 
-func TestUidsNegativeFirstWithoutCalculatedUids(t *testing.T) {
-	key := x.DataKey(x.AttrInRootNamespace("negativeFirstWithoutCalculatedUids"), 7)
-
-	txn := NewTxn(5)
-	l, err := txn.Get(key)
-	require.NoError(t, err)
-	for _, uid := range []uint64{2, 4, 6, 8} {
-		addMutationHelper(t, l, &pb.DirectedEdge{ValueId: uid}, Set, txn)
+// A negative first must not be applied by Uids at all. For an index read the worker post-filters
+// the list it gets back -- handleCompareFunction against the real values when the tokenizer is
+// lossy, filterGeoFunction against the real geometry -- and a uid trimmed off here is one that
+// filter never sees. The query layer applies the count itself, over the filtered result, with
+// x.PageRange. Both read paths are checked, because they reach the tail differently.
+func TestUidsDoesNotApplyANegativeFirst(t *testing.T) {
+	next := 0
+	build := func(warmed bool) *List {
+		next++
+		key := x.DataKey(x.AttrInRootNamespace(fmt.Sprintf("negativeFirstNotApplied%d", next)), 7)
+		txn := NewTxn(5)
+		l, err := txn.Get(key)
+		require.NoError(t, err)
+		for _, uid := range []uint64{2, 4, 6, 8, 10} {
+			addMutationHelper(t, l, &pb.DirectedEdge{ValueId: uid}, Set, txn)
+		}
+		require.NoError(t, l.commitMutation(5, 10))
+		if warmed {
+			_, err := l.calculateUids()
+			require.NoError(t, err)
+			require.True(t, l.canUseCalculatedUids(10))
+		} else {
+			require.False(t, l.mutationMap.isUidsCalculated)
+		}
+		return l
 	}
-	require.NoError(t, l.commitMutation(5, 10))
-	require.False(t, l.mutationMap.isUidsCalculated)
 
-	last, err := l.Uids(ListOptions{ReadTs: 10, First: -2})
-	require.NoError(t, err)
-	require.Equal(t, []uint64{6, 8}, last.Uids)
+	all := []uint64{2, 4, 6, 8, 10}
+	for _, first := range []int{-1, -2, -4, -5, -9, math.MinInt32, math.MinInt} {
+		for _, warmed := range []bool{false, true} {
+			got, err := build(warmed).Uids(ListOptions{ReadTs: 10, First: first})
+			require.NoError(t, err)
+			require.Equal(t, all, got.Uids, "first: %d, warmed: %t", first, warmed)
+		}
+	}
 
-	// A negative first has no early stop, so the walk materialized all four uids. Returning a view
-	// onto that slice would pin the whole thing to hand back two uids.
-	require.Equal(t, len(last.Uids), cap(last.Uids))
+	// AfterUid still applies: it bounds which uids exist for this read, rather than how many of
+	// them to return.
+	for _, warmed := range []bool{false, true} {
+		got, err := build(warmed).Uids(ListOptions{ReadTs: 10, First: -2, AfterUid: 4})
+		require.NoError(t, err)
+		require.Equal(t, []uint64{6, 8, 10}, got.Uids, "warmed: %t", warmed)
+	}
 }
