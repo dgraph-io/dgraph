@@ -253,6 +253,11 @@ func TestVerifyUniqueWithinMutationLanguageIdentity(t *testing.T) {
 			err := verifyUniqueWithinMutation(qc)
 			if tc.wantError {
 				require.ErrorContains(t, err, "could not insert duplicate value")
+				predicateName := "gxid"
+				if tc.firstLang != "" {
+					predicateName += "@" + tc.firstLang
+				}
+				require.ErrorContains(t, err, "predicate ["+predicateName+"]")
 			} else {
 				require.NoError(t, err)
 			}

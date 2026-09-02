@@ -523,12 +523,101 @@ func TestUniqueForLangDirective(t *testing.T) {
 		CommitNow: true,
 	})
 	require.Error(t, err)
-	require.ErrorContains(t, err, "could not insert duplicate value [अमित] for predicate [name]")
+	require.ErrorContains(t, err, "could not insert duplicate value [अमित] for predicate [name@hi]")
 	_, err = dg.Mutate(&api.Mutation{
 		SetNquads: []byte(`_:a <name@en> "अमित" .`),
 		CommitNow: true,
 	})
 	require.NoError(t, err)
+}
+
+func TestUniqueLangTaggedAndUntaggedAcrossMutations(t *testing.T) {
+	dg := setUpDgraph(t)
+	require.NoError(t, dg.SetupSchema(`name: string @unique @lang @index(exact) .`))
+
+	for _, mutation := range []string{
+		`<0x101> <name> "untagged-first" .`,
+		`<0x102> <name@en> "untagged-first" .`,
+		`<0x103> <name@en> "tagged-first" .`,
+		`<0x104> <name> "tagged-first" .`,
+	} {
+		_, err := dg.Mutate(&api.Mutation{
+			SetNquads: []byte(mutation),
+			CommitNow: true,
+		})
+		require.NoError(t, err)
+	}
+
+	resp, err := dg.Query(`{
+		untaggedFirst(func: uid(0x101)) { uid name }
+		taggedSecond(func: uid(0x102)) { uid name@en }
+		taggedFirst(func: uid(0x103)) { uid name@en }
+		untaggedSecond(func: uid(0x104)) { uid name }
+	}`)
+	require.NoError(t, err)
+	require.NoError(t, dgraphapi.CompareJSON(`{
+		"untaggedFirst": [{"uid": "0x101", "name": "untagged-first"}],
+		"taggedSecond": [{"uid": "0x102", "name@en": "untagged-first"}],
+		"taggedFirst": [{"uid": "0x103", "name@en": "tagged-first"}],
+		"untaggedSecond": [{"uid": "0x104", "name": "tagged-first"}]
+	}`, string(resp.Json)))
+}
+
+func TestUniqueLangRejectsSwapAcrossLanguages(t *testing.T) {
+	dg := setUpDgraph(t)
+	require.NoError(t, dg.SetupSchema(`name: string @unique @lang @index(exact) .`))
+
+	_, err := dg.Mutate(&api.Mutation{
+		SetNquads: []byte(`<0x201> <name@en> "occupied" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	_, err = dg.Mutate(&api.Mutation{
+		SetNquads: []byte(`<0x202> <name@en> "occupied" .
+		                   <0x201> <name@fr> "other-language" .`),
+		CommitNow: true,
+	})
+	require.ErrorContains(t, err,
+		"could not insert duplicate value [occupied] for predicate [name@en]")
+
+	resp, err := dg.Query(`{
+		english(func: eq(name@en, "occupied")) { uid name@en }
+		french(func: eq(name@fr, "other-language")) { uid name@fr }
+	}`)
+	require.NoError(t, err)
+	require.NoError(t, dgraphapi.CompareJSON(`{
+		"english": [{"uid": "0x201", "name@en": "occupied"}],
+		"french": []
+	}`, string(resp.Json)))
+}
+
+func TestUniqueLangAllowsSwapWithinLanguage(t *testing.T) {
+	dg := setUpDgraph(t)
+	require.NoError(t, dg.SetupSchema(`name: string @unique @lang @index(exact) .`))
+
+	_, err := dg.Mutate(&api.Mutation{
+		SetNquads: []byte(`<0x301> <name@en> "available" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	_, err = dg.Mutate(&api.Mutation{
+		SetNquads: []byte(`<0x302> <name@en> "available" .
+		                   <0x301> <name@en> "replacement" .`),
+		CommitNow: true,
+	})
+	require.NoError(t, err)
+
+	resp, err := dg.Query(`{
+		available(func: eq(name@en, "available")) { uid name@en }
+		replacement(func: eq(name@en, "replacement")) { uid name@en }
+	}`)
+	require.NoError(t, err)
+	require.NoError(t, dgraphapi.CompareJSON(`{
+		"available": [{"uid": "0x302", "name@en": "available"}],
+		"replacement": [{"uid": "0x301", "name@en": "replacement"}]
+	}`, string(resp.Json)))
 }
 
 func TestUniqueTwoWaySwapMutation(t *testing.T) {

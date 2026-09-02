@@ -1772,6 +1772,13 @@ func parseRequest(ctx context.Context, qc *queryContext) error {
 	return validateQuery(qc.dqlRes.Query)
 }
 
+func predicateNameWithLang(pred *api.NQuad) string {
+	if pred.Lang == "" {
+		return pred.Predicate
+	}
+	return fmt.Sprintf("%s@%s", pred.Predicate, pred.Lang)
+}
+
 // verifyUnique verifies uniqueness of mutation
 func verifyUnique(qc *queryContext, qr query.Request) error {
 	if len(qc.uniqueVars) == 0 {
@@ -1781,6 +1788,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 	for i, queryVar := range qc.uniqueVars {
 		gmuIndex, rdfIndex := decodeIndex(i)
 		pred := qc.gmuList[gmuIndex].Set[rdfIndex]
+		predicateName := predicateNameWithLang(pred)
 		queryResult := qr.Vars[queryVar.queryVar]
 		if !isUpsertCondTrue(qc, int(gmuIndex)) {
 			continue
@@ -1797,7 +1805,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 			} else if len(varName.Uids.Uids) == 1 {
 				subjectUid = varName.Uids.Uids[0]
 			} else {
-				return errors.Errorf("unique constraint violated for predicate [%v]", pred.Predicate)
+				return errors.Errorf("unique constraint violated for predicate [%v]", predicateName)
 			}
 		} else {
 			var err error
@@ -1822,7 +1830,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 					varNameVal, _ := varName.Vals.Get(subjectUid)
 					if v.Value == varNameVal.Value && uidOfv != subjectUid {
 						return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-							v.Value, pred.Predicate)
+							v.Value, predicateName)
 					}
 					return nil
 				})
@@ -1841,9 +1849,9 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 		if !isEmpty(queryResult.Uids) {
 			if len(queryResult.Uids.Uids) > 1 {
 				glog.Errorf("unique constraint violated for predicate [%v].uids: [%v].namespace: [%v]",
-					pred.Predicate, queryResult.Uids.Uids, pred.Namespace)
+					predicateName, queryResult.Uids.Uids, pred.Namespace)
 				return errors.Errorf("there are duplicates in existing data for predicate [%v]."+
-					"Please drop the unique constraint and re-add it after fixing the predicate data", pred.Predicate)
+					"Please drop the unique constraint and re-add it after fixing the predicate data", predicateName)
 			} else if queryResult.Uids.Uids[0] != subjectUid {
 				// Determine whether the mutation is a swap mutation
 				isSwap, err := isSwap(qc, queryResult.Uids.Uids[0], pred.Predicate, pred.Lang)
@@ -1852,7 +1860,7 @@ func verifyUnique(qc *queryContext, qr query.Request) error {
 				}
 				if !isSwap {
 					return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-						predValue, pred.Predicate)
+						predValue, predicateName)
 				}
 			}
 		}
@@ -2473,7 +2481,7 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 				dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
 				pred2.Subject != pred1.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-					pred1Value, pred1.Predicate)
+					pred1Value, predicateNameWithLang(pred1))
 			}
 		}
 	}
