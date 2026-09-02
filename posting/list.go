@@ -1933,13 +1933,14 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil, true
 	}
 
-	// Do The intersection here as it's optimized.
-	out, err, applyIntersectWith := getUidList()
-	if err != nil || !applyIntersectWith || opt.First == 0 {
+	// The bool reports whether the caller still has to intersect what came back and cut it down to
+	// First. A branch that has already intersected, or that needs neither, returns false.
+	out, err, postProcess := getUidList()
+	if err != nil || !postProcess {
 		return out, err
 	}
 
-	if opt.Intersect != nil && applyIntersectWith {
+	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
 
