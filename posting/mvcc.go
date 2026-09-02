@@ -801,8 +801,11 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64, readUids bool) *
 // commit for the group. Exactly one reader warms at a time; the rest serve their read unwarmed and
 // recompute as they did before.
 //
-// Iterating lCopy is safe even though its mutable layer shares maps with the published list, because
-// setMutationAfterCommit replaces those maps instead of writing into them.
+// Iterating lCopy is safe even though its mutable layer shares maps with the published list, but
+// only because updateItemInCache, the one caller that commits into a cached list, passes
+// refresh=true, and that rebuilds committedEntries and committedUids before writing. A refresh=false
+// commit on a published list would write into the maps a copy like this one is reading, which Go
+// reports as a fatal concurrent map access rather than a race the detector might miss.
 func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *List) {
 	cached := cacheItem.list
 	if !cached.tryStartUidWarm() {
@@ -812,8 +815,10 @@ func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *Lis
 
 	calculated, err := lCopy.calculateUids()
 	if err != nil {
-		// Warming is an optimization, so a failure here must not fail a read the cache can otherwise
-		// serve. lCopy keeps its uids unmaterialized and the reader walks the list as before.
+		// Warming is an optimization, so it must not be the thing that fails the read. Often the
+		// read fails anyway, on the same unreadable split, once it walks the list itself -- but a
+		// transient error need not recur, and a read bounded by First or AfterUid may never reach
+		// the part that could not be read.
 		//
 		// Give up on this list rather than letting the next reader repeat the walk. Everyone who
 		// gets here holds a cache hit on a list that cannot be read, so otherwise both the wasted
