@@ -103,6 +103,12 @@ func TestUidReadFirst(t *testing.T) {
 			want: math.MaxInt32},
 		{name: "bounded read near the sentinel does not overflow int32",
 			first: math.MaxInt32 - 1, offset: 5, want: math.MaxInt32 + 4},
+		// x.PageRange clamps a negative offset to 0, so the pushdown has to as well. Adding it
+		// would read fewer uids than were asked for, and a large enough one would go negative,
+		// which means "take from the back" by the time it reaches List.Uids.
+		{name: "small negative offset does not shrink the read", first: 10, offset: -1, want: 10},
+		{name: "large negative offset does not invert the read", first: 10, offset: -100, want: 10},
+		{name: "negative first still ignores a negative offset", first: -2, offset: -100, want: -2},
 	}
 
 	for _, tc := range tests {
