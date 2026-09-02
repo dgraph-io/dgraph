@@ -2475,6 +2475,20 @@ func DeleteData(ns uint64) error {
 func DeletePredicate(ctx context.Context, attr string, ts uint64) error {
 	glog.Infof("Dropping predicate: [%s]", attr)
 	ResetCache()
+
+	// Evict any long-lived in-memory vector index instance for this predicate
+	// before its schema is removed below. On a long-running Alpha the factory
+	// caches the VectorIndex (holding e.g. the established vector dimension and
+	// routing centroids); without eviction a predicate re-created under the same
+	// name would inherit that stale state and, for instance, reject vectors of a
+	// new dimension. FactoryCreateSpec is empty for non-vector predicates, so
+	// this is a no-op for them.
+	if specs, err := schema.State().FactoryCreateSpec(ctx, attr); err == nil {
+		for _, spec := range specs {
+			_ = spec.Remove(attr)
+		}
+	}
+
 	preds := schema.State().PredicatesToDelete(attr)
 	for _, pred := range preds {
 		prefix := x.PredicatePrefix(pred)
