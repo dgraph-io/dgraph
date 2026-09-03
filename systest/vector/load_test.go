@@ -12,13 +12,11 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
-	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -29,27 +27,12 @@ type Node struct {
 }
 
 func (vsuite *VectorTestSuite) TestLiveLoadAndExportRDFFormat() {
-	t := vsuite.T()
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	testExportAndLiveLoad(t, c, "rdf", vsuite.schemaVecDimesion10)
+	testExportAndLiveLoad(vsuite.T(), "rdf", vsuite.schemaVecDimesion10)
 }
 
-func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportFormat string, schema string) {
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+func testExportAndLiveLoad(t *testing.T, exportFormat string, schema string) {
+	gc, hc := setupTest(t)
+	exportDir := testExportDir(t)
 
 	require.NoError(t, gc.SetupSchema(schema))
 
@@ -58,10 +41,10 @@ func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportForma
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, exportFormat, -1))
+	require.NoError(t, hc.Export(exportDir, exportFormat, -1))
 
 	require.NoError(t, gc.DropAll())
 
@@ -75,7 +58,7 @@ func testExportAndLiveLoad(t *testing.T, c *dgraphtest.LocalCluster, exportForma
 	require.NoError(t, err)
 	require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, 0), string(result.GetJson()))
 
-	require.NoError(t, c.LiveLoadFromExport(dgraphtest.DefaultExportDir))
+	require.NoError(t, sharedCluster.LiveLoadFromExport(exportDir))
 
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
@@ -110,27 +93,9 @@ func TestBulkLoadVectorIndex(t *testing.T) {
 
 	for _, mode := range modes {
 		t.Run(mode.name, func(t *testing.T) {
-			// Step 1: Create a source cluster and load vectors into it
-			sourceConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour)
-			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-			require.NoError(t, err)
-			defer func() { sourceCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, sourceCluster.Start())
-
-			gc, cleanup, err := sourceCluster.Client()
-			require.NoError(t, err)
-			defer cleanup()
-			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-			hc, err := sourceCluster.HTTPClient()
-			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-				dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 1: Load vectors into the shared cluster (bulk-load source)
+			gc, hc := setupTest(t)
+			exportDir := testExportDir(t)
 
 			// Set up vector schema and load vectors
 			require.NoError(t, gc.SetupSchema(mode.schema))
@@ -138,7 +103,7 @@ func TestBulkLoadVectorIndex(t *testing.T) {
 			rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 			mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-			_, err = gc.Mutate(mu)
+			_, err := gc.Mutate(mu)
 			require.NoError(t, err)
 
 			// Verify vectors are loaded and queryable in source cluster
@@ -150,61 +115,10 @@ func TestBulkLoadVectorIndex(t *testing.T) {
 			}
 
 			// Step 2: Export the data from source cluster
-			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+			require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-			// Step 3: Set up a cluster for bulk loading and run bulk load on exported data
-			bulkOutDir := t.TempDir()
-			bulkConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-			require.NoError(t, err)
-			defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-			// Start only Zero for bulk loading
-			require.NoError(t, bulkCluster.StartZero(0))
-			require.NoError(t, bulkCluster.HealthCheck(true))
-
-			// Copy exported files from source cluster container to host for bulk load
-			exportHostDir := t.TempDir()
-			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-			require.NoError(t, err)
-			require.NotEmpty(t, dataFiles, "should have exported data files")
-			require.NotEmpty(t, schemaFiles, "should have exported schema files")
-
-			// Run bulk load with exported data
-			opts := dgraphtest.BulkOpts{
-				DataFiles:   dataFiles,
-				SchemaFiles: schemaFiles,
-				OutDir:      bulkOutDir,
-			}
-			require.NoError(t, bulkCluster.BulkLoad(opts))
-
-			// Step 4: Create a new cluster that uses the bulk loaded p directory
-			targetConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-			require.NoError(t, err)
-			defer func() { targetCluster.Cleanup(t.Failed()) }()
-
-			// Start the target cluster (both Zero and Alphas)
-			require.NoError(t, targetCluster.Start())
-
-			// Get a client to verify the data
-			targetGc, targetCleanup, err := targetCluster.Client()
-			require.NoError(t, err)
-			defer targetCleanup()
-			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 3+4: Bulk load the export and start a target cluster on it
+			targetGc := setupBulkTarget(t, exportDir, 1)
 
 			// Step 5: Verify vector count
 			query := `{
@@ -260,27 +174,9 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 
 	for _, mode := range modes {
 		t.Run(mode.name, func(t *testing.T) {
-			// Step 1: Create a source cluster and load vectors into it
-			sourceConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour)
-			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-			require.NoError(t, err)
-			defer func() { sourceCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, sourceCluster.Start())
-
-			gc, cleanup, err := sourceCluster.Client()
-			require.NoError(t, err)
-			defer cleanup()
-			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-			hc, err := sourceCluster.HTTPClient()
-			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-				dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 1: Load vectors into the shared cluster (bulk-load source)
+			gc, hc := setupTest(t)
+			exportDir := testExportDir(t)
 
 			// Set up schema with multiple vector predicates
 			require.NoError(t, gc.SetupSchema(mode.schema))
@@ -292,7 +188,7 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 				allVectors[pred] = vectors
 
 				mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-				_, err = gc.Mutate(mu)
+				_, err := gc.Mutate(mu)
 				require.NoError(t, err)
 			}
 
@@ -306,63 +202,11 @@ func TestBulkLoadVectorIndexMultipleGroups(t *testing.T) {
 			}
 
 			// Step 2: Export the data from source cluster
-			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+			require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-			// Step 3: Set up a cluster for bulk loading with multiple shards
-			bulkOutDir := t.TempDir()
-			bulkConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(numShards). // 3 alphas for 3 shards
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-			require.NoError(t, err)
-			defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-			// Start only Zero for bulk loading
-			require.NoError(t, bulkCluster.StartZero(0))
-			require.NoError(t, bulkCluster.HealthCheck(true))
-
-			// Copy exported files from source cluster container to host for bulk load
-			exportHostDir := t.TempDir()
-			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-			require.NoError(t, err)
-			require.NotEmpty(t, dataFiles, "should have exported data files")
-			require.NotEmpty(t, schemaFiles, "should have exported schema files")
-
-			// Run bulk load with explicit shard configuration
-			opts := dgraphtest.BulkOpts{
-				DataFiles:    dataFiles,
-				SchemaFiles:  schemaFiles,
-				OutDir:       bulkOutDir,
-				MapShards:    numShards,
-				ReduceShards: numShards,
-			}
-			require.NoError(t, bulkCluster.BulkLoad(opts))
-
-			// Step 4: Create a new cluster that uses the bulk loaded p directories
-			targetConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(numShards). // Must match the number of shards
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-			require.NoError(t, err)
-			defer func() { targetCluster.Cleanup(t.Failed()) }()
-
-			// Start the target cluster (both Zero and Alphas)
-			require.NoError(t, targetCluster.Start())
-
-			// Get a client to verify the data
-			targetGc, targetCleanup, err := targetCluster.Client()
-			require.NoError(t, err)
-			defer targetCleanup()
-			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 3+4: Bulk load the export with multiple shards and start a
+			// target cluster on the bulk-loaded p directories
+			targetGc := setupBulkTarget(t, exportDir, numShards)
 
 			// Step 5: Verify vector counts for each predicate
 			for _, pred := range predicates {
@@ -427,27 +271,9 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 				dgraph.type: [string] @index(exact) .
 			`, mode.vectorIndex)
 
-			// Step 1: Create source cluster and load mixed data
-			sourceConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour)
-			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-			require.NoError(t, err)
-			defer func() { sourceCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, sourceCluster.Start())
-
-			gc, cleanup, err := sourceCluster.Client()
-			require.NoError(t, err)
-			defer cleanup()
-			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-			hc, err := sourceCluster.HTTPClient()
-			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-				dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 1: Load mixed data into the shared cluster (bulk-load source)
+			gc, hc := setupTest(t)
+			exportDir := testExportDir(t)
 
 			require.NoError(t, gc.SetupSchema(mixedSchema))
 
@@ -480,7 +306,7 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 			}
 
 			mu := &api.Mutation{SetNquads: []byte(rdfBuilder.String()), CommitNow: true}
-			_, err = gc.Mutate(mu)
+			_, err := gc.Mutate(mu)
 			require.NoError(t, err)
 
 			// Verify source data
@@ -490,53 +316,10 @@ func TestBulkLoadMixedPredicates(t *testing.T) {
 			require.JSONEq(t, fmt.Sprintf(`{"q":[{"count":%d}]}`, numVectors), string(result.GetJson()))
 
 			// Step 2: Export data
-			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+			require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-			// Step 3: Bulk load
-			bulkOutDir := t.TempDir()
-			bulkConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-			require.NoError(t, err)
-			defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-			require.NoError(t, bulkCluster.StartZero(0))
-			require.NoError(t, bulkCluster.HealthCheck(true))
-
-			exportHostDir := t.TempDir()
-			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-			require.NoError(t, err)
-
-			opts := dgraphtest.BulkOpts{
-				DataFiles:   dataFiles,
-				SchemaFiles: schemaFiles,
-				OutDir:      bulkOutDir,
-			}
-			require.NoError(t, bulkCluster.BulkLoad(opts))
-
-			// Step 4: Start target cluster
-			targetConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-			require.NoError(t, err)
-			defer func() { targetCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, targetCluster.Start())
-
-			targetGc, targetCleanup, err := targetCluster.Client()
-			require.NoError(t, err)
-			defer targetCleanup()
-			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 3+4: Bulk load the export and start a target cluster on it
+			targetGc := setupBulkTarget(t, exportDir, 1)
 
 			// Step 5: Verify all predicate types work
 
@@ -609,84 +392,23 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			predName := "project_description_v"
 
-			// Step 1: Create source cluster
-			sourceConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour)
-			sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-			require.NoError(t, err)
-			defer func() { sourceCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, sourceCluster.Start())
-
-			gc, cleanup, err := sourceCluster.Client()
-			require.NoError(t, err)
-			defer cleanup()
-			require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-			hc, err := sourceCluster.HTTPClient()
-			require.NoError(t, err)
-			require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-				dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 1: Load vectors into the shared cluster (bulk-load source)
+			gc, hc := setupTest(t)
+			exportDir := testExportDir(t)
 
 			require.NoError(t, gc.SetupSchema(tc.schema))
 
 			// Generate vectors with specific dimension
 			rdfs, vectors := dgraphapi.GenerateRandomVectors(0, tc.numVecs, tc.dimension, predName)
 			mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-			_, err = gc.Mutate(mu)
+			_, err := gc.Mutate(mu)
 			require.NoError(t, err)
 
 			// Step 2: Export
-			require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+			require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-			// Step 3: Bulk load
-			bulkOutDir := t.TempDir()
-			bulkConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-			require.NoError(t, err)
-			defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-			require.NoError(t, bulkCluster.StartZero(0))
-			require.NoError(t, bulkCluster.HealthCheck(true))
-
-			exportHostDir := t.TempDir()
-			dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-			require.NoError(t, err)
-
-			opts := dgraphtest.BulkOpts{
-				DataFiles:   dataFiles,
-				SchemaFiles: schemaFiles,
-				OutDir:      bulkOutDir,
-			}
-			require.NoError(t, bulkCluster.BulkLoad(opts))
-
-			// Step 4: Start target cluster
-			targetConf := dgraphtest.NewClusterConfig().
-				WithNumAlphas(1).
-				WithNumZeros(1).
-				WithReplicas(1).
-				WithACL(time.Hour).
-				WithBulkLoadOutDir(bulkOutDir)
-
-			targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-			require.NoError(t, err)
-			defer func() { targetCluster.Cleanup(t.Failed()) }()
-			require.NoError(t, targetCluster.Start())
-
-			targetGc, targetCleanup, err := targetCluster.Client()
-			require.NoError(t, err)
-			defer targetCleanup()
-			require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-				dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+			// Step 3+4: Bulk load the export and start a target cluster on it
+			targetGc := setupBulkTarget(t, exportDir, 1)
 
 			// Verify count
 			query := fmt.Sprintf(`{ q(func: has(%s)) { count(uid) } }`, predName)
@@ -703,7 +425,6 @@ func TestBulkLoadVectorDimensions(t *testing.T) {
 				require.GreaterOrEqual(t, len(similarVectors), tc.minSimilar,
 					"similar_to query should return results for vector")
 			}
-
 		})
 	}
 }
@@ -719,27 +440,9 @@ func TestBulkLoadVectorEdgeCases(t *testing.T) {
 
 	vectorDim := 10
 
-	// Step 1: Create source cluster
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+	// Step 1: Load edge-case data into the shared cluster (bulk-load source)
+	gc, hc := setupTest(t)
+	exportDir := testExportDir(t)
 
 	require.NoError(t, gc.SetupSchema(schema))
 
@@ -769,57 +472,14 @@ func TestBulkLoadVectorEdgeCases(t *testing.T) {
 	// vec_empty: no data, just schema
 
 	mu := &api.Mutation{SetNquads: []byte(rdfBuilder.String()), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
 	// Step 2: Export
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+	require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-	// Step 3: Bulk load
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
-
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
-
-	opts := dgraphtest.BulkOpts{
-		DataFiles:   dataFiles,
-		SchemaFiles: schemaFiles,
-		OutDir:      bulkOutDir,
-	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
-
-	// Step 4: Start target cluster
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, targetCluster.Start())
-
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+	// Step 3+4: Bulk load the export and start a target cluster on it
+	targetGc := setupBulkTarget(t, exportDir, 1)
 
 	// Step 5: Verify edge cases
 
@@ -869,27 +529,9 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 		project_description_v: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "4")) .
 	`
 
-	// Step 1: Create a source cluster and load vectors into it
-	sourceConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour)
-	sourceCluster, err := dgraphtest.NewLocalCluster(sourceConf)
-	require.NoError(t, err)
-	defer func() { sourceCluster.Cleanup(t.Failed()) }()
-	require.NoError(t, sourceCluster.Start())
-
-	gc, cleanup, err := sourceCluster.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := sourceCluster.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+	// Step 1: Load vectors into the shared cluster (bulk-load source)
+	gc, hc := setupTest(t)
+	exportDir := testExportDir(t)
 
 	// Load the vectors FIRST (predicate typed but not indexed), then alter to
 	// add the partitioned index. The alter-with-data path is the one that used
@@ -901,7 +543,7 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
 	require.NoError(t, gc.SetupSchema(partitionedSchema))
@@ -914,61 +556,10 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	}
 
 	// Step 2: Export the data from source cluster
-	require.NoError(t, hc.Export(dgraphtest.DefaultExportDir, "rdf", -1))
+	require.NoError(t, hc.Export(exportDir, "rdf", -1))
 
-	// Step 3: Set up a cluster for bulk loading and run bulk load on exported data
-	bulkOutDir := t.TempDir()
-	bulkConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	bulkCluster, err := dgraphtest.NewLocalCluster(bulkConf)
-	require.NoError(t, err)
-	defer func() { bulkCluster.Cleanup(t.Failed()) }()
-
-	// Start only Zero for bulk loading
-	require.NoError(t, bulkCluster.StartZero(0))
-	require.NoError(t, bulkCluster.HealthCheck(true))
-
-	// Copy exported files from source cluster container to host for bulk load
-	exportHostDir := t.TempDir()
-	dataFiles, schemaFiles, err := sourceCluster.CopyExportToHost(dgraphtest.DefaultExportDir, exportHostDir)
-	require.NoError(t, err)
-	require.NotEmpty(t, dataFiles, "should have exported data files")
-	require.NotEmpty(t, schemaFiles, "should have exported schema files")
-
-	// Run bulk load with exported data
-	opts := dgraphtest.BulkOpts{
-		DataFiles:   dataFiles,
-		SchemaFiles: schemaFiles,
-		OutDir:      bulkOutDir,
-	}
-	require.NoError(t, bulkCluster.BulkLoad(opts))
-
-	// Step 4: Create a new cluster that uses the bulk loaded p directory
-	targetConf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).
-		WithNumZeros(1).
-		WithReplicas(1).
-		WithACL(time.Hour).
-		WithBulkLoadOutDir(bulkOutDir)
-
-	targetCluster, err := dgraphtest.NewLocalCluster(targetConf)
-	require.NoError(t, err)
-	defer func() { targetCluster.Cleanup(t.Failed()) }()
-
-	// Start the target cluster (both Zero and Alphas)
-	require.NoError(t, targetCluster.Start())
-
-	// Get a client to verify the data
-	targetGc, targetCleanup, err := targetCluster.Client()
-	require.NoError(t, err)
-	defer targetCleanup()
-	require.NoError(t, targetGc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+	// Step 3+4: Bulk load the export and start a target cluster on it
+	targetGc := setupBulkTarget(t, exportDir, 1)
 
 	// Step 5: Verify vector count
 	query := `{
@@ -1001,24 +592,13 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 // a user-set vectorDimension: a value contradicting the existing data must be
 // rejected, while a matching value (and an absent one) is accepted.
 func TestPartitionedVectorDimensionValidation(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+	gc, _ := setupTest(t)
 
 	const pred = "project_description_v"
 	const dim = 10
 	require.NoError(t, gc.SetupSchema(pred+`: float32vector .`))
 	rdfs, _ := dgraphapi.GenerateRandomVectors(0, 200, dim, pred)
-	_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
+	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
 	require.NoError(t, err)
 
 	idx := func(opts string) string {
@@ -1047,18 +627,7 @@ func TestPartitionedVectorDimensionValidation(t *testing.T) {
 // establish the true dimension. Before the fix this failed with a spurious
 // "contradicts the existing vector dimension" error.
 func TestPartitionedVectorDimensionValidationUntyped(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().
-		WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+	gc, _ := setupTest(t)
 
 	const pred = "project_description_v"
 	const dim = 100
@@ -1066,7 +635,7 @@ func TestPartitionedVectorDimensionValidationUntyped(t *testing.T) {
 	// Mutate BEFORE declaring the predicate as float32vector: the values are
 	// stored as their default text form, e.g. "[0.5, 7.8, ...]".
 	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, 500, dim, pred)
-	_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
+	_, err := gc.Mutate(&api.Mutation{SetNquads: []byte(rdfs), CommitNow: true})
 	require.NoError(t, err)
 
 	// Now attach the partitioned index declaring the matching vectorDimension.
