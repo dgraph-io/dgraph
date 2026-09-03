@@ -645,18 +645,31 @@ func TestVectorDeadlockwithTimeout(t *testing.T) {
 func TestVectorMutateDiffrentLengthWithDiffrentIndexes(t *testing.T) {
 	for _, mode := range vecIndexModes {
 		t.Run(mode.name, func(t *testing.T) {
+			// A mixed-length mutation must fail in both modes, but the two
+			// index types reject it at different layers: a partitioned index
+			// pins the predicate's dimension at the first insert and fails
+			// the second vector's dimension check before any distance is
+			// computed, while monolithic hnsw has no dimension gate and fails
+			// inside neighbor scoring with a metric-specific error.
+			expect := func(metricErr string) string {
+				if mode.approx {
+					return "cannot insert vector of length"
+				}
+				return metricErr
+			}
+
 			dropPredicate("vtest")
 
 			setSchema(mode.schema("vtest", "euclidean"))
-			testVectorMutationDiffrentLength(t, "can not compute euclidean distance on vectors of different lengths")
+			testVectorMutationDiffrentLength(t, expect("can not compute euclidean distance on vectors of different lengths"))
 			dropPredicate("vtest")
 
 			setSchema(mode.schema("vtest", "cosine"))
-			testVectorMutationDiffrentLength(t, "can not compute cosine distance on vectors of different lengths")
+			testVectorMutationDiffrentLength(t, expect("can not compute cosine distance on vectors of different lengths"))
 			dropPredicate("vtest")
 
 			setSchema(mode.schema("vtest", "dotproduct"))
-			testVectorMutationDiffrentLength(t, "can not compute dot product on vectors of different lengths")
+			testVectorMutationDiffrentLength(t, expect("can not compute dot product on vectors of different lengths"))
 			dropPredicate("vtest")
 		})
 	}
