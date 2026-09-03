@@ -390,6 +390,10 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
+		// Evict cached in-memory vector index instances while the schema
+		// still lists their predicates; DeleteAll below can no longer find
+		// them once the schema state is wiped.
+		posting.EvictVectorIndexCaches()
 		schema.State().DeleteAll()
 
 		if err := posting.DeleteAll(); err != nil {
