@@ -409,6 +409,10 @@ func (ml *MemoryLayer) UpdateMaxCost(maxCost int64) {
 	ml.cache.data.UpdateMaxCost(maxCost)
 }
 
+func (ml *MemoryLayer) hasCache() bool {
+	return ml != nil && ml.cache != nil && ml.cache.data != nil
+}
+
 type IterateDiskArgs struct {
 	Prefix         []byte
 	Prefetch       bool
@@ -761,19 +765,90 @@ func (c *CachePL) Set(l *List, readTs uint64) {
 	}
 }
 
-func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64) *List {
+func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64, readUids bool) *List {
 	cacheItem, ok := ml.cache.get(key)
+	if !ok || cacheItem.list == nil {
+		return nil
+	}
+	cached := cacheItem.list
 
+	cached.RLock()
 	// Issue #9597 fix: Cache is only valid if minTs <= readTs AND maxTs >= readTs.
 	// If maxTs < readTs, the cache is missing mutations committed after maxTs.
-	if ok && cacheItem.list != nil && cacheItem.list.minTs <= readTs && cacheItem.list.maxTs >= readTs {
-		cacheItem.list.RLock()
-		lCopy := copyList(cacheItem.list)
-		cacheItem.list.RUnlock()
-		checkForRollup(key, lCopy)
-		return lCopy
+	if cached.minTs > readTs || cached.maxTs < readTs {
+		cached.RUnlock()
+		return nil
 	}
-	return nil
+	needsWarm := readUids && cached.mutationMap.needsUidWarm()
+	lCopy := copyList(cached)
+	cached.RUnlock()
+
+	if needsWarm {
+		ml.warmCachedUids(key, cacheItem, lCopy)
+	}
+	checkForRollup(key, lCopy)
+	return lCopy
+}
+
+// warmCachedUids materializes the uid slice for a cached posting list and publishes it back to the
+// cached entry, so that later readers of the same key are served from it instead of walking the list
+// again.
+//
+// The work happens on lCopy, which this reader owns, rather than on the published list. A warm walks
+// the whole list and reads split parts from Badger, and the commit path takes the published list's
+// write lock from the serial Raft apply loop (commitOrAbort in worker/draft.go, ahead of the
+// ProcessDelta that releases waiting reads), so holding that lock across the walk would stall every
+// commit for the group. Exactly one reader warms at a time; the rest serve their read unwarmed and
+// recompute as they did before.
+//
+// Iterating lCopy is safe even though its mutable layer shares maps with the published list, but
+// only because updateItemInCache, the one caller that commits into a cached list, passes
+// refresh=true, and that rebuilds committedEntries and committedUids before writing. A refresh=false
+// commit on a published list would write into the maps a copy like this one is reading, which Go
+// reports as a fatal concurrent map access rather than a race the detector might miss.
+func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *List) {
+	cached := cacheItem.list
+	if !cached.tryStartUidWarm() {
+		return
+	}
+	defer cached.finishUidWarm()
+
+	calculated, err := lCopy.calculateUids()
+	if err != nil {
+		// Warming is an optimization, so it must not be the thing that fails the read. Often the
+		// read fails anyway, on the same unreadable split, once it walks the list itself -- but a
+		// transient error need not recur, and a read bounded by First or AfterUid may never reach
+		// the part that could not be read.
+		//
+		// Give up on this list rather than letting the next reader repeat the walk. Everyone who
+		// gets here holds a cache hit on a list that cannot be read, so otherwise both the wasted
+		// walk and this log line recur at read QPS. Abandoning caps them at one per commit to the
+		// key, which is the bound doRollup gets from its own per-key dedupe.
+		cached.abandonUidWarm()
+		glog.Warningf("Giving up on materializing calculated UIDs for key [%x]: %v", key, err)
+		return
+	}
+	if !calculated {
+		return
+	}
+	if !cached.publishCalculatedUids(lCopy.mutationMap.committedUidsTime,
+		lCopy.mutationMap.calculatedUids) {
+		return
+	}
+	// Re-set the entry so ristretto accounts for the calculated UID slice.
+	ml.resetIfCurrent(key, cacheItem)
+}
+
+// resetIfCurrent re-sets cacheItem under key so that its ristretto cost is recomputed, but only if it
+// is still the live entry for that key. A plain set would resurrect an entry that was evicted or
+// dropped by a rollup while the caller was working, and the caller may have been working for as long
+// as a warm takes.
+func (ml *MemoryLayer) resetIfCurrent(key []byte, cacheItem *CachePL) bool {
+	if current, ok := ml.cache.get(key); !ok || current != cacheItem {
+		return false
+	}
+	ml.cache.set(key, cacheItem)
+	return true
 }
 
 func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64, readUids bool) (*List, error) {
@@ -792,9 +867,13 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	if err != nil {
 		return l, err
 	}
-	if readUids {
-		if err := l.calculateUids(); err != nil {
-			return nil, err
+	if readUids && ml.hasCache() {
+		if _, err := l.calculateUids(); err != nil {
+			// Same as on the cache path: the list itself read fine, so serve it unmaterialized rather
+			// than failing the read for the sake of an optimization. This one keeps its warning
+			// unconditionally, because it runs per cache miss rather than per read, and it is where
+			// an operator should first see that a list has stopped being readable.
+			glog.Warningf("Error materializing calculated UIDs for key [%x]: %v", key, err)
 		}
 	}
 	return l, nil
@@ -814,7 +893,7 @@ func (ml *MemoryLayer) ReadData(key []byte, pstore *badger.DB, readTs uint64, re
 	// We first try to read the data from cache, if it is present. If it's not present, then we would read the
 	// latest data from the disk. This would get stored in the cache. If this read has a minTs > readTs then
 	// we would have to read the correct timestamp from the disk.
-	l := ml.readFromCache(key, readTs)
+	l := ml.readFromCache(key, readTs, readUids)
 	if l != nil {
 		l.mutationMap.setTs(readTs)
 		return l, nil
