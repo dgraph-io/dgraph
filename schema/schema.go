@@ -23,6 +23,8 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/tok"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
@@ -472,9 +474,30 @@ func (s *state) PredicatesToDelete(pred string) []string {
 		preds = append(preds, pred)
 
 		if schema.ValueType == pb.Posting_VFLOAT && len(schema.IndexSpecs) != 0 {
+			// Monolithic HNSW supporting predicates.
 			preds = append(preds, pred+hnsw.VecEntry)
 			preds = append(preds, pred+hnsw.VecKeyword)
 			preds = append(preds, pred+hnsw.VecDead)
+			// Persisted dimension metadata (written by partitioned builds;
+			// harmless to list when absent).
+			preds = append(preds, pred+hnsw.VecMeta)
+			// Partitioned (IVF) indexes shard their aux data into per-cluster
+			// attrs and persist a centroid set. These are internal attrs, not
+			// schema predicates, and badger keys are length-prefixed by the
+			// exact attr, so the unsplit prefixes above do not cover them; they
+			// must be enumerated explicitly or they leak on drop (orphaned data
+			// plus a stale dimension when the predicate is re-created).
+			for _, spec := range schema.IndexSpecs {
+				if n, ok := partitioned_hnsw.NumClustersFromSpec(spec); ok {
+					for i := range n {
+						preds = append(preds,
+							hnsw.SplitEntryAttr(pred, i),
+							hnsw.SplitVecAttr(pred, i),
+							hnsw.SplitDeadAttr(pred, i))
+					}
+					preds = append(preds, pred+kmeans.CentroidPrefix)
+				}
+			}
 		}
 	}
 	return preds

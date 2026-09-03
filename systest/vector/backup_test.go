@@ -23,54 +23,44 @@ import (
 	"github.com/dgraph-io/dgraph/v25/dgraphapi"
 	"github.com/dgraph-io/dgraph/v25/dgraphtest"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	"github.com/dgraph-io/dgraph/v25/worker"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
-func TestVectorIncrBackupRestore(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
+func (vsuite *VectorTestSuite) TestVectorIncrBackupRestore() {
+	t := vsuite.T()
+	// The 5-round restore verification below queries every vector of each
+	// restored batch (topk == numVectors), which takes ~35min per index mode;
+	// the assertions stay at full strength and the test runs nightly.
+	skipUnlessNightlyLane(t)
+	gc, hc := vsuite.setup()
+	backupDir := testBackupDir(t)
 
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	require.NoError(t, gc.SetupSchema(testSchema))
-
-	numVectors := 500
-	pred := "project_description_v"
+	numVectors := 1500
 	allVectors := make([][][]float32, 0, 5)
 	allRdfs := make([]string, 0, 5)
 	for i := 1; i <= 5; i++ {
 		var rdfs string
 		var vectors [][]float32
-		rdfs, vectors = dgraphapi.GenerateRandomVectors(numVectors*(i-1), numVectors*i, 1, pred)
+		rdfs, vectors = dgraphapi.GenerateRandomVectors(numVectors*(i-1), numVectors*i, 10, pred)
 		allVectors = append(allVectors, vectors)
 		allRdfs = append(allRdfs, rdfs)
 		mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 		_, err := gc.Mutate(mu)
 		require.NoError(t, err)
+		require.NoError(t, gc.SetupSchema(vsuite.schemaVecDimesion10))
 
 		t.Logf("taking backup #%v\n", i)
-		require.NoError(t, hc.Backup(c, i == 1, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(sharedCluster, i == 1, backupDir))
 	}
 
 	for i := 1; i <= 5; i++ {
 		t.Logf("restoring backup #%v\n", i)
 
 		incrFrom := i - 1
-		require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", incrFrom, i))
-		require.NoError(t, dgraphapi.WaitForRestore(c))
+		require.NoError(t, hc.Restore(sharedCluster, backupDir, "", incrFrom, i))
+		require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 		query := `{
 			vector(func: has(project_description_v)) {
 				   count(uid)
@@ -80,11 +70,12 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 		require.NoError(t, err)
 
 		require.JSONEq(t, fmt.Sprintf(`{"vector":[{"count":%v}]}`, numVectors*i), string(result.GetJson()))
-		var allSpredVec [][]float32
-		for i, vecArr := range allVectors {
-			if i <= i {
-				allSpredVec = append(allSpredVec, vecArr...)
-			}
+
+		// Only the batches restored so far exist (the count above proves it);
+		// similar_to results must come from exactly this set.
+		var restoredVecs [][]float32
+		for _, vecArr := range allVectors[:i] {
+			restoredVecs = append(restoredVecs, vecArr...)
 		}
 		for p, vector := range allVectors[i-1] {
 			triple := strings.Split(allRdfs[i-1], "\n")[p]
@@ -93,92 +84,69 @@ func TestVectorIncrBackupRestore(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, allVectors[i-1][p], queriedVector[0])
-
 			similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(similarVectors), 10)
 			for _, similarVector := range similarVectors {
-				require.Contains(t, allSpredVec, similarVector)
+				require.Contains(t, restoredVecs, similarVector)
 			}
 		}
 	}
 }
 
-func TestVectorBackupRestore(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
+func (vsuite *VectorTestSuite) TestVectorBackupRestore() {
+	t := vsuite.T()
+	gc, hc := vsuite.setup()
+	backupDir := testBackupDir(t)
 
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	require.NoError(t, gc.SetupSchema(testSchema))
-
-	numVectors := 1000
-	pred := "project_description_v"
-	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
+	numVectors := 1001
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
+	require.NoError(t, gc.SetupSchema(vsuite.schema))
 
 	t.Log("taking backup \n")
-	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
 	t.Log("restoring backup \n")
-	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
-	require.NoError(t, dgraphapi.WaitForRestore(c))
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
+	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 
-	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
+	for _, vector := range vectors {
+		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 100)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, len(similarVectors), 100)
+		for _, similarVector := range similarVectors {
+			require.Contains(t, vectors, similarVector)
+		}
+	}
 }
 
-func TestVectorBackupRestoreDropIndex(t *testing.T) {
-	// setup cluster
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+func (vsuite *VectorTestSuite) TestVectorBackupRestoreDropIndex() {
+	t := vsuite.T()
+	gc, hc := vsuite.setup()
+	backupDir := testBackupDir(t)
 
 	// add vector predicate + index
-	require.NoError(t, gc.SetupSchema(testSchema))
+	require.NoError(t, gc.SetupSchema(vsuite.schema))
 	// add data to the vector predicate
-	numVectors := 3
+	numVectors := 1000
 	pred := "project_description_v"
-	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 1, pred)
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
 	t.Log("taking full backup \n")
-	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
 	// drop index
 	require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
 
 	// add more data to the vector predicate
-	rdfs, vectors2 := dgraphapi.GenerateRandomVectors(3, numVectors+3, 1, pred)
+	rdfs, vectors2 := dgraphapi.GenerateRandomVectors(numVectors, numVectors+3, 100, pred)
 	mu = &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
@@ -196,18 +164,18 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	vectors2 = slices.Delete(vectors2, 0, 1)
 
 	t.Log("taking first incr backup \n")
-	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
 	// add index
-	require.NoError(t, gc.SetupSchema(testSchema))
+	require.NoError(t, gc.SetupSchema(vsuite.schema))
 
 	t.Log("taking second incr backup \n")
-	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
 	// restore backup
 	t.Log("restoring backup \n")
-	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
-	require.NoError(t, dgraphapi.WaitForRestore(c))
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
+	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 
 	query := ` {
 		vectors(func: has(project_description_v)) {
@@ -216,7 +184,7 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 		}`
 	resp, err := gc.Query(query)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"vectors":[{"count":4}]}`, string(resp.GetJson()))
+	require.JSONEq(t, `{"vectors":[{"count":1001}]}`, string(resp.GetJson()))
 
 	require.NoError(t, err)
 	allVec := append(vectors, vectors2...)
@@ -231,51 +199,38 @@ func TestVectorBackupRestoreDropIndex(t *testing.T) {
 	}
 }
 
-func TestVectorBackupRestoreReIndexing(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
+func (vsuite *VectorTestSuite) TestVectorBackupRestoreReIndexing() {
+	t := vsuite.T()
+	gc, hc := vsuite.setup()
+	backupDir := testBackupDir(t)
 
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
-
-	require.NoError(t, gc.SetupSchema(testSchema))
+	require.NoError(t, gc.SetupSchema(vsuite.schema))
 
 	numVectors := 1000
 	pred := "project_description_v"
-	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 10, pred)
+	rdfs, vectors := dgraphapi.GenerateRandomVectors(0, numVectors, 100, pred)
 
 	mu := &api.Mutation{SetNquads: []byte(rdfs), CommitNow: true}
-	_, err = gc.Mutate(mu)
+	_, err := gc.Mutate(mu)
 	require.NoError(t, err)
 
 	t.Log("taking backup \n")
-	require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
-	rdfs2, vectors2 := dgraphapi.GenerateRandomVectors(numVectors, numVectors+300, 10, pred)
+	rdfs2, vectors2 := dgraphapi.GenerateRandomVectors(numVectors, numVectors+300, 100, pred)
 
 	mu = &api.Mutation{SetNquads: []byte(rdfs2), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
 	t.Log("restoring backup \n")
-	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 2, 1))
-	require.NoError(t, dgraphapi.WaitForRestore(c))
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 2, 1))
+	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 
 	for i := 0; i < 5; i++ {
 		// drop index
 		require.NoError(t, gc.SetupSchema(testSchemaWithoutIndex))
 		// add index
-		require.NoError(t, gc.SetupSchema(testSchema))
+		require.NoError(t, gc.SetupSchema(vsuite.schema))
 	}
 	vectors = append(vectors, vectors2...)
 	rdfs = rdfs + rdfs2
@@ -283,9 +238,9 @@ func TestVectorBackupRestoreReIndexing(t *testing.T) {
 }
 
 // readBackupManifest reads manifest.json from the backup directory inside the container.
-func readBackupManifest(t *testing.T, c *dgraphtest.LocalCluster) worker.MasterManifest {
+func readBackupManifest(t *testing.T, c *dgraphtest.LocalCluster, dir string) worker.MasterManifest {
 	t.Helper()
-	b, err := c.ReadFileFromContainer(filepath.Join(dgraphtest.DefaultBackupDir, "manifest.json"))
+	b, err := c.ReadFileFromContainer(filepath.Join(dir, "manifest.json"))
 	require.NoError(t, err)
 	var m worker.MasterManifest
 	require.NoError(t, json.Unmarshal(b, &m))
@@ -328,6 +283,27 @@ func assertVecSupportingPreds(t *testing.T, preds []string, vecPreds []string, c
 	}
 }
 
+// assertPartitionedVecSupportingPreds checks that a partitioned (numClusters)
+// vector predicate's backup predicate set carries every internal key family:
+// the centroid set, the per-predicate dimension metadata (__vector_meta_), and
+// the per-cluster split attrs. Restore is byte-replay with no rebuild, so any
+// one of these missing from the manifest silently vanishes on restore.
+func assertPartitionedVecSupportingPreds(t *testing.T, preds []string, vecPred string,
+	numClusters int, ctx string) {
+	t.Helper()
+	require.Containsf(t, preds, vecPred, "%s: missing base predicate %q", ctx, vecPred)
+	require.Containsf(t, preds, vecPred+kmeans.CentroidPrefix, "%s: missing centroid for %q", ctx, vecPred)
+	require.Containsf(t, preds, vecPred+hnsw.VecMeta, "%s: missing %s for %q", ctx, hnsw.VecMeta, vecPred)
+	for i := 0; i < numClusters; i++ {
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecEntry, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecEntry, i, vecPred)
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecKeyword, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecKeyword, i, vecPred)
+		require.Containsf(t, preds, vecPred+fmt.Sprintf("%s_%d", hnsw.VecDead, i),
+			"%s: missing per-cluster %s_%d for %q", ctx, hnsw.VecDead, i, vecPred)
+	}
+}
+
 func assertNoDuplicates(t *testing.T, preds []string, ctx string) {
 	t.Helper()
 	seen := make(map[string]int)
@@ -362,25 +338,16 @@ func findGroupForPred(m *worker.Manifest, pred string) (uint32, bool) {
 }
 
 func TestVectorBackupManifestPredicates(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+	gc, hc := setupTest(t)
+	// Each subtest uses its own backup subdirectory (under a base unique to
+	// this test) so manifest counts are deterministic and independent of how
+	// many earlier subtests or other tests ran.
+	baseDir := testBackupDir(t)
 
 	t.Run("single vector predicate", func(t *testing.T) {
 		require.NoError(t, gc.DropAll())
+
+		dir := filepath.Join(baseDir, "single")
 
 		schema := `vec1: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 			name: string @index(exact) .`
@@ -388,9 +355,9 @@ func TestVectorBackupManifestPredicates(t *testing.T) {
 
 		insertVectors(t, gc, []string{"vec1"}, 0, 5)
 
-		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(sharedCluster, true, dir))
 
-		manifest := readBackupManifest(t, c)
+		manifest := readBackupManifest(t, sharedCluster, dir)
 		require.Len(t, manifest.Manifests, 1)
 		preds := allUserPreds(manifest.Manifests[0])
 
@@ -401,8 +368,34 @@ func TestVectorBackupManifestPredicates(t *testing.T) {
 		assertNoDuplicates(t, preds, "single-vec")
 	})
 
+	t.Run("partitioned vector predicate", func(t *testing.T) {
+		require.NoError(t, gc.DropAll())
+
+		dir := filepath.Join(baseDir, "partitioned")
+
+		const numClusters = 4
+		schema := fmt.Sprintf(`vecp: float32vector @index(hnsw(metric: "euclidean", numClusters: "%d")) .
+			name: string @index(exact) .`, numClusters)
+		require.NoError(t, gc.SetupSchema(schema))
+
+		insertVectors(t, gc, []string{"vecp"}, 0, 20)
+
+		require.NoError(t, hc.Backup(sharedCluster, true, dir))
+
+		manifest := readBackupManifest(t, sharedCluster, dir)
+		preds := allUserPreds(manifest.Manifests[len(manifest.Manifests)-1])
+
+		require.Contains(t, preds, "0-name")
+		// A partitioned index's backup set must carry the centroid, the
+		// dimension metadata (__vector_meta_), and every per-cluster split attr.
+		assertPartitionedVecSupportingPreds(t, preds, "0-vecp", numClusters, "partitioned-vec")
+		assertNoDuplicates(t, preds, "partitioned-vec")
+	})
+
 	t.Run("multiple vector predicates in same group", func(t *testing.T) {
 		require.NoError(t, gc.DropAll())
+
+		dir := filepath.Join(baseDir, "multi")
 
 		schema := `vec_a: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 			vec_b: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
@@ -412,9 +405,9 @@ func TestVectorBackupManifestPredicates(t *testing.T) {
 
 		insertVectors(t, gc, []string{"vec_a", "vec_b", "vec_c"}, 0, 3)
 
-		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(sharedCluster, true, dir))
 
-		manifest := readBackupManifest(t, c)
+		manifest := readBackupManifest(t, sharedCluster, dir)
 		require.GreaterOrEqual(t, len(manifest.Manifests), 1)
 		latest := manifest.Manifests[len(manifest.Manifests)-1]
 		preds := allUserPreds(latest)
@@ -427,20 +420,25 @@ func TestVectorBackupManifestPredicates(t *testing.T) {
 	t.Run("incremental backup preserves vector predicates", func(t *testing.T) {
 		require.NoError(t, gc.DropAll())
 
+		dir := filepath.Join(baseDir, "incremental")
+
 		schema := `vec_x: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 			vec_y: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .`
 		require.NoError(t, gc.SetupSchema(schema))
 
 		insertVectors(t, gc, []string{"vec_x", "vec_y"}, 0, 3)
-		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(sharedCluster, true, dir))
 
 		insertVectors(t, gc, []string{"vec_x", "vec_y"}, 3, 6)
-		require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
+		require.NoError(t, hc.Backup(sharedCluster, false, dir))
 
-		manifest := readBackupManifest(t, c)
-		require.Len(t, manifest.Manifests, 4)
+		// Isolated backup dir => exactly two manifests: the full backup (index 0)
+		// and the incremental (index 1). Both must carry the vector supporting
+		// predicates.
+		manifest := readBackupManifest(t, sharedCluster, dir)
+		require.Len(t, manifest.Manifests, 2)
 
-		for i := 2; i < 4; i++ {
+		for i := 0; i < 2; i++ {
 			m := manifest.Manifests[i]
 			preds := allUserPreds(m)
 			ctx := fmt.Sprintf("manifest[%d]", i)
@@ -487,7 +485,7 @@ func TestVectorBackupManifestMultiGroup(t *testing.T) {
 
 		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
 
-		manifest := readBackupManifest(t, c)
+		manifest := readBackupManifest(t, c, dgraphtest.DefaultBackupDir)
 		latest := manifest.Manifests[len(manifest.Manifests)-1]
 
 		// Verify we have multiple groups.
@@ -505,6 +503,51 @@ func TestVectorBackupManifestMultiGroup(t *testing.T) {
 				"group %d: missing %s for %q", gid, hnsw.VecKeyword, vecPred)
 			require.Containsf(t, groupPreds, vecPred+hnsw.VecDead,
 				"group %d: missing %s for %q", gid, hnsw.VecDead, vecPred)
+		}
+
+		// Verify no duplicates within each group independently.
+		for gid, preds := range userPredsPerGroup(latest) {
+			assertNoDuplicates(t, preds, fmt.Sprintf("group-%d", gid))
+		}
+
+		// Verify no duplicates across all groups combined.
+		assertNoDuplicates(t, allUserPreds(latest), "all-groups")
+	})
+
+	t.Run("partitioned vector predicates across multiple groups", func(t *testing.T) {
+		require.NoError(t, gc.DropAll())
+
+		// A partitioned index legitimately expects a LARGER supporting-predicate
+		// set (centroid, __vector_meta_, and per-cluster split attrs), so this is
+		// not a loosening of the monolithic case above. numClusters == 4 over 100
+		// vectors keeps clustering meaningful.
+		const numClusters = 4
+		schema := fmt.Sprintf(`vecp_p: float32vector @index(hnsw(metric: "euclidean", numClusters: "%d")) .
+			vecp_q: float32vector @index(hnsw(metric: "euclidean", numClusters: "%d")) .
+			vecp_r: float32vector @index(hnsw(metric: "cosine", numClusters: "%d")) .
+			vecp_s: float32vector @index(hnsw(metric: "euclidean", numClusters: "%d")) .
+			title: string @index(exact) .
+			score: int .`, numClusters, numClusters, numClusters, numClusters)
+		require.NoError(t, gc.SetupSchema(schema))
+
+		insertVectors(t, gc, []string{"vecp_p", "vecp_q", "vecp_r", "vecp_s"}, 0, 100)
+
+		require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+
+		manifest := readBackupManifest(t, c, dgraphtest.DefaultBackupDir)
+		latest := manifest.Manifests[len(manifest.Manifests)-1]
+
+		// Verify we have multiple groups.
+		require.GreaterOrEqual(t, len(latest.Groups), 2, "expected at least 2 groups with 2 alphas")
+
+		// For each partitioned vector predicate, verify its full supporting
+		// predicate set is present in the SAME group as its base predicate.
+		for _, vecPred := range []string{"0-vecp_p", "0-vecp_q", "0-vecp_r", "0-vecp_s"} {
+			gid, found := findGroupForPred(latest, vecPred)
+			require.Truef(t, found, "base predicate %q not found in any group", vecPred)
+
+			assertPartitionedVecSupportingPreds(t, latest.Groups[gid], vecPred, numClusters,
+				fmt.Sprintf("partitioned-multi-group-%d", gid))
 		}
 
 		// Verify no duplicates within each group independently.
@@ -535,7 +578,7 @@ func TestVectorBackupManifestMultiGroup(t *testing.T) {
 		insertVectors(t, gc, []string{"vec_m", "vec_n", "vec_o"}, 3, 6)
 		require.NoError(t, hc.Backup(c, false, dgraphtest.DefaultBackupDir))
 
-		manifest := readBackupManifest(t, c)
+		manifest := readBackupManifest(t, c, dgraphtest.DefaultBackupDir)
 		require.GreaterOrEqual(t, len(manifest.Manifests), 3)
 
 		// Verify the last 2 entries (full + incremental from this subtest).
@@ -571,22 +614,8 @@ func TestVectorBackupManifestMultiGroup(t *testing.T) {
 // Zero's membership state (consistent with normal operation). The backup code
 // discovers them via GetSchemaOverNetwork and adds them exactly once.
 func TestVectorBackupAfterRestore(t *testing.T) {
-	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1).WithACL(time.Hour)
-	c, err := dgraphtest.NewLocalCluster(conf)
-	require.NoError(t, err)
-	defer func() { c.Cleanup(t.Failed()) }()
-	require.NoError(t, c.Start())
-
-	gc, cleanup, err := c.Client()
-	require.NoError(t, err)
-	defer cleanup()
-	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
-		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
-
-	hc, err := c.HTTPClient()
-	require.NoError(t, err)
-	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
-		dgraphapi.DefaultPassword, x.RootNamespace))
+	gc, hc := setupTest(t)
+	backupDir := testBackupDir(t)
 
 	schema := `vec_r1: float32vector @index(hnsw(exponent: "5", metric: "euclidean")) .
 		vec_r2: float32vector @index(hnsw(exponent: "5", metric: "cosine")) .
@@ -596,22 +625,22 @@ func TestVectorBackupAfterRestore(t *testing.T) {
 	insertVectors(t, gc, []string{"vec_r1", "vec_r2"}, 0, 5)
 
 	// Take the initial backup.
-	require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, true, backupDir))
 
 	// Restore from the backup. Supporting predicates are NOT registered as
 	// tablets in Zero (ForceTablet is skipped for them), keeping the state
 	// consistent with normal operation.
-	require.NoError(t, hc.Restore(c, dgraphtest.DefaultBackupDir, "", 0, 0))
-	require.NoError(t, dgraphapi.WaitForRestore(c))
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
+	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 
 	// Re-login after restore since sessions are invalidated.
-	gc, cleanup, err = c.Client()
+	gc, cleanup, err := sharedCluster.Client()
 	require.NoError(t, err)
 	defer cleanup()
 	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
 		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
 
-	hc, err = c.HTTPClient()
+	hc, err = sharedCluster.HTTPClient()
 	require.NoError(t, err)
 	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
 		dgraphapi.DefaultPassword, x.RootNamespace))
@@ -620,14 +649,73 @@ func TestVectorBackupAfterRestore(t *testing.T) {
 	// not in Zero's membership state, so the backup code discovers them
 	// via GetSchemaOverNetwork and adds them exactly once.
 	insertVectors(t, gc, []string{"vec_r1", "vec_r2"}, 5, 10)
-	require.NoError(t, hc.Backup(c, true, dgraphtest.DefaultBackupDir))
+	require.NoError(t, hc.Backup(sharedCluster, true, backupDir))
 
-	manifest := readBackupManifest(t, c)
+	manifest := readBackupManifest(t, sharedCluster, backupDir)
 	require.GreaterOrEqual(t, len(manifest.Manifests), 2)
 
 	latest := manifest.Manifests[len(manifest.Manifests)-1]
 	preds := allUserPreds(latest)
 
 	assertVecSupportingPreds(t, preds, []string{"0-vec_r1", "0-vec_r2"}, "post-restore-backup")
+	assertNoDuplicates(t, preds, "post-restore-backup")
+}
+
+// TestVectorBackupAfterRestorePartitioned is the partitioned (numClusters)
+// counterpart of TestVectorBackupAfterRestore. Restore is a byte-replay with no
+// index rebuild, so a partitioned index's LARGER supporting-predicate set
+// (centroid, __vector_meta_, and per-cluster split attrs) must survive the
+// backup -> restore -> backup round trip and be discovered exactly once by the
+// post-restore backup. This is not a loosening of the monolithic case; the
+// supporting-predicate set is legitimately larger and every member is asserted.
+func TestVectorBackupAfterRestorePartitioned(t *testing.T) {
+	gc, hc := setupTest(t)
+	backupDir := testBackupDir(t)
+
+	// numClusters == 2 keeps clustering meaningful for the vector counts inserted
+	// below (50 before the first backup, 100 total by the second).
+	const numClusters = 2
+	schema := fmt.Sprintf(`vec_r1: float32vector @index(hnsw(exponent: "5", metric: "euclidean", numClusters: "%d")) .
+		vec_r2: float32vector @index(hnsw(exponent: "5", metric: "cosine", numClusters: "%d")) .
+		label: string @index(exact) .`, numClusters, numClusters)
+	require.NoError(t, gc.SetupSchema(schema))
+
+	insertVectors(t, gc, []string{"vec_r1", "vec_r2"}, 0, 50)
+
+	// Take the initial backup.
+	require.NoError(t, hc.Backup(sharedCluster, true, backupDir))
+
+	// Restore from the backup. Supporting predicates are NOT registered as
+	// tablets in Zero (ForceTablet is skipped for them), keeping the state
+	// consistent with normal operation.
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
+	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+
+	// Re-login after restore since sessions are invalidated.
+	gc, cleanup, err := sharedCluster.Client()
+	require.NoError(t, err)
+	defer cleanup()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+
+	hc, err = sharedCluster.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.RootNamespace))
+
+	// Insert more data and take another backup. The partitioned supporting
+	// predicates are not in Zero's membership state, so the backup code discovers
+	// them via GetSchemaOverNetwork and adds them exactly once.
+	insertVectors(t, gc, []string{"vec_r1", "vec_r2"}, 50, 100)
+	require.NoError(t, hc.Backup(sharedCluster, true, backupDir))
+
+	manifest := readBackupManifest(t, sharedCluster, backupDir)
+	require.GreaterOrEqual(t, len(manifest.Manifests), 2)
+
+	latest := manifest.Manifests[len(manifest.Manifests)-1]
+	preds := allUserPreds(latest)
+
+	assertPartitionedVecSupportingPreds(t, preds, "0-vec_r1", numClusters, "post-restore-backup")
+	assertPartitionedVecSupportingPreds(t, preds, "0-vec_r2", numClusters, "post-restore-backup")
 	assertNoDuplicates(t, preds, "post-restore-backup")
 }

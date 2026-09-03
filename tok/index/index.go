@@ -8,6 +8,7 @@ package index
 import (
 	"context"
 
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	opts "github.com/dgraph-io/dgraph/v25/tok/options"
 )
@@ -57,6 +58,14 @@ type IndexFactory[T c.Float] interface {
 	// function -- if it does not yet exist, otherwise, it will replace any
 	// index with the given name.
 	CreateOrReplace(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
+
+	// FindOrCreate returns the VectorIndex registered under name, creating
+	// it when absent. Unlike CreateOrReplace it preserves the existing
+	// instance and any in-memory state it holds (e.g. partition routing
+	// state), so mutation and query paths share one long-lived index per
+	// predicate. Index builds keep using CreateOrReplace, which doubles as
+	// the invalidation point: the rebuilt instance replaces the shared one.
+	FindOrCreate(name string, o opts.Options, floatBits int) (VectorIndex[T], error)
 }
 
 // SearchFilter defines a predicate function that we will use to determine
@@ -89,9 +98,31 @@ type OptionalIndexSupport[T c.Float] interface {
 		filter SearchFilter[T]) (*SearchPathResult, error)
 }
 
+type VectorPartitionStrat[T c.Float] interface {
+	// FindIndexForSearch returns the partitions a search for vec should
+	// probe. The CacheType lets the strategy load persisted routing state
+	// (centroids) on first use; it may be nil during an index build, when
+	// that state is already in memory.
+	FindIndexForSearch(c CacheType, vec []T) ([]int, error)
+	// FindIndexForInsert returns the partition vec belongs to. See
+	// FindIndexForSearch for the CacheType semantics.
+	FindIndexForInsert(c CacheType, vec []T) (int, error)
+	NumPasses() int
+	SetNumPasses(int)
+	NumSeedVectors() int
+	StartBuildPass()
+	EndBuildPass()
+	AddSeedVector(vec []T)
+	AddVector(vec []T) error
+	GetCentroids() [][]T
+}
+
 // A VectorIndex can be used to Search for vectors and add vectors to an index.
 type VectorIndex[T c.Float] interface {
 	OptionalIndexSupport[T]
+
+	MergeResults(ctx context.Context, c CacheType, list []uint64, query []T, maxResults int,
+		filter SearchFilter[T]) ([]uint64, error)
 
 	// Search will find the uids for a given set of vectors based on the
 	// input query, limiting to the specified maximum number of results.
@@ -116,6 +147,19 @@ type VectorIndex[T c.Float] interface {
 	// Insert will add a vector and uuid into the existing VectorIndex. If
 	// uuid already exists, it should throw an error to not insert duplicate uuids
 	Insert(ctx context.Context, c CacheType, uuid uint64, vec []T) ([]*KeyValue, error)
+
+	BuildInsert(ctx context.Context, uuid uint64, vec []T) error
+	GetCentroids() [][]T
+	AddSeedVector(vec []T)
+	NumBuildPasses() int
+	SetNumPasses(int)
+	NumIndexPasses() int
+	NumSeedVectors() int
+	StartBuild(caches []CacheType)
+	EndBuild() []int
+	NumThreads() int
+	Dimension() int
+	SetDimension(schema *pb.SchemaUpdate, dimension int)
 }
 
 // VectorIndexOptions carries optional, per-call search tuning parameters.
@@ -135,6 +179,14 @@ type VectorIndexOptions[T c.Float] struct {
 
 	// Filter allows callers to pass a SearchFilter; if nil, AcceptAll should be used.
 	Filter SearchFilter[T]
+}
+
+// VectorDeadListResolver is implemented by indexes that shard their
+// dead-node bookkeeping across multiple aux predicates. DeadAttrForVector
+// returns the attr of the dead-node list that covers vec, so a delete lands
+// in the list the covering shard actually reads.
+type VectorDeadListResolver[T c.Float] interface {
+	DeadAttrForVector(c CacheType, vec []T) (string, error)
 }
 
 // OptionalSearchOptions adds per-call search controls without breaking existing APIs.
