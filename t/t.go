@@ -780,7 +780,12 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 				continue
 			}
 			if !isUnitOnly() {
-				if err := resumeDefault(); err != nil {
+				if isSelfManagedClusterPackage(task.pkg.ID) {
+					// These tests bring up their own clusters; pause the
+					// default cluster (if running) to free memory for them
+					// instead of resuming or starting it.
+					pauseDefault()
+				} else if err := resumeDefault(); err != nil {
 					return err
 				}
 			}
@@ -1220,6 +1225,14 @@ func isCorePackage(pkg string) bool {
 
 func isVectorPackage(pkg string) bool {
 	return strings.HasSuffix(pkg, "/vector")
+}
+
+// isSelfManagedClusterPackage returns true for packages whose tests create and
+// manage their own dgraphtest.LocalCluster instances and never talk to the
+// default compose cluster. For these, bringing up the default cluster wastes
+// several minutes and the memory their own clusters need.
+func isSelfManagedClusterPackage(pkg string) bool {
+	return strings.HasSuffix(pkg, "systest/vector")
 }
 
 func isHeavyPackage(pkg string) bool {
