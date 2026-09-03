@@ -2440,41 +2440,48 @@ func isDropOperation(op *api.Operation) bool {
 	return op.DropAll || op.DropOp != api.Operation_NONE || len(op.DropAttr) > 0
 }
 
+// uniqueValueKey identifies a value for the in-request duplicate check: two edges
+// collide iff they write the same value to the same predicate. The value is held as
+// the interface{} produced by dql.TypeValFrom, so type identity participates in the
+// comparison exactly as it did in the previous ==-based check (int64(1) and "1" are
+// distinct). NOTE for #9820: when language becomes part of value identity, add the
+// NQuad's Lang here.
+type uniqueValueKey struct {
+	predicate string
+	value     interface{}
+}
+
+// verifyUniqueWithinMutation rejects a request in which two edges set the same value on
+// the same @unique predicate for different subjects. A single linear pass over a
+// seen-map replaces the earlier every-pair scan, which was O(N^2) in the number of
+// unique-predicate edges and dominated large batched mutations (issue #9814).
 func verifyUniqueWithinMutation(qc *queryContext) error {
 	if len(qc.uniqueVars) == 0 {
 		return nil
 	}
 
+	// Maps each (predicate, value) to the subject of the first edge that set it.
+	// Duplicate values from the same subject are permitted, as before.
+	seen := make(map[uniqueValueKey]string, len(qc.uniqueVars))
 	for i := range qc.uniqueVars {
 		gmuIndex, rdfIndex := decodeIndex(i)
 		// handles cases where the mutation was pruned in updateMutations
 		if gmuIndex >= uint32(len(qc.gmuList)) || qc.gmuList[gmuIndex] == nil || rdfIndex >= uint32(len(qc.gmuList[gmuIndex].Set)) {
 			continue
 		}
-		pred1 := qc.gmuList[gmuIndex].Set[rdfIndex]
-		if pred1.ObjectValue == nil {
+		pred := qc.gmuList[gmuIndex].Set[rdfIndex]
+		if pred.ObjectValue == nil {
 			continue
 		}
-		pred1Value := dql.TypeValFrom(pred1.ObjectValue).Value
-		for j := range qc.uniqueVars {
-			if i == j {
-				continue
-			}
-			gmuIndex2, rdfIndex2 := decodeIndex(j)
-			// check for the second predicate, which could also have been pruned
-			if gmuIndex2 >= uint32(len(qc.gmuList)) || qc.gmuList[gmuIndex2] == nil || rdfIndex2 >= uint32(len(qc.gmuList[gmuIndex2].Set)) {
-				continue
-			}
-			pred2 := qc.gmuList[gmuIndex2].Set[rdfIndex2]
-			if pred2.ObjectValue == nil {
-				continue
-			}
-			if pred2.Predicate == pred1.Predicate && dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
-				pred2.Subject != pred1.Subject {
+		key := uniqueValueKey{predicate: pred.Predicate, value: dql.TypeValFrom(pred.ObjectValue).Value}
+		if subject, ok := seen[key]; ok {
+			if subject != pred.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-					pred1Value, pred1.Predicate)
+					key.value, pred.Predicate)
 			}
+			continue
 		}
+		seen[key] = pred.Subject
 	}
 	return nil
 }
