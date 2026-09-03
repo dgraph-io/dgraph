@@ -2504,8 +2504,28 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 	return builder.Run(ctx)
 }
 
+// EvictVectorIndexCaches evicts every long-lived in-memory vector index
+// instance for the predicates currently in the schema, exactly like
+// DeletePredicate does for a single attr. The factory cache survives DROP_ALL
+// on a long-running Alpha, so a predicate re-created under the same name would
+// inherit stale state — e.g. a partitioned index's established
+// vectorDimension, which then rejects inserts of the new dimension. It only
+// works while the schema still lists the predicates: the DROP_ALL apply path
+// must call it BEFORE schema.State().DeleteAll(). FactoryCreateSpec is empty
+// for non-vector predicates.
+func EvictVectorIndexCaches() {
+	for _, pred := range schema.State().Predicates() {
+		if specs, err := schema.State().FactoryCreateSpec(context.TODO(), pred); err == nil {
+			for _, spec := range specs {
+				_ = spec.Remove(pred)
+			}
+		}
+	}
+}
+
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
+	EvictVectorIndexCaches()
 	ResetCache()
 	return pstore.DropAll()
 }
