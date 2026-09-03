@@ -22,7 +22,13 @@ jobs:
 
   dgraph-vector-tests:
     needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
+    # The scheduled (nightly) run always executes: detect-changes has no diff
+    # to inspect on a schedule event and outputs code=false, which used to
+    # silently skip every nightly run. !cancelled() lets the condition be
+    # evaluated even if the changes job failed on a schedule event.
+    if: >-
+      !cancelled() && (github.event_name == 'schedule' ||
+       (needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false))
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 180
     steps:
@@ -64,6 +70,12 @@ jobs:
           cd t; ./t -r
 
       - name: Run Vector Tests
+        env:
+          # Lane selection: the scheduled (nightly) run executes the whole
+          # suite; PR-triggered runs skip the long-running tests gated by
+          # skipUnlessNightlyLane (currently TestVectorIncrBackupRestore).
+          # The t runner passes its environment through to `go test`.
+          VECTOR_TEST_LANE: ${{ github.event_name == 'schedule' && 'nightly' || 'pr' }}
         run: |
           #!/bin/bash
           # go env settings
@@ -71,9 +83,9 @@ jobs:
           # move the binary
           cp dgraph/dgraph ~/go/bin/dgraph
           # run the unit and vector tests
-          # NOTE: temporary bump of the per-package go-test timeout (default 90m)
-          # so the full vector suite (incl. the slow IncrBackupRestore) completes
-          # in a single run; revert once the slow tests move to a nightly lane.
+          # NOTE: the 150m per-package go-test timeout is for the nightly lane,
+          # which runs the slow IncrBackupRestore (~35min per index mode) with
+          # full assertions; the PR lane finishes well under the default.
           cd t; ./t --suite=vector --timeout 150m
           # clean up docker containers after test execution
           ./t -r
