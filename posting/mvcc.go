@@ -801,8 +801,11 @@ func (ml *MemoryLayer) readFromCache(key []byte, readTs uint64, readUids bool) *
 // commit for the group. Exactly one reader warms at a time; the rest serve their read unwarmed and
 // recompute as they did before.
 //
-// Iterating lCopy is safe even though its mutable layer shares maps with the published list, because
-// setMutationAfterCommit replaces those maps instead of writing into them.
+// Iterating lCopy is safe even though its mutable layer shares maps with the published list, but
+// only because updateItemInCache, the one caller that commits into a cached list, passes
+// refresh=true, and that rebuilds committedEntries and committedUids before writing. A refresh=false
+// commit on a published list would write into the maps a copy like this one is reading, which Go
+// reports as a fatal concurrent map access rather than a race the detector might miss.
 func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *List) {
 	cached := cacheItem.list
 	if !cached.tryStartUidWarm() {
@@ -812,9 +815,17 @@ func (ml *MemoryLayer) warmCachedUids(key []byte, cacheItem *CachePL, lCopy *Lis
 
 	calculated, err := lCopy.calculateUids()
 	if err != nil {
-		// Warming is an optimization, so a failure here must not fail a read the cache can otherwise
-		// serve. lCopy keeps its uids unmaterialized and the reader walks the list as before.
-		glog.Warningf("Error materializing calculated UIDs for key [%x]: %v", key, err)
+		// Warming is an optimization, so it must not be the thing that fails the read. Often the
+		// read fails anyway, on the same unreadable split, once it walks the list itself -- but a
+		// transient error need not recur, and a read bounded by First or AfterUid may never reach
+		// the part that could not be read.
+		//
+		// Give up on this list rather than letting the next reader repeat the walk. Everyone who
+		// gets here holds a cache hit on a list that cannot be read, so otherwise both the wasted
+		// walk and this log line recur at read QPS. Abandoning caps them at one per commit to the
+		// key, which is the bound doRollup gets from its own per-key dedupe.
+		cached.abandonUidWarm()
+		glog.Warningf("Giving up on materializing calculated UIDs for key [%x]: %v", key, err)
 		return
 	}
 	if !calculated {
@@ -859,7 +870,9 @@ func (ml *MemoryLayer) readFromDisk(key []byte, pstore *badger.DB, readTs uint64
 	if readUids && ml.hasCache() {
 		if _, err := l.calculateUids(); err != nil {
 			// Same as on the cache path: the list itself read fine, so serve it unmaterialized rather
-			// than failing the read for the sake of an optimization.
+			// than failing the read for the sake of an optimization. This one keeps its warning
+			// unconditionally, because it runs per cache miss rather than per read, and it is where
+			// an operator should first see that a list has stopped being readable.
 			glog.Warningf("Error materializing calculated UIDs for key [%x]: %v", key, err)
 		}
 	}
