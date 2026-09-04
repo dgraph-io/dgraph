@@ -69,7 +69,7 @@ services:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2
       --security "whitelist=0.0.0.0/0;"
   minio:
-    image: minio/minio:${MINIO_IMAGE_ARCH:-RELEASE.2020-11-13T20-10-18Z}
+    image: docker.io/minio/minio:${MINIO_IMAGE_ARCH:-RELEASE.2020-11-13T20-10-18Z}
     env_file:
       - export.env
     ports:

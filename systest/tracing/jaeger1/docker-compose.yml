@@ -23,7 +23,7 @@ services:
       service=alpha1;" --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --security
       "whitelist=0.0.0.0/0;"
   jaeger:
-    image: jaegertracing/all-in-one:1.60
+    image: docker.io/jaegertracing/all-in-one:1.60
     environment:
       - SPAN_STORAGE_TYPE=memory
     ports:

@@ -38,7 +38,7 @@ services:
       --graphql "lambda-url=http://lambda:8686/graphql-worker; debug=true;" --trace "ratio=1.0;"
 
   lambda:
-    image: dgraph/dgraph-lambda:latest
+    image: docker.io/dgraph/dgraph-lambda:latest
     labels:
       cluster: test
     ports:
