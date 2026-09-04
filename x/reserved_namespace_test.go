@@ -117,3 +117,139 @@ func TestRegisterReservedNamespaceRejectsDuplicate(t *testing.T) {
 		RegisterReservedNamespace(ReservedNamespace{Predicates: []string{"dgraph.duptest.x"}})
 	})
 }
+
+// TestValueLockedPrefixes covers locking dynamically-named predicates by prefix.
+// A namespace whose predicates are created one per (namespace, relation) at
+// runtime cannot enumerate them in ValueLocked, so without prefix locking they
+// would be creatable via Alter yet writable by anyone through /mutate.
+func TestValueLockedPrefixes(t *testing.T) {
+	RegisterReservedNamespace(ReservedNamespace{
+		PredicatePrefix:     "dgraph.prefixlock.rel.",
+		Predicates:          []string{"dgraph.prefixlock.xid"},
+		ValueLockedPrefixes: []string{"dgraph.prefixlock.rel."},
+		TrustMarker:         testTrust,
+	})
+
+	// Any predicate under the locked prefix, including ones that do not exist
+	// yet — that is the point of locking by prefix.
+	for _, p := range []string{
+		"dgraph.prefixlock.rel.document.owner",
+		"dgraph.prefixlock.rel.group.member",
+		"dgraph.prefixlock.rel.",
+		"dgraph.prefixlock.REL.Document.Owner", // case-insensitive, like exact names
+	} {
+		marker, locked := ReservedPredicateValueLock(p)
+		require.Truef(t, locked, "prefix lock must cover %q", p)
+		require.Equal(t, testTrust, marker)
+	}
+
+	// Owned but deliberately not locked: xid stays writable so admin tooling and
+	// migrations can create nodes.
+	_, locked := ReservedPredicateValueLock("dgraph.prefixlock.xid")
+	require.False(t, locked)
+
+	// A near miss outside the prefix is not locked.
+	_, locked = ReservedPredicateValueLock("dgraph.prefixlock.relative")
+	require.False(t, locked)
+}
+
+// TestValueLockedExactWinsOverPrefix pins the precedence: a namespace may lock a
+// whole prefix to one marker while pinning an individual predicate under it to
+// another, so the exact entry must be consulted first.
+// TestValueLockedExactWinsOverPrefix pins that an exact value lock takes precedence
+// over a prefix that also matches.
+//
+// It registers the prefix and the exact name in SEPARATE namespaces with distinct
+// markers, which is both the only way the precedence is observable and the only way
+// the split is expressible: a ReservedNamespace carries one TrustMarker, so the
+// earlier version of this test registered both kinds in one namespace, gave them the
+// same marker, and passed whichever table ReservedPredicateValueLock consulted
+// first.
+func TestValueLockedExactWinsOverPrefix(t *testing.T) {
+	type prefixTrustKey int
+	type exactTrustKey int
+	const (
+		prefixTrust prefixTrustKey = 1
+		exactTrust  exactTrustKey  = 2
+	)
+
+	// The namespace that owns the whole sub-namespace by prefix.
+	RegisterReservedNamespace(ReservedNamespace{
+		PredicatePrefix:     "dgraph.precedence.rel.",
+		ValueLockedPrefixes: []string{"dgraph.precedence.rel."},
+		TrustMarker:         prefixTrust,
+	})
+	// A second namespace pinning one predicate inside it to its own marker. Note
+	// there is no cross-kind conflict check, so this registration is accepted — the
+	// precedence rule is what decides the overlap.
+	RegisterReservedNamespace(ReservedNamespace{
+		Predicates:  []string{"dgraph.precedence.rel.special"},
+		ValueLocked: []string{"dgraph.precedence.rel.special"},
+		TrustMarker: exactTrust,
+	})
+
+	marker, locked := ReservedPredicateValueLock("dgraph.precedence.rel.special")
+	require.True(t, locked)
+	require.Equal(t, exactTrust, marker,
+		"the exact entry must win over the prefix that also matches")
+
+	marker, locked = ReservedPredicateValueLock("dgraph.precedence.rel.ordinary")
+	require.True(t, locked)
+	require.Equal(t, prefixTrust, marker,
+		"a predicate with no exact entry falls to the prefix owner")
+}
+
+// TestValueLockedPrefixRejectsEmpty covers the guard that PredicatePrefix has and
+// value locks did not. An empty prefix matches every predicate in the cluster.
+func TestValueLockedPrefixRejectsEmpty(t *testing.T) {
+	type emptyTrustKey int
+	require.PanicsWithValue(t,
+		"x.RegisterReservedNamespace: value-locked prefix must not be empty",
+		func() {
+			RegisterReservedNamespace(ReservedNamespace{
+				PredicatePrefix:     "dgraph.emptylock.",
+				ValueLockedPrefixes: []string{""},
+				TrustMarker:         emptyTrustKey(1),
+			})
+		})
+}
+
+// TestValueLockedPrefixesRequireTrustMarker mirrors the ValueLocked invariant:
+// a locked prefix with no marker would be unwritable by everyone, including its
+// owner, so it must panic at registration.
+func TestValueLockedPrefixesRequireTrustMarker(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{
+			PredicatePrefix:     "dgraph.prefixnomarker.rel.",
+			ValueLockedPrefixes: []string{"dgraph.prefixnomarker.rel."},
+			// TrustMarker intentionally left nil.
+		})
+	})
+}
+
+// TestValueLockedPrefixesRejectQualified confirms a namespace-qualified prefix is
+// rejected, for the same reason a qualified exact name is: the guard matches the
+// bare predicate, so it would never fire and the predicates would stay writable.
+func TestValueLockedPrefixesRejectQualified(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{
+			ValueLockedPrefixes: []string{NamespaceAttr(RootNamespace, "dgraph.qualprefix.rel.")},
+			TrustMarker:         testTrust,
+		})
+	})
+}
+
+// TestValueLockedPrefixesRejectDuplicate confirms two namespaces cannot claim the
+// same locked prefix, since import order would silently pick the TrustMarker.
+func TestValueLockedPrefixesRejectDuplicate(t *testing.T) {
+	require.Panics(t, func() {
+		RegisterReservedNamespace(ReservedNamespace{
+			ValueLockedPrefixes: []string{"dgraph.dupprefix.rel."},
+			TrustMarker:         testTrust,
+		})
+		RegisterReservedNamespace(ReservedNamespace{
+			ValueLockedPrefixes: []string{"dgraph.dupprefix.rel."},
+			TrustMarker:         testTrust,
+		})
+	})
+}

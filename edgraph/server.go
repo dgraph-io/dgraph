@@ -113,7 +113,11 @@ type existingGQLSchemaQryResp struct {
 // If multiple schema nodes were found, it returns an error.
 func GetGQLSchema(namespace uint64) (uid, graphQLSchema string, err error) {
 	ctx := context.WithValue(context.Background(), Authorize, false)
-	ctx = x.AttachNamespace(ctx, namespace)
+	// Trusted attribution: this runs on a hand-built background context with no
+	// request credential to present, and it crosses the tenant seam via
+	// QueryNoGrpc. Marking it keeps ResolveTenant from trying to derive a
+	// namespace that was never going to be there.
+	ctx = x.AttachTrustedTenant(ctx, namespace)
 	resp, err := (&Server{}).QueryNoGrpc(ctx,
 		&api.Request{
 			Query: `
@@ -249,7 +253,7 @@ func parseSchemaFromAlterOperation(ctx context.Context, sch string) (
 	if x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapAssumeTenant); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
 				"Non superadmin user cannot bypass namespaces. "+s.Message())
@@ -353,7 +357,18 @@ func InsertDropRecord(ctx context.Context, dropOp string) error {
 // Alter handles requests to change the schema or remove parts or all of the
 // data. It enforces the admin-IP-whitelist and ACL authorization checks.
 func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, error) {
-	return s.alter(ctx, op, NeedAuthorize)
+	// Entry point: drop the namespace the client sent before resolving.
+	//
+	// md["namespace"] is client-controlled on the server side, and the built-in
+	// resolver leaves whatever is there when it cannot derive one from the access
+	// JWT — so an unattributable request would otherwise proceed on the tenant the
+	// caller named. Authorization currently catches that, because it reads the signed
+	// claim, but that is an invariant held by call-site ordering, and relying on
+	// ordering is what produced the escalations this guards against.
+	//
+	// Deliberately here and not in the shared continuation below: alter also serves AlterNoAuth, which the
+	// in-process callers reach with a context they have already attributed.
+	return s.alter(x.ClearIncomingNamespace(ctx), op, NeedAuthorize)
 }
 
 // AlterNoAuth is Alter without the admin-IP-whitelist and ACL authorization
@@ -376,7 +391,10 @@ func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) 
 	ctx, span := otel.Tracer("").Start(ctx, "Server.Alter")
 	defer span.End()
 
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	span.AddEvent("Alter operation", trace.WithAttributes(attribute.String("op", op.String())))
 
 	// Always print out Alter operations because they are important and rare.
@@ -403,7 +421,7 @@ func (s *Server) alter(ctx context.Context, op *api.Operation, doAuth AuthMode) 
 			glog.V(2).Info("Blocked drop-all because it is not permitted.")
 			return empty, errors.New("Drop all operation is not permitted.")
 		}
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapClusterAdmin); err != nil {
 			s := status.Convert(err)
 			return empty, status.Error(s.Code(),
 				"Drop all can only be called by the guardian of the galaxy. "+s.Message())
@@ -1230,7 +1248,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 	var healthAll []pb.HealthInfo
 	if all {
-		if err := AuthorizeGuardians(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 			return nil, err
 		}
 		pool := conn.GetPools().GetAll()
@@ -1270,6 +1288,10 @@ func filterTablets(ctx context.Context, ms *pb.MembershipState) error {
 	if !x.WorkerConfig.AclEnabled {
 		return nil
 	}
+	// The signed claim, not the resolved namespace: this decides which tenant's
+	// tablets the CALLER may see, and State reaches here with no ResolveTenant
+	// ahead of it, so md["namespace"] would be whatever the caller sent. Reading it
+	// let a guardian of any tenant ask for namespace 0 and skip filtering entirely.
 	namespace, err := x.ExtractNamespaceFrom(ctx)
 	if err != nil {
 		return errors.Errorf("Namespace not found in JWT.")
@@ -1297,7 +1319,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := AuthorizeGuardians(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 		return nil, err
 	}
 
@@ -1344,7 +1366,18 @@ func (s *Server) QueryGraphQL(ctx context.Context, req *api.Request,
 }
 
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
-	resp, err := s.QueryNoGrpc(ctx, req)
+	// Entry point: drop the namespace the client sent before resolving.
+	//
+	// md["namespace"] is client-controlled on the server side, and the built-in
+	// resolver leaves whatever is there when it cannot derive one from the access
+	// JWT — so an unattributable request would otherwise proceed on the tenant the
+	// caller named. Authorization currently catches that, because it reads the signed
+	// claim, but that is an invariant held by call-site ordering, and relying on
+	// ordering is what produced the escalations this guards against.
+	//
+	// Deliberately here and not in the shared continuation below: QueryNoGrpc also serves the two HTTP
+	// handlers and GetGQLSchema, which attaches its own trusted tenancy.
+	resp, err := s.QueryNoGrpc(x.ClearIncomingNamespace(ctx), req)
 	if err != nil {
 		return resp, err
 	}
@@ -1357,7 +1390,10 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 // Query handles queries or mutations
 func (s *Server) QueryNoGrpc(ctx context.Context, req *api.Request) (*api.Response, error) {
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if x.WorkerConfig.AclEnabled && req.GetStartTs() != 0 {
 		// A fresh StartTs is assigned if it is 0.
 		ns, err := x.ExtractNamespace(ctx)
@@ -1481,7 +1517,7 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 	if req.doAuth == NeedAuthorize && x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
-		if err := AuthSuperAdmin(ctx); err != nil {
+		if err := AuthorizeCapability(ctx, CapAssumeTenant); err != nil {
 			s := status.Convert(err)
 			return nil, status.Error(s.Code(),
 				"Non superadmin user cannot bypass namespaces. "+s.Message())
@@ -2063,7 +2099,7 @@ func (s *Server) UpdateExtSnapshotStreamingState(ctx context.Context,
 	// it is protected under ACL and under an --security auth-token. Each gate fails open when
 	// its feature is unconfigured, so the arming requirement on the stream path backstops the
 	// bare-OSS case.
-	if err := AuthorizeGuardians(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapTenantAdmin); err != nil {
 		return nil, err
 	}
 	if err := hasPoormansAuth(ctx); err != nil {
@@ -2090,7 +2126,7 @@ func (s *Server) StreamExtSnapshot(stream api.Dgraph_StreamExtSnapshotServer) er
 
 	// Authorize at stream start, before any data is consumed. Stream auth metadata rides on the
 	// stream's context, so the same gates used for the unary entry point apply here.
-	if err := AuthorizeGuardians(stream.Context()); err != nil {
+	if err := AuthorizeCapability(stream.Context(), CapTenantAdmin); err != nil {
 		return err
 	}
 	if err := hasPoormansAuth(stream.Context()); err != nil {
@@ -2118,7 +2154,7 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 		return &api.TxnContext{}, errors.Errorf(
 			"StartTs cannot be zero while committing a transaction")
 	}
-	if ns, err := x.ExtractNamespaceFrom(ctx); err == nil {
+	if ns, err := x.ExtractNamespace(ctx); err == nil {
 		annotateNamespace(span, ns)
 	}
 	annotateStartTs(span, tc.StartTs)
