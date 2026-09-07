@@ -2450,14 +2450,35 @@ func isDropOperation(op *api.Operation) bool {
 
 // uniqueValueKey identifies a value for the in-request duplicate check: two edges
 // collide iff they write the same value to the same predicate under the same language
-// tag (language is part of value identity since #9820). The value is held as the
-// interface{} produced by dql.TypeValFrom, so type identity participates in the
-// comparison exactly as it did in the previous ==-based check (int64(1) and "1" are
-// distinct).
+// tag (language is part of value identity since #9820). Tid keeps values of different
+// types distinct (int64(1) and "1" do not collide), preserving the type identity the
+// previous ==-based check had.
 type uniqueValueKey struct {
 	predicate string
 	lang      string
+	tid       types.TypeID
 	value     interface{}
+}
+
+// uniqueValueKeyFrom builds a hashable key for tv. dql.TypeValFrom returns slice-typed
+// values for five branches — []byte for bytes/geo/datetime/bigfloat and []float32 for
+// vfloat — which must not be used as map keys (hash of unhashable type panics, and
+// there is no recover on the mutation path). These reach this function from a plain
+// JSON mutation: the chunker parses any "[...]"-shaped string into a Vfloat32Val before
+// the schema is consulted. Slice values are keyed by their byte content instead, and
+// Tid prevents cross-type collisions (the string "x" never collides with []byte("x")).
+// The previous == comparison panicked outright on two same-predicate slice values, so
+// content equality here replaces a crash rather than changing any working behavior.
+func uniqueValueKeyFrom(predicate, lang string, tv types.Val) uniqueValueKey {
+	switch v := tv.Value.(type) {
+	case []byte:
+		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid, value: string(v)}
+	case []float32:
+		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid,
+			value: string(types.FloatArrayAsBytes(v))}
+	default:
+		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid, value: tv.Value}
+	}
 }
 
 // verifyUniqueWithinMutation rejects a request in which two edges set the same value on
@@ -2483,15 +2504,12 @@ func verifyUniqueWithinMutation(qc *queryContext) error {
 		if pred.ObjectValue == nil {
 			continue
 		}
-		key := uniqueValueKey{
-			predicate: pred.Predicate,
-			lang:      pred.Lang,
-			value:     dql.TypeValFrom(pred.ObjectValue).Value,
-		}
+		tv := dql.TypeValFrom(pred.ObjectValue)
+		key := uniqueValueKeyFrom(pred.Predicate, pred.Lang, tv)
 		if subject, ok := seen[key]; ok {
 			if subject != pred.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-					key.value, predicateNameWithLang(pred))
+					tv.Value, predicateNameWithLang(pred))
 			}
 			continue
 		}
