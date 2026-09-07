@@ -288,6 +288,173 @@ func TestIsSwapLanguageIdentity(t *testing.T) {
 	require.True(t, got)
 }
 
+// TestVerifyUniqueWithinMutationSemantics pins the in-request duplicate check's
+// contract: two edges writing the same value to the same @unique predicate for
+// different subjects reject the request with the established error message; everything
+// else — same-subject repeats, distinct values, distinct predicates, distinct value
+// types, val()-style edges — is allowed.
+func TestVerifyUniqueWithinMutationSemantics(t *testing.T) {
+	str := func(s string) *api.Value {
+		return &api.Value{Val: &api.Value_StrVal{StrVal: s}}
+	}
+	nquad := func(subject, predicate string, value *api.Value) *api.NQuad {
+		return &api.NQuad{Subject: subject, Predicate: predicate, ObjectValue: value}
+	}
+	qcFor := func(nquads ...*api.NQuad) *queryContext {
+		uniqueVars := make(map[uint64]uniquePredMeta, len(nquads))
+		for i := range nquads {
+			uniqueVars[encodeIndex(0, i)] = uniquePredMeta{}
+		}
+		return &queryContext{
+			gmuList:    []*dql.Mutation{{Set: nquads}},
+			uniqueVars: uniqueVars,
+		}
+	}
+
+	t.Run("same value on different subjects errors", func(t *testing.T) {
+		err := verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", str("dup@example.com")),
+			nquad("_:b", "email", str("dup@example.com")),
+		))
+		// The exact message is load-bearing: clients and tests match on it.
+		require.EqualError(t, err,
+			"could not insert duplicate value [dup@example.com] for predicate [email]")
+	})
+
+	t.Run("same value repeated by the same subject is allowed", func(t *testing.T) {
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", str("dup@example.com")),
+			nquad("_:a", "email", str("dup@example.com")),
+		)))
+	})
+
+	t.Run("distinct values are allowed", func(t *testing.T) {
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", str("a@example.com")),
+			nquad("_:b", "email", str("b@example.com")),
+		)))
+	})
+
+	t.Run("same value on different predicates is allowed", func(t *testing.T) {
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", str("dup@example.com")),
+			nquad("_:b", "backup_email", str("dup@example.com")),
+		)))
+	})
+
+	t.Run("value type participates in identity", func(t *testing.T) {
+		// int64(1) and "1" are different values, exactly as with the previous
+		// ==-based comparison.
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "score", &api.Value{Val: &api.Value_IntVal{IntVal: 1}}),
+			nquad("_:b", "score", str("1")),
+		)))
+	})
+
+	t.Run("nil ObjectValue edges are skipped", func(t *testing.T) {
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", nil),
+			nquad("_:b", "email", nil),
+		)))
+	})
+
+	t.Run("duplicates across mutations in one request error", func(t *testing.T) {
+		qc := &queryContext{
+			gmuList: []*dql.Mutation{
+				{Set: []*api.NQuad{nquad("_:a", "email", str("dup@example.com"))}},
+				{Set: []*api.NQuad{nquad("_:b", "email", str("dup@example.com"))}},
+			},
+			uniqueVars: map[uint64]uniquePredMeta{
+				encodeIndex(0, 0): {},
+				encodeIndex(1, 0): {},
+			},
+		}
+		require.EqualError(t, verifyUniqueWithinMutation(qc),
+			"could not insert duplicate value [dup@example.com] for predicate [email]")
+	})
+}
+
+// TestVerifyUniqueWithinMutationNonScalarValues is the panic regression for slice-typed
+// values. dql.TypeValFrom returns []byte (bytes/geo/datetime/bigfloat) and []float32
+// (vfloat), which are unhashable: using them directly as map keys panics — and there is
+// no recover on the mutation path, so it would take the alpha down. Reachable from a
+// plain JSON mutation because the chunker parses any "[...]"-shaped string into a
+// Vfloat32Val before the schema is consulted.
+func TestVerifyUniqueWithinMutationNonScalarValues(t *testing.T) {
+	qcFor := func(nquads ...*api.NQuad) *queryContext {
+		uniqueVars := make(map[uint64]uniquePredMeta, len(nquads))
+		for i := range nquads {
+			uniqueVars[encodeIndex(0, i)] = uniquePredMeta{}
+		}
+		return &queryContext{
+			gmuList:    []*dql.Mutation{{Set: nquads}},
+			uniqueVars: uniqueVars,
+		}
+	}
+	bytesVal := func(b []byte) *api.Value {
+		return &api.Value{Val: &api.Value_BytesVal{BytesVal: b}}
+	}
+
+	t.Run("vfloat values via JSON chunker do not panic", func(t *testing.T) {
+		// The exact reachable repro: a string value shaped like a float array on a
+		// plain string @unique predicate becomes a Vfloat32Val ([]float32).
+		nqs, _, err := chunker.ParseJSON([]byte(
+			`[{"uid":"_:a","email":"[1.0, 2.0]"},{"uid":"_:b","email":"[1.0, 2.0]"}]`),
+			chunker.SetNquads)
+		require.NoError(t, err)
+		require.Len(t, nqs, 2)
+		// Guard against this test going vacuous if the chunker's parsing changes:
+		// the values must actually be the unhashable vfloat shape.
+		for _, nq := range nqs {
+			_, isVfloat := nq.ObjectValue.Val.(*api.Value_Vfloat32Val)
+			require.True(t, isVfloat, "expected the chunker to produce a Vfloat32Val")
+		}
+
+		err = verifyUniqueWithinMutation(qcFor(nqs...))
+		require.ErrorContains(t, err, "could not insert duplicate value")
+		require.ErrorContains(t, err, "for predicate [email]")
+	})
+
+	t.Run("distinct vfloat values are allowed", func(t *testing.T) {
+		nqs, _, err := chunker.ParseJSON([]byte(
+			`[{"uid":"_:a","email":"[1.0, 2.0]"},{"uid":"_:b","email":"[1.0, 3.0]"}]`),
+			chunker.SetNquads)
+		require.NoError(t, err)
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(nqs...)))
+	})
+
+	t.Run("same vfloat value from the same subject is allowed", func(t *testing.T) {
+		nqs, _, err := chunker.ParseJSON([]byte(
+			`[{"uid":"_:a","email":"[1.0, 2.0]"},{"uid":"_:a","email":"[1.0, 2.0]"}]`),
+			chunker.SetNquads)
+		require.NoError(t, err)
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(nqs...)))
+	})
+
+	t.Run("byte values do not panic and compare by content", func(t *testing.T) {
+		err := verifyUniqueWithinMutation(qcFor(
+			&api.NQuad{Subject: "_:a", Predicate: "blob", ObjectValue: bytesVal([]byte{1, 2, 3})},
+			&api.NQuad{Subject: "_:b", Predicate: "blob", ObjectValue: bytesVal([]byte{1, 2, 3})},
+		))
+		require.ErrorContains(t, err, "for predicate [blob]")
+
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			&api.NQuad{Subject: "_:a", Predicate: "blob", ObjectValue: bytesVal([]byte{1, 2, 3})},
+			&api.NQuad{Subject: "_:b", Predicate: "blob", ObjectValue: bytesVal([]byte{1, 2, 4})},
+		)))
+	})
+
+	t.Run("a string never collides with equal bytes", func(t *testing.T) {
+		// Same byte content, different Tid: must not be treated as duplicates.
+		require.NoError(t, verifyUniqueWithinMutation(qcFor(
+			&api.NQuad{Subject: "_:a", Predicate: "field",
+				ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "abc"}}},
+			&api.NQuad{Subject: "_:b", Predicate: "field",
+				ObjectValue: bytesVal([]byte("abc"))},
+		)))
+	})
+}
+
 func TestVerifyUniqueWithinMutationBoundsChecks(t *testing.T) {
 	t.Run("gmuIndex out of bounds", func(t *testing.T) {
 		qc := &queryContext{
