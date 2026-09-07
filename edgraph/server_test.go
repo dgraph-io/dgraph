@@ -208,6 +208,86 @@ func TestGetHash(t *testing.T) {
 	require.Equal(t, hex.EncodeToString(h.Sum(nil)), getHash(10, 20))
 }
 
+func TestVerifyUniqueWithinMutationLanguageIdentity(t *testing.T) {
+	tests := []struct {
+		name       string
+		firstLang  string
+		secondLang string
+		wantError  bool
+	}{
+		{name: "same language", firstLang: "en", secondLang: "en", wantError: true},
+		{name: "different languages", firstLang: "en", secondLang: "fr"},
+		{name: "both untagged", wantError: true},
+		{name: "tagged and untagged", firstLang: "en"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			qc := &queryContext{
+				gmuList: []*dql.Mutation{{
+					Set: []*api.NQuad{
+						{
+							Subject:   "_:a",
+							Predicate: "gxid",
+							ObjectValue: &api.Value{
+								Val: &api.Value_StrVal{StrVal: "same"},
+							},
+							Lang: tc.firstLang,
+						},
+						{
+							Subject:   "_:b",
+							Predicate: "gxid",
+							ObjectValue: &api.Value{
+								Val: &api.Value_StrVal{StrVal: "same"},
+							},
+							Lang: tc.secondLang,
+						},
+					},
+				}},
+				uniqueVars: map[uint64]uniquePredMeta{
+					encodeIndex(0, 0): {},
+					encodeIndex(0, 1): {},
+				},
+			}
+
+			err := verifyUniqueWithinMutation(qc)
+			if tc.wantError {
+				require.ErrorContains(t, err, "could not insert duplicate value")
+				predicateName := "gxid"
+				if tc.firstLang != "" {
+					predicateName += "@" + tc.firstLang
+				}
+				require.ErrorContains(t, err, "predicate ["+predicateName+"]")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIsSwapLanguageIdentity(t *testing.T) {
+	qc := &queryContext{
+		gmuList: []*dql.Mutation{{
+			Set: []*api.NQuad{{
+				Subject:   "0x1",
+				Predicate: "gxid",
+				Lang:      "fr",
+			}},
+		}},
+		uniqueVars: map[uint64]uniquePredMeta{
+			encodeIndex(0, 0): {},
+		},
+	}
+
+	got, err := isSwap(qc, 1, "gxid", "en")
+	require.NoError(t, err)
+	require.False(t, got, "updating another language does not release the existing value")
+
+	got, err = isSwap(qc, 1, "gxid", "fr")
+	require.NoError(t, err)
+	require.True(t, got)
+}
+
 func TestVerifyUniqueWithinMutationBoundsChecks(t *testing.T) {
 	t.Run("gmuIndex out of bounds", func(t *testing.T) {
 		qc := &queryContext{
