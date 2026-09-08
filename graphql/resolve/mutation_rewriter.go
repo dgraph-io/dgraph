@@ -62,6 +62,52 @@ type UpdateRewriter struct {
 	delFrag *mutationFragment
 	Rewriter
 }
+
+// XIDConflicts returns any @id conflicts that were deferred during rewriting
+// and must be verified post-execution.
+func (urw *UpdateRewriter) XIDConflicts() []xidConflict {
+	if urw.XidMetadata == nil {
+		return nil
+	}
+	return urw.XidMetadata.xidConflicts
+}
+
+// VerifyXIDConflicts implements XIDConflictVerifier. For each deferred @id conflict,
+// it checks whether the existenceUID is among the mutated UIDs. If not, the @id value
+// belongs to a different node — a genuine conflict — and an error is returned.
+//
+// If mutatedUIDs is empty the filter matched nothing and no mutation ran, so there is
+// nothing to verify — all recorded conflicts are vacuous and we return nil.
+func (urw *UpdateRewriter) VerifyXIDConflicts(mutatedUIDs []string, hasAuthRules bool) error {
+	if len(mutatedUIDs) == 0 {
+		return nil
+	}
+
+	mutatedSet := make(map[string]struct{}, len(mutatedUIDs))
+	for _, uid := range mutatedUIDs {
+		mutatedSet[uid] = struct{}{}
+	}
+
+	var conflictErrors x.GqlErrorList
+	for _, conflict := range urw.XIDConflicts() {
+		if _, isSameNode := mutatedSet[conflict.existenceUID]; !isSameNode {
+			if !hasAuthRules {
+				conflictErrors = append(conflictErrors, x.GqlErrorf(
+					"id %s already exists for field %s inside type %s",
+					conflict.xidValue, conflict.xidField, conflict.typeName))
+			} else {
+				conflictErrors = append(conflictErrors, x.GqlErrorf(
+					"GraphQL debug: id %s already exists for field %s inside type %s",
+					conflict.xidValue, conflict.xidField, conflict.typeName))
+			}
+		}
+	}
+	if len(conflictErrors) > 0 {
+		return conflictErrors
+	}
+	return nil
+}
+
 type deleteRewriter struct {
 	Rewriter
 }
@@ -94,6 +140,22 @@ type xidMetadata struct {
 	seenAtTopLevel map[string]bool
 	// seenUIDs tells whether the UID is previously been seen during DFS traversal
 	seenUIDs map[string]bool
+	// xidConflicts accumulates @id conflicts deferred for post-execution verification.
+	// UpdateWithSet: appended when an @id value already exists — we cannot tell at rewrite
+	// time whether it belongs to the node being updated (same node = OK) or a different node
+	// (genuine conflict). Verified after the upsert by VerifyXIDConflicts.
+	// UpdateWithRemove: never appended — removing an @id value cannot steal uniqueness, so
+	// no conflict check is needed and the field is skipped entirely at rewrite time.
+	xidConflicts []xidConflict
+}
+
+// xidConflict records an @id existence check that could not be resolved at rewrite time.
+// It is resolved post-execution by comparing existenceUID against the mutated node UIDs.
+type xidConflict struct {
+	existenceUID string // UID of the node that currently holds this @id value
+	xidField     string // @id field name (for error messages)
+	xidValue     string // the @id value being set
+	typeName     string // type name (for error messages)
 }
 
 // A mutationBuilder can build a json mutation []byte from a mutationFragment
@@ -346,21 +408,36 @@ func (urw *UpdateRewriter) RewriteQueries(
 		}
 	}
 
-	// Write existence queries for remove
+	// Write existence queries for remove.
+	// Top-level @id (XID) fields in a remove patch are scalar values being cleared from the
+	// node — not references used to locate other nodes. No existence query is needed for them:
+	// removing a value that doesn't match the stored value is a no-op in Dgraph, and
+	// rewriteObject skips @id fields in UpdateWithRemove at top level entirely.
+	// Nested @id fields (e.g. remove: { author: { email: "x" } }) still need existence queries
+	// because they identify which node to unlink, so we only strip the top-level ones.
 	if delArg != nil {
 		obj := delArg.(map[string]interface{})
 		if len(obj) != 0 {
-			queries, typs, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, obj, urw.XidMetadata)
-			if len(errs) > 0 {
-				var gqlErrors x.GqlErrorList
-				for _, err := range errs {
-					gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
-				}
-				retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
-					"failed to rewrite mutation payload"))
+			delObjForExistence := make(map[string]interface{}, len(obj))
+			for k, v := range obj {
+				delObjForExistence[k] = v
 			}
-			ret = append(ret, queries...)
-			retTypes = append(retTypes, typs...)
+			for _, xid := range mutatedType.XIDFields() {
+				delete(delObjForExistence, xid.Name())
+			}
+			if len(delObjForExistence) != 0 {
+				queries, typs, errs := existenceQueries(ctx, mutatedType, nil, urw.VarGen, delObjForExistence, urw.XidMetadata)
+				if len(errs) > 0 {
+					var gqlErrors x.GqlErrorList
+					for _, err := range errs {
+						gqlErrors = append(gqlErrors, schema.AsGQLErrors(err)...)
+					}
+					retErrors = schema.AppendGQLErrs(retErrors, schema.GQLWrapf(gqlErrors,
+						"failed to rewrite mutation payload"))
+				}
+				ret = append(ret, queries...)
+				retTypes = append(retTypes, typs...)
+			}
 		}
 	}
 	return ret, retTypes, retErrors
@@ -1407,6 +1484,14 @@ func rewriteObject(
 		for _, xid := range xids {
 			var xidString string
 			if xidVal, ok := obj[xid.Name()]; ok && xidVal != nil {
+				// For UpdateWithRemove at top level, @id values are scalar values being cleared
+				// from the node. Whether or not the value currently exists in the database is
+				// irrelevant — a remove can never steal uniqueness from another node.
+				// Skip regardless of what the existence query returned (or didn't return).
+				if mutationType == UpdateWithRemove && atTopLevel {
+					continue
+				}
+
 				xidString, _ = extractVal(xidVal, xid.Name(), xid.Type().Name())
 				variable = varGen.Next(typ, xid.Name(), xidString, false)
 				existenceError := x.GqlErrorf("multiple nodes found for given xid values," +
@@ -1463,9 +1548,23 @@ func rewriteObject(
 								return nil, "", retErrors
 							}
 						} else {
-							// We return an error as we are at top level of non-upsert mutation and the XID exists.
-							// We need to conceal the error because we might be leaking information to the user if it
-							// tries to add duplicate data to the field with @id.
+							// For UpdateWithSet mutations, an @id value that already exists in the
+							// database may belong to the same node being updated (unchanged value).
+							// We cannot confirm this at rewrite time because the filter target UID is
+							// only resolved when the upsert executes. Defer the conflict check to
+							// post-execution via xidMetadata.xidConflicts and let the mutation proceed.
+							if mutationType == UpdateWithSet && typUidExist {
+								xidMetadata.xidConflicts = append(xidMetadata.xidConflicts, xidConflict{
+									existenceUID: typUid,
+									xidField:     xid.Name(),
+									xidValue:     xidString,
+									typeName:     typ.Name(),
+								})
+								continue
+							}
+
+							// For Add mutations, treat an existing @id as a conflict.
+							// Conceal the error if the type has auth rules to avoid leaking information.
 							var err error
 							if typUidExist {
 								if queryAuthSelector(typ) == nil {

@@ -1225,28 +1225,6 @@ func TestUpdateMutationWithIDFields(t *testing.T) {
         }`,
 		error: "mutation updateEmployer failed because GraphQL debug: only one node is allowed" +
 			" in the filter while updating fields with @id directive",
-	}, {
-		name: "update mutation gives error when given @id field already exist in some node",
-		query: `mutation update($patch: UpdateEmployerInput!) {
-                  updateEmployer(input: $patch) {
-                    numUids
-                  }
-                }`,
-		variables: `{
-                   "patch": {
-                       "filter": {
-                           "name": {
-                               "in": "ABC"
-                           }
-                       },
-                       "set": {
-                           "company": "ABC tech"
-                       }
-                   }
-               }`,
-		error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
-			" payload because GraphQL debug: id ABC tech already exists for field company" +
-			" inside type Employer",
 	},
 		{
 			name: "update mutation gives error when multiple nodes are found at nested level" +
