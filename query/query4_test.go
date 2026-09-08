@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1899,4 +1900,263 @@ func TestMultiplesSortingOrderWithVarAndPredicate(t *testing.T) {
 	// should return error
 	_, err := processQuery(context.Background(), t, query)
 	require.ErrorContains(t, err, "Val() is not allowed in multiple sorting. Got: [SECTIONS_COUNT]")
+}
+
+// generateCascadeTestTriples generates triples for N OrderedCascadeParent nodes with
+// pseudo-random parent_number values (1-10000) to force the sort algorithm to actually
+// sort rather than returning entries in insertion order.
+// Only even-indexed parents receive 3-5 OrderedCascadeChild nodes each.
+func generateCascadeTestTriples(numNodes int, uidBase uint64) string {
+	var sb strings.Builder
+	childBase := uint64(0xF0000)
+	childIdx := uint64(0)
+
+	// Generate deterministic pseudo-random numbers in range 1-10000
+	// Using a simple LCG-based approach for reproducibility
+	numbers := make([]int, numNodes)
+	seed := uint64(12345)
+	for i := 0; i < numNodes; i++ {
+		seed = seed*6364136223846793005 + 1442695040888963407 // LCG
+		numbers[i] = int((seed % 10000) + 1)
+	}
+
+	for i := 0; i < numNodes; i++ {
+		uid := uidBase + uint64(i)
+		fmt.Fprintf(&sb, "<0x%X> <cascade_parent_number> \"%d\" .\n", uid, numbers[i])
+
+		// Only even-indexed parents get children (3-5 children deterministically)
+		if i%2 == 0 {
+			numChildren := 3 + (i % 2 * 0) + (i/2)%3 // produces 3, 4, or 5 cyclically
+			for j := 0; j < numChildren; j++ {
+				childUID := childBase + childIdx
+				attrValue := (childIdx%2 == 0) // alternating true/false
+				fmt.Fprintf(&sb, "<0x%X> <cascade_children> <0x%X> .\n", uid, childUID)
+				fmt.Fprintf(&sb, "<0x%X> <cascade_child_attr> \"%t\" .\n", childUID, attrValue)
+				childIdx++
+			}
+		}
+	}
+	return sb.String()
+}
+
+// TestCascadeWithOrderAndLargeDataSet verifies cascade behavior with order
+// when there are large numbers of nodes (> 1000). It tests:
+//   - Default limit behavior (no explicit first): 900, 1000, 1100, 3000 parents
+//     expecting 900, 1000, 1000, 1000 respectively
+//   - Explicit first greater than available nodes: ensures all nodes are returned
+//   - Order desc with cascade on parent-child relationships
+//
+// Schema: OrderedCascadeParent has a pseudo-random parent_number (1-10000) and
+// an array of OrderedCascadeChild nodes (only even-indexed parents have children).
+// Each child has a boolean child_attr attribute.
+func TestCascadeWithOrderAndLargeDataSet(t *testing.T) {
+	// Schema for cascade test with parent-child relationship
+	schema := `
+		type OrderedCascadeParent {
+			parent_number: int
+			children: [uid]
+		}
+
+		type OrderedCascadeChild {
+			child_attr: bool
+		}
+
+		cascade_parent_number: int @index(int) .
+		cascade_child_attr: bool .
+		cascade_children: [uid] .
+	`
+
+	t.Run("DefaultLimit", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			expectedCount int
+			uidBase       uint64
+		}{
+			{"900Nodes_DefaultLimit", 900, 900, 0x10000},
+			{"1000Nodes_DefaultLimit", 1000, 1000, 0x20000},
+			{"1100Nodes_DefaultLimit", 1100, 1000, 0x30000},
+			{"3000Nodes_DefaultLimit", 3000, 1000, 0x40000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_parent_number")
+					dropPredicate("cascade_child_attr")
+					dropPredicate("cascade_children")
+					setSchema(testSchema)
+				})
+
+				// Insert data with pseudo-random numbers and parent-child relationships
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with orderasc on parent_number and @cascade on children
+				query := `{
+					me(func: type(OrderedCascadeParent), orderasc: cascade_parent_number) @cascade {
+						parent_number
+						children {
+							child_attr
+						}
+					}
+				}`
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ParentNumber int `json:"parent_number"`
+							Children     []struct {
+								ChildAttr bool `json:"child_attr"`
+							} `json:"children"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d parent nodes with default limit", tt.expectedCount, tt.numNodes)
+
+				// Verify results are in ascending order by parent_number
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.GreaterOrEqual(t, response.Data.Me[i].ParentNumber, response.Data.Me[i-1].ParentNumber,
+						"Results should be in ascending order by parent_number at index %d", i)
+				}
+			})
+		}
+	})
+
+	t.Run("ExplicitFirstGreaterThanAvailable", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			first         int
+			expectedCount int
+			uidBase       uint64
+		}{
+			{"1100Nodes_First10000", 1100, 10000, 1100, 0x50000},
+			{"3000Nodes_First10000", 3000, 10000, 3000, 0x60000},
+			{"3000Nodes_First1500", 3000, 1500, 1500, 0x70000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_parent_number")
+					dropPredicate("cascade_child_attr")
+					dropPredicate("cascade_children")
+					setSchema(testSchema)
+				})
+
+				// Insert data with pseudo-random numbers and parent-child relationships
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with explicit first > available, orderasc and @cascade
+				query := fmt.Sprintf(`{
+					me(func: type(OrderedCascadeParent), first: %d, orderasc: cascade_parent_number) @cascade {
+						parent_number
+						children {
+							child_attr
+						}
+					}
+				}`, tt.first)
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ParentNumber int `json:"parent_number"`
+							Children     []struct {
+								ChildAttr bool `json:"child_attr"`
+							} `json:"children"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d parent nodes with first:%d", tt.expectedCount, tt.numNodes, tt.first)
+
+				// Verify results are in ascending order by parent_number
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.GreaterOrEqual(t, response.Data.Me[i].ParentNumber, response.Data.Me[i-1].ParentNumber,
+						"Results should be in ascending order by parent_number at index %d", i)
+				}
+			})
+		}
+	})
+
+	t.Run("OrderDescWithLargeDataSet", func(t *testing.T) {
+		tests := []struct {
+			name          string
+			numNodes      int
+			first         int
+			expectedCount int
+			uidBase       uint64
+		}{
+			{"1100Nodes_OrderDesc_First10000", 1100, 10000, 1100, 0x80000},
+			{"3000Nodes_OrderDesc_First10000", 3000, 10000, 3000, 0x90000},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Clean up from previous runs
+				setSchema(testSchema)
+
+				// Set up schema
+				setSchema(schema)
+				t.Cleanup(func() {
+					dropPredicate("cascade_parent_number")
+					dropPredicate("cascade_child_attr")
+					dropPredicate("cascade_children")
+					setSchema(testSchema)
+				})
+
+				// Insert data with pseudo-random numbers and parent-child relationships
+				triples := generateCascadeTestTriples(tt.numNodes, tt.uidBase)
+				require.NoError(t, addTriplesToCluster(triples))
+
+				// Query with orderdesc on parent_number, explicit first, and @cascade
+				query := fmt.Sprintf(`{
+					me(func: type(OrderedCascadeParent), first: %d, orderdesc: cascade_parent_number) @cascade {
+						parent_number
+						children {
+							child_attr
+						}
+					}
+				}`, tt.first)
+
+				js := processQueryNoErr(t, query)
+				var response struct {
+					Data struct {
+						Me []struct {
+							ParentNumber int `json:"parent_number"`
+							Children     []struct {
+								ChildAttr bool `json:"child_attr"`
+							} `json:"children"`
+						} `json:"me"`
+					} `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(js), &response))
+				require.Len(t, response.Data.Me, tt.expectedCount,
+					"Expected %d results for %d parent nodes with orderdesc first:%d", tt.expectedCount, tt.numNodes, tt.first)
+
+				// Verify results are in descending order by parent_number
+				for i := 1; i < len(response.Data.Me); i++ {
+					require.LessOrEqual(t, response.Data.Me[i].ParentNumber, response.Data.Me[i-1].ParentNumber,
+						"Results should be in descending order by parent_number at index %d", i)
+				}
+			})
+		}
+	})
 }
