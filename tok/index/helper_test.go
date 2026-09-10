@@ -17,7 +17,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
-	"github.com/viterin/vek/vek32"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -291,15 +290,6 @@ func BenchmarkDotProduct(b *testing.B) {
 	if err != nil {
 		b.Skip()
 	}
-
-	b.Run(fmt.Sprintf("vek:size=%d", len(data)),
-		func(b *testing.B) {
-			temp := make([]float32, num)
-			BytesAsFloatArray[float32](data, &temp, 32)
-			for k := 0; k < b.N; k++ {
-				vek32.Dot(temp, temp)
-			}
-		})
 
 	b.Run(fmt.Sprintf("dotProduct:size=%d", len(data)),
 		func(b *testing.B) {
