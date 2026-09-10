@@ -13,6 +13,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"sync/atomic"
 
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -65,11 +66,12 @@ const (
 // List stores the in-memory representation of a posting list.
 type List struct {
 	x.SafeMutex
-	key         []byte
-	plist       *pb.PostingList
-	mutationMap *MutableLayer
-	minTs       uint64 // commit timestamp of immutable layer, reject reads before this ts.
-	maxTs       uint64 // max commit timestamp seen for this list.
+	key          []byte
+	plist        *pb.PostingList
+	mutationMap  *MutableLayer
+	minTs        uint64       // commit timestamp of immutable layer, reject reads before this ts.
+	maxTs        uint64       // max commit timestamp seen for this list.
+	uidWarmState atomic.Int32 // One of the uidWarm* states below. See tryStartUidWarm.
 
 	cache []byte
 }
@@ -1053,6 +1055,11 @@ func (l *List) setMutationAfterCommit(startTs, commitTs uint64, pl *pb.PostingLi
 	l.mutationMap.currentUids = nil
 	l.mutationMap.isUidsCalculated = false
 	l.mutationMap.calculatedUids = nil
+	// The list just changed, so a warm that failed against the old state may well succeed against
+	// this one. Reads reach a cached list through this path rather than through a fresh copy, since
+	// remove-on-update defaults to false, so without this a single failure would stick for the life
+	// of the cache entry.
+	l.uidWarmState.CompareAndSwap(uidWarmAbandoned, uidWarmIdle)
 
 	if pl.CommitTs != 0 {
 		l.maxTs = x.Max(l.maxTs, pl.CommitTs)
@@ -1731,37 +1738,98 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 func (l *List) ApproxLen() int {
 	l.RLock()
 	defer l.RUnlock()
+	return l.approxLen()
+}
+
+func (l *List) approxLen() int {
+	l.AssertRLock()
 	return l.mutationMap.len() + codec.ApproxLen(l.plist.Pack)
 }
 
-func (l *List) calculateUids() error {
-	l.RLock()
-	if l.mutationMap == nil || l.mutationMap.isUidsCalculated {
-		l.RUnlock()
-		return nil
-	}
-	res := make([]uint64, 0, l.ApproxLen())
+// calculateUids materializes the uid slice for l and stores it on l's own mutable layer, reporting
+// whether it did the work.
+//
+// The caller must own l exclusively. This walks the entire list and, for a multi-part list, reads
+// every split from Badger (readListPart), all while holding l's write lock. A list published in the
+// posting-list cache is shared with the commit path, which takes the same write lock from the serial
+// Raft apply loop, so never run this on one; warm a private copy and hand the result over with
+// publishCalculatedUids instead.
+func (l *List) calculateUids() (bool, error) {
+	l.Lock()
+	defer l.Unlock()
 
+	if !l.mutationMap.needsUidWarm() {
+		return false, nil
+	}
+
+	res := make([]uint64, 0, l.approxLen())
 	err := l.iterate(l.mutationMap.committedUidsTime, 0, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
 		}
 		return nil
 	})
-
-	l.RUnlock()
-
 	if err != nil {
-		return err
+		return false, err
 	}
-
-	l.Lock()
-	defer l.Unlock()
 
 	l.mutationMap.calculatedUids = res
 	l.mutationMap.isUidsCalculated = true
+	return true, nil
+}
 
-	return nil
+// needsUidWarm reports whether materializing calculatedUids for this layer would be useful. An
+// uncommitted mutation (currentEntries) rules it out because canUseCalculatedUids refuses to serve a
+// slice in that state anyway.
+func (mm *MutableLayer) needsUidWarm() bool {
+	return mm != nil && !mm.isUidsCalculated && mm.currentEntries == nil
+}
+
+// The states of List.uidWarmState. A list starts idle, and copyList builds a fresh List, so a copy
+// never inherits an election or a give-up from the list it was copied from.
+const (
+	uidWarmIdle      int32 = iota // No warm in flight, and none has failed against the list's current state.
+	uidWarmRunning                // A reader is materializing calculatedUids for this list.
+	uidWarmAbandoned              // A warm failed against the current state. Do not retry until it changes.
+)
+
+// tryStartUidWarm elects a single warmer for l, reporting whether the caller won. Materializing
+// calculatedUids is an optimization and never a correctness requirement, so a reader that loses the
+// election serves its read unwarmed rather than queueing behind the winner. Pair a win with
+// finishUidWarm or abandonUidWarm.
+func (l *List) tryStartUidWarm() bool {
+	return l.uidWarmState.CompareAndSwap(uidWarmIdle, uidWarmRunning)
+}
+
+// finishUidWarm releases the election won by tryStartUidWarm, leaving l open to being warmed again.
+// It leaves an abandoned list abandoned, so that it is safe to defer alongside abandonUidWarm.
+func (l *List) finishUidWarm() {
+	l.uidWarmState.CompareAndSwap(uidWarmRunning, uidWarmIdle)
+}
+
+// abandonUidWarm gives up on materializing l's uids, so that no later reader retries it. A walk
+// fails when the list itself cannot be read -- a multi-part list with an unreadable split, say --
+// and retrying costs another full walk plus a Badger read per split, for a slice that reads do not
+// need. setMutationAfterCommit lifts this on the next commit to the list, so a failure suppresses
+// one attempt per state rather than permanently.
+func (l *List) abandonUidWarm() {
+	l.uidWarmState.Store(uidWarmAbandoned)
+}
+
+// publishCalculatedUids installs uids, materialized from a private copy of l taken at
+// committedUidsTime, onto l itself, reporting whether it published. It drops the result if l moved on
+// while the copy was being walked, and it holds l's write lock only for the handover.
+func (l *List) publishCalculatedUids(committedUidsTime uint64, uids []uint64) bool {
+	l.Lock()
+	defer l.Unlock()
+
+	if !l.mutationMap.needsUidWarm() || l.mutationMap.committedUidsTime != committedUidsTime {
+		return false
+	}
+
+	l.mutationMap.calculatedUids = uids
+	l.mutationMap.isUidsCalculated = true
+	return true
 }
 
 // canUseCalculatedUids reports whether calculatedUids can serve a read at readTs. The slice is
@@ -1784,12 +1852,14 @@ func (l *List) canUseCalculatedUids(readTs uint64) bool {
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
 func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+	requestedFirst := opt.First
+	bounded := requestedFirst > 0 && requestedFirst < math.MaxInt32
 	if opt.First == 0 {
 		opt.First = math.MaxInt32
 	}
 
 	getUidList := func() (*pb.List, error, bool) {
-		if l.canUseCalculatedUids(opt.ReadTs) {
+		if opt.Intersect == nil && !bounded && l.canUseCalculatedUids(opt.ReadTs) {
 			l.RLock()
 
 			afterIdx := 0
@@ -1811,13 +1881,11 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			out := &pb.List{Uids: copyArr}
 			l.RUnlock()
 
-			return out, nil, opt.Intersect != nil
+			return out, nil, false
 		}
 		// Pre-assign length to make it faster.
 		l.RLock()
 		defer l.RUnlock()
-		// Use approximate length for initial capacity.
-		res := make([]uint64, 0, l.ApproxLen())
 		out := &pb.List{}
 
 		if l.mutationMap.len() == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
@@ -1828,10 +1896,13 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			return out, nil, false
 		}
 
+		approxLen := l.approxLen()
+
 		// If we need to intersect and the number of elements are small, in that case it's better to
 		// just check each item is present or not.
-		if opt.Intersect != nil && len(opt.Intersect.Uids) < l.ApproxLen() {
+		if opt.Intersect != nil && len(opt.Intersect.Uids) < approxLen {
 			// Cache the iterator as it makes the search space smaller each time.
+			res := make([]uint64, 0, len(opt.Intersect.Uids))
 			var pitr pIterator
 			for _, uid := range opt.Intersect.Uids {
 				ok, _, err := l.findPostingWithItr(opt.ReadTs, uid, pitr)
@@ -1855,6 +1926,12 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 			uidMax = opt.Intersect.Uids[len(opt.Intersect.Uids)-1]
 		}
 
+		resCap := approxLen
+		if bounded && requestedFirst+1 < resCap {
+			resCap = requestedFirst + 1
+		}
+		res := make([]uint64, 0, resCap)
+
 		err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 			if p.PostingType == pb.Posting_REF {
 				if p.Uid < uidMin {
@@ -1865,7 +1942,7 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 				}
 				res = append(res, p.Uid)
 
-				if opt.First != 0 && len(res) > opt.First {
+				if opt.First > 0 && len(res) > opt.First {
 					return ErrStopIteration
 				}
 			}
@@ -1879,24 +1956,25 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 		return out, nil, true
 	}
 
-	// Do The intersection here as it's optimized.
-	out, err, applyIntersectWith := getUidList()
-	if err != nil || !applyIntersectWith || opt.First == 0 {
+	// The bool reports whether the caller still has to intersect what came back and cut it down to
+	// First. A branch that has already intersected, or that needs neither, returns false.
+	out, err, postProcess := getUidList()
+	if err != nil || !postProcess {
 		return out, err
 	}
 
-	if opt.Intersect != nil && applyIntersectWith {
+	if opt.Intersect != nil {
 		algo.IntersectWith(out, opt.Intersect, out)
 	}
 
-	if opt.First != 0 {
-		if opt.First < 0 {
-			if len(out.Uids) > -opt.First {
-				out.Uids = out.Uids[(len(out.Uids) + opt.First):]
-			}
-		} else if len(out.Uids) > opt.First {
-			out.Uids = out.Uids[:opt.First]
-		}
+	// Only a positive first is applied here, and only because it is paired with the early stop in
+	// the walk above, which makes it an optimization that pays for itself. A negative first has no
+	// early stop, so trimming to the last n buys nothing and is not sound: for an index read the
+	// worker post-filters this list against the real values afterwards -- handleCompareFunction for
+	// a lossy tokenizer, filterGeoFunction for geo -- and rows dropped there cannot come back. The
+	// query layer applies the negative count itself, over the filtered result, with x.PageRange.
+	if opt.First > 0 && len(out.Uids) > opt.First {
+		out.Uids = out.Uids[:opt.First]
 	}
 	return out, nil
 }
