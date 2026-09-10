@@ -249,14 +249,6 @@ func GqlErrorf(message string, args ...interface{}) *GqlError {
 	}
 }
 
-// ExtractNamespaceHTTP parses the namespace value from the incoming HTTP request.
-func ExtractNamespaceHTTP(r *http.Request) uint64 {
-	ctx := AttachAccessJwt(context.Background(), r)
-	// Ignoring error because the default value is zero anyways.
-	namespace, _ := ExtractNamespaceFrom(ctx)
-	return namespace
-}
-
 // ExtractNamespace parses the namespace value from the incoming gRPC context. For the non-ACL mode,
 // it is caller's responsibility to set the galaxy namespace.
 func ExtractNamespace(ctx context.Context) (uint64, error) {
@@ -445,24 +437,6 @@ func ParseRequest(w http.ResponseWriter, r *http.Request, data interface{}) bool
 	return true
 }
 
-// AttachJWTNamespace attaches the namespace in the JWT claims to the context if present, otherwise
-// it attaches the galaxy namespace.
-func AttachJWTNamespace(ctx context.Context) context.Context {
-	if !WorkerConfig.AclEnabled {
-		return AttachNamespace(ctx, RootNamespace)
-	}
-
-	ns, err := ExtractNamespaceFrom(ctx)
-	if err == nil {
-		// Attach the namespace only if we got one from JWT.
-		// This preserves any namespace directly present in the context which is needed for
-		// requests originating from dgraph internal code like server.go::GetGQLSchema() where
-		// context is created by hand.
-		ctx = AttachNamespace(ctx, ns)
-	}
-	return ctx
-}
-
 // AttachNamespace adds given namespace to the metadata of the context.
 func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -472,19 +446,6 @@ func AttachNamespace(ctx context.Context, namespace uint64) context.Context {
 	ns := strconv.FormatUint(namespace, 10)
 	md.Set("namespace", ns)
 	return metadata.NewIncomingContext(ctx, md)
-}
-
-// AttachJWTNamespaceOutgoing attaches the namespace in the JWT claims to the outgoing metadata of
-// the context.
-func AttachJWTNamespaceOutgoing(ctx context.Context) (context.Context, error) {
-	if !WorkerConfig.AclEnabled {
-		return AttachNamespaceOutgoing(ctx, RootNamespace), nil
-	}
-	ns, err := ExtractNamespaceFrom(ctx)
-	if err != nil {
-		return ctx, err
-	}
-	return AttachNamespaceOutgoing(ctx, ns), nil
 }
 
 // AttachNamespaceOutgoing adds given namespace in the outgoing metadata of the context.

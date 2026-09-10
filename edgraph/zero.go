@@ -21,7 +21,7 @@ func (s *Server) AllocateIDs(ctx context.Context, req *api.AllocateIDsRequest) (
 	*api.AllocateIDsResponse, error) {
 
 	// For now, we only allow users in superadmin group to do this operation in v25
-	if err := AuthSuperAdmin(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapLeaseUIDs); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"v25.AllocateIDs can only be called by the superadmin group. "+s.Message())

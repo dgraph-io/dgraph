@@ -20,7 +20,7 @@ import (
 func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceRequest) (
 	*api.CreateNamespaceResponse, error) {
 
-	if err := AuthSuperAdmin(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapClusterAdmin); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"Non superadmin user cannot create namespace. "+s.Message())
@@ -39,7 +39,7 @@ func (s *Server) CreateNamespace(ctx context.Context, in *api.CreateNamespaceReq
 func (s *Server) DropNamespace(ctx context.Context, in *api.DropNamespaceRequest) (
 	*api.DropNamespaceResponse, error) {
 
-	if err := AuthSuperAdmin(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapClusterAdmin); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"Non superadmin user cannot drop namespace. "+s.Message())
@@ -65,7 +65,7 @@ func (s *Server) DropNamespace(ctx context.Context, in *api.DropNamespaceRequest
 func (s *Server) ListNamespaces(ctx context.Context, in *api.ListNamespacesRequest) (
 	*api.ListNamespacesResponse, error) {
 
-	if err := AuthSuperAdmin(ctx); err != nil {
+	if err := AuthorizeCapability(ctx, CapClusterAdmin); err != nil {
 		s := status.Convert(err)
 		return nil, status.Error(s.Code(),
 			"Non superadmin user cannot list namespaces. "+s.Message())
