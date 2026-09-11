@@ -35,6 +35,10 @@ const (
 	searchTime           = "vector_search_time"
 	VecEntry             = "__vector_entry"
 	VecDead              = "__vector_dead"
+	// VecMeta names the internal per-predicate metadata key (dimension, etc.).
+	// It contains VecKeyword ("__vector_") so it is skipped by export, rejected
+	// on user mutations, and handled by backup like the other vector aux keys.
+	VecMeta              = "__vector_meta_"
 	VectorIndexMaxLevels = 5
 	EfConstruction       = 16
 	EfSearch             = 12
@@ -50,6 +54,14 @@ var (
 	errNilVector           = errors.New("nil vector returned")
 	errFetchingPostingList = errors.New("error fetching posting list")
 )
+
+// VectorIndexMeta is the JSON payload stored under the VecMeta key: derived,
+// build-time facts about a vector index that are NOT part of the user-declared
+// schema (e.g. the dimension inferred from the data). Persisted by the build,
+// read on instance hydration and at schema-alter validation.
+type VectorIndexMeta struct {
+	Dimension int `json:"dimension"`
+}
 
 type SearchResult struct {
 	nnUids        []uint64
@@ -109,6 +121,10 @@ func cosineSimilarity[T c.Float](a, b []T, floatBits int) (T, error) {
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
 func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
+	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
+}
+
+func EuclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
 	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
 }
 
@@ -361,6 +377,22 @@ func getInsertLayer(maxLevels int) int {
 }
 
 var emptyVec = []byte{}
+
+// GetVectorFromUid fetches the vector stored for uid under the data predicate
+// pred. A uid with no stored vector yields an empty slice and no error, so
+// callers can treat "no vector" as "no results".
+func GetVectorFromUid[T c.Float](pred string, uid uint64, floatBits int, c index.CacheType) ([]T, error) {
+	var vec []T
+	data, err := getDataFromKeyWithCacheType(pred, uid, c)
+	if err != nil {
+		if errors.Is(err, errFetchingPostingList) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	index.BytesAsFloatArray(data, &vec, floatBits)
+	return vec, nil
+}
 
 // adds the data corresponding to a uid to the given vec variable in the form of []T
 // this does not allocate memory for vec, so it must be allocated before calling this function
@@ -688,6 +720,9 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 			if err := ph.getVecFromUid(uuid, tc, &inVec); err != nil || len(inVec) == 0 {
 				// Without the source vector we can't score edges reliably.
 				// Fall back to "append then truncate" after a cheap de-dupe.
+				// NOTE: on a row already at the efConstruction cap this
+				// silently discards the new neighbors — callers must ensure
+				// the transaction's read view can see the vectors involved.
 				allLayerEdges[level] = append(allLayerEdges[level], allLayerNeighbors[level]...)
 				allLayerEdges[level] = dedupeUidsPreserveOrder(allLayerEdges[level])
 				if len(allLayerEdges[level]) > ph.efConstruction {
