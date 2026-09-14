@@ -888,8 +888,15 @@ func (enc *encoder) merge(parent, child []fastJsonNode) ([]fastJsonNode, error) 
 		return child, nil
 	}
 
-	// Here we merge two slices of maps.
-	mergedList := make([]fastJsonNode, 0)
+	// Here we merge two slices of maps. The final size is len(parent) * len(child),
+	// but the loop below bails out once cnt exceeds LimitNormalizeNode, so cap the
+	// pre-allocation at that limit to avoid a huge (or overflowing) up-front alloc
+	// for queries that are going to be rejected anyway.
+	c := len(parent) * len(child)
+	if lim := x.Config.LimitNormalizeNode; lim > 0 && c > lim {
+		c = lim
+	}
+	mergedList := make([]fastJsonNode, 0, c)
 	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
