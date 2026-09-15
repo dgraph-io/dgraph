@@ -88,6 +88,22 @@ func (h *priorityQueue) Pop() interface{} {
 	return val
 }
 
+// removeMax removes and returns the highest cost item from the priority queue.
+// This is used to evict the least promising node when the frontier exceeds its
+// size limit, preserving the lowest cost nodes needed for shortest paths.
+func (h *priorityQueue) removeMax() {
+	if len(*h) == 0 {
+		return
+	}
+	maxIdx := 0
+	for i := 1; i < len(*h); i++ {
+		if (*h)[i].cost > (*h)[maxIdx].cost {
+			maxIdx = i
+		}
+	}
+	heap.Remove(h, maxIdx)
+}
+
 type mapItem struct {
 	attr  string
 	cost  float64
@@ -406,7 +422,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				path: route{route: curPath},
 			}
 			if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-				pq.Pop()
+				pq.removeMax()
 			}
 			heap.Push(&pq, node)
 		}
@@ -562,7 +578,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					hop:  item.hop + 1,
 				}
 				if int64(pq.Len()) > sg.Params.MaxFrontierSize {
-					pq.Pop()
+					pq.removeMax()
 				}
 				heap.Push(&pq, node)
 			} else {
