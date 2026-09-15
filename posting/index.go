@@ -1518,6 +1518,15 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 				if err != nil {
 					return err
 				}
+				// Only genuinely float32vector-typed values encode a real
+				// dimension. A value written before the predicate was typed
+				// float32vector is stored as raw text; interpreting those bytes
+				// as packed float32 yields len(bytes)/4 — a bogus dimension that
+				// would then fail every vector in the conversion pre-pass. Skip
+				// them (mirrors ExistingVectorDimension).
+				if val.Tid != types.VFloatID {
+					return nil
+				}
 				inVec := types.BytesAsFloatArray(val.Value.([]byte))
 				lenFreq[len(inVec)] += 1
 				if lenFreq[len(inVec)] > maxFreq {
@@ -2523,6 +2532,23 @@ func EvictVectorIndexCaches() {
 	}
 }
 
+// EvictVectorIndexCachesForNs is the namespace-scoped counterpart of
+// EvictVectorIndexCaches. It must run BEFORE the namespace's predicates are
+// removed from the schema (DeletePredsForNs), or the predicates can no longer
+// be found to evict — same ordering requirement as the DROP_ALL path.
+func EvictVectorIndexCachesForNs(ns uint64) {
+	for _, pred := range schema.State().Predicates() {
+		if x.ParseNamespace(pred) != ns {
+			continue
+		}
+		if specs, err := schema.State().FactoryCreateSpec(context.TODO(), pred); err == nil {
+			for _, spec := range specs {
+				_ = spec.Remove(pred)
+			}
+		}
+	}
+}
+
 // DeleteAll deletes all entries in the posting list.
 func DeleteAll() error {
 	EvictVectorIndexCaches()
@@ -2532,6 +2558,12 @@ func DeleteAll() error {
 
 func DeleteAllForNs(ns uint64) error {
 	ResetCache()
+	// Evict this namespace's cached in-memory vector index instances while the
+	// schema still lists their predicates; DeletePredsForNs below removes them,
+	// after which they can no longer be found. Without this, recreating a vector
+	// predicate in the same namespace inherits stale state (e.g. a partitioned
+	// index's established dimension) and rejects vectors of a new dimension.
+	EvictVectorIndexCachesForNs(ns)
 	schema.State().DeletePredsForNs(ns)
 	return DeleteData(ns)
 }
