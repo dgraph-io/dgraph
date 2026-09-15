@@ -475,6 +475,7 @@ func (s *state) PredicatesToDelete(pred string) []string {
 			preds = append(preds, pred+hnsw.VecEntry)
 			preds = append(preds, pred+hnsw.VecKeyword)
 			preds = append(preds, pred+hnsw.VecDead)
+			preds = append(preds, pred+hnsw.VecQuant)
 		}
 	}
 	return preds
