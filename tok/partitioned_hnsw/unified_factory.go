@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/golang/glog"
 
@@ -24,6 +25,13 @@ import (
 // the numClusters option: absent => today's plain hnsw, unchanged;
 // numClusters > 1 => the partitioned (IVF-over-HNSW) implementation.
 type unifiedHNSWFactory[T c.Float] struct {
+	// mu serializes the whole select-then-delegate sequence. pick() removes a
+	// name's stale registration from the other child factory before the
+	// selected one creates it; the child locks protect each factory alone, not
+	// this cross-factory sequence, so without mu a concurrent monolithic and
+	// partitioned call for the same name could each create a registration and
+	// leave Find ambiguous. Find/Remove take the same lock.
+	mu   sync.Mutex
 	mono index.IndexFactory[T] // plain hnsw
 	part index.IndexFactory[T] // partitioned
 }
@@ -114,6 +122,8 @@ func (uf *unifiedHNSWFactory[T]) pick(name string, o opt.Options) (index.IndexFa
 }
 
 func (uf *unifiedHNSWFactory[T]) Create(name string, o opt.Options, floatBits int) (index.VectorIndex[T], error) {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
 	f, err := uf.pick(name, o)
 	if err != nil {
 		return nil, err
@@ -122,6 +132,8 @@ func (uf *unifiedHNSWFactory[T]) Create(name string, o opt.Options, floatBits in
 }
 
 func (uf *unifiedHNSWFactory[T]) CreateOrReplace(name string, o opt.Options, floatBits int) (index.VectorIndex[T], error) {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
 	f, err := uf.pick(name, o)
 	if err != nil {
 		return nil, err
@@ -130,6 +142,8 @@ func (uf *unifiedHNSWFactory[T]) CreateOrReplace(name string, o opt.Options, flo
 }
 
 func (uf *unifiedHNSWFactory[T]) FindOrCreate(name string, o opt.Options, floatBits int) (index.VectorIndex[T], error) {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
 	f, err := uf.pick(name, o)
 	if err != nil {
 		return nil, err
@@ -138,6 +152,8 @@ func (uf *unifiedHNSWFactory[T]) FindOrCreate(name string, o opt.Options, floatB
 }
 
 func (uf *unifiedHNSWFactory[T]) Find(name string) (index.VectorIndex[T], error) {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
 	if vi, err := uf.part.Find(name); err != nil {
 		return nil, err
 	} else if vi != nil {
@@ -147,6 +163,8 @@ func (uf *unifiedHNSWFactory[T]) Find(name string) (index.VectorIndex[T], error)
 }
 
 func (uf *unifiedHNSWFactory[T]) Remove(name string) error {
+	uf.mu.Lock()
+	defer uf.mu.Unlock()
 	if err := uf.part.Remove(name); err != nil {
 		return err
 	}
