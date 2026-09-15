@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -782,11 +781,5 @@ func TestVectorSuite(t *testing.T) {
 			ssuite.schemaVecDimesion10 = schema
 		}
 		suite.Run(t, &ssuite)
-	}
-	// Panic only after every schema iteration has run so that a failure in one
-	// index mode does not skip the remaining tests; the process still exits
-	// loudly if anything failed.
-	if t.Failed() {
-		x.Panic(errors.New("vector tests failed"))
 	}
 }
