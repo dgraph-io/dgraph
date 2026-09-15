@@ -30,8 +30,14 @@ type partitionedHNSW[T c.Float] struct {
 	floatBits int
 	pred      string
 
-	clusterMap      map[int]index.VectorIndex[T]
-	numClusters     int
+	clusterMap  map[int]index.VectorIndex[T]
+	numClusters int
+	// dimMu guards vectorDimension: one long-lived instance per predicate is
+	// shared by concurrent Insert calls, and the first insert resolves the
+	// dimension (read-then-write). Without the lock that read-modify-write
+	// races, and two concurrent first inserts of different lengths could each
+	// win a different dimension.
+	dimMu           sync.Mutex
 	vectorDimension int
 	vecCount        int
 	numPasses       int
@@ -48,6 +54,27 @@ type partitionedHNSW[T c.Float] struct {
 	routeMemoCount atomic.Int64 // Track memo size to enforce cap
 }
 
+// resolveNumProbes computes the effective probe count (IVF nprobe) from
+// options: default a small slice of the clusters but never fewer than 4,
+// clamped to [1, numClusters].
+func (ph *partitionedHNSW[T]) resolveNumProbes(o opt.Options) int {
+	defaultProbes := max(4, ph.numClusters/25)
+	numProbes, _, _ := opt.GetOpt(o, NumProbesOpt, defaultProbes)
+	return max(1, min(numProbes, ph.numClusters))
+}
+
+// applyRuntimeOptions applies option changes that do NOT require a rebuild
+// (only numProbes today) to this already-built, long-lived instance. The
+// factory calls it when returning a cached index, so a numProbes-only schema
+// change takes effect on the next query without a restart. It must not touch
+// anything that feeds GetOptions (the index identity), or unrelated predicates
+// would reindex on upgrade.
+func (ph *partitionedHNSW[T]) applyRuntimeOptions(o opt.Options) {
+	if ph.partition != nil {
+		ph.partition.SetNumProbes(ph.resolveNumProbes(o))
+	}
+}
+
 func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
 	ph.numClusters, _, _ = opt.GetOpt(o, NumClustersOpt, 1000)
 	ph.vectorDimension, _, _ = opt.GetOpt(o, VectorDimensionOpt, -1)
@@ -60,14 +87,7 @@ func (ph *partitionedHNSW[T]) applyOptions(o opt.Options) error {
 		return errors.New("partition strategy must be kmeans")
 	}
 
-	// numProbes is how many clusters a search visits (IVF nprobe). More
-	// probes cost latency and buy recall. Default: a small slice of the
-	// clusters, but never fewer than 4 (or all of them if numClusters < 4).
-	defaultProbes := max(4, ph.numClusters/25)
-	numProbes, _, _ := opt.GetOpt(o, NumProbesOpt, defaultProbes)
-	numProbes = max(1, min(numProbes, ph.numClusters))
-
-	ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, ph.numClusters, numProbes,
+	ph.partition = kmeans.CreateKMeans(ph.floatBits, ph.pred, ph.numClusters, ph.resolveNumProbes(o),
 		hnsw.EuclideanDistanceSq[T])
 
 	ph.buildPass = 0
@@ -148,6 +168,8 @@ func (ph *partitionedHNSW[T]) SetNumPasses(n int) {
 }
 
 func (ph *partitionedHNSW[T]) Dimension() int {
+	ph.dimMu.Lock()
+	defer ph.dimMu.Unlock()
 	return ph.vectorDimension
 }
 
@@ -160,6 +182,8 @@ func (ph *partitionedHNSW[T]) Dimension() int {
 // separately as internal index metadata (see addDimensionMetaInDB) and
 // re-hydrated where a fresh instance needs it.
 func (ph *partitionedHNSW[T]) SetDimension(schema *pb.SchemaUpdate, dimension int) {
+	ph.dimMu.Lock()
+	defer ph.dimMu.Unlock()
 	ph.vectorDimension = dimension
 }
 
@@ -249,6 +273,9 @@ func (ph *partitionedHNSW[T]) hydrateDimension(c index.CacheType) int {
 }
 
 func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, uid uint64, vec []T) ([]*index.KeyValue, error) {
+	// Resolve the dimension once under the lock: concurrent first inserts must
+	// not race the read-then-write of vectorDimension.
+	ph.dimMu.Lock()
 	if ph.vectorDimension <= 0 {
 		// A fresh instance (e.g. after restart) has no dimension in memory.
 		// Prefer the dimension persisted by the last build so this insert is
@@ -260,9 +287,11 @@ func (ph *partitionedHNSW[T]) Insert(ctx context.Context, txn index.CacheType, u
 			ph.vectorDimension = len(vec)
 		}
 	}
+	dim := ph.vectorDimension
+	ph.dimMu.Unlock()
 
-	if len(vec) != ph.vectorDimension {
-		return nil, fmt.Errorf("cannot insert vector of length %d, vector length should be %d", len(vec), ph.vectorDimension)
+	if len(vec) != dim {
+		return nil, fmt.Errorf("cannot insert vector of length %d, vector length should be %d", len(vec), dim)
 	}
 
 	index, err := ph.partition.FindIndexForInsert(txn, vec)

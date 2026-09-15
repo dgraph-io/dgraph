@@ -8,6 +8,7 @@ package posting
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -77,11 +78,23 @@ func (vt *viTxn) StartTs() uint64 {
 func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
+		// A storage/read failure — NOT a "not found". Propagate as-is so
+		// callers can retry rather than mistaking it for an absent key.
 		return nil, err
 	}
 	pl.Lock()
 	defer pl.Unlock()
-	return vt.GetValueFromPostingList(pl)
+	val, err := vt.GetValueFromPostingList(pl)
+	if err == ErrNoValue {
+		// Genuine "no value" (e.g. a vector index whose centroids were never
+		// built). Surface the shared index.ErrNotFound sentinel so index-layer
+		// callers (kmeans centroid hydration) can tell it apart from the
+		// storage error above and cache the definitive miss instead of
+		// retrying. Wrap ErrNoValue so existing errors.Is(_, ErrNoValue)
+		// checks still hold.
+		return nil, fmt.Errorf("%w: %w", index.ErrNotFound, ErrNoValue)
+	}
+	return val, err
 }
 
 func (vt *viTxn) GetWithLockHeld(key []byte) ([]byte, error) {

@@ -13,21 +13,29 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
-// fakeCache is a minimal index.CacheType serving a fixed key/value map.
+// fakeCache is a minimal index.CacheType serving a fixed key/value map. It
+// mirrors the real CacheType contract: a genuine miss returns index.ErrNotFound
+// (a definitive answer), while failWith, when set, simulates a transient
+// storage error (a distinct, retriable error).
 type fakeCache struct {
-	data map[string][]byte
-	gets int
+	data     map[string][]byte
+	gets     int
+	failWith error
 }
 
 func (f *fakeCache) Get(key []byte) ([]byte, error) {
 	f.gets++
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
 	if v, ok := f.data[string(key)]; ok {
 		return v, nil
 	}
-	return nil, errors.New("no value found")
+	return nil, index.ErrNotFound
 }
 
 func (f *fakeCache) Ts() uint64 { return 1 }
@@ -269,6 +277,64 @@ func TestRoutingWithoutPersistedCentroids(t *testing.T) {
 	}
 	if cache.gets != gets {
 		t.Fatalf("expected the hydration miss to be cached, got %d extra reads", cache.gets-gets)
+	}
+}
+
+// TestSetNumProbesChangesSearchWidth verifies a numProbes change takes effect
+// on the live instance (the core of the "numProbes ignored until restart" fix):
+// SetNumProbes must change how many clusters a subsequent search probes.
+func TestSetNumProbesChangesSearchWidth(t *testing.T) {
+	centroids := [][]float32{{0, 0}, {10, 0}, {0, 10}, {10, 10}, {5, 5}}
+	cache := centroidCacheFor(t, "0-pred", centroids)
+	km := CreateKMeans[float32](32, "0-pred", len(centroids), 2,
+		hnsw.EuclideanDistanceSq[float32]).(*Kmeans[float32])
+
+	probes, err := km.FindIndexForSearch(cache, []float32{5, 5})
+	if err != nil {
+		t.Fatalf("FindIndexForSearch: %v", err)
+	}
+	if len(probes) != 2 {
+		t.Fatalf("expected 2 probes initially, got %d", len(probes))
+	}
+
+	km.SetNumProbes(4)
+	probes, err = km.FindIndexForSearch(cache, []float32{5, 5})
+	if err != nil {
+		t.Fatalf("FindIndexForSearch after SetNumProbes: %v", err)
+	}
+	if len(probes) != 4 {
+		t.Fatalf("expected 4 probes after SetNumProbes(4), got %d", len(probes))
+	}
+}
+
+// TestHydrationRetriesOnTransientError verifies the other path: a transient
+// storage error (as opposed to a confirmed not-found) must NOT be cached as a
+// miss, or one blip would permanently route the predicate to cluster 0. The
+// instance stays unhydrated so a later call retries.
+func TestHydrationRetriesOnTransientError(t *testing.T) {
+	cache := &fakeCache{
+		data:     map[string][]byte{},
+		failWith: errors.New("transient storage failure"),
+	}
+	km := CreateKMeans[float32](32, "0-pred", 8, 3,
+		hnsw.EuclideanDistanceSq[float32]).(*Kmeans[float32])
+
+	// On a transient error the index falls back to cluster 0 for this call...
+	idx, err := km.FindIndexForInsert(cache, []float32{5, 5})
+	if err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if idx != 0 {
+		t.Fatalf("expected cluster-0 fallback on transient error, got %d", idx)
+	}
+
+	// ...but does NOT cache the failure: the next call retries (re-reads).
+	gets := cache.gets
+	if _, err := km.FindIndexForInsert(cache, []float32{5, 5}); err != nil {
+		t.Fatalf("FindIndexForInsert: %v", err)
+	}
+	if cache.gets == gets {
+		t.Fatalf("transient error was cached as a miss; expected a retry (re-read)")
 	}
 }
 
