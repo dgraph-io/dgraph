@@ -409,6 +409,19 @@ func checkSchema(s *pb.SchemaUpdate) error {
 			x.ParseAttr(s.Predicate))
 	}
 
+	// BM25 scores a single document (one value) per UID: per-document length and
+	// corpus statistics are not well-defined for a list predicate, and the bucketed
+	// stats maintenance relies on conflict detection that a list predicate's
+	// value-dependent conflict key would not provide. Reject @index(bm25) on lists.
+	if s.List {
+		for _, tokenizer := range s.Tokenizer {
+			if tokenizer == "bm25" {
+				return errors.Errorf("Tokenizer 'bm25' cannot be applied to list predicate: %s",
+					x.ParseAttr(s.Predicate))
+			}
+		}
+	}
+
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 && !s.Unique {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",

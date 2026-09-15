@@ -25,6 +25,8 @@ func GetTokenizerForLang(t Tokenizer, lang string) Tokenizer {
 		// We must return a new instance because another goroutine might be calling this
 		// with a different lang.
 		return FullTextTokenizer{lang: lang}
+	case BM25Tokenizer:
+		return BM25Tokenizer{lang: lang}
 	case TermTokenizer:
 		return TermTokenizer{lang: lang}
 	case ExactTokenizer:
@@ -65,6 +67,29 @@ func GetNGramTokens(funcArgs []string, lang string) ([]string, error) {
 
 func GetNGramQueryTokens(funcArgs []string, lang string) ([]string, error) {
 	return BuildNGramQueryTokens(funcArgs[0], NGramTokenizer{lang: lang})
+}
+
+// GetBM25QueryTokens tokenizes the query text using the fulltext pipeline,
+// deduplicates, and encodes with the BM25 identifier prefix.
+func GetBM25QueryTokens(funcArgs []string, lang string) ([]string, error) {
+	if l := len(funcArgs); l != 1 {
+		return nil, errors.Errorf("Function requires 1 arguments, but got %d", l)
+	}
+	tok := BM25Tokenizer{lang: lang}
+	allTokens, err := tok.Tokens(funcArgs[0])
+	if err != nil {
+		return nil, err
+	}
+	// Deduplicate for query
+	seen := make(map[string]struct{}, len(allTokens))
+	var unique []string
+	for _, t := range allTokens {
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			unique = append(unique, encodeToken(t, tok.Identifier()))
+		}
+	}
+	return unique, nil
 }
 
 // GetFullTextTokens returns the full-text tokens for the given value.
