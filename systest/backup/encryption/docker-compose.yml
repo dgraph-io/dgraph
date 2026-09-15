@@ -111,7 +111,7 @@ services:
       client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;" --security
       "whitelist=0.0.0.0/0;"
   minio:
-    image: minio/minio:latest
+    image: docker.io/minio/minio:latest
     env_file:
       - ../../backup.env
     ports:

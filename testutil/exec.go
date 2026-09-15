@@ -153,7 +153,7 @@ func DetectIfRaceViolation(instance ContainerInstance) bool {
 		return false
 	}
 
-	logCmd := exec.Command("docker", "logs", c.ID)
+	logCmd := exec.Command(ContainerRuntime(), "logs", c.ID)
 	out, err := logCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Error: while getting docker logs %v\n", err)

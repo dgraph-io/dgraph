@@ -262,7 +262,7 @@ func DockerRun(instance string, op int) error {
 // MARKED FOR DEPRECATION: DockerCp copies from/to a container. Paths inside a container have the format
 // container_name:path.
 func DockerCp(srcPath, dstPath string) error {
-	argv := []string{"docker", "cp", srcPath, dstPath}
+	argv := []string{ContainerRuntime(), "cp", srcPath, dstPath}
 	return Exec(argv...)
 }
 
@@ -293,7 +293,7 @@ func DockerExec(instance string, cmd ...string) error {
 		glog.Fatalf("Unable to find container: %s\n", instance)
 		return nil
 	}
-	argv := []string{"docker", "exec", "--user", "root", c.ID}
+	argv := []string{ContainerRuntime(), "exec", "--user", "root", c.ID}
 	argv = append(argv, cmd...)
 	return Exec(argv...)
 }

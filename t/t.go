@@ -156,6 +156,11 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	if *runCoverage {
 		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
 	}
+	// Always ensure COVERAGE_OUTPUT is set. Podman-compose expands an *unset*
+	// ${COVERAGE_OUTPUT} as the literal '""', which shlex then passes to dgraph
+	// as an empty-string argument before the subcommand. An explicit empty
+	// value is substituted as nothing (no token), matching Docker Compose.
+	cmd.Env = testutil.EnsureCoverageOutput(cmd.Env)
 	if runtime.GOARCH == "arm64" {
 		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
@@ -188,6 +193,7 @@ func ensureGoPathLinuxBinEnvVarSet() {
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
 		gopath = filepath.Join(os.Getenv("HOME"), "go")
+		os.Setenv("GOPATH", gopath) // export the default so child processes inherit it
 	}
 
 	var gopathLinuxBin string
@@ -238,7 +244,8 @@ func startCluster(composeFile, prefix string) error {
 	// + --project-directory so relative bind-mount sources resolve against the
 	// pristine test package dir.
 	composeArgs := ComposeFileArgs(composeFile, *baseDir)
-	upArgs := append([]string{"docker", "compose", "--compatibility"},
+	composePfx := testutil.ContainerComposeCmdPrefix()
+	upArgs := append(composePfx,
 		append(composeArgs, "-p", prefix, "up", "--force-recreate", "--build", "--remove-orphans", "--detach")...)
 
 	// docker compose `up` on a shared named volume can race on initial
@@ -247,7 +254,16 @@ func startCluster(composeFile, prefix string) error {
 	// Retry once after a full `down -v` — the second attempt finds a fresh
 	// volume and succeeds. One retry is enough in practice for this class
 	// of race; anything persistent is a real configuration error.
-	const upAttempts = 3
+	// Podman rootless mode uses a per-container rootlessport daemon that
+	// independently binds random host ports; simultaneous container starts
+	// can race and produce "address already in use". 5 attempts with a
+	// 5-second drain window is enough for the port daemon to release bindings.
+	upAttempts := 3
+	retryWait := 2 * time.Second
+	if testutil.ContainerRuntime() == "podman" {
+		upAttempts = 5
+		retryWait = 5 * time.Second
+	}
 	var lastErr error
 	var cmdStderr strings.Builder
 	fmt.Printf("Bringing up cluster %s for package: %s ...\n", prefix, composeFile)
@@ -273,12 +289,12 @@ func startCluster(composeFile, prefix string) error {
 				// before the next `up` tries to populate a fresh volume.
 				// Without the sleep, the retry can hit the same volume-
 				// init race the first attempt did.
-				downArgs := append([]string{"docker", "compose", "--compatibility"},
+				downArgs := append(testutil.ContainerComposeCmdPrefix(),
 					append(composeArgs, "-p", prefix, "down", "-v")...)
 				downCmd := command(downArgs...)
 				downCmd.Stderr = nil
 				_ = downCmd.Run()
-				time.Sleep(2 * time.Second)
+				time.Sleep(retryWait)
 				fmt.Printf("Retrying cluster bring-up (attempt %d/%d) after `down -v`...\n", attempt+1, upAttempts)
 			}
 		}
@@ -343,7 +359,7 @@ func outputLogs(prefix string) {
 		if c == nil {
 			return
 		}
-		logCmd := exec.Command("docker", "logs", c.ID)
+		logCmd := exec.Command(testutil.ContainerRuntime(), "logs", c.ID)
 		out, err := logCmd.CombinedOutput()
 		if err != nil {
 			fmt.Printf("error fetching docker logs for %s: %v\n", c.ID, err)
@@ -384,7 +400,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 		if err != nil {
 			outputLogs(prefix)
 		}
-		stopArgs := append([]string{"docker", "compose", "--compatibility"},
+		stopArgs := append(testutil.ContainerComposeCmdPrefix(),
 			append(composeArgs, "-p", prefix, "stop")...)
 		cmd := command(stopArgs...)
 		cmd.Stderr = nil
@@ -430,7 +446,7 @@ func stopCluster(composeFile, prefix string, wg *sync.WaitGroup, err error) {
 			}
 		}
 
-		downArgs := append([]string{"docker", "compose", "--compatibility"},
+		downArgs := append(testutil.ContainerComposeCmdPrefix(),
 			append(composeArgs, "-p", prefix, "down", "-v")...)
 		cmd = command(downArgs...)
 		if err := cmd.Run(); err != nil {
@@ -696,7 +712,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !started || stopped {
 			return
 		}
-		pauseArgs := append([]string{"docker", "compose", "--compatibility"},
+		pauseArgs := append(testutil.ContainerComposeCmdPrefix(),
 			append(ComposeFileArgs(defaultCompose, *baseDir), "-p", prefix, "stop")...)
 		cmd := command(pauseArgs...)
 		cmd.Stderr = nil
@@ -717,7 +733,7 @@ func runTests(taskCh chan task, closer *z.Closer) error {
 		if !defaultPaused {
 			return nil // already running
 		}
-		resumeArgs := append([]string{"docker", "compose", "--compatibility"},
+		resumeArgs := append(testutil.ContainerComposeCmdPrefix(),
 			append(ComposeFileArgs(defaultCompose, *baseDir), "-p", prefix, "start")...)
 		cmd := command(resumeArgs...)
 		cmd.Stderr = nil
@@ -1409,6 +1425,9 @@ func run() error {
 		fmt.Printf("Found Teamcity: %s\n", tc)
 		isTeamcity = true
 	}
+	// Initialize container runtime early so DOCKER_HOST is configured for
+	// Podman before any Docker API SDK calls (e.g. AllContainers).
+	fmt.Printf("Container runtime: %s\n", testutil.ContainerRuntime())
 	if *clear {
 		removeAllTestContainers()
 		return nil
