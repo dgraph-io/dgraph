@@ -2,8 +2,10 @@ package kmeans
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/golang/glog"
 
@@ -21,23 +23,34 @@ type Kmeans[T c.Float] struct {
 	floatBits   int
 	numPasses   int
 	numClusters int
-	numProbes   int
-	centroids   *vectorCentroids[T]
+	// numProbes is read on the search path and can be updated on the live
+	// instance by a numProbes-only schema change (SetNumProbes), so it is
+	// atomic to keep that update race-free with concurrent searches.
+	numProbes atomic.Int64
+	centroids *vectorCentroids[T]
 }
 
 func CreateKMeans[T c.Float](floatBits int, pred string, numClusters, numProbes int,
 	distFunc func(a, b []T, floatBits int) (T, error)) index.VectorPartitionStrat[T] {
-	return &Kmeans[T]{
+	km := &Kmeans[T]{
 		floatBits:   floatBits,
 		numPasses:   5,
 		numClusters: numClusters,
-		numProbes:   numProbes,
 		centroids: &vectorCentroids[T]{
 			distFunc:  distFunc,
 			floatBits: floatBits,
 			pred:      pred,
 		},
 	}
+	km.numProbes.Store(int64(numProbes))
+	return km
+}
+
+// SetNumProbes updates the search-time probe count. numProbes is query-time
+// tuning excluded from the index identity, so a change to it is applied to the
+// live instance here instead of via a rebuild. Safe for concurrent searches.
+func (km *Kmeans[T]) SetNumProbes(n int) {
+	km.numProbes.Store(int64(n))
 }
 
 func (km *Kmeans[T]) AddSeedVector(vec []T) {
@@ -59,7 +72,7 @@ func (km *Kmeans[T]) FindIndexForSearch(c index.CacheType, vec []T) ([]int, erro
 	if err := km.centroids.maybeHydrate(c); err != nil {
 		return nil, err
 	}
-	res, err := km.centroids.findNClosestCentroids(vec, km.numProbes)
+	res, err := km.centroids.findNClosestCentroids(vec, int(km.numProbes.Load()))
 	if err != nil {
 		return nil, err
 	}
@@ -187,16 +200,26 @@ func (vc *vectorCentroids[T]) maybeHydrate(c index.CacheType) error {
 	if vc.hydrated || len(vc.centroids) > 0 {
 		return nil
 	}
-	vc.hydrated = true
-
 	indexCountAttr := hnsw.ConcatStrings(vc.pred, CentroidPrefix)
 	key := x.DataKey(indexCountAttr, 1)
 	centroidsMarshalled, err := c.Get(key)
+	if err != nil && !errors.Is(err, index.ErrNotFound) {
+		// A storage/read failure, not a confirmed miss. Do NOT mark the
+		// instance hydrated: leaving it unhydrated lets a later call retry
+		// instead of permanently routing this predicate to cluster 0 after one
+		// transient read error. Route to cluster 0 for THIS call only.
+		glog.Warningf("vector index %s: error reading centroids (%v); routing to "+
+			"cluster 0 for now, hydration will be retried", vc.pred, err)
+		return nil
+	}
+	// A definitive answer (confirmed not-found, or a successful read): mark
+	// hydrated so routing calls don't re-read the centroid key every time.
+	vc.hydrated = true
 	if err != nil || len(centroidsMarshalled) == 0 {
 		// No persisted centroids (the index was never built): stay in
 		// cluster-0 mode until the next rebuild replaces this instance.
-		glog.V(1).Infof("vector index %s: no persisted centroids (err: %v), "+
-			"routing everything to cluster 0", vc.pred, err)
+		glog.V(1).Infof("vector index %s: no persisted centroids, "+
+			"routing everything to cluster 0", vc.pred)
 		return nil
 	}
 	glog.V(1).Infof("vector index %s: hydrated %d bytes of centroids", vc.pred, len(centroidsMarshalled))
