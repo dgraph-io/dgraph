@@ -222,8 +222,17 @@ func (vsuite *VectorTestSuite) TestVectorBackupRestoreReIndexing() {
 	mu = &api.Mutation{SetNquads: []byte(rdfs2), CommitNow: true}
 	_, err = gc.Mutate(mu)
 	require.NoError(t, err)
+
+	// Capture the second batch in an incremental backup. Without this the
+	// restore below has only the first backup to work with, and a restore
+	// range that references a non-existent second backup is a silent no-op:
+	// the test would then pass purely on the still-live data, never exercising
+	// restore at all.
+	t.Log("taking incremental backup \n")
+	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
+
 	t.Log("restoring backup \n")
-	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 2, 1))
+	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
 
 	for i := 0; i < 5; i++ {
