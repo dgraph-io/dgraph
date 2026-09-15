@@ -480,6 +480,7 @@ func checkSchema(s *pb.SchemaUpdate) error {
 // index or existing data. A vector predicate has exactly one dimension, so
 // silently accepting a wrong value would brick inserts and fail the rebuild.
 func validateVectorDimension(s *pb.SchemaUpdate) error {
+	firstDim, haveFirst := 0, false
 	for _, spec := range s.GetIndexSpecs() {
 		var raw string
 		found := false
@@ -497,6 +498,14 @@ func validateVectorDimension(s *pb.SchemaUpdate) error {
 			return errors.Errorf("vectorDimension for [%s] must be a positive integer, got %q",
 				x.ParseAttr(s.Predicate), raw)
 		}
+		// Repeated index specs on one predicate must agree: when no data
+		// exists yet, ExistingVectorDimension can't catch a self-contradiction,
+		// so track the first declared dimension and reject a later conflict.
+		if haveFirst && firstDim != d {
+			return errors.Errorf("conflicting vectorDimension values %d and %d for [%s] in one schema update",
+				firstDim, d, x.ParseAttr(s.Predicate))
+		}
+		firstDim, haveFirst = d, true
 		if existing, ok := posting.ExistingVectorDimension(context.Background(), s.Predicate); ok && existing != d {
 			return errors.Errorf("vectorDimension %d for [%s] contradicts the existing vector "+
 				"dimension %d; drop the data/index or set vectorDimension to %d",

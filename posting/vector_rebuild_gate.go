@@ -345,7 +345,13 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 	// only closes when nothing is left to replay, removing any need to
 	// replay under the capture lock.
 	carry := map[uint64]vectorPendingMutation{}
-	grace := map[uint64]int{}
+	// graceUntil bounds, by WALL CLOCK, how long a resolved-but-not-yet-readable
+	// uid is retried before it is treated as aborted. A round-count budget was
+	// wrong: the per-round sleep only runs when no uid progressed, so if other
+	// uids keep progressing the budget could burn in microseconds and drop a
+	// still-committing uid.
+	graceUntil := map[uint64]time.Time{}
+	const graceDuration = 200 * time.Millisecond
 	stalls := 0
 	for {
 		for uid, pm := range swapVectorPending(attr) {
@@ -372,7 +378,7 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 			}
 			if !retry {
 				progressed = true
-				delete(grace, uid)
+				delete(graceUntil, uid)
 				continue
 			}
 			// Retry while the transaction is unresolved; once resolved,
@@ -382,14 +388,15 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 				next[uid] = pm
 				continue
 			}
-			if grace[uid] == 0 {
-				grace[uid] = 40 // ~200ms at 5ms per stalled round
+			deadline, ok := graceUntil[uid]
+			if !ok {
+				deadline = time.Now().Add(graceDuration)
+				graceUntil[uid] = deadline
 			}
-			grace[uid]--
-			if grace[uid] > 0 {
+			if time.Now().Before(deadline) {
 				next[uid] = pm
 			} else {
-				delete(grace, uid)
+				delete(graceUntil, uid)
 			}
 		}
 		carry = next
