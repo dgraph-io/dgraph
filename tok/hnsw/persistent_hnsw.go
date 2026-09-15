@@ -502,7 +502,17 @@ func (ph *persistentHNSW[T]) MergeResults(ctx context.Context, c index.CacheType
 		var vec []T
 		err := ph.getVecFromUid(list[i], c, &vec)
 		if err != nil {
+			// A UID can remain in a shard's result set after its data key was
+			// removed (deleted but not yet cleaned from the graph). Skip it and
+			// keep returning the surviving neighbors rather than aborting the
+			// whole query; only genuine errors propagate.
+			if errors.Is(err, errNilVector) {
+				continue
+			}
 			return nil, err
+		}
+		if len(vec) == 0 {
+			continue
 		}
 
 		dist, err := ph.simType.distanceScore(vec, query, ph.floatBits)
