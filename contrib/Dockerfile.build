@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1
+# Multi-stage builder for `make local-image-jemalloc`.
+#
+# Compiles a jemalloc-enabled, CGO, native-Linux dgraph binary the same way CI
+# and the release build do -- natively inside a Linux container -- so no
+# macOS->Linux cross-compilation is required. (That cross-compile is exactly why
+# the plain `local-image` target ships a non-jemalloc binary on macOS: the
+# jemalloc static archive would have to be cross-built for the Linux target.)
+# BuildKit exports the compiled binary to ./linux via `--output=type=local`, and
+# contrib/Dockerfile then packages it into the same runtime image CI/CD publishes.
+
+ARG GO_VERSION=1.26
+
+FROM golang:${GO_VERSION} AS builder
+# dgraph/Makefile's `jemalloc` target downloads jemalloc 5.3.1 and builds it from
+# source, statically linking /usr/local/lib/libjemalloc.a with the baked
+# malloc_conf (background_thread:true,metadata_thp:auto). That needs a C/C++
+# toolchain plus curl/bzip2 to fetch and unpack the release tarball.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        bzip2 \
+        ca-certificates \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+# Prime the module cache first so dependency downloads survive source-only edits.
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+COPY . .
+# `make dgraph` builds jemalloc from source and compiles with the default
+# BUILD_TAGS=jemalloc and CGO enabled: the exact CI/release build. USER_ID
+# resolves to 0 (root) in the container, so the jemalloc `make install` step
+# needs no sudo.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    make dgraph
+
+# Export-only stage. `docker build --target=artifact --output=type=local,dest=./linux`
+# writes this stage's root filesystem to the host, producing ./linux/dgraph for
+# contrib/Dockerfile's `ADD linux /usr/local/bin`.
+FROM scratch AS artifact
+COPY --from=builder /src/dgraph/dgraph /dgraph
