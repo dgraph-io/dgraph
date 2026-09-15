@@ -151,6 +151,13 @@ func (hf *partitionedHNSWIndexFactory[T]) FindOrCreate(
 	if vi, err := hf.findWithLock(name); err != nil {
 		return nil, err
 	} else if vi != nil {
+		// Apply rebuild-free option changes (numProbes) to the cached instance.
+		// A numProbes-only alter doesn't change the index identity, so it never
+		// triggers CreateOrReplace; without this the live instance would keep
+		// the old probe count until the alpha restarts.
+		if ph, ok := vi.(*partitionedHNSW[T]); ok {
+			ph.applyRuntimeOptions(o)
+		}
 		return vi, nil
 	}
 	return hf.createWithLock(name, o, floatBits)

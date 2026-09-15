@@ -7,11 +7,20 @@ package index
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	opts "github.com/dgraph-io/dgraph/v25/tok/options"
 )
+
+// ErrNotFound is the sentinel a CacheType.Get returns (wrapped) when a key is
+// genuinely absent, as opposed to a storage/read failure. It lets index-layer
+// callers tell "not there" (a definitive answer, safe to cache) apart from
+// "the read failed" (transient — must be retried), which a bare error cannot
+// express. The concrete CacheType implementations translate their not-found
+// error into this sentinel; storage errors pass through unwrapped.
+var ErrNotFound = errors.New("index: key not found")
 
 // IndexFactory is responsible for being able to create, find, and remove
 // VectorIndexes. There is no "update" as of now; just remove and create.
@@ -109,6 +118,11 @@ type VectorPartitionStrat[T c.Float] interface {
 	FindIndexForInsert(c CacheType, vec []T) (int, error)
 	NumPasses() int
 	SetNumPasses(int)
+	// SetNumProbes updates the search-time probe count on the live strategy.
+	// numProbes is query-time tuning (excluded from the index identity), so a
+	// change to it must be applied to the long-lived instance directly rather
+	// than through a rebuild. Safe for concurrent use with searches.
+	SetNumProbes(int)
 	NumSeedVectors() int
 	StartBuildPass()
 	EndBuildPass()
