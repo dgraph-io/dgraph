@@ -238,7 +238,7 @@ services:
       "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;"
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     env_file:
       - ./minio.env
     working_dir: /data/minio

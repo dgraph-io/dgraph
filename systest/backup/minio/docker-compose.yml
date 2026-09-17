@@ -101,7 +101,7 @@ services:
       client-cert=/dgraph-tls/client.zero1.crt; client-key=/dgraph-tls/client.zero1.key;" --security
       "whitelist=0.0.0.0/0;"
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     env_file:
       - ../../backup.env
     ports:

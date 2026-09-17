@@ -3,7 +3,7 @@
 version: "3.5"
 services:
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     ports:
       - "9001"
     env_file:
