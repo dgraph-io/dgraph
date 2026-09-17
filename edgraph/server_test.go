@@ -351,6 +351,39 @@ func TestVerifyUniqueWithinMutationSemantics(t *testing.T) {
 		)))
 	})
 
+	t.Run("equal strings from different representations collide", func(t *testing.T) {
+		// An untyped RDF literal arrives as DefaultVal while the JSON path produces
+		// StrVal; both are a Go string, and the previous ==-based check treated them
+		// as equal. They must stay one identity: the everyday trigger is mixing RDF
+		// and JSON mutations in one request, where for two new nodes the injected
+		// eq() queries come back empty and this check is the only duplicate guard.
+		require.EqualError(t, verifyUniqueWithinMutation(qcFor(
+			nquad("_:a", "email", &api.Value{Val: &api.Value_DefaultVal{DefaultVal: "x"}}),
+			nquad("_:b", "email", str("x")),
+		)), "could not insert duplicate value [x] for predicate [email]")
+	})
+
+	t.Run("rdf and json parsers produce colliding values", func(t *testing.T) {
+		// Same case through the real parsers rather than hand-built NQuads, pinning
+		// the parser behavior this depends on: chunker/rdf_parser.go emits DefaultVal
+		// for untyped literals, chunker/json_parser.go emits StrVal.
+		rdfNqs, _, err := chunker.ParseRDFs([]byte(`_:a <email> "dup@example.com" .`))
+		require.NoError(t, err)
+		require.Len(t, rdfNqs, 1)
+		_, isDefault := rdfNqs[0].ObjectValue.Val.(*api.Value_DefaultVal)
+		require.True(t, isDefault, "expected the RDF parser to produce a DefaultVal")
+
+		jsonNqs, _, err := chunker.ParseJSON(
+			[]byte(`[{"uid":"_:b","email":"dup@example.com"}]`), chunker.SetNquads)
+		require.NoError(t, err)
+		require.Len(t, jsonNqs, 1)
+		_, isStr := jsonNqs[0].ObjectValue.Val.(*api.Value_StrVal)
+		require.True(t, isStr, "expected the JSON parser to produce a StrVal")
+
+		require.ErrorContains(t, verifyUniqueWithinMutation(qcFor(rdfNqs[0], jsonNqs[0])),
+			"could not insert duplicate value")
+	})
+
 	t.Run("nil ObjectValue edges are skipped", func(t *testing.T) {
 		require.NoError(t, verifyUniqueWithinMutation(qcFor(
 			nquad("_:a", "email", nil),
