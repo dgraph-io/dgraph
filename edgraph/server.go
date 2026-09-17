@@ -2450,14 +2450,25 @@ func isDropOperation(op *api.Operation) bool {
 
 // uniqueValueKey identifies a value for the in-request duplicate check: two edges
 // collide iff they write the same value to the same predicate under the same language
-// tag (language is part of value identity since #9820). Tid keeps values of different
-// types distinct (int64(1) and "1" do not collide), preserving the type identity the
-// previous ==-based check had.
+// tag (language is part of value identity since #9820). For comparable values the value
+// field holds the interface{} produced by dql.TypeValFrom, so Go's dynamic-type
+// identity gives exactly the semantics the previous ==-based check had: int64(1) and
+// "1" stay distinct, while an untyped RDF literal (DefaultVal) and a JSON string
+// (StrVal) — both a Go string — stay EQUAL. Keying on types.TypeID for every value
+// split those two apart and let duplicates through when RDF and JSON mutations were
+// mixed in one request (caught in review).
 type uniqueValueKey struct {
 	predicate string
 	lang      string
-	tid       types.TypeID
 	value     interface{}
+}
+
+// byteContent keys slice-typed values by exact byte content. Its own Go type keeps it
+// from colliding with a plain string value of the same bytes, and tid separates the
+// four []byte-backed types (binary/geo/datetime/bigfloat) and vfloat from one another.
+type byteContent struct {
+	tid   types.TypeID
+	bytes string
 }
 
 // uniqueValueKeyFrom builds a hashable key for tv. dql.TypeValFrom returns slice-typed
@@ -2465,20 +2476,19 @@ type uniqueValueKey struct {
 // vfloat — which must not be used as map keys (hash of unhashable type panics, and
 // there is no recover on the mutation path). These reach this function from a plain
 // JSON mutation: the chunker parses any "[...]"-shaped string into a Vfloat32Val before
-// the schema is consulted. Slice values are keyed by their byte content instead, and
-// Tid prevents cross-type collisions (the string "x" never collides with []byte("x")).
+// the schema is consulted. Slice values are wrapped in byteContent; everything else
+// passes through unchanged so that map-key equality is the old == equality.
 // The previous == comparison panicked outright on two same-predicate slice values, so
-// content equality here replaces a crash rather than changing any working behavior.
+// content equality for those replaces a crash rather than changing working behavior.
 func uniqueValueKeyFrom(predicate, lang string, tv types.Val) uniqueValueKey {
+	value := tv.Value
 	switch v := tv.Value.(type) {
 	case []byte:
-		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid, value: string(v)}
+		value = byteContent{tid: tv.Tid, bytes: string(v)}
 	case []float32:
-		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid,
-			value: string(types.FloatArrayAsBytes(v))}
-	default:
-		return uniqueValueKey{predicate: predicate, lang: lang, tid: tv.Tid, value: tv.Value}
+		value = byteContent{tid: tv.Tid, bytes: string(types.FloatArrayAsBytes(v))}
 	}
+	return uniqueValueKey{predicate: predicate, lang: lang, value: value}
 }
 
 // verifyUniqueWithinMutation rejects a request in which two edges set the same value on
