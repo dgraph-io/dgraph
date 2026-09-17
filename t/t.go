@@ -157,7 +157,6 @@ func commandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 		cmd.Env = append(cmd.Env, "COVERAGE_OUTPUT=--test.coverprofile=coverage.out")
 	}
 	if runtime.GOARCH == "arm64" {
-		cmd.Env = append(cmd.Env, "MINIO_IMAGE_ARCH=RELEASE.2020-11-13T20-10-18Z-arm64")
 		cmd.Env = append(cmd.Env, "NFS_SERVER_IMAGE_ARCH=11-arm")
 	}
 	cmd.Env = append(cmd.Env, EnvForCompose()...)
