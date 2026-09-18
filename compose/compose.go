@@ -443,7 +443,7 @@ func getJaeger(version int) service {
 
 func getMinio(minioDataDir string) service {
 	svc := service{
-		Image:         "minio/minio:RELEASE.2020-11-13T20-10-18Z",
+		Image:         "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z",
 		ContainerName: containerName("minio1"),
 		Ports: []string{
 			toPort(int(opts.MinioPort)),
