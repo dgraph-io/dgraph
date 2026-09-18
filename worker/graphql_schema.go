@@ -115,7 +115,28 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, errUpdatingGraphQLSchemaOnNonGroupOneLeader
 	}
 
-	ctx = x.AttachJWTNamespace(ctx)
+	// Re-resolve on the receiving alpha when the forwarded request carries a signed
+	// access JWT: UpdateGQLSchemaOverNetwork copies the caller's incoming metadata
+	// onward, and re-deriving from the signed token is stronger than trusting the
+	// forwarded namespace value. When there is no such token the forwarded value
+	// stands, which is the case the note below is about.
+	//
+	// Deliberately NOT clearing the forwarded namespace here, unlike the public gRPC
+	// entry points. This function is both a network handler and an in-process
+	// continuation: UpdateGQLSchemaOverNetwork calls it directly when this alpha is
+	// already the group-1 leader, passing the caller's context — which edgraph's
+	// UpdateGQLSchema has attributed, and which carries no separate credential to
+	// re-derive from. Clearing it broke exactly that path, and the live-loader suite
+	// caught it with "While updating gql schema: No namespace in the metadata".
+	//
+	// The weaker guarantee is also the honest one for this port: the internal worker
+	// listener has no auth interceptor at all, so a caller able to reach it is inside
+	// the trust boundary already and the boundary here is network-level rather than
+	// credential-level.
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "While updating gql schema")
+	}
 	namespace, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While updating gql schema")

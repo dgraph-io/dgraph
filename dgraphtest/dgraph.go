@@ -256,9 +256,9 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 		"--bindall", "--logtostderr", fmt.Sprintf("-v=%d", c.conf.verbosity)}
 
 	if c.lowerThanV21 {
-		acmd = append(acmd, `--whitelist=0.0.0.0/0`, "--telemetry=false")
+		acmd = append(acmd, fmt.Sprintf(`--whitelist=%s`, c.conf.whitelist), "--telemetry=false")
 	} else {
-		security := `--security=whitelist=0.0.0.0/0`
+		security := fmt.Sprintf(`--security=whitelist=%s`, c.conf.whitelist)
 		if c.conf.securityToken != "" {
 			security += fmt.Sprintf(`;token=%s`, c.conf.securityToken)
 		}

@@ -175,6 +175,18 @@ func auditGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo)
 	var namespace uint64
 	var err error
 	extractUser := func(md metadata.MD) {
+		// Prefer the identity the interceptor already verified. Without this,
+		// auditing a request re-parses and re-verifies its access token, a second
+		// full JWT verification per RPC purely to recover a username the identity
+		// interceptor has already extracted.
+		//
+		// The fallback below is unchanged and still covers every case where no
+		// Principal exists: poor-man's auth, a token that failed to verify
+		// (UnknownUser), and no credential at all (UnauthorisedUser under ACL).
+		if p := x.PrincipalFrom(ctx); p != nil {
+			user = p.Subject
+			return
+		}
 		if t := md.Get("accessJwt"); len(t) > 0 {
 			user = getUser(t[0], false)
 		} else if t := md.Get("auth-token"); len(t) > 0 {
@@ -230,9 +242,24 @@ func auditHttp(w *ResponseWriter, r *http.Request) {
 		user = getUser("", false)
 	}
 
+	// Audit must never reject a request, so a resolver error becomes the explicit
+	// unknown sentinel rather than a failure.
+	//
+	// Worth knowing what this does and does not achieve today: the built-in resolver
+	// tolerates a token it cannot parse and reports no error, so a malformed
+	// credential is still recorded against the root namespace and this branch is
+	// reached only by an installed resolver that fails closed. Attributing a
+	// malformed token accurately needs the resolver to distinguish "no credential"
+	// from "unusable credential", which it cannot yet do: /admin and the login
+	// mutation legitimately carry no credential at all.
+	namespace, err := x.ResolveTenantHTTP(r)
+	if err != nil {
+		namespace = UnknownNamespace
+	}
+
 	auditor.Audit(&AuditEvent{
 		User:        user,
-		Namespace:   x.ExtractNamespaceHTTP(r),
+		Namespace:   namespace,
 		ServerHost:  x.WorkerConfig.MyAddr,
 		ClientHost:  r.RemoteAddr,
 		Endpoint:    r.URL.Path,
