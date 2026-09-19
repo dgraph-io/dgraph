@@ -78,6 +78,33 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 	return retVal
 }
 
+// SplitEntryAttr, SplitVecAttr and SplitDeadAttr name the aux predicates a
+// partitioned sub-index with the given split reads and writes. Anything that
+// must address a specific cluster's keyspace (delete routing, index drops)
+// derives the names from here.
+func SplitEntryAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecEntry, split))
+}
+
+func SplitVecAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecKeyword, split))
+}
+
+func SplitDeadAttr(pred string, split int) string {
+	return ConcatStrings(pred, fmt.Sprintf("%s_%d", VecDead, split))
+}
+
+func UpdateIndexSplit[T c.Float](vi index.VectorIndex[T], split int) error {
+	hnsw, ok := vi.(*persistentHNSW[T])
+	if !ok {
+		return errors.New("index is not a persistent HNSW index")
+	}
+	hnsw.vecEntryKey = SplitEntryAttr(hnsw.pred, split)
+	hnsw.vecKey = SplitVecAttr(hnsw.pred, split)
+	hnsw.vecDead = SplitDeadAttr(hnsw.pred, split)
+	return nil
+}
+
 // Create is an implementation of the IndexFactory interface function, invoked by an HNSWIndexFactory
 // instance. It takes in a string name and a VectorSource implementation, and returns a VectorIndex and error
 // flag. It creates an HNSW instance using the index name and populates other parts of the HNSW struct such as
@@ -166,4 +193,15 @@ func (hf *persistentIndexFactory[T]) CreateOrReplace(
 		}
 	}
 	return hf.createWithLock(name, o, floatBits)
+}
+
+// FindOrCreate for the plain hnsw index deliberately keeps the historical
+// fresh-instance-per-call semantics of CreateOrReplace: persistentHNSW uses
+// per-instance maps (nodeAllEdges, deadNodes) as transaction-scoped caches,
+// which are only correct because each caller gets its own instance.
+func (hf *persistentIndexFactory[T]) FindOrCreate(
+	name string,
+	o opt.Options,
+	floatBits int) (index.VectorIndex[T], error) {
+	return hf.CreateOrReplace(name, o, floatBits)
 }

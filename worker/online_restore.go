@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -306,22 +307,29 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 	}
 	for _, pred := range restorePreds {
 		// HNSW vector indexes produce supporting predicates (__vector_entry,
-		// __vector_, __vector_dead) that are stored alongside the base vector
-		// predicate in the same Badger instance. During normal operation these
-		// are never registered as tablets in Zero — the HNSW code writes them
-		// directly via AddMutationWithLockHeld, and transaction validation in
-		// Zero's checkPreds strips the VecKeyword suffix to resolve the base
-		// predicate's group. Registering them here would create an inconsistent
-		// state that causes backup manifest duplication and may trigger futile
-		// rebalancing attempts.
+		// __vector_, __vector_dead, __vector_meta_ and, for partitioned indexes,
+		// the per-cluster split attrs pred__vector__i / __vector_entry_i /
+		// __vector_dead_i plus the __centroid_ set) that are stored alongside the
+		// base vector predicate in the same Badger instance. During normal
+		// operation these are never registered as tablets in Zero — the HNSW code
+		// writes them directly via AddMutationWithLockHeld, and transaction
+		// validation in Zero's checkPreds strips the VecKeyword suffix to resolve
+		// the base predicate's group. Registering them here would create an
+		// inconsistent state that causes backup manifest duplication and may
+		// trigger futile rebalancing attempts.
 		//
 		// Skipping ForceTablet is safe because the restore mapper decides which
 		// data keys to restore based on the manifest's predicate set (predSet),
 		// not on Zero's tablet assignments. The supporting predicate data will
 		// still be restored to the correct Alpha's Badger store.
-		if strings.HasSuffix(pred, hnsw.VecEntry) ||
-			strings.HasSuffix(pred, hnsw.VecKeyword) ||
-			strings.HasSuffix(pred, hnsw.VecDead) {
+		//
+		// Match on strings.Contains (not HasSuffix) to catch the partitioned
+		// per-cluster names, which carry a trailing "_<clusterIdx>" and so do not
+		// end in the bare VecEntry/VecKeyword/VecDead tokens. Every supporting key
+		// contains VecKeyword ("__vector_"), which also covers VecMeta; centroids
+		// use CentroidPrefix. This mirrors the skip logic in export.go's ChooseKey.
+		if strings.Contains(pred, hnsw.VecKeyword) ||
+			strings.Contains(pred, kmeans.CentroidPrefix) {
 			continue
 		}
 
