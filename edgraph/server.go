@@ -2448,42 +2448,82 @@ func isDropOperation(op *api.Operation) bool {
 	return op.DropAll || op.DropOp != api.Operation_NONE || len(op.DropAttr) > 0
 }
 
+// uniqueValueKey identifies a value for the in-request duplicate check: two edges
+// collide iff they write the same value to the same predicate under the same language
+// tag (language is part of value identity since #9820). For comparable values the value
+// field holds the interface{} produced by dql.TypeValFrom, so Go's dynamic-type
+// identity gives exactly the semantics the previous ==-based check had: int64(1) and
+// "1" stay distinct, while an untyped RDF literal (DefaultVal) and a JSON string
+// (StrVal) — both a Go string — stay EQUAL. Keying on types.TypeID for every value
+// split those two apart and let duplicates through when RDF and JSON mutations were
+// mixed in one request (caught in review).
+type uniqueValueKey struct {
+	predicate string
+	lang      string
+	value     interface{}
+}
+
+// byteContent keys slice-typed values by exact byte content. Its own Go type keeps it
+// from colliding with a plain string value of the same bytes, and tid separates the
+// four []byte-backed types (binary/geo/datetime/bigfloat) and vfloat from one another.
+type byteContent struct {
+	tid   types.TypeID
+	bytes string
+}
+
+// uniqueValueKeyFrom builds a hashable key for tv. dql.TypeValFrom returns slice-typed
+// values for five branches — []byte for bytes/geo/datetime/bigfloat and []float32 for
+// vfloat — which must not be used as map keys (hash of unhashable type panics, and
+// there is no recover on the mutation path). These reach this function from a plain
+// JSON mutation: the chunker parses any "[...]"-shaped string into a Vfloat32Val before
+// the schema is consulted. Slice values are wrapped in byteContent; everything else
+// passes through unchanged so that map-key equality is the old == equality.
+// The previous == comparison panicked outright on two same-predicate slice values, so
+// content equality for those replaces a crash rather than changing working behavior.
+func uniqueValueKeyFrom(predicate, lang string, tv types.Val) uniqueValueKey {
+	value := tv.Value
+	switch v := tv.Value.(type) {
+	case []byte:
+		value = byteContent{tid: tv.Tid, bytes: string(v)}
+	case []float32:
+		value = byteContent{tid: tv.Tid, bytes: string(types.FloatArrayAsBytes(v))}
+	}
+	return uniqueValueKey{predicate: predicate, lang: lang, value: value}
+}
+
+// verifyUniqueWithinMutation rejects a request in which two edges set the same value on
+// the same @unique predicate, under the same language tag, for different subjects. A
+// single linear pass over a seen-map replaces the earlier every-pair scan, which was
+// O(N^2) in the number of unique-predicate edges and dominated large batched mutations
+// (issue #9814).
 func verifyUniqueWithinMutation(qc *queryContext) error {
 	if len(qc.uniqueVars) == 0 {
 		return nil
 	}
 
+	// Maps each (predicate, lang, value) to the subject of the first edge that set it.
+	// Duplicate values from the same subject are permitted, as before.
+	seen := make(map[uniqueValueKey]string, len(qc.uniqueVars))
 	for i := range qc.uniqueVars {
 		gmuIndex, rdfIndex := decodeIndex(i)
 		// handles cases where the mutation was pruned in updateMutations
 		if gmuIndex >= uint32(len(qc.gmuList)) || qc.gmuList[gmuIndex] == nil || rdfIndex >= uint32(len(qc.gmuList[gmuIndex].Set)) {
 			continue
 		}
-		pred1 := qc.gmuList[gmuIndex].Set[rdfIndex]
-		if pred1.ObjectValue == nil {
+		pred := qc.gmuList[gmuIndex].Set[rdfIndex]
+		if pred.ObjectValue == nil {
 			continue
 		}
-		pred1Value := dql.TypeValFrom(pred1.ObjectValue).Value
-		for j := range qc.uniqueVars {
-			if i == j {
-				continue
-			}
-			gmuIndex2, rdfIndex2 := decodeIndex(j)
-			// check for the second predicate, which could also have been pruned
-			if gmuIndex2 >= uint32(len(qc.gmuList)) || qc.gmuList[gmuIndex2] == nil || rdfIndex2 >= uint32(len(qc.gmuList[gmuIndex2].Set)) {
-				continue
-			}
-			pred2 := qc.gmuList[gmuIndex2].Set[rdfIndex2]
-			if pred2.ObjectValue == nil {
-				continue
-			}
-			if pred2.Predicate == pred1.Predicate && pred2.Lang == pred1.Lang &&
-				dql.TypeValFrom(pred2.ObjectValue).Value == pred1Value &&
-				pred2.Subject != pred1.Subject {
+		tv := dql.TypeValFrom(pred.ObjectValue)
+		key := uniqueValueKeyFrom(pred.Predicate, pred.Lang, tv)
+		if subject, ok := seen[key]; ok {
+			if subject != pred.Subject {
 				return errors.Errorf("could not insert duplicate value [%v] for predicate [%v]",
-					pred1Value, predicateNameWithLang(pred1))
+					tv.Value, predicateNameWithLang(pred))
 			}
+			continue
 		}
+		seen[key] = pred.Subject
 	}
 	return nil
 }
