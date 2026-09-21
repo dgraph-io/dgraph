@@ -214,6 +214,43 @@ func TestValueLockedPrefixRejectsEmpty(t *testing.T) {
 		})
 }
 
+// TestValueLockedLongestPrefixWins pins that when two namespaces lock overlapping
+// prefixes with different markers, the longest (most specific) prefix governs a
+// predicate whatever the registration order. Otherwise a holder of the broader
+// marker could write under the narrower prefix its owner meant to guard (CWE-863),
+// with import order silently deciding which marker wins.
+func TestValueLockedLongestPrefixWins(t *testing.T) {
+	type broadTrustKey int
+	type narrowTrustKey int
+	const (
+		broadTrust  broadTrustKey  = 1
+		narrowTrust narrowTrustKey = 2
+	)
+
+	// The broad prefix registers FIRST, so a first-match lookup would return it.
+	RegisterReservedNamespace(ReservedNamespace{
+		PredicatePrefix:     "dgraph.longestpfx.rel.",
+		ValueLockedPrefixes: []string{"dgraph.longestpfx.rel."},
+		TrustMarker:         broadTrust,
+	})
+	// A second namespace locks a narrower sub-prefix to its own marker.
+	RegisterReservedNamespace(ReservedNamespace{
+		ValueLockedPrefixes: []string{"dgraph.longestpfx.rel.secret."},
+		TrustMarker:         narrowTrust,
+	})
+
+	// Under both prefixes, the more specific one governs.
+	marker, locked := ReservedPredicateValueLock("dgraph.longestpfx.rel.secret.key")
+	require.True(t, locked)
+	require.Equal(t, narrowTrust, marker,
+		"the longest matching prefix must win, not the first registered")
+
+	// Under the broad prefix only, the broad owner governs.
+	marker, locked = ReservedPredicateValueLock("dgraph.longestpfx.rel.owner")
+	require.True(t, locked)
+	require.Equal(t, broadTrust, marker)
+}
+
 // TestValueLockedPrefixesRequireTrustMarker mirrors the ValueLocked invariant:
 // a locked prefix with no marker would be unwritable by everyone, including its
 // owner, so it must panic at registration.

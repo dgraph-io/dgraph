@@ -826,6 +826,11 @@ func IsRegisteredReservedType(typ string) bool {
 // Exact names win over prefixes. That matters when two namespaces overlap — one
 // owning a prefix, another owning a specific predicate inside it — since a single
 // ReservedNamespace has one TrustMarker and cannot express the split itself.
+//
+// Among prefixes the longest (most specific) match wins, for the same reason: a
+// broader prefix must not authorize a write under a narrower one just because it
+// registered first. Registration order therefore never decides which marker
+// governs a predicate.
 func ReservedPredicateValueLock(pred string) (marker any, locked bool) {
 	p := strings.ToLower(pred)
 	reservedNsMu.RLock()
@@ -833,12 +838,14 @@ func ReservedPredicateValueLock(pred string) (marker any, locked bool) {
 	if marker, locked = reservedNsValueLocked[p]; locked {
 		return marker, true
 	}
+	best := -1
 	for _, vlp := range reservedNsValueLockedPrefixes {
-		if strings.HasPrefix(p, vlp.prefix) {
-			return vlp.marker, true
+		if strings.HasPrefix(p, vlp.prefix) && len(vlp.prefix) > best {
+			best = len(vlp.prefix)
+			marker, locked = vlp.marker, true
 		}
 	}
-	return nil, false
+	return marker, locked
 }
 
 // TODO: rename this map to a better suited name as per its properties. It is not just for GraphQL
