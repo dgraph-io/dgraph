@@ -113,11 +113,11 @@ func (vc *viLocalCache) GetValueFromPostingList(pl *List) ([]byte, error) {
 	value := pl.findStaticValue(vc.delegate.startTs)
 
 	if value == nil || len(value.Postings) == 0 {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	if value.Postings[0].Op == Del {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	pl.cache = value.Postings[0].Value

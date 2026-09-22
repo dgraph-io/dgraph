@@ -75,6 +75,17 @@ func (vt *viTxn) StartTs() uint64 {
 	return vt.delegate.StartTs
 }
 
+// notFound wraps ErrNoValue with the shared index.ErrNotFound sentinel so
+// index-layer callers (e.g. kmeans centroid hydration) can distinguish a
+// confirmed absent key from a storage/read failure, while errors.Is(_,
+// ErrNoValue) still holds for existing callers. It is produced at the single
+// point a "no value" is determined (GetValueFromPostingList), so every accessor
+// — Get, GetWithLockHeld, and both the viTxn and viLocalCache implementations —
+// reports a genuine miss identically.
+func notFound() error {
+	return fmt.Errorf("%w: %w", index.ErrNotFound, ErrNoValue)
+}
+
 func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
@@ -84,17 +95,7 @@ func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	}
 	pl.Lock()
 	defer pl.Unlock()
-	val, err := vt.GetValueFromPostingList(pl)
-	if err == ErrNoValue {
-		// Genuine "no value" (e.g. a vector index whose centroids were never
-		// built). Surface the shared index.ErrNotFound sentinel so index-layer
-		// callers (kmeans centroid hydration) can tell it apart from the
-		// storage error above and cache the definitive miss instead of
-		// retrying. Wrap ErrNoValue so existing errors.Is(_, ErrNoValue)
-		// checks still hold.
-		return nil, fmt.Errorf("%w: %w", index.ErrNotFound, ErrNoValue)
-	}
-	return val, err
+	return vt.GetValueFromPostingList(pl)
 }
 
 func (vt *viTxn) GetWithLockHeld(key []byte) ([]byte, error) {
@@ -112,11 +113,11 @@ func (vt *viTxn) GetValueFromPostingList(pl *List) ([]byte, error) {
 	value := pl.findStaticValue(vt.delegate.StartTs)
 
 	if value == nil || len(value.Postings) == 0 {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	if value.Postings[0].Op == Del {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	pl.cache = value.Postings[0].Value
