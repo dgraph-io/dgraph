@@ -396,6 +396,10 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 			if time.Now().Before(deadline) {
 				next[uid] = pm
 			} else {
+				glog.Warningf("vector rebuild drain for %s: captured uid %d "+
+					"committed but its value did not become readable within the "+
+					"%v grace window; dropping it (it will not be indexed by this "+
+					"rebuild)", attr, uid, graceDuration)
 				delete(graceUntil, uid)
 			}
 		}
@@ -408,6 +412,13 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 					"uncommitted captured mutations for %v", attr, len(carry),
 					time.Duration(stalls)*5*time.Millisecond)
 			}
+			time.Sleep(5 * time.Millisecond)
+		} else if len(graceUntil) > 0 {
+			// Some captures are resolved but waiting out their grace window for
+			// the commit to become durably readable. Under a steady arrival of
+			// new captures `progressed` stays true, so without this the loop
+			// would spin hot for the whole grace window. A short sleep bounds
+			// the spin without changing the wall-clock grace semantics.
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
