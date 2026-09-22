@@ -1505,7 +1505,7 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 		numVectorsToCheck := 100
 		lenFreq := make(map[int]int, numVectorsToCheck)
 		maxFreq := 0
-		MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
+		err := MemLayerInstance.IterateDisk(ctx, IterateDiskArgs{
 			Prefix:      pk.DataPrefix(),
 			ReadTs:      rb.StartTs,
 			AllVersions: false,
@@ -1518,16 +1518,31 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 				if err != nil {
 					return err
 				}
-				// Only genuinely float32vector-typed values encode a real
-				// dimension. A value written before the predicate was typed
-				// float32vector is stored as raw text; interpreting those bytes
-				// as packed float32 yields len(bytes)/4 — a bogus dimension that
-				// would then fail every vector in the conversion pre-pass. Skip
-				// them (mirrors ExistingVectorDimension).
+				// A value written before the predicate was typed float32vector
+				// is stored as raw text; interpreting those bytes as packed
+				// float32 yields a bogus len/4. Convert to vfloat first (mirrors
+				// the seed scan below) so we measure the real dimension. Without
+				// this, an all-text predicate infers nothing, dimension stays -1,
+				// and every vector then fails downstream with "expected
+				// dimension -1".
 				if val.Tid != types.VFloatID {
+					sv, err := types.Convert(val, types.VFloatID)
+					if err != nil {
+						// Not a decodable vector value; skip it for inference.
+						return nil
+					}
+					b := types.ValueForType(types.BinaryID)
+					if err := types.Marshal(sv, &b); err != nil {
+						return err
+					}
+					val.Value = b.Value
+					val.Tid = types.VFloatID
+				}
+				vecBytes, ok := val.Value.([]byte)
+				if !ok {
 					return nil
 				}
-				inVec := types.BytesAsFloatArray(val.Value.([]byte))
+				inVec := types.BytesAsFloatArray(vecBytes)
 				lenFreq[len(inVec)] += 1
 				if lenFreq[len(inVec)] > maxFreq {
 					maxFreq = lenFreq[len(inVec)]
@@ -1541,6 +1556,12 @@ func rebuildVectorIndex(ctx context.Context, factorySpecs []*tok.FactoryCreateSp
 			},
 			StartKey: x.DataKey(rb.Attr, 0),
 		})
+		// A scan failure must surface here — otherwise dimension stays -1 and
+		// the rebuild fails downstream with a confusing message instead of the
+		// real error. (IterateDisk maps ErrStopIteration to nil internally.)
+		if err != nil {
+			return err
+		}
 
 		indexer.SetDimension(rb.CurrentSchema, dimension)
 	}
