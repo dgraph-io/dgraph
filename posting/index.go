@@ -2544,13 +2544,7 @@ func rebuildListType(ctx context.Context, rb *IndexRebuild) error {
 // must call it BEFORE schema.State().DeleteAll(). FactoryCreateSpec is empty
 // for non-vector predicates.
 func EvictVectorIndexCaches() {
-	for _, pred := range schema.State().Predicates() {
-		if specs, err := schema.State().FactoryCreateSpec(context.TODO(), pred); err == nil {
-			for _, spec := range specs {
-				_ = spec.Remove(pred)
-			}
-		}
-	}
+	evictVectorIndexCaches(nil)
 }
 
 // EvictVectorIndexCachesForNs is the namespace-scoped counterpart of
@@ -2558,8 +2552,17 @@ func EvictVectorIndexCaches() {
 // removed from the schema (DeletePredsForNs), or the predicates can no longer
 // be found to evict — same ordering requirement as the DROP_ALL path.
 func EvictVectorIndexCachesForNs(ns uint64) {
+	evictVectorIndexCaches(func(pred string) bool { return x.ParseNamespace(pred) == ns })
+}
+
+// evictVectorIndexCaches removes the cached vector-index instance for every
+// predicate the include filter accepts (nil => all). It is the shared body of
+// the DROP_ALL and DROP_NS eviction paths, so the two ordering-sensitive
+// callers cannot drift apart. Must run while the schema still lists the
+// predicates. FactoryCreateSpec is empty for non-vector predicates.
+func evictVectorIndexCaches(include func(pred string) bool) {
 	for _, pred := range schema.State().Predicates() {
-		if x.ParseNamespace(pred) != ns {
+		if include != nil && !include(pred) {
 			continue
 		}
 		if specs, err := schema.State().FactoryCreateSpec(context.TODO(), pred); err == nil {
