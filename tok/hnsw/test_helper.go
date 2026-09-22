@@ -8,6 +8,7 @@ package hnsw
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -154,7 +155,10 @@ func (t *inMemTxn) Get(key []byte) (rval []byte, rerr error) {
 func (t *inMemTxn) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	val, ok := tsDbs[t.startTs].inMemTestDb[string(key[:])]
 	if !ok {
-		return nil, errors.New("Could not find data with key " + string(key[:]))
+		// Mirror the real caches: a genuine miss surfaces index.ErrNotFound so
+		// getVecFromUid distinguishes an absent key (skip) from a storage error
+		// (propagate).
+		return nil, fmt.Errorf("%w: could not find data with key %s", index.ErrNotFound, string(key[:]))
 	}
 	return val, nil
 }
@@ -227,7 +231,10 @@ func (c *inMemLocalCache) Find(prefix []byte, filter func([]byte) bool) (uint64,
 func (c *inMemLocalCache) GetWithLockHeld(key []byte) (rval []byte, rerr error) {
 	val, ok := tsDbs[c.readTs].inMemTestDb[string(key[:])]
 	if !ok {
-		return nil, errors.New("Could not find data with key " + string(key[:]))
+		// Mirror the real caches: a genuine miss surfaces index.ErrNotFound so
+		// getVecFromUid distinguishes an absent key (skip) from a storage error
+		// (propagate).
+		return nil, fmt.Errorf("%w: could not find data with key %s", index.ErrNotFound, string(key[:]))
 	}
 	return val, nil
 }

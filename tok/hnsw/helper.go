@@ -399,10 +399,18 @@ func GetVectorFromUid[T c.Float](pred string, uid uint64, floatBits int, c index
 func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[]T) error {
 	data, err := getDataFromKeyWithCacheType(ph.pred, uid, c)
 	if err != nil {
-		if errors.Is(err, errFetchingPostingList) {
-			// no vector. Return empty array of floats
+		if errors.Is(err, index.ErrNotFound) {
+			// The key is genuinely absent (a UID deleted but not yet cleaned
+			// from the graph, or never written). Treat it as "no vector" so
+			// callers can skip it and keep the surviving neighbors.
 			index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 			return fmt.Errorf("%w; %w", errNilVector, err)
+		}
+		if errors.Is(err, errFetchingPostingList) {
+			// A storage/read failure — NOT an absent key. Propagate it so the
+			// query fails loudly instead of silently returning a short result
+			// set (a result-correctness bug this path used to hide).
+			return err
 		}
 		return err
 	}
