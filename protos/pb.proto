@@ -151,6 +151,14 @@ message ZeroProposal {
   // 12 has already been used.
   DeleteNsRequest delete_ns = 13;  // Used to delete namespace.
   repeated Tablet tablets = 14;
+  TabletPins tablet_pins = 15;  // Pin tablets to groups, or remove pins.
+}
+
+// TabletPins updates the tablet pins in MembershipState. pin assigns a group to each listed
+// predicate, replacing any earlier pin; unpin removes the pin of each listed predicate.
+message TabletPins {
+  map<string, uint32> pin = 1;
+  repeated string unpin = 2;
 }
 
 // MembershipState is used to pack together the current membership state of all
@@ -168,6 +176,10 @@ message MembershipState {
   string cid = 8;  // Used to uniquely identify the Dgraph cluster.
   reserved 9; // was used for License
   // 10 has already been used.
+  // tablet_pins maps a predicate to the group it is pinned to. Zero places a pinned predicate on
+  // that group when it is first served, the automatic rebalancer never moves it, and a manual move
+  // to another group is rejected until the pin is changed or removed.
+  map<string, uint32> tablet_pins = 11;
 }
 
 message ConnectionState {
