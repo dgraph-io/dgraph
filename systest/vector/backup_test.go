@@ -231,6 +231,12 @@ func (vsuite *VectorTestSuite) TestVectorBackupRestoreReIndexing() {
 	t.Log("taking incremental backup \n")
 	require.NoError(t, hc.Backup(sharedCluster, false, backupDir))
 
+	// Drop everything so the restore below is the SOLE source of the data.
+	// Without this the restore runs over still-live data and the assertions
+	// pass whether or not the restore did anything — never exercising the path.
+	t.Log("dropping all data before restore \n")
+	require.NoError(t, gc.DropAll())
+
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
