@@ -67,6 +67,7 @@ type HTTPClient struct {
 	dqlMutateUrl  string
 	alphaStateUrl string
 	moveTabletURL string
+	cancelMoveURL string
 }
 
 // GraphQLParams are used for making graphql requests to dgraph
@@ -756,6 +757,32 @@ func (hc *HTTPClient) MoveTablet(predicate string, group uint32) error {
 	return nil
 }
 
+// CancelMove aborts the in-flight move of predicate through Zero's /cancelMove endpoint. It fails
+// if Zero is not driving a move of that predicate.
+func (hc *HTTPClient) CancelMove(predicate string) error {
+	url := fmt.Sprintf("%s?tablet=%s", hc.cancelMoveURL, predicate)
+	response, err := http.Get(url)
+	if err != nil {
+		return errors.Wrapf(err, "error cancelling move via HTTP: predicate=%s", predicate)
+	}
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Printf("[WARNING] error closing body: %v", err)
+		}
+	}()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return errors.Wrapf(err, "error reading cancel move response body")
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return errors.Errorf("cancel move failed with status %d: %s", response.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // SetupSchema sets up DQL schema
 func (gc *GrpcClient) SetupSchema(dbSchema string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -845,10 +872,12 @@ func GetHttpClient(alphaUrl, zeroUrl string) (*HTTPClient, error) {
 	dqlUrl := "http://" + alphaUrl + "/query"
 	dqlMutateUrl := "http://" + alphaUrl + "/mutate"
 	moveTabletUrl := "http://" + zeroUrl + "/moveTablet"
+	cancelMoveUrl := "http://" + zeroUrl + "/cancelMove"
 	return &HTTPClient{
 		adminURL:      adminUrl,
 		graphqlURL:    graphQLUrl,
 		moveTabletURL: moveTabletUrl,
+		cancelMoveURL: cancelMoveUrl,
 		stateURL:      stateUrl,
 		dqlURL:        dqlUrl,
 		dqlMutateUrl:  dqlMutateUrl,

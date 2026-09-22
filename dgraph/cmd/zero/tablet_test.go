@@ -6,6 +6,9 @@
 package zero
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 func TestMoveTimeout(t *testing.T) {
@@ -65,4 +69,99 @@ func TestMoveBackoff(t *testing.T) {
 	// A successful move clears the backoff.
 	s.recordMoveResult(pred, time.Minute, nil)
 	require.False(t, s.skipMove(pred))
+}
+
+// TestRebalanceDisabled checks that a zero rebalance interval turns the automatic rebalancer off:
+// the loop must return instead of ticking (or, as time.Tick(0) would have it, blocking forever).
+func TestRebalanceDisabled(t *testing.T) {
+	prev := opts.rebalanceInterval
+	opts.rebalanceInterval = 0
+	t.Cleanup(func() { opts.rebalanceInterval = prev })
+
+	done := make(chan struct{})
+	go func() {
+		(&Server{}).rebalanceTablets()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("rebalanceTablets must return immediately when rebalance_interval is 0")
+	}
+}
+
+func TestCancelMove(t *testing.T) {
+	s := &Server{inflightMoves: new(sync.Map)}
+	pred := "0-name"
+
+	_, err := s.CancelMove(pred)
+	require.Error(t, err, "cancelling a predicate with no move in flight must fail")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	untrack := s.trackMove(pred, 1, 2, cancel)
+	require.NoError(t, ctx.Err())
+
+	msg, err := s.CancelMove(pred)
+	require.NoError(t, err)
+	require.Contains(t, msg, pred)
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
+	require.ErrorIs(t, context.Cause(ctx), errMoveCancelled)
+
+	// A move is cancelled once; other tablets are unaffected.
+	_, err = s.CancelMove(pred)
+	require.Error(t, err)
+	_, err = s.CancelMove("0-other")
+	require.Error(t, err)
+	untrack()
+
+	// A move that finished, or passed the point of no return, can no longer be cancelled.
+	ctx, cancel = context.WithCancelCause(context.Background())
+	untrack = s.trackMove(pred, 1, 2, cancel)
+	untrack()
+	_, err = s.CancelMove(pred)
+	require.Error(t, err)
+	require.NoError(t, ctx.Err())
+
+	// Untracking a stale registration must not drop a newer move of the same predicate.
+	staleCtx, staleCancel := context.WithCancelCause(context.Background())
+	stale := s.trackMove(pred, 1, 2, staleCancel)
+	ctx, cancel = context.WithCancelCause(context.Background())
+	defer s.trackMove(pred, 2, 1, cancel)()
+	stale()
+	_, err = s.CancelMove(pred)
+	require.NoError(t, err)
+	require.NoError(t, staleCtx.Err())
+	require.ErrorIs(t, context.Cause(ctx), errMoveCancelled)
+}
+
+func TestCancelMoveHandler(t *testing.T) {
+	st := &state{zero: &Server{inflightMoves: new(sync.Map)}}
+	do := func(method, target string) *httptest.ResponseRecorder {
+		rr := httptest.NewRecorder()
+		st.cancelMove(rr, httptest.NewRequest(method, target, nil))
+		return rr
+	}
+
+	require.Equal(t, http.StatusBadRequest, do(http.MethodPost, "/cancelMove?tablet=name").Code,
+		"only GET is accepted, like /moveTablet")
+	require.Equal(t, http.StatusBadRequest, do(http.MethodGet, "/cancelMove").Code,
+		"tablet is mandatory")
+	require.Equal(t, http.StatusBadRequest, do(http.MethodGet, "/cancelMove?tablet=name&namespace=x").Code,
+		"namespace must be an integer")
+	require.Equal(t, http.StatusBadRequest, do(http.MethodGet, "/cancelMove?tablet=name").Code,
+		"no move in flight")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer st.zero.trackMove(x.NamespaceAttr(x.RootNamespace, "name"), 1, 2, cancel)()
+	rr := do(http.MethodGet, "/cancelMove?tablet=name")
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	require.Contains(t, rr.Body.String(), "from group 1 to 2")
+	require.ErrorIs(t, context.Cause(ctx), errMoveCancelled)
+
+	// Tablets outside the root namespace are addressed with the namespace query parameter.
+	ctx, cancel = context.WithCancelCause(context.Background())
+	defer st.zero.trackMove(x.NamespaceAttr(5, "name"), 1, 2, cancel)()
+	require.Equal(t, http.StatusBadRequest, do(http.MethodGet, "/cancelMove?tablet=name").Code)
+	require.Equal(t, http.StatusOK, do(http.MethodGet, "/cancelMove?tablet=name&namespace=5").Code)
+	require.ErrorIs(t, context.Cause(ctx), errMoveCancelled)
 }

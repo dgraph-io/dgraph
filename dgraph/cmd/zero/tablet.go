@@ -74,8 +74,16 @@ This would trigger G1 to get latest state. Wait for it.
 
 */
 
+// rebalanceTablets periodically moves one tablet from the largest group to the smallest to even
+// out disk usage. A rebalance_interval of 0 disables it entirely: tablets then move only through
+// MoveTablet, which is what operators who place tablets deliberately want.
 // TODO: Have a event log for everything.
 func (s *Server) rebalanceTablets() {
+	if opts.rebalanceInterval <= 0 {
+		glog.Infof("Automatic tablet rebalancing is disabled (rebalance_interval=%v). Tablets move"+
+			" only through /moveTablet.", opts.rebalanceInterval)
+		return
+	}
 	ticker := time.Tick(opts.rebalanceInterval)
 	for range ticker {
 		predicate, srcGroup, dstGroup := s.chooseTablet()
@@ -160,8 +168,22 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) (err
 	}()
 
 	timeout := moveTimeout(predicateMoveTimeout, tab)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	ctx, cancelTimeout := context.WithTimeout(context.Background(), timeout)
+	defer cancelTimeout()
+
+	// Operators can abort the move through CancelMove. The move is registered before any RPC goes
+	// out and stays cancellable until the tablet reassignment is committed. Folding the
+	// cancellation cause into the returned error keeps a cancelled move distinguishable from a
+	// timed-out one in logs and in the /moveTablet response.
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	untrack := s.trackMove(predicate, srcGroup, dstGroup, cancel)
+	defer untrack()
+	defer func() {
+		if err != nil && errors.Is(context.Cause(ctx), errMoveCancelled) {
+			err = errors.Wrap(errMoveCancelled, err.Error())
+		}
+	}()
 
 	span := trace.SpanFromContext(ctx)
 	defer span.End()
@@ -224,6 +246,9 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) (err
 	if err := s.Node.proposeAndWait(ctx, p); err != nil {
 		return errors.Wrapf(err, "while proposing tablet reassignment. Proposal: %+v", p)
 	}
+	// The tablet now belongs to the destination. A cancellation from here on could only skip the
+	// source-side cleanup below, so stop accepting them.
+	untrack()
 	msg = fmt.Sprintf("Predicate move done for: [%v] from group %d to %d\n",
 		predicate, srcGroup, dstGroup)
 	span.AddEvent(msg)
@@ -366,4 +391,57 @@ func (s *Server) recordMoveResult(pred string, elapsed time.Duration, err error)
 func (s *Server) skipMove(pred string) bool {
 	entry, ok := s.moveBackoff.Load(pred)
 	return ok && time.Now().Before(entry.(tabletBackoff).until)
+}
+
+// errMoveCancelled is the cancellation cause recorded when an operator aborts a predicate move
+// through CancelMove. It is folded into the failed move's error so the outcome is distinguishable
+// from a timeout.
+var errMoveCancelled = errors.New("predicate move cancelled by operator")
+
+// inflightMove describes a predicate move this Zero is currently driving.
+type inflightMove struct {
+	predicate string
+	srcGroup  uint32
+	dstGroup  uint32
+	startedAt time.Time
+	cancel    context.CancelCauseFunc
+}
+
+// trackMove registers an in-flight move of predicate so CancelMove can find it, and returns the
+// function that removes the registration once the move has finished or passed the point where
+// cancelling is safe. Zero drives at most one move at a time, but the registry is keyed by
+// predicate so the cancel API does not depend on that. Removal is conditional on the registration
+// still being this one, so a late untrack never drops a newer move of the same predicate.
+func (s *Server) trackMove(predicate string, srcGroup, dstGroup uint32,
+	cancel context.CancelCauseFunc) (untrack func()) {
+	im := &inflightMove{
+		predicate: predicate,
+		srcGroup:  srcGroup,
+		dstGroup:  dstGroup,
+		startedAt: time.Now(),
+		cancel:    cancel,
+	}
+	s.inflightMoves.Store(predicate, im)
+	return func() { s.inflightMoves.CompareAndDelete(predicate, im) }
+}
+
+// CancelMove aborts the in-flight move of predicate, whether the automatic rebalancer or MoveTablet
+// started it. Cancelling the move's context aborts the stream from the source group; the tablet
+// stays on the source group, commits on it resume as soon as movePredicate unwinds, and any partial
+// data on the destination is cleaned up by the next move attempt, exactly as after a timeout. A
+// cancelled attempt feeds the rebalancer's backoff like any other failure, so the rebalancer does
+// not immediately re-pick a tablet an operator just stopped. It returns a description of the
+// cancelled move, or an error if this Zero is not driving a move of predicate.
+func (s *Server) CancelMove(predicate string) (string, error) {
+	v, ok := s.inflightMoves.LoadAndDelete(predicate)
+	if !ok {
+		return "", errors.Errorf("no move of predicate [%v] is in progress on this Zero;"+
+			" moves run on the Zero leader", predicate)
+	}
+	im := v.(*inflightMove)
+	im.cancel(errMoveCancelled)
+	msg := fmt.Sprintf("Cancelling move of predicate [%v] from group %d to %d after %v",
+		im.predicate, im.srcGroup, im.dstGroup, time.Since(im.startedAt).Round(time.Second))
+	glog.Info(msg)
+	return msg, nil
 }

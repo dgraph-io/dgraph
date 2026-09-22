@@ -156,22 +156,8 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	namespace := r.URL.Query().Get("namespace")
-	namespace = strings.TrimSpace(namespace)
-	ns := x.RootNamespace
-	if namespace != "" {
-		var err error
-		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			x.SetStatus(w, x.ErrorInvalidRequest, "Invalid namespace in query parameter.")
-			return
-		}
-	}
-
-	tablet := r.URL.Query().Get("tablet")
-	if len(tablet) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
+	ns, tablet, ok := tabletFromQueryParams(w, r)
+	if !ok {
 		return
 	}
 
@@ -201,6 +187,58 @@ func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = fmt.Fprint(w, resp.GetMsg())
 	if err != nil {
+		glog.Warningf("Error while writing response: %+v", err)
+	}
+}
+
+// tabletFromQueryParams reads the tablet and optional namespace query parameters shared by the
+// tablet endpoints (/moveTablet, /cancelMove). It writes any error to w and reports success.
+func tabletFromQueryParams(w http.ResponseWriter, r *http.Request) (uint64, string, bool) {
+	ns := x.RootNamespace
+	if namespace := strings.TrimSpace(r.URL.Query().Get("namespace")); namespace != "" {
+		var err error
+		if ns, err = strconv.ParseUint(namespace, 0, 64); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			x.SetStatus(w, x.ErrorInvalidRequest, "Invalid namespace in query parameter.")
+			return 0, "", false
+		}
+	}
+	tablet := r.URL.Query().Get("tablet")
+	if len(tablet) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, "tablet is a mandatory query parameter")
+		return 0, "", false
+	}
+	return ns, tablet, true
+}
+
+// cancelMove aborts the in-flight move of a tablet, whether the automatic rebalancer or /moveTablet
+// started it. It takes the same tablet and namespace query parameters as /moveTablet. The tablet
+// stays on its source group, and commits on it resume as soon as the move unwinds. It is served by
+// whichever Zero is driving the move, normally the leader.
+func (st *state) cancelMove(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	ns, tablet, ok := tabletFromQueryParams(w, r)
+	if !ok {
+		return
+	}
+
+	msg, err := st.zero.CancelMove(x.NamespaceAttr(ns, tablet))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	if _, err := fmt.Fprint(w, msg); err != nil {
 		glog.Warningf("Error while writing response: %+v", err)
 	}
 }

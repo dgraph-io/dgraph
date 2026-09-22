@@ -83,7 +83,9 @@ instances to achieve high-availability.
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
-	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
+	flag.Duration("rebalance_interval", 8*time.Minute,
+		"Interval for trying a predicate move. Set to 0 to disable automatic tablet rebalancing;"+
+			" tablets then move only through the /moveTablet endpoint.")
 	flag.String("enterprise_license", "", "(deprecated) Path to the enterprise license file.")
 	flag.String("cid", "", "Cluster ID")
 
@@ -267,9 +269,8 @@ func run() {
 			"WAL directory and Audit output cannot be the same ('%s').", opts.audit.Output)
 	}
 
-	if opts.rebalanceInterval <= 0 {
-		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
-			opts.rebalanceInterval)
+	if opts.rebalanceInterval < 0 {
+		log.Fatalf("ERROR: Rebalance interval must not be negative. Found: %v", opts.rebalanceInterval)
 	}
 
 	addr := "localhost"
@@ -317,7 +318,7 @@ func run() {
 	// the following endpoints are disabled only if the flag is explicitly set to true.
 	// They are guarded by adminAuthHandler because they expose control-plane operations;
 	// without the guard any caller able to reach the HTTP port could invoke them. The
-	// destructive endpoints (/removeNode, /moveTablet) are always guarded (strict); the
+	// destructive endpoints (/removeNode, /moveTablet, /cancelMove) are always guarded (strict); the
 	// informational and allocation endpoints (/state, /assign) enforce auth only once a token
 	// or whitelist is configured via --security.
 	if !limit.GetBool("disable-admin-http") {
@@ -325,6 +326,7 @@ func run() {
 		baseMux.Handle("/assign", adminAuthHandler(false, http.HandlerFunc(st.assign)))
 		baseMux.Handle("/removeNode", adminAuthHandler(true, http.HandlerFunc(st.removeNode)))
 		baseMux.Handle("/moveTablet", adminAuthHandler(true, http.HandlerFunc(st.moveTablet)))
+		baseMux.Handle("/cancelMove", adminAuthHandler(true, http.HandlerFunc(st.cancelMove)))
 	}
 	baseMux.HandleFunc("/debug/jemalloc", x.JemallocHandler)
 	http.DefaultServeMux.Handle("/debug/z", zpages.NewTracezHandler(zpages.NewSpanProcessor()))

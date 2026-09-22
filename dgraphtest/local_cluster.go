@@ -727,6 +727,35 @@ func (c *LocalCluster) killContainer(dc dnode) error {
 	return nil
 }
 
+// PauseAlpha freezes the alpha's container (docker pause). The process keeps its sockets, so peers
+// see a connected but unresponsive node rather than a closed connection: streams to it block
+// instead of failing. Tests use this to hold an operation such as a predicate move mid-flight
+// deterministically. Undo with UnpauseAlpha; the cluster cannot be cleaned up while paused.
+func (c *LocalCluster) PauseAlpha(id int) error {
+	if id >= c.conf.numAlphas {
+		return fmt.Errorf("invalid id of alpha: %v", id)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if err := c.dcli.ContainerPause(ctx, c.alphas[id].cid()); err != nil {
+		return errors.Wrapf(err, "error pausing container [%v]", c.alphas[id].cname())
+	}
+	return nil
+}
+
+// UnpauseAlpha resumes an alpha container frozen by PauseAlpha.
+func (c *LocalCluster) UnpauseAlpha(id int) error {
+	if id >= c.conf.numAlphas {
+		return fmt.Errorf("invalid id of alpha: %v", id)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+	if err := c.dcli.ContainerUnpause(ctx, c.alphas[id].cid()); err != nil {
+		return errors.Wrapf(err, "error unpausing container [%v]", c.alphas[id].cname())
+	}
+	return nil
+}
+
 func (c *LocalCluster) HealthCheck(zeroOnly bool) error {
 	log.Printf("[INFO] checking health of containers")
 	var wg sync.WaitGroup

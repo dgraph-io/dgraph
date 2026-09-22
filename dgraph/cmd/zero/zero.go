@@ -61,6 +61,9 @@ type Server struct {
 
 	moveOngoing    chan struct{}
 	blockCommitsOn *sync.Map
+	// inflightMoves tracks the predicate moves this Zero is currently driving, so an operator can
+	// abort one through CancelMove. Maps predicate -> *inflightMove.
+	inflightMoves *sync.Map
 	// moveBackoff tracks tablets whose most recent move failed, so the automatic rebalancer
 	// does not immediately re-pick them. Maps predicate -> tabletBackoff.
 	moveBackoff *sync.Map
@@ -92,6 +95,7 @@ func (s *Server) Init() {
 	s.blockCommitsOn = new(sync.Map)
 	s.moveOngoing = make(chan struct{}, 1)
 	s.moveBackoff = new(sync.Map)
+	s.inflightMoves = new(sync.Map)
 	s.checkpointPerGroup = make(map[uint32]uint64)
 	if opts.limiterConfig.UidLeaseLimit > 0 {
 		// rate limiting is not enabled when lease limit is set to zero.
