@@ -6,6 +6,7 @@
 package partitioned_hnsw
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
@@ -114,5 +115,33 @@ func TestUnifiedFlipTransition(t *testing.T) {
 	}
 	if _, isPart := found.(*partitionedHNSW[float32]); isPart {
 		t.Fatal("Find still returns the stale partitioned instance after altering to monolithic")
+	}
+}
+
+// TestUnifiedConcurrentCreateFindOrCreate exercises the uf.mu invariant under
+// `go test -race`: many goroutines hammer Create (monolithic opts) and
+// FindOrCreate (partitioned opts) on the SAME name. Without the factory lock,
+// pick()'s cross-factory "remove the stale registration from the other child"
+// step races the selected child's create, so both children can end up holding a
+// registration and Find becomes ambiguous. The test asserts no data race and
+// that the name still resolves to exactly one live instance afterwards.
+func TestUnifiedConcurrentCreateFindOrCreate(t *testing.T) {
+	uf := CreateUnifiedFactory[float32](32)
+	const name = "0-race"
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func() { defer wg.Done(); _, _ = uf.Create(name, monoOpts(), 32) }()
+		go func() { defer wg.Done(); _, _ = uf.FindOrCreate(name, partitionedOpts(), 32) }()
+	}
+	wg.Wait()
+
+	found, err := uf.Find(name)
+	if err != nil {
+		t.Fatalf("Find after concurrent storm: %v", err)
+	}
+	if found == nil {
+		t.Fatal("Find returned nil after concurrent storm")
 	}
 }
