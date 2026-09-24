@@ -644,6 +644,11 @@ func valToBytes(v types.Val) ([]byte, error) {
 		switch str := v.Value.(type) {
 		case string:
 			return stringJsonMarshal(str), nil
+		case []byte:
+			if len(str) == 0 {
+				return []byte(`""`), nil
+			}
+			return stringJsonMarshal(unsafe.String(unsafe.SliceData(str), len(str))), nil
 		default:
 			return json.Marshal(str)
 		}
