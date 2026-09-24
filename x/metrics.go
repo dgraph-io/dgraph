@@ -52,6 +52,25 @@ var (
 	// NumEdges is the total number of edges created so far.
 	NumEdges = ostats.Int64("num_edges_total",
 		"Total number of edges created", ostats.UnitDimensionless)
+	// IntraMutationNoFanout counts mutations whose resolved worker grant gave
+	// every predicate a single worker, i.e. intra-predicate parallelism was
+	// silently inactive for that batch. This happens whenever the resolved
+	// worker count falls below roughly twice the predicate count, which the
+	// operator cannot otherwise observe.
+	IntraMutationNoFanout = ostats.Int64("intra_mutation_no_fanout_total",
+		"Total mutations that ran with no intra-predicate fan-out",
+		ostats.UnitDimensionless)
+	// TxnsPerDelta is the number of transaction statuses carried by each
+	// applied OracleDelta — Zero's delta batching depth, which governs how
+	// much work a single apply-loop iteration amortizes and is the
+	// prerequisite figure for any cross-transaction apply optimization.
+	// Empty (MaxAssigned-only) deltas are not recorded: they would dominate
+	// the low buckets at light write load and drown the signal. Read the
+	// batching depth as the share of samples in buckets >= 2, never as the
+	// mean; Restore's synthetic single-transaction delta is included.
+	TxnsPerDelta = ostats.Int64("txns_per_delta",
+		"Transactions carried by each applied OracleDelta",
+		ostats.UnitDimensionless)
 	// NumBackups is the number of backups requested
 	NumBackups = ostats.Int64("num_backups_total",
 		"Total number of backups requested", ostats.UnitDimensionless)
@@ -237,6 +256,20 @@ var (
 			Measure:     NumEdges,
 			Description: NumEdges.Description(),
 			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        IntraMutationNoFanout.Name(),
+			Measure:     IntraMutationNoFanout,
+			Description: IntraMutationNoFanout.Description(),
+			Aggregation: view.Count(),
+			TagKeys:     allTagKeys,
+		},
+		{
+			Name:        TxnsPerDelta.Name(),
+			Measure:     TxnsPerDelta,
+			Description: TxnsPerDelta.Description(),
+			Aggregation: view.Distribution(0, 1, 2, 4, 8, 16, 32, 64, 128, 256),
 			TagKeys:     allTagKeys,
 		},
 		{
