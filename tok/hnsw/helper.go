@@ -743,38 +743,87 @@ func (ph *persistentHNSW[T]) addNeighbors(ctx context.Context, tc *TxnCache,
 
 // removeDeadNodes(nnEdges, tc) removes dead nodes from nnEdges and returns the new nnEdges
 func (ph *persistentHNSW[T]) removeDeadNodes(nnEdges []uint64, tc *TxnCache) ([]uint64, error) {
-	// TODO add a path to delete deadNodes
-	if ph.deadNodes == nil {
-		data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
-		if err != nil && !errors.Is(err, errFetchingPostingList) {
-			return []uint64{}, err
-		}
-
-		var deadNodes []uint64
-		if data != nil { // if dead nodes exist, convert to []uint64
-			deadNodes, err = ParseEdges(string(data))
-			if err != nil {
-				return []uint64{}, err
-			}
-		}
-
-		ph.deadNodes = make(map[uint64]struct{})
-		for _, n := range deadNodes {
-			ph.deadNodes[n] = struct{}{}
-		}
+	deadNodes, err := ph.loadDeadNodes(tc)
+	if err != nil {
+		return []uint64{}, err
 	}
-	if len(ph.deadNodes) == 0 {
+	if len(deadNodes) == 0 {
 		return nnEdges, nil
 	}
 
-	var diff []uint64
+	diff := make([]uint64, 0, len(nnEdges))
 	for _, s := range nnEdges {
-		if _, ok := ph.deadNodes[s]; !ok {
+		if _, ok := deadNodes[s]; !ok {
 			diff = append(diff, s)
-			continue
 		}
 	}
 	return diff, nil
+}
+
+// loadDeadNodes returns the set of tombstoned (deleted) vector UIDs visible at
+// the cache's read timestamp.
+//
+// The dead set is persisted as a single posting (DataKey(vecDead, 1)) that grows
+// as vectors are deleted. It used to be loaded once and never refreshed, so any
+// vector deleted after the first call stayed invisible to the neighbour filter
+// for the lifetime of the index instance — dead UIDs leaked back into edge
+// lists. We instead cache it as an immutable snapshot tagged with its read
+// timestamp: a rebuild streams every key at a single StartTs, so the JSON is
+// parsed once and reused across the many removeDeadNodes calls per insert, while
+// later transactions (a newer StartTs) reload and observe new deletions.
+//
+// The shared cache only ever advances in time. A transaction never observes
+// deletions newer than its own snapshot: if a newer snapshot is already cached,
+// the caller gets its own freshly-loaded set without overwriting the cache. The
+// returned map is immutable, so callers read it without locking.
+//
+// Concurrent loaders at the same ts each build a set and race to publish; the
+// losers reuse the winner's. That one-time duplicate parse is bounded (one per
+// rebuild goroutine) and the posting read is in-memory during a rebuild, so no
+// singleflight is warranted.
+func (ph *persistentHNSW[T]) loadDeadNodes(tc *TxnCache) (map[uint64]struct{}, error) {
+	ts := tc.Ts()
+	if cur := ph.deadNodes.Load(); cur != nil && cur.ts == ts {
+		return cur.set, nil
+	}
+
+	data, err := getDataFromKeyWithCacheType(ph.vecDead, 1, tc)
+	if err != nil && !errors.Is(err, errFetchingPostingList) {
+		return nil, err
+	}
+
+	var deadNodes []uint64
+	if data != nil { // if dead nodes exist, convert to []uint64
+		deadNodes, err = ParseEdges(string(data))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	loaded := make(map[uint64]struct{}, len(deadNodes))
+	for _, n := range deadNodes {
+		loaded[n] = struct{}{}
+	}
+	snap := &deadSnapshot{ts: ts, set: loaded}
+
+	for {
+		cur := ph.deadNodes.Load()
+		switch {
+		case cur != nil && cur.ts == ts:
+			// A concurrent loader already published a snapshot for this ts.
+			// Reads at a fixed ts are deterministic, so cur.set equals what we
+			// loaded; reuse the shared one and drop ours.
+			return cur.set, nil
+		case cur != nil && cur.ts > ts:
+			// A newer snapshot is cached. Serve our own ts-scoped set without
+			// installing it, so older readers keep snapshot isolation.
+			return loaded, nil
+		default:
+			if ph.deadNodes.CompareAndSwap(cur, snap) {
+				return loaded, nil
+			}
+		}
+	}
 }
 
 func Uint64ToBytes(key uint64) []byte {
