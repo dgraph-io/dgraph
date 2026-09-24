@@ -540,7 +540,6 @@ var builtInFilters = map[string]string{
 	"point":        "PointGeoFilter",
 	"polygon":      "PolygonGeoFilter",
 	"multiPolygon": "PolygonGeoFilter",
-	"hnsw":         "HNSWSearchFilter",
 }
 
 // GraphQL in-built type -> Dgraph scalar
