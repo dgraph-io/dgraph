@@ -43,6 +43,7 @@ var (
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
+
 }
 
 type shardState struct {
@@ -295,8 +296,11 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 	atomic.AddInt64(&m.prog.mapEdgeCount, 1)
 
 	uid := p.Uid
-	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 {
-		// Keep p
+	if p.PostingType != pb.Posting_REF || len(p.Facets) > 0 || len(p.Value) > 0 {
+		// Keep p. A REF posting that carries a Value (e.g. a BM25 term posting packing
+		// term frequency and document length) must retain that payload — mirroring the
+		// len(p.Value) > 0 retention clause in List.encode — or it would be reduced to a
+		// bare UID and the value silently lost.
 	} else {
 		// We only needed the UID.
 		p = nil
@@ -456,11 +460,21 @@ func (m *mapper) addIndexMapEntries(nq dql.NQuad, de *pb.DirectedEdge) {
 		// doing edge postings. So okay to be fatal.
 		x.Check(err)
 
+		attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
+
+		// BM25 postings pack (term frequency, document length) into each posting's value
+		// and require corpus statistics; the generic token path would write bare,
+		// valueless postings and no stats, leaving bulk-loaded data unsearchable. Handle
+		// it separately.
+		if _, isBM25 := toker.(tok.BM25Tokenizer); isBM25 {
+			m.addBM25IndexMapEntries(attr, nq.Lang, de, schemaVal)
+			continue
+		}
+
 		// Extract tokens.
 		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
-		attr := x.NamespaceAttr(nq.Namespace, nq.Predicate)
 		// Store index posting.
 		for _, t := range toks {
 			m.addMapEntry(
@@ -473,4 +487,55 @@ func (m *mapper) addIndexMapEntries(nq dql.NQuad, de *pb.DirectedEdge) {
 			)
 		}
 	}
+}
+
+// addBM25IndexMapEntries writes the BM25 term postings for one document — one posting
+// per distinct term, packing (term frequency, document length) into the value exactly
+// as the live index path does — and accumulates the document's contribution to this
+// mapper's corpus statistics. The accumulated stats are flushed once per bucket after
+// the map phase (loader.flushBM25Stats), because corpus statistics must be summed
+// across documents rather than unioned like postings.
+func (m *mapper) addBM25IndexMapEntries(attr string, lang string, de *pb.DirectedEdge,
+	schemaVal types.Val) {
+	termFreqs, docLen, err := tok.BM25Tokenizer{}.TokensWithFrequency(schemaVal.Value, lang)
+	x.Check(err)
+	if docLen == 0 {
+		// Document tokenizes to zero terms (e.g. all stopwords); it contributes no
+		// postings and no corpus statistics.
+		return
+	}
+
+	shard := m.state.shards.shardFor(attr)
+	uid := de.GetEntity()
+	for term, tf := range termFreqs {
+		encodedTerm := string([]byte{tok.IdentBM25}) + term
+		m.addMapEntry(
+			x.IndexKey(attr, encodedTerm),
+			&pb.Posting{
+				Uid:         uid,
+				PostingType: pb.Posting_REF,
+				ValType:     pb.Posting_BINARY,
+				Value:       posting.EncodeBM25Value(tf, docLen),
+			},
+			shard,
+		)
+	}
+
+	// Emit the document's corpus-statistics contribution as a PER-DOCUMENT posting
+	// on the final stats bucket key: (docCount=1, totalTerms=docLen). Duplicate
+	// nquads for the same (attr, uid) collapse in the reducer's same-uid dedup —
+	// exactly like the term postings above — so duplicates cannot inflate the
+	// stats (mapper-side pre-aggregation counted once per nquad and did). The
+	// reducer folds each bucket's per-doc postings into the single aggregate
+	// posting the live/rebuild paths store (see reduce.go appendToList).
+	m.addMapEntry(
+		x.BM25StatsKey(attr, int(uid%posting.NumBM25StatsBuckets)),
+		&pb.Posting{
+			Uid:         uid,
+			PostingType: pb.Posting_REF,
+			ValType:     pb.Posting_BINARY,
+			Value:       posting.EncodeBM25Stats(1, uint64(docLen)),
+		},
+		shard,
+	)
 }
