@@ -409,6 +409,36 @@ func checkSchema(s *pb.SchemaUpdate) error {
 			x.ParseAttr(s.Predicate))
 	}
 
+	for _, tokenizer := range s.Tokenizer {
+		if tokenizer != "bm25" {
+			continue
+		}
+		// BM25 scores a single document (one value) per UID: per-document length and
+		// corpus statistics are not well-defined for a list predicate, and the bucketed
+		// stats maintenance relies on conflict detection that a list predicate's
+		// value-dependent conflict key would not provide. Reject @index(bm25) on lists.
+		if s.List {
+			return errors.Errorf("Tokenizer 'bm25' cannot be applied to list predicate: %s",
+				x.ParseAttr(s.Predicate))
+		}
+		// BM25 term keys and posting identity are language-blind: values in different
+		// languages on the same UID would overwrite each other's (term, uid) payload,
+		// and corpus statistics would count each language value as a separate document.
+		if s.GetLang() {
+			return errors.Errorf("Tokenizer 'bm25' cannot be applied to predicate with @lang: %s",
+				x.ParseAttr(s.Predicate))
+		}
+		// BM25 corpus statistics are maintained by read-modify-write and rely on
+		// transaction conflict detection to serialize same-bucket updates. This check
+		// also exists in schema.resolveTokenizers for text schemas; enforcing it here
+		// covers schema updates that arrive as protobuf without passing the parser.
+		if s.NoConflict {
+			return errors.Errorf("Tokenizer 'bm25' cannot be used with @noconflict on predicate %s: "+
+				"BM25 corpus statistics require conflict detection to stay consistent",
+				x.ParseAttr(s.Predicate))
+		}
+	}
+
 	// If schema update has upsert directive, it should have index directive.
 	if s.Upsert && len(s.Tokenizer) == 0 && !s.Unique {
 		return errors.Errorf("Index tokenizer is mandatory for: [%s] when specifying @upsert directive",
