@@ -105,7 +105,7 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 		}
 		ph.simType = okSimType
 	} else {
-		ph.simType = SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
+		ph.simType = SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistance[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
 			isSimilarityMetric: false}
 	}

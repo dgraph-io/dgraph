@@ -20,8 +20,6 @@ import (
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	"github.com/pkg/errors"
-	"github.com/viterin/vek"
-	"github.com/viterin/vek/vek32"
 )
 
 const (
@@ -96,20 +94,25 @@ func applyDistanceFunction[T c.Float](a, b []T, floatBits int, funcName string,
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
 func dotProduct[T c.Float](a, b []T, floatBits int) (T, error) {
-	return applyDistanceFunction(a, b, floatBits, "dot product", vek32.Dot, vek.Dot)
+	return applyDistanceFunction(a, b, floatBits, "dot product", dotF32, dotF64)
 }
 
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter.
 func cosineSimilarity[T c.Float](a, b []T, floatBits int) (T, error) {
-	return applyDistanceFunction(a, b, floatBits, "cosine distance", vek32.CosineSimilarity, vek.CosineSimilarity)
+	return applyDistanceFunction(a, b, floatBits, "cosine distance", cosineSimF32, cosineSimF64)
 }
 
+// euclideanDistance returns the metric-domain euclidean distance, i.e. square rooted.
+// Callers rely on that: DistanceThreshold in SearchWithOptions compares against it
+// directly. The square root is monotonic, so dropping it would leave ranking unchanged
+// but would require squaring the threshold at those comparison sites.
+//
 // This needs to implement signature of SimilarityType[T].distanceScore
 // function, hence it takes in a floatBits parameter,
 // but doesn't actually use it.
-func euclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
-	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
+func euclideanDistance[T c.Float](a, b []T, floatBits int) (T, error) {
+	return applyDistanceFunction(a, b, floatBits, "euclidean distance", euclideanF32, euclideanF64)
 }
 
 // Used for distance, since shorter distance is better
@@ -217,7 +220,7 @@ type SimilarityType[T c.Float] struct {
 func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 	switch {
 	case indexType == Euclidean:
-		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
+		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistance[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
 			isSimilarityMetric: false}
 	case indexType == Cosine:
@@ -229,7 +232,7 @@ func GetSimType[T c.Float](indexType string, floatBits int) SimilarityType[T] {
 			insortHeap: insortPersistentHeapDescending[T], isBetterScore: isBetterScoreForSimilarity[T],
 			isSimilarityMetric: true}
 	default:
-		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistanceSq[T],
+		return SimilarityType[T]{indexType: Euclidean, distanceScore: euclideanDistance[T],
 			insortHeap: insortPersistentHeapAscending[T], isBetterScore: isBetterScoreForDistance[T],
 			isSimilarityMetric: false}
 	}
