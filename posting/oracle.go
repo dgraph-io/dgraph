@@ -8,6 +8,7 @@ package posting
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -74,9 +75,22 @@ func (vt *viTxn) StartTs() uint64 {
 	return vt.delegate.StartTs
 }
 
+// notFound wraps ErrNoValue with the shared index.ErrNotFound sentinel so
+// index-layer callers (e.g. kmeans centroid hydration) can distinguish a
+// confirmed absent key from a storage/read failure, while errors.Is(_,
+// ErrNoValue) still holds for existing callers. It is produced at the single
+// point a "no value" is determined (GetValueFromPostingList), so every accessor
+// — Get, GetWithLockHeld, and both the viTxn and viLocalCache implementations —
+// reports a genuine miss identically.
+func notFound() error {
+	return fmt.Errorf("%w: %w", index.ErrNotFound, ErrNoValue)
+}
+
 func (vt *viTxn) Get(key []byte) ([]byte, error) {
 	pl, err := vt.delegate.cache.Get(key)
 	if err != nil {
+		// A storage/read failure — NOT a "not found". Propagate as-is so
+		// callers can retry rather than mistaking it for an absent key.
 		return nil, err
 	}
 	pl.Lock()
@@ -99,11 +113,11 @@ func (vt *viTxn) GetValueFromPostingList(pl *List) ([]byte, error) {
 	value := pl.findStaticValue(vt.delegate.StartTs)
 
 	if value == nil || len(value.Postings) == 0 {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	if value.Postings[0].Op == Del {
-		return nil, ErrNoValue
+		return nil, notFound()
 	}
 
 	pl.cache = value.Postings[0].Value
@@ -241,6 +255,17 @@ func (o *oracle) CacheAt(ts uint64) *LocalCache {
 }
 
 // MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
+// TxnPending reports whether the transaction that started at startTs is
+// still awaiting its commit/abort delta from zero. Used by the vector
+// rebuild drain to decide between "wait for this capture's commit" and
+// "resolved without a value: nothing to index".
+func (o *oracle) TxnPending(startTs uint64) bool {
+	o.RLock()
+	defer o.RUnlock()
+	_, ok := o.pendingTxns[startTs]
+	return ok
+}
+
 func (o *oracle) MinPendingStartTs() uint64 {
 	o.RLock()
 	defer o.RUnlock()
