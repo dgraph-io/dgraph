@@ -488,7 +488,7 @@ func (m *mapper) processReqCh(ctx context.Context) error {
 			// If the predicate is a vector indexing predicate, skip further processing.
 			// currently we don't store vector supporting predicates in the schema.
 			if strings.HasSuffix(parsedKey.Attr, hnsw.VecEntry) || strings.HasSuffix(parsedKey.Attr, hnsw.VecKeyword) ||
-				strings.HasSuffix(parsedKey.Attr, hnsw.VecDead) {
+				strings.HasSuffix(parsedKey.Attr, hnsw.VecDead) || strings.HasSuffix(parsedKey.Attr, hnsw.VecQuant) {
 				return nil
 			}
 			// Reset the StreamId to prevent ordering issues while writing to stream writer.
