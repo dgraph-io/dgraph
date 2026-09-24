@@ -2017,8 +2017,9 @@
 - name: Updating @id field when given value for @id fields exist in some node
   explaination:
     We are giving two @id fields title and ISBN in set part of update mutation, and will generate
-    two existence queries for both of them.As we already have node with title Sapiens, we will
-    return error in this case
+    two existence queries for both of them. "History of Humans" already exists at node 0x123 (a
+    different node than the one being updated). The rewriter defers the conflict check — the
+    mutation proceeds, and VerifyXIDConflicts catches the cross-node conflict post-execution.
   gqlmutation: |
     mutation update($patch: UpdateBookInput!) {
       updateBook(input: $patch) {
@@ -2068,12 +2069,23 @@
     {
       "Book_2": "0x123"
     }
-  error2:
-    {
-      "message":
-        failed to rewrite mutation payload because id History of Humans already exists for field
-        title inside type Book,
+  dgquerysec: |-
+    query {
+      x as updateBook(func: type(Book)) @filter((eq(Book.title, "Sapiens") OR eq(Book.ISBN, "2QSAT"))) {
+        uid
+      }
     }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Book.ISBN": "I001",
+          "Book.publisher": "penguin",
+          "Book.title": "History of Humans"
+        }
+      cond: "@if(gt(len(x), 0))"
+  xidconflictuids: '["0x456"]'
+  xidconflicterror:
+    { "message": id History of Humans already exists for field title inside type Book }
 
 - name: skipping nullable @id values while Updating link to non-existent nested object
   explaination:
