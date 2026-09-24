@@ -264,7 +264,8 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		IsLearner: isLearner,
 	}
 	glog.Infof("RaftContext: %+v\n", rc)
-	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig)
+	electionTick := x.WorkerConfig.Raft.GetInt64("election-tick")
+	m := conn.NewNode(rc, store, x.WorkerConfig.TLSClientConfig, int(electionTick))
 
 	n := &node{
 		Node: m,
