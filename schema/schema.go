@@ -15,7 +15,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"golang.org/x/net/trace"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -52,7 +51,6 @@ func GetWriteContext(ctx context.Context) context.Context {
 func (s *state) init() {
 	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.types = make(map[string]*pb.TypeUpdate)
-	s.elog = trace.NewEventLog("Dgraph", "Schema")
 	s.mutSchema = make(map[string]*pb.SchemaUpdate)
 }
 
@@ -61,7 +59,6 @@ type state struct {
 	// Map containing predicate to type information.
 	predicate map[string]*pb.SchemaUpdate
 	types     map[string]*pb.TypeUpdate
-	elog      trace.EventLog
 	// mutSchema holds the schema update that is being applied in the background.
 	mutSchema map[string]*pb.SchemaUpdate
 }
@@ -180,12 +177,12 @@ func logUpdate(schema *pb.SchemaUpdate, pred string) string {
 	if schema.List {
 		typ = fmt.Sprintf("[%s]", typ)
 	}
-	return fmt.Sprintf("Setting schema for attr %s: %v, tokenizer: %v, directive: %v, count: %v\n",
+	return fmt.Sprintf("Setting schema for attr %s: %v, tokenizer: %v, directive: %v, count: %v",
 		pred, typ, schema.Tokenizer, schema.Directive, schema.Count)
 }
 
 func logTypeUpdate(typ *pb.TypeUpdate, typeName string) string {
-	return fmt.Sprintf("Setting type definition for type %s: %v\n", typeName, typ)
+	return fmt.Sprintf("Setting type definition for type %s: %v", typeName, typ)
 }
 
 // Set sets the schema for the given predicate in memory.
@@ -198,7 +195,7 @@ func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.predicate[pred] = schema
-	s.elog.Printf(logUpdate(schema, pred))
+	glog.V(2).Infoln(logUpdate(schema, pred))
 }
 
 // SetMutSchema sets the mutation schema for the given predicate.
@@ -237,7 +234,7 @@ func (s *state) SetType(typeName string, typ *pb.TypeUpdate) {
 	s.Lock()
 	defer s.Unlock()
 	s.types[typeName] = typ
-	s.elog.Printf(logTypeUpdate(typ, typeName))
+	glog.V(2).Infoln(logTypeUpdate(typ, typeName))
 }
 
 // Get gets the schema for the given predicate.
@@ -552,8 +549,6 @@ func Load(predicate string) error {
 		return err
 	}
 	State().Set(predicate, &s)
-	State().elog.Printf(logUpdate(&s, predicate))
-	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
 
