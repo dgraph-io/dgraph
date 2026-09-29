@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -64,6 +65,16 @@ func mergeMapShardsIntoReduceShards(opt *BulkOptions) {
 	}
 }
 
+// shardDirIndex returns the numeric index encoded in a shard directory's name:
+// map shards are named "%03d" and reduce shards "shard_%d".
+func shardDirIndex(dir string) (int, error) {
+	base := filepath.Base(dir)
+	if i := strings.LastIndex(base, "_"); i >= 0 {
+		base = base[i+1:]
+	}
+	return strconv.Atoi(base)
+}
+
 func readShardDirs(d string) []string {
 	_, err := os.Stat(d)
 	if os.IsNotExist(err) {
@@ -77,7 +88,17 @@ func readShardDirs(d string) []string {
 	for i, shard := range shards {
 		shards[i] = filepath.Join(d, shard)
 	}
-	sort.Strings(shards)
+	// Sort numerically on the index in the directory name: reduce shards are named
+	// "shard_%d" without zero padding, so a lexical sort puts shard_10 before shard_2
+	// and the reducer would pair shard contents with the wrong output group.
+	sort.Slice(shards, func(i, j int) bool {
+		ii, erri := shardDirIndex(shards[i])
+		jj, errj := shardDirIndex(shards[j])
+		if erri != nil || errj != nil {
+			return shards[i] < shards[j]
+		}
+		return ii < jj
+	})
 	return shards
 }
 
