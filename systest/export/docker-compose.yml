@@ -69,7 +69,7 @@ services:
       /gobin/dgraph ${COVERAGE_OUTPUT} alpha --my=alpha3:7080 --zero=zero1:5080 --logtostderr -v=2
       --security "whitelist=0.0.0.0/0;"
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: ghcr.io/dgraph-io/minio:release.2026-09-22t19-25-18z
     env_file:
       - export.env
     ports:

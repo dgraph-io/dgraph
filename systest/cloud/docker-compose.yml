@@ -44,7 +44,7 @@ services:
       --acl "secret-file=/dgraph-acl/hmac-secret; access-ttl=20s;" --limit "shared-instance=true"
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: ghcr.io/dgraph-io/minio:release.2026-09-22t19-25-18z
     env_file:
       - ./../../dgraph/minio.env
     working_dir: /data/minio
