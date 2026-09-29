@@ -35,12 +35,6 @@ func mergeMapShardsIntoReduceShards(opt *BulkOptions) {
 		os.Exit(1)
 	}
 
-	// First shard is handled differently because it contains reserved predicates.
-	firstShard := shardDirs[0]
-	// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
-	shardDirs = shardDirs[1:]
-	sortBySize(shardDirs)
-
 	var reduceShards []string
 	for i := range opt.ReduceShards {
 		shardDir := filepath.Join(opt.TmpDir, reduceShardDir, fmt.Sprintf("shard_%d", i))
@@ -48,15 +42,41 @@ func mergeMapShardsIntoReduceShards(opt *BulkOptions) {
 		reduceShards = append(reduceShards, shardDir)
 	}
 
-	// Put the first map shard in the first reduce shard since it contains all the reserved
-	// predicates. We want all the reserved predicates in group 1.
-	reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
-	fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
-	x.Check(os.Rename(firstShard, reduceShard))
+	// With --tablet_placement, map shard k < ReduceShards is designated for group k+1: pinned
+	// predicates were routed to map shard group-1, so those shards must land in the reduce
+	// shard of the same index. Map shard directories are created lazily, so a designated shard
+	// with no data may be absent — identify shards by the number in their name, not by position.
+	var packable []string
+	if len(opt.tabletPlacement) > 0 {
+		for _, shard := range shardDirs {
+			k, err := shardDirIndex(shard)
+			x.Check(err)
+			if k >= opt.ReduceShards {
+				packable = append(packable, shard)
+				continue
+			}
+			reduceShard := filepath.Join(reduceShards[k], filepath.Base(shard))
+			fmt.Printf("Shard %s -> Reduce %s (group %d, placement)\n", shard, reduceShard, k+1)
+			x.Check(os.Rename(shard, reduceShard))
+		}
+		sortBySize(packable)
+	} else {
+		// First shard is handled differently because it contains reserved predicates.
+		firstShard := shardDirs[0]
+		// Sort the rest of the shards by size to allow the largest shards to be shuffled first.
+		packable = shardDirs[1:]
+		sortBySize(packable)
+
+		// Put the first map shard in the first reduce shard since it contains all the reserved
+		// predicates. We want all the reserved predicates in group 1.
+		reduceShard := filepath.Join(reduceShards[0], filepath.Base(firstShard))
+		fmt.Printf("Shard %s -> Reduce %s\n", firstShard, reduceShard)
+		x.Check(os.Rename(firstShard, reduceShard))
+	}
 
 	// Heuristic: put the largest map shard into the smallest reduce shard
 	// until there are no more map shards left. Should be a good approximation.
-	for _, shard := range shardDirs {
+	for _, shard := range packable {
 		sortBySize(reduceShards)
 		reduceShard := filepath.Join(
 			reduceShards[len(reduceShards)-1], filepath.Base(shard))
