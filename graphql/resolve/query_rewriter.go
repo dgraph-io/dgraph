@@ -1022,7 +1022,114 @@ func rootQueryOptimization(dgQuery []*dql.GraphQuery) []*dql.GraphQuery {
 
 func (authRw *authRewriter) writingAuth() bool {
 	return authRw != nil && authRw.isWritingAuth
+}
 
+// authSeedOptimization replaces an auth var block that cascades through every node of a type
+// with a cheaper seed traversal that enters via an indexed eq filter on the edge target.
+//
+// Before (full type scan):
+//   Asset_Auth2 as var(func: uid(Asset_1)) @cascade {
+//     Asset.inTenant @filter(eq(Tenant.tenantId, "acme")) { Tenant.id : uid }
+//   }
+//
+// After (indexed seed traversal):
+//   Tenant_Auth3 as var(func: eq(Tenant.tenantId, "acme"))
+//   var(func: uid(Tenant_Auth3)) { Asset_Auth2 as Tenant.assets }
+//
+// Conditions: single edge hop, eq filter on the target type's indexed field, @hasInverse on the edge.
+func authSeedOptimization(
+	varBlock *dql.GraphQuery,
+	typ schema.Type,
+	varGen *VariableGenerator,
+) []*dql.GraphQuery {
+	// Auth rule var blocks always start from func: uid(parentVar)
+	if varBlock.Func == nil || varBlock.Func.Name != "uid" {
+		return nil
+	}
+	// Optimization applies only to single edge hops
+	if len(varBlock.Children) != 1 {
+		return nil
+	}
+	edgeChild := varBlock.Children[0]
+
+	// The edge child must carry a simple eq filter (not a compound and/or tree)
+	if edgeChild.Filter == nil || edgeChild.Filter.Func == nil ||
+		edgeChild.Filter.Func.Name != "eq" {
+		return nil
+	}
+	if len(edgeChild.Filter.Func.Args) < 2 {
+		return nil
+	}
+
+	// Extract the field name from the DQL predicate (e.g. "Asset.inTenant" → "inTenant")
+	edgeParts := strings.SplitN(edgeChild.Attr, ".", 2)
+	if len(edgeParts) != 2 || edgeParts[1] == "" {
+		return nil
+	}
+	edgeFieldDef := typ.Field(edgeParts[1])
+	if edgeFieldDef == nil {
+		return nil
+	}
+
+	// The edge must have @hasInverse so we can traverse forward from seed to protected type
+	inverseFld := edgeFieldDef.Inverse()
+	if inverseFld == nil {
+		return nil
+	}
+
+	// Resolve the filter field on the edge target type and verify it has an eq/hash index
+	targetType := edgeFieldDef.Type()
+	if lt := targetType.ListType(); lt != nil {
+		targetType = lt
+	}
+
+	// edgeChild.Filter.Func.Args[0].Value is the predicate, e.g. "Tenant.tenantId"
+	filterParts := strings.SplitN(edgeChild.Filter.Func.Args[0].Value, ".", 2)
+	if len(filterParts) != 2 || filterParts[1] == "" {
+		return nil
+	}
+	filterFieldDef := targetType.Field(filterParts[1])
+	if filterFieldDef == nil || !filterFieldDef.HasEqIndex() {
+		return nil
+	}
+
+	// All conditions met: build the optimized two-block replacement.
+	seedVar := varGen.Next(targetType, "", "", true)
+
+	// Seed block: enters Dgraph via the indexed eq filter on the target type
+	seedQry := &dql.GraphQuery{
+		Var:  seedVar,
+		Attr: "var",
+		Func: edgeChild.Filter.Func,
+	}
+
+	// parentVar is the type-scoped var (e.g. FbPost_4 / Asset_1) that the original auth
+	// block started from. Keep it referenced in the traversal's inner filter so that:
+	// (a) the DQL dependency checker does not flag it as unused, and (b) when the inverse
+	// edge is polymorphic the traversal is restricted to the correct protected type.
+	parentVar := varBlock.Func.Args[0].Value
+
+	// Traversal block: walks forward from seed via the inverse predicate and assigns
+	// protected-type UIDs to varBlock.Var using nested var assignment.
+	traversalQry := &dql.GraphQuery{
+		Attr: "var",
+		Func: &dql.Function{
+			Name: "uid",
+			Args: []dql.Arg{{Value: seedVar}},
+		},
+		Children: []*dql.GraphQuery{{
+			Var:  varBlock.Var,
+			Attr: inverseFld.DgraphPredicate(),
+			Filter: &dql.FilterTree{
+				Func: &dql.Function{
+					Name: "uid",
+					Args: []dql.Arg{{Value: parentVar}},
+				},
+			},
+		}},
+	}
+
+	return []*dql.GraphQuery{seedQry, traversalQry}
 }
 
 // addAuthQueries takes a field and the GraphQuery that has so far been constructed for
@@ -1166,12 +1273,25 @@ func (authRw *authRewriter) addAuthQueries(
 	// that has the filter from the user query in it.  This is then used as
 	// the starting point for other auth queries.
 	//
-	// We already have the query, so just copy it and modify the original
+	// We already have the query, so just copy it and modify the original.
+	//
+	// Promote an eq/in filter to the func entry point when the user supplied one on an
+	// indexed field. rootQueryOptimization does the same for the non-auth path, but it
+	// fires after addAuthQueries overwrites dgQuery[0].Func to uid(parentVar), so it is
+	// a no-op in auth mode — this promotion compensates.
+	varFunc := dgQuery[0].Func
+	varFilter := dgQuery[0].Filter
+	if varFunc != nil && varFunc.Name == "type" &&
+		varFilter != nil && varFilter.Func != nil &&
+		(varFilter.Func.Name == "eq" || varFilter.Func.Name == "in") {
+		varFunc = varFilter.Func
+		varFilter = &dql.FilterTree{Func: dgQuery[0].Func}
+	}
 	varQry := &dql.GraphQuery{
 		Var:    authRw.varName,
 		Attr:   "var",
-		Func:   dgQuery[0].Func,
-		Filter: dgQuery[0].Filter,
+		Func:   varFunc,
+		Filter: varFilter,
 	}
 
 	// build the root auth query like
@@ -1362,12 +1482,16 @@ func (authRw *authRewriter) rewriteRuleNode(
 			r1[0].Cascade = append(r1[0].Cascade, "__all__")
 		}
 
-		return []*dql.GraphQuery{r1[0]}, &dql.FilterTree{
+		authFilter := &dql.FilterTree{
 			Func: &dql.Function{
 				Name: "uid",
 				Args: []dql.Arg{{Value: varName}},
 			},
 		}
+		if optimized := authSeedOptimization(r1[0], typ, authRw.varGen); optimized != nil {
+			return optimized, authFilter
+		}
+		return []*dql.GraphQuery{r1[0]}, authFilter
 	case rn.DQLRule != nil:
 		return []*dql.GraphQuery{rn.DQLRule}, &dql.FilterTree{
 			Func: &dql.Function{

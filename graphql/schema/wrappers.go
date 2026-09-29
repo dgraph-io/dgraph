@@ -278,6 +278,7 @@ type FieldDefinition interface {
 	HasIDDirective() bool
 	HasEmbeddingDirective() bool
 	EmbeddingSearchMetric() string
+	HasEqIndex() bool
 	HasInterfaceArg() bool
 	GetDefaultValue(action string) interface{}
 	Inverse() FieldDefinition
@@ -2379,6 +2380,23 @@ func (fd *fieldDefinition) HasEmbeddingDirective() bool {
 		return false
 	}
 	return hasEmbeddingDirective(fd.fieldDef)
+}
+
+// HasEqIndex returns true if this field has an exact or hash search index, making it
+// eligible for a func: eq(...) entry point in DQL (avoids a full type scan).
+func (fd *fieldDefinition) HasEqIndex() bool {
+	if fd.fieldDef == nil {
+		return false
+	}
+	if hasIDDirective(fd.fieldDef) {
+		return true
+	}
+	for _, arg := range getSearchArgs(fd.fieldDef) {
+		if arg == "exact" || arg == "hash" {
+			return true
+		}
+	}
+	return false
 }
 
 func (fd *fieldDefinition) EmbeddingSearchMetric() string {

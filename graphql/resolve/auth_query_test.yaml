@@ -400,7 +400,7 @@
         UserSecret.ownedBy : UserSecret.ownedBy
       }
       UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
-      UserSecret_1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret_1 as var(func: eq(UserSecret.ownedBy, "user2")) @filter(type(UserSecret))
       UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
@@ -693,7 +693,7 @@
         UserSecret.ownedBy : UserSecret.ownedBy
       }
       UserSecretRoot as var(func: uid(UserSecret_1), orderasc: UserSecret.aSecret, first: 1) @filter(uid(UserSecret_Auth2))
-      UserSecret_1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret_1 as var(func: eq(UserSecret.ownedBy, "user2")) @filter(type(UserSecret))
       UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
@@ -822,7 +822,7 @@
         dgraph.uid : uid
       }
       MovieRoot as var(func: uid(Movie_1), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth2)) AND (uid(Movie_Auth3) OR uid(Movie_Auth4))))
-      Movie_1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
+      Movie_1 as var(func: eq(Movie.content, "A. N. Author")) @filter(type(Movie))
       Movie_Auth2 as var(func: uid(Movie_1)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth3 as var(func: uid(Movie_1)) @cascade {
         Movie.regionsAvailable : Movie.regionsAvailable {
@@ -859,7 +859,7 @@
         dgraph.uid : uid
       }
       MovieRoot as var(func: uid(Movie_3)) @filter((NOT (uid(Movie_Auth4)) AND (uid(Movie_Auth5) OR uid(Movie_Auth6))))
-      Movie_3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_3 as var(func: eq(Movie.content, "MovieXYZ")) @filter(type(Movie))
       Movie_Auth4 as var(func: uid(Movie_3)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth5 as var(func: uid(Movie_3)) @cascade {
         Movie.regionsAvailable : Movie.regionsAvailable {
@@ -920,7 +920,7 @@
         dgraph.uid : uid
       }
       MovieRoot as var(func: uid(Movie_8), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
-      Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_8 as var(func: eq(Movie.content, "MovieXYZ")) @filter(type(Movie))
       Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
         Movie.regionsAvailable : Movie.regionsAvailable {
@@ -990,7 +990,7 @@
         dgraph.uid : uid
       }
       MovieRoot as var(func: uid(Movie_8)) @filter((NOT (uid(Movie_Auth9)) AND (uid(Movie_Auth10) OR uid(Movie_Auth11))))
-      Movie_8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      Movie_8 as var(func: eq(Movie.content, "MovieXYZ")) @filter(type(Movie))
       Movie_Auth9 as var(func: uid(Movie_8)) @filter(eq(Movie.hidden, true)) @cascade
       Movie_Auth10 as var(func: uid(Movie_8)) @cascade {
         Movie.regionsAvailable : Movie.regionsAvailable {
@@ -1571,7 +1571,7 @@
         dgraph.uid : uid
       }
       PostRoot as var(func: uid(Post_1), orderdesc: Post.text, first: 10, offset: 5) @filter(((uid(Question_Auth3) AND uid(Question_Auth4)) OR uid(FbPost_Auth6) OR uid(Answer_Auth8)))
-      Post_1 as var(func: type(Post)) @filter(eq(Post.text, "A Post"))
+      Post_1 as var(func: eq(Post.text, "A Post")) @filter(type(Post))
       Question_2 as var(func: type(Question))
       Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
         Question.id : uid
@@ -1932,7 +1932,7 @@
         Post.text : Post.text
         dgraph.uid : uid
       }
-      PostRoot as var(func: uid(Post_1)) @filter((uid(Question_Auth3) OR uid(FbPost_Auth5) OR uid(Answer_6)))
+      PostRoot as var(func: uid(Post_1)) @filter((uid(Question_Auth3) OR uid(FbPost_Auth5) OR uid(Answer_7)))
       Post_1 as var(func: uid(0x123))
       Question_2 as var(func: type(Question))
       Question_Auth3 as var(func: uid(Question_2)) @filter(eq(Question.answered, true)) @cascade {
@@ -1940,12 +1940,11 @@
         Question.text : Post.text
       }
       FbPost_4 as var(func: type(FbPost))
-      FbPost_Auth5 as var(func: uid(FbPost_4)) @cascade {
-        FbPost.author : Post.author @filter(eq(Author.name, "ADMIN")) {
-          Author.name : Author.name
-        }
+      Author_Auth6 as var(func: eq(Author.name, "ADMIN"))
+      var(func: uid(Author_Auth6)) {
+        FbPost_Auth5 as Author.posts @filter(uid(FbPost_4))
       }
-      Answer_6 as var(func: type(Answer))
+      Answer_7 as var(func: type(Answer))
       checkPwd(func: uid(PostRoot)) @filter(type(Post)) {
         pwd as checkpwd(Post.pwd, $pwd0)
       }
@@ -2157,4 +2156,47 @@
       Person_Auth2 as var(func: uid(0x5)) @filter(type(Person)) @cascade {
         Person.id : uid
       }
+    }
+
+- name: Auth seed optimization - single-hop eq rule rewrites to indexed seed traversal
+  gqlquery: |
+    query {
+      queryAsset {
+        id
+        name
+      }
+    }
+  jwtvar:
+    TENANT: acme
+  dgquery: |-
+    query {
+      queryAsset(func: uid(AssetRoot)) {
+        Asset.id : uid
+        Asset.name : Asset.name
+      }
+      AssetRoot as var(func: uid(Asset_1)) @filter(uid(Asset_Auth2))
+      Asset_1 as var(func: type(Asset))
+      Tenant_Auth3 as var(func: eq(Tenant.tenantId, "acme"))
+      var(func: uid(Tenant_Auth3)) {
+        Asset_Auth2 as Tenant.assets @filter(uid(Asset_1))
+      }
+    }
+
+- name: varQry eq-promotion - user eq filter on hash-indexed field is promoted to func entry point
+  gqlquery: |
+    query {
+      queryUserSecret(filter: { ownedBy: { eq: "user1" } }) {
+        id
+      }
+    }
+  jwtvar:
+    USER: user1
+  dgquery: |-
+    query {
+      queryUserSecret(func: uid(UserSecretRoot)) {
+        UserSecret.id : uid
+      }
+      UserSecretRoot as var(func: uid(UserSecret_1)) @filter(uid(UserSecret_Auth2))
+      UserSecret_1 as var(func: eq(UserSecret.ownedBy, "user1")) @filter(type(UserSecret))
+      UserSecret_Auth2 as var(func: uid(UserSecret_1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
