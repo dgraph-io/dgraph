@@ -73,6 +73,12 @@ type BulkOptions struct {
 
 	Namespace uint64
 
+	// TabletPlacementFile pins predicates to groups; see x.ParseTabletPlacementFile.
+	TabletPlacementFile string
+	// tabletPlacement maps a namespaced predicate to its map/reduce shard (group - 1),
+	// built from TabletPlacementFile by buildTabletPlacement.
+	tabletPlacement map[string]int
+
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
@@ -193,7 +199,7 @@ func newLoader(opt *BulkOptions, precomputedWriteTs uint64) *loader {
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
-		shards: newShardMap(opt.MapShards),
+		shards: newShardMap(opt.MapShards, opt.tabletPlacement),
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *chunkWithMeta, opt.NumGoroutines),
 		writeTs:       writeTs,
@@ -578,6 +584,12 @@ func (ld *loader) writeSchema() {
 	// and distribute them among all the DBs.
 	for p := range ld.schema.schemaMap {
 		if _, ok := m[p]; !ok {
+			// A pinned predicate's schema key must go to its pinned group even when the
+			// load carried no data for it.
+			if shard, ok := ld.opt.tabletPlacement[p]; ok {
+				preds[shard] = append(preds[shard], p)
+				continue
+			}
 			i := adler32.Checksum([]byte(p)) % numDBs
 			preds[i] = append(preds[i], p)
 		}

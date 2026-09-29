@@ -103,6 +103,13 @@ func init() {
 		"Number of reduce shards. This determines the number of dgraph instances in the final "+
 			"cluster. Increasing this potentially decreases the reduce stage runtime by using "+
 			"more parallelism, but increases memory usage.")
+	flag.String("tablet_placement", "",
+		"Path to a JSON file pinning predicates to groups, as an array of "+
+			`{"predicate", "group", "namespace"} entries. Pinned predicates are written to the `+
+			"output shard of their group (group N is out/<N-1>); everything else is packed as "+
+			"usual. Placement is applied at load time only; until the cluster enforces pins, "+
+			"Zero's rebalancer may later move tablets. Use map_shards > reduce_shards so "+
+			"unpinned predicates still balance by size.")
 	flag.String("custom_tokenizers", "",
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
@@ -138,37 +145,38 @@ func run() {
 	x.Check(err)
 
 	opt := BulkOptions{
-		DataFiles:        Bulk.Conf.GetString("files"),
-		DataFormat:       Bulk.Conf.GetString("format"),
-		EncryptionKey:    keys.EncKey,
-		SchemaFile:       Bulk.Conf.GetString("schema"),
-		GqlSchemaFile:    Bulk.Conf.GetString("graphql_schema"),
-		Encrypted:        Bulk.Conf.GetBool("encrypted"),
-		EncryptedOut:     Bulk.Conf.GetBool("encrypted_out"),
-		OutDir:           Bulk.Conf.GetString("out"),
-		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
-		TmpDir:           Bulk.Conf.GetString("tmp"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		PartitionBufSize: int64(Bulk.Conf.GetInt("partition_mb")),
-		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
-		SkipReducePhase:  Bulk.Conf.GetBool("skip_reduce_phase"),
-		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:      Bulk.Conf.GetInt("reducers"),
-		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		HttpAddr:         Bulk.Conf.GetString("http"),
-		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
-		LogErrors:        Bulk.Conf.GetBool("log_errors"),
-		ErrorLogPath:     Bulk.Conf.GetString("error_log"),
-		MapShards:        Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:          Bulk.Conf.GetBool("new_uids"),
-		ClientDir:        Bulk.Conf.GetString("xidmap"),
-		Namespace:        Bulk.Conf.GetUint64("force-namespace"),
-		Badger:           bopts,
+		DataFiles:           Bulk.Conf.GetString("files"),
+		DataFormat:          Bulk.Conf.GetString("format"),
+		EncryptionKey:       keys.EncKey,
+		SchemaFile:          Bulk.Conf.GetString("schema"),
+		GqlSchemaFile:       Bulk.Conf.GetString("graphql_schema"),
+		Encrypted:           Bulk.Conf.GetBool("encrypted"),
+		EncryptedOut:        Bulk.Conf.GetBool("encrypted_out"),
+		OutDir:              Bulk.Conf.GetString("out"),
+		ReplaceOutDir:       Bulk.Conf.GetBool("replace_out"),
+		TmpDir:              Bulk.Conf.GetString("tmp"),
+		NumGoroutines:       Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:          uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		PartitionBufSize:    int64(Bulk.Conf.GetInt("partition_mb")),
+		SkipMapPhase:        Bulk.Conf.GetBool("skip_map_phase"),
+		SkipReducePhase:     Bulk.Conf.GetBool("skip_reduce_phase"),
+		CleanupTmp:          Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:         Bulk.Conf.GetInt("reducers"),
+		Version:             Bulk.Conf.GetBool("version"),
+		StoreXids:           Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:            Bulk.Conf.GetString("zero"),
+		HttpAddr:            Bulk.Conf.GetString("http"),
+		IgnoreErrors:        Bulk.Conf.GetBool("ignore_errors"),
+		LogErrors:           Bulk.Conf.GetBool("log_errors"),
+		ErrorLogPath:        Bulk.Conf.GetString("error_log"),
+		MapShards:           Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:        Bulk.Conf.GetInt("reduce_shards"),
+		TabletPlacementFile: Bulk.Conf.GetString("tablet_placement"),
+		CustomTokenizers:    Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:             Bulk.Conf.GetBool("new_uids"),
+		ClientDir:           Bulk.Conf.GetString("xidmap"),
+		Namespace:           Bulk.Conf.GetUint64("force-namespace"),
+		Badger:              bopts,
 	}
 
 	x.PrintVersion()
@@ -244,6 +252,28 @@ func RunBulkLoader(opt BulkOptions) {
 		fmt.Fprintf(os.Stderr, "Invalid flags: shufflers(%d) should be <= reduce_shards(%d)\n",
 			opt.NumReducers, opt.ReduceShards)
 		os.Exit(1)
+	}
+
+	if opt.TabletPlacementFile != "" {
+		entries, err := x.ParseTabletPlacementFile(opt.TabletPlacementFile)
+		if err == nil {
+			opt.tabletPlacement, err = buildTabletPlacement(&opt, entries)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid --tablet_placement: %v\n", err)
+			os.Exit(1)
+		}
+		printTabletPlacement(entries)
+		if opt.SkipMapPhase {
+			fmt.Println("WARNING: --tablet_placement routes data during the map phase, which " +
+				"this run skips. Make sure the map run used the same placement file; this run " +
+				"only applies it to schema-only predicates.")
+		}
+		if opt.MapShards == opt.ReduceShards {
+			fmt.Println("NOTE: map_shards == reduce_shards with --tablet_placement disables " +
+				"size balancing entirely; use map_shards > reduce_shards to let unpinned " +
+				"predicates balance by size.")
+		}
 	}
 
 	// Validate skip phase flags
