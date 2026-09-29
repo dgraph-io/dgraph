@@ -487,15 +487,16 @@ func (c *LocalCluster) LiveLoadFromExport(exportDir string) error {
 }
 
 type BulkOpts struct {
-	DataFiles       []string
-	SchemaFiles     []string
-	GQLSchemaFiles  []string
-	OutDir          string
-	MapShards       int    // Number of map shards (0 = auto based on numAlphas/replicas)
-	ReduceShards    int    // Number of reduce shards (0 = auto based on numAlphas/replicas)
-	SkipReducePhase bool   // Stop after map phase; preserve tmp dir for later reduce
-	SkipMapPhase    bool   // Skip map phase; assumes map output files already exist
-	TmpDir          string // Custom tmp directory (required when splitting map/reduce runs)
+	DataFiles           []string
+	SchemaFiles         []string
+	GQLSchemaFiles      []string
+	OutDir              string
+	MapShards           int    // Number of map shards (0 = auto based on numAlphas/replicas)
+	ReduceShards        int    // Number of reduce shards (0 = auto based on numAlphas/replicas)
+	SkipReducePhase     bool   // Stop after map phase; preserve tmp dir for later reduce
+	SkipMapPhase        bool   // Skip map phase; assumes map output files already exist
+	TmpDir              string // Custom tmp directory (required when splitting map/reduce runs)
+	TabletPlacementFile string // JSON file pinning predicates to groups (--tablet_placement)
 }
 
 func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
@@ -541,6 +542,9 @@ func (c *LocalCluster) BulkLoad(opts BulkOpts) error {
 	}
 	if opts.SkipMapPhase {
 		args = append(args, "--skip_map_phase")
+	}
+	if opts.TabletPlacementFile != "" {
+		args = append(args, "--tablet_placement", opts.TabletPlacementFile)
 	}
 
 	if len(opts.DataFiles) > 0 {
