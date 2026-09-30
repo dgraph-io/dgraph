@@ -83,6 +83,19 @@ func setupTest(t *testing.T) (*dgraphapi.GrpcClient, *dgraphapi.HTTPClient) {
 	return gc, hc
 }
 
+// reloginAfterRestore re-authenticates the clients after a restore. Restore
+// rewrites the cluster's ACL state, invalidating the JWTs gc and hc hold, so any
+// subsequent use (queries, schema changes, further backups/restores) must
+// re-login first. Credentials are unchanged since the backup is from this
+// cluster.
+func reloginAfterRestore(t *testing.T, gc *dgraphapi.GrpcClient, hc *dgraphapi.HTTPClient) {
+	t.Helper()
+	require.NoError(t, gc.LoginIntoNamespace(context.Background(),
+		dgraphapi.DefaultUser, dgraphapi.DefaultPassword, x.RootNamespace))
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.RootNamespace))
+}
+
 // setup is setupTest for suite methods.
 func (vsuite *VectorTestSuite) setup() (*dgraphapi.GrpcClient, *dgraphapi.HTTPClient) {
 	return setupTest(vsuite.T())

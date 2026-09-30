@@ -61,6 +61,7 @@ func (vsuite *VectorTestSuite) TestVectorIncrBackupRestore() {
 		incrFrom := i - 1
 		require.NoError(t, hc.Restore(sharedCluster, backupDir, "", incrFrom, i))
 		require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+		reloginAfterRestore(t, gc, hc)
 		query := `{
 			vector(func: has(project_description_v)) {
 				   count(uid)
@@ -113,6 +114,7 @@ func (vsuite *VectorTestSuite) TestVectorBackupRestore() {
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+	reloginAfterRestore(t, gc, hc)
 
 	for _, vector := range vectors {
 		similarVectors, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, 100)
@@ -176,6 +178,7 @@ func (vsuite *VectorTestSuite) TestVectorBackupRestoreDropIndex() {
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+	reloginAfterRestore(t, gc, hc)
 
 	query := ` {
 		vectors(func: has(project_description_v)) {
@@ -240,6 +243,7 @@ func (vsuite *VectorTestSuite) TestVectorBackupRestoreReIndexing() {
 	t.Log("restoring backup \n")
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+	reloginAfterRestore(t, gc, hc)
 
 	for i := 0; i < 5; i++ {
 		// drop index
@@ -647,6 +651,7 @@ func TestVectorBackupAfterRestore(t *testing.T) {
 	// consistent with normal operation.
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+	reloginAfterRestore(t, gc, hc)
 
 	// Re-login after restore since sessions are invalidated.
 	gc, cleanup, err := sharedCluster.Client()
@@ -705,6 +710,7 @@ func TestVectorBackupAfterRestorePartitioned(t *testing.T) {
 	// consistent with normal operation.
 	require.NoError(t, hc.Restore(sharedCluster, backupDir, "", 0, 0))
 	require.NoError(t, dgraphapi.WaitForRestore(sharedCluster))
+	reloginAfterRestore(t, gc, hc)
 
 	// Re-login after restore since sessions are invalidated.
 	gc, cleanup, err := sharedCluster.Client()
