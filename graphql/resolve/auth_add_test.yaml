@@ -206,6 +206,22 @@
       "Column": [ { "uid": "0x456" } ],
       "Ticket": [ { "uid": "0x789" } ]
     }
+  authquerysec: |-
+    query {
+      Project(func: uid(Project_1)) @filter(uid(Project_Auth2)) {
+        uid
+      }
+      Project_1 as var(func: uid(0x123))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Project": [ { "uid": "0x123" } ]
+    }
 
 - name: Add multiple nodes of different types that fails auth
   gqlquery: |
@@ -347,6 +363,22 @@
     {
       "Column": [ { "uid": "0x456" }, { "uid": "0x459" } ],
       "Ticket": [ { "uid": "0x789" }, { "uid": "0x799" } ]
+    }
+  authquerysec: |-
+    query {
+      Project(func: uid(Project_1)) @filter(uid(Project_Auth2)) {
+        uid
+      }
+      Project_1 as var(func: uid(0x123))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Project": [ { "uid": "0x123" } ]
     }
 
 - name: Add multiples of multiple nodes of different types that fails auth
@@ -509,6 +541,36 @@
     {
       "Column": [ { "uid": "0x456" } ]
     }
+  authquerysec: |-
+    query {
+      Project(func: uid(Project_1)) @filter(uid(Project_Auth2)) {
+        uid
+      }
+      Project_1 as var(func: uid(0x123))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+      Ticket(func: uid(Ticket_3)) @filter(uid(Ticket_Auth4)) {
+        uid
+      }
+      Ticket_3 as var(func: uid(0x789))
+      Ticket_Auth4 as var(func: uid(Ticket_3)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Project": [ { "uid": "0x123" } ],
+      "Ticket": [ { "uid": "0x789" } ]
+    }
 
 - name: Add with auth on additional delete that fails
   gqlquery: |
@@ -589,7 +651,37 @@
     {
       "Column": [ { "uid": "0x456" } ]
     }
-  error: { "message": couldn't rewrite query for mutation addColumn because authorization failed }
+  authquerysec: |-
+    query {
+      Project(func: uid(Project_1)) @filter(uid(Project_Auth2)) {
+        uid
+      }
+      Project_1 as var(func: uid(0x123))
+      Project_Auth2 as var(func: uid(Project_1)) @cascade {
+        Project.roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+        }
+      }
+      Ticket(func: uid(Ticket_3)) @filter(uid(Ticket_Auth4)) {
+        uid
+      }
+      Ticket_3 as var(func: uid(0x789))
+      Ticket_Auth4 as var(func: uid(Ticket_3)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Project": [],
+      "Ticket": []
+    }
+  error: { "message": mutation failed because authorization failed }
 
 - name: Add with deep auth on additional delete
   gqlquery: |
@@ -681,6 +773,26 @@
       "Column": [ { "uid": "0x456" } ],
       "Project": [ { "uid": "0x123" } ]
     }
+  authquerysec: |-
+    query {
+      Ticket(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2)) {
+        uid
+      }
+      Ticket_1 as var(func: uid(0x789))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Ticket": [ { "uid": "0x789" } ]
+    }
 
 - name: Add with deep auth on additional delete that fails
   gqlquery: |
@@ -771,7 +883,27 @@
       "Column": [ { "uid": "0x456" } ],
       "Project": [ { "uid": "0x123" } ]
     }
-  error: { "message": couldn't rewrite query for mutation addProject because authorization failed }
+  authquerysec: |-
+    query {
+      Ticket(func: uid(Ticket_1)) @filter(uid(Ticket_Auth2)) {
+        uid
+      }
+      Ticket_1 as var(func: uid(0x789))
+      Ticket_Auth2 as var(func: uid(Ticket_1)) @cascade {
+        Ticket.onColumn : Ticket.onColumn {
+          Column.inProject : Column.inProject {
+            Project.roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              Role.assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            }
+          }
+        }
+      }
+    }
+  authjsonsec: |
+    {
+      "Ticket": []
+    }
+  error: { "message": mutation failed because authorization failed }
 
 - name: Add with top level RBAC false
   gqlquery: |
