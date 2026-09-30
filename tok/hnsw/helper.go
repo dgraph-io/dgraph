@@ -385,9 +385,13 @@ func GetVectorFromUid[T c.Float](pred string, uid uint64, floatBits int, c index
 	var vec []T
 	data, err := getDataFromKeyWithCacheType(pred, uid, c)
 	if err != nil {
-		if errors.Is(err, errFetchingPostingList) {
+		if errors.Is(err, index.ErrNotFound) {
+			// The key is genuinely absent — treat as "no vector".
 			return nil, nil
 		}
+		// A storage/read failure must propagate: partitioned SearchWithUid /
+		// SearchWithUidAndOptions call this, and swallowing it here would return
+		// an empty result set instead of surfacing the error.
 		return nil, err
 	}
 	index.BytesAsFloatArray(data, &vec, floatBits)

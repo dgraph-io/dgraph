@@ -99,7 +99,7 @@ var (
 		"Flag to specify whether to download resources or not")
 	race        = pflag.Bool("race", false, "Set true to build with race")
 	testTimeout = pflag.String("timeout", "",
-		"Timeout for each test package (e.g. 60m, 2h). Defaults to 30m (180m with --race).")
+		"Timeout for each test package (e.g. 60m, 2h). Defaults to 90m (180m with --race).")
 	skip = pflag.String("skip", "",
 		"comma separated list of packages that needs to be skipped. "+
 			"Package Check uses string.Contains(). Please check the flag carefully")
