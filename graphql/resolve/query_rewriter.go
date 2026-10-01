@@ -1111,6 +1111,12 @@ func authSeedOptimization(
 	if len(filterParts) != 2 || filterParts[1] == "" {
 		return nil
 	}
+	// Confirm the predicate's type prefix matches targetType. A field with the same suffix
+	// name on a different type could otherwise pass the field lookup below and incorrectly
+	// enable the optimization against the wrong predicate.
+	if targetType.DgraphPredicate(filterParts[1]) != edgeChild.Filter.Func.Args[0].Value {
+		return nil
+	}
 	filterFieldDef := targetType.Field(filterParts[1])
 	if filterFieldDef == nil || !filterFieldDef.HasEqIndex() {
 		return nil
