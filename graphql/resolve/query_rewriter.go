@@ -1042,8 +1042,19 @@ func authSeedOptimization(
 	typ schema.Type,
 	varGen *VariableGenerator,
 ) []*dql.GraphQuery {
-	// Auth rule var blocks always start from func: uid(parentVar)
+	// Auth rule var blocks always start from func: uid(parentVar) with exactly one arg.
+	// len(Args)==0 means the block was built from literal UIDs (addUIDFunc with ids!=nil),
+	// which would cause a panic when we index Args[0] below.
 	if varBlock.Func == nil || varBlock.Func.Name != "uid" {
+		return nil
+	}
+	if varBlock.Filter != nil || len(varBlock.Func.Args) == 0 {
+		return nil
+	}
+	// Only optimize when the var block carries the standard @cascade{"__all__"} produced by
+	// rewriteRuleNode. A different cascade directive signals a more complex rule whose
+	// semantics we must not alter.
+	if len(varBlock.Cascade) != 1 || varBlock.Cascade[0] != "__all__" {
 		return nil
 	}
 	// Optimization applies only to single edge hops
@@ -1052,6 +1063,10 @@ func authSeedOptimization(
 	}
 	edgeChild := varBlock.Children[0]
 
+	// Reject any cascade on the edge child — it implies additional filter semantics.
+	if len(edgeChild.Cascade) != 0 {
+		return nil
+	}
 	// The edge child must carry a simple eq filter (not a compound and/or tree)
 	if edgeChild.Filter == nil || edgeChild.Filter.Func == nil ||
 		edgeChild.Filter.Func.Name != "eq" {
@@ -1059,6 +1074,14 @@ func authSeedOptimization(
 	}
 	if len(edgeChild.Filter.Func.Args) < 2 {
 		return nil
+	}
+	// Reject nested hops or filtered leaf nodes under the edge child — the optimized
+	// traversal only reproduces the top-level eq filter and cannot replicate deeper
+	// predicates, which would silently drop auth requirements and bypass authorization.
+	for _, c := range edgeChild.Children {
+		if c.Filter != nil || len(c.Children) > 0 {
+			return nil
+		}
 	}
 
 	// Extract the field name from the DQL predicate (e.g. "Asset.inTenant" → "inTenant")
