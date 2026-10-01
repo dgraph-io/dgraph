@@ -512,6 +512,13 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	start := time.Now().UnixMilli()
 	r = index.NewSearchPathResult()
 
+	// Mirror the clamp already applied on the SearchWithOptions path: a negative
+	// maxResults must not reach the bottom-layer search, where it would drive a
+	// negative slice bound in addPathNode.
+	if maxResults < 0 {
+		maxResults = 0
+	}
+
 	// 0-profile_vector_entry
 	var startVec []T
 	entry, err := ph.PickStartNode(ctx, c, &startVec)
