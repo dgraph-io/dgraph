@@ -39,7 +39,6 @@ type partitionedHNSW[T c.Float] struct {
 	// win a different dimension.
 	dimMu           sync.Mutex
 	vectorDimension int
-	vecCount        int
 	numPasses       int
 	partition       index.VectorPartitionStrat[T]
 
