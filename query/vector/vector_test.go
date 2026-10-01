@@ -409,7 +409,7 @@ func TestInvalidVectorIndex(t *testing.T) {
 				if err == nil {
 					require.Error(t, err)
 				}
-				if strings.Contains(err.Error(), "Can't create a vector index for euclidan") {
+				if strings.Contains(err.Error(), "can't create a vector index for euclidan") {
 					return
 				}
 				time.Sleep(time.Second)
