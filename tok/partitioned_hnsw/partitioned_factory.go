@@ -56,10 +56,10 @@ func (hf *partitionedHNSWIndexFactory[T]) GetOptions(o opt.Options) string {
 
 	sb := strings.Builder{}
 	if val, ok, _ := opt.GetOpt(o, NumClustersOpt, 1000); ok {
-		sb.WriteString(fmt.Sprintf(`"%s":"%d",`, NumClustersOpt, val))
+		fmt.Fprintf(&sb, `"%s":"%d",`, NumClustersOpt, val)
 	}
 	if val, ok, _ := opt.GetOpt(o, PartitionStratOpt, "kmeans"); ok {
-		sb.WriteString(fmt.Sprintf(`"%s":"%s",`, PartitionStratOpt, val))
+		fmt.Fprintf(&sb, `"%s":"%s",`, PartitionStratOpt, val)
 	}
 	extra := sb.String()
 	if len(extra) == 0 {
@@ -93,7 +93,7 @@ func (hf *partitionedHNSWIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 		AddStringOption(PartitionStratOpt).AddIntOption(VectorDimensionOpt)
 	getSimFunc := func(optValue string) (any, error) {
 		if optValue != hnsw.Euclidean && optValue != hnsw.Cosine && optValue != hnsw.DotProd {
-			return nil, fmt.Errorf("Can't create a vector index for %s", optValue)
+			return nil, fmt.Errorf("can't create a vector index for %s", optValue)
 		}
 		return hnsw.GetSimType[T](optValue, hf.floatBits), nil
 	}

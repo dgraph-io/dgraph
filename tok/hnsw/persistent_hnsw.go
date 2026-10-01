@@ -120,7 +120,6 @@ func (ph *persistentHNSW[T]) NumBuildPasses() int {
 }
 
 func (ph *persistentHNSW[T]) SetNumPasses(int) {
-	return
 }
 
 func (ph *persistentHNSW[T]) Dimension() int {
