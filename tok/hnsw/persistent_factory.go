@@ -21,6 +21,7 @@ const (
 	EfConstructionOpt string = "efConstruction"
 	EfSearchOpt       string = "efSearch"
 	MetricOpt         string = "metric"
+	QuantizeOpt       string = "quantize"
 	Hnsw              string = "hnsw"
 )
 
@@ -73,8 +74,18 @@ func (hf *persistentIndexFactory[T]) AllowedOptions() opt.AllowedOptions {
 		}
 		return GetSimType[T](optValue, hf.floatBits), nil
 	}
-
 	retVal.AddCustomOption(MetricOpt, getSimFunc)
+
+	// quantize is validated at the option layer so a bad value (e.g. "int4")
+	// is rejected when the schema is altered, not at first index build.
+	getQuantFunc := func(optValue string) (any, error) {
+		if optValue != "int8" {
+			return nil, fmt.Errorf("unsupported %q value %q (only \"int8\" is supported)",
+				QuantizeOpt, optValue)
+		}
+		return optValue, nil
+	}
+	retVal.AddCustomOption(QuantizeOpt, getQuantFunc)
 	return retVal
 }
 
@@ -106,6 +117,7 @@ func (hf *persistentIndexFactory[T]) createWithLock(
 		vecEntryKey:  ConcatStrings(name, VecEntry),
 		vecKey:       ConcatStrings(name, VecKeyword),
 		vecDead:      ConcatStrings(name, VecDead),
+		vecQKey:      ConcatStrings(name, VecQuant),
 		floatBits:    floatBits,
 		nodeAllEdges: map[uint64][][]uint64{},
 	}
