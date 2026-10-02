@@ -22,8 +22,13 @@ import (
 //
 // It is pure and returns strings rather than logging, so the combinations can be
 // pinned by a table test.
+//
+// builtinIdentity is false when a deployment installed its own authenticator via
+// ConfigureIdentity. Such an authenticator can produce identities from credentials
+// this function knows nothing about -- an external JWT, say -- so whether a closed
+// posture can be administered is no longer something it can judge.
 func securityWarnings(posture x.AnonymousPosture, whitelist string, ips []x.IPRange,
-	authToken string, aclEnabled bool, httpPort int) []string {
+	authToken string, aclEnabled, builtinIdentity bool, httpPort int) []string {
 
 	hasCredential := aclEnabled || authToken != ""
 	var out []string
@@ -33,7 +38,7 @@ func securityWarnings(posture x.AnonymousPosture, whitelist string, ips []x.IPRa
 	// warns at exactly that point: whitelisting answers where a request came from
 	// and has no credential in it, so a widened range with nothing else configured
 	// means every address inside it can run privileged operations anonymously.
-	if posture == x.AnonymousFull && len(ips) > 0 && !hasCredential {
+	if posture == x.AnonymousFull && admitsNonLoopback(ips) && !hasCredential {
 		out = append(out, fmt.Sprintf(
 			`SECURITY: --security "whitelist=%s" admits non-loopback callers, but neither ACL nor `+
 				`an admin token is configured. Privileged operations (backup, restore, export, `+
@@ -51,7 +56,7 @@ func securityWarnings(posture x.AnonymousPosture, whitelist string, ips []x.IPRa
 	// administered at all. This is a misconfiguration rather than a hardening, and
 	// it is worth saying so loudly at boot instead of letting it surface as a
 	// permission error during an incident.
-	if posture.RequiresIdentityForCapability() && !hasCredential {
+	if posture.RequiresIdentityForCapability() && !hasCredential && builtinIdentity {
 		out = append(out, fmt.Sprintf(
 			`SECURITY: --security "anonymous=%s" requires an identified caller, but neither ACL nor `+
 				`an admin token is configured, so no request can ever be identified. Every `+
@@ -60,4 +65,23 @@ func securityWarnings(posture x.AnonymousPosture, whitelist string, ips []x.IPRa
 	}
 
 	return out
+}
+
+// admitsNonLoopback reports whether any whitelist range admits an address outside
+// loopback. Loopback is always admitted regardless of the whitelist, so a range
+// that covers only loopback -- whitelist=127.0.0.1, or the documented "localhost
+// only" example -- does not take the admin plane off the host and is not worth a
+// warning.
+//
+// A range is loopback-only when both of its ends are loopback. That is exact
+// rather than approximate: IPv4 loopback is the contiguous block 127.0.0.0/8, and
+// IPv6 loopback is the single address ::1, so a range whose ends both fall inside
+// one of those cannot contain anything else.
+func admitsNonLoopback(ips []x.IPRange) bool {
+	for _, r := range ips {
+		if !r.Lower.IsLoopback() || !r.Upper.IsLoopback() {
+			return true
+		}
+	}
+	return false
 }

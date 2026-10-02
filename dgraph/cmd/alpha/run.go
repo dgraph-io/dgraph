@@ -720,11 +720,6 @@ func run() {
 	ips, err := getIPsFromString(security.GetString("whitelist"))
 	x.Check(err)
 
-	for _, msg := range securityWarnings(anonymous, security.GetString("whitelist"), ips,
-		opts.AuthToken, keys.AclSecretKey != nil, httpPort()) {
-		glog.Warning(msg)
-	}
-
 	tlsClientConf, err := x.LoadClientTLSConfigForInternalPort(Alpha.Conf)
 	x.Check(err)
 	tlsServerConf, err := x.LoadServerTLSConfigForInternalPort(Alpha.Conf)
@@ -774,6 +769,15 @@ func run() {
 
 	setupCustomTokenizers()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
+
+	// Deliberately this late. It has to follow ConfigureIdentity, because a
+	// deployment authenticator changes who can be identified, and it has to follow
+	// the port offset, because the warning names the HTTP port.
+	builtinIdentity := x.AuthenticatorName() == edgraph.PresharedAuthenticator().Name()
+	for _, msg := range securityWarnings(anonymous, security.GetString("whitelist"), ips,
+		opts.AuthToken, keys.AclSecretKey != nil, builtinIdentity, httpPort()) {
+		glog.Warning(msg)
+	}
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")

@@ -6,6 +6,7 @@
 package x
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -88,4 +89,25 @@ func TestAnonymousPostureEnforcement(t *testing.T) {
 			require.Equal(t, tt.posture, parsed)
 		})
 	}
+}
+
+type namedAuthenticator struct{ name string }
+
+func (n namedAuthenticator) Name() string { return n.name }
+func (namedAuthenticator) Authenticate(context.Context) (*Principal, error) {
+	return nil, nil
+}
+
+// TestAuthenticatorName pins the accessor dgraph alpha uses to tell whether a
+// deployment replaced the default authenticator during ConfigureIdentity.
+func TestAuthenticatorName(t *testing.T) {
+	t.Cleanup(func() { SetAuthenticator(nil) })
+
+	require.Equal(t, "acl", AuthenticatorName(), "the package default is ACL only")
+
+	SetAuthenticator(namedAuthenticator{name: "deployment"})
+	require.Equal(t, "deployment", AuthenticatorName())
+
+	SetAuthenticator(nil)
+	require.Equal(t, "acl", AuthenticatorName(), "nil restores the default")
 }

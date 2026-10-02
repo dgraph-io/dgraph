@@ -25,7 +25,9 @@ func TestSecurityWarnings(t *testing.T) {
 		whitelist string
 		authToken string
 		acl       bool
-		want      []string // substrings that must appear, one per expected warning
+		// customIdentity means ConfigureIdentity installed its own authenticator.
+		customIdentity bool
+		want           []string // substrings that must appear, one per expected warning
 	}{{
 		// The shipped default. An empty whitelist admits loopback only, so the admin
 		// plane has not left the host and there is nothing to say.
@@ -41,6 +43,33 @@ func TestSecurityWarnings(t *testing.T) {
 		name:      "private CIDR with no credential",
 		posture:   x.AnonymousFull,
 		whitelist: "10.0.0.0/8",
+		want:      []string{"WITHOUT ANY CREDENTIAL"},
+	}, {
+		// Loopback is admitted regardless of the whitelist, so naming it explicitly
+		// does not take the admin plane off the host. The public docs give exactly
+		// this as the "allow localhost only" example.
+		name:      "explicit loopback whitelist is quiet",
+		posture:   x.AnonymousFull,
+		whitelist: "127.0.0.1",
+	}, {
+		name:      "loopback range is quiet",
+		posture:   x.AnonymousFull,
+		whitelist: "127.0.0.1:127.0.0.3",
+	}, {
+		name:      "IPv6 loopback is quiet",
+		posture:   x.AnonymousFull,
+		whitelist: "::1",
+	}, {
+		name:      "loopback alongside a real address still warns",
+		posture:   x.AnonymousFull,
+		whitelist: "127.0.0.1,10.0.0.1",
+		want:      []string{"WITHOUT ANY CREDENTIAL"},
+	}, {
+		// A range starting at loopback but running past it admits non-loopback
+		// addresses, so a check on Lower alone would be wrong.
+		name:      "range leaving loopback still warns",
+		posture:   x.AnonymousFull,
+		whitelist: "127.0.0.1:128.0.0.1",
 		want:      []string{"WITHOUT ANY CREDENTIAL"},
 	}, {
 		name:      "widened whitelist with a token",
@@ -75,6 +104,21 @@ func TestSecurityWarnings(t *testing.T) {
 		posture:   x.AnonymousNone,
 		whitelist: "0.0.0.0/0",
 		acl:       true,
+	}, {
+		// A deployment authenticator (an external JWT issuer, say) can identify
+		// callers with neither ACL nor a token, so claiming the cluster cannot be
+		// administered would be false.
+		name:           "closed posture with a deployment authenticator is quiet",
+		posture:        x.AnonymousData,
+		customIdentity: true,
+	}, {
+		// The other warning does not depend on identity at all: under full, a
+		// widened whitelist with no credential is exposed whoever installed what.
+		name:           "deployment authenticator does not silence the exposure warning",
+		posture:        x.AnonymousFull,
+		whitelist:      "0.0.0.0/0",
+		customIdentity: true,
+		want:           []string{"WITHOUT ANY CREDENTIAL"},
 	}}
 
 	for _, tt := range tests {
@@ -82,7 +126,8 @@ func TestSecurityWarnings(t *testing.T) {
 			ips, err := getIPsFromString(tt.whitelist)
 			require.NoError(t, err)
 
-			got := securityWarnings(tt.posture, tt.whitelist, ips, tt.authToken, tt.acl, 8080)
+			got := securityWarnings(tt.posture, tt.whitelist, ips, tt.authToken, tt.acl,
+				!tt.customIdentity, 8080)
 			require.Len(t, got, len(tt.want))
 			for i, want := range tt.want {
 				require.Contains(t, got[i], "SECURITY:")
@@ -130,6 +175,20 @@ var identityExceptions = map[string]string{
 	"loginHandler": "login must not require a credential it is the means of issuing",
 }
 
+// identityRequired names the handlers that reach an authorization decision and so
+// must resolve the caller's identity. Checking for the banned helpers alone only
+// catches a partial prelude. A handler that drops the prelude entirely and starts
+// from a bare context.Background() calls none of them, and would pass.
+var identityRequired = map[string]string{
+	"queryHandler":           "/query, refused to anonymous callers under anonymous=none",
+	"mutationHandler":        "/mutate, refused to anonymous callers under anonymous=none",
+	"commitHandler":          "/commit, refused to anonymous callers under anonymous=none",
+	"alterHandler":           "/alter, which can drop all data",
+	"healthCheck":            "/health?all, a tenant-admin capability check",
+	"stateHandler":           "/state, a tenant-admin capability check",
+	"resolveWithAdminServer": "the HTTP admin routes, which re-enter the /admin GraphQL server",
+}
+
 // TestHTTPEdgeResolvesIdentityThroughOneHelper pins an invariant that a live test
 // caught the hard way.
 //
@@ -158,6 +217,7 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 	// Aliased: the integration-tagged run_test.go declares a package-level `token`.
 	fset := gotoken.NewFileSet()
 	seenExceptions := map[string]bool{}
+	seenRequired := map[string]bool{}
 	for _, path := range paths {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -171,6 +231,7 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 				continue
 			}
 			_, exempt := identityExceptions[fn.Name.Name]
+			resolves := false
 			ast.Inspect(fn, func(n ast.Node) bool {
 				sel, ok := n.(*ast.SelectorExpr)
 				if !ok {
@@ -178,6 +239,10 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 				}
 				pkgIdent, ok := sel.X.(*ast.Ident)
 				if !ok || pkgIdent.Name != "x" {
+					return true
+				}
+				if sel.Sel.Name == "AttachRequestIdentity" {
+					resolves = true
 					return true
 				}
 				why, bad := banned[sel.Sel.Name]
@@ -193,7 +258,22 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 					fset.Position(sel.Pos()), fn.Name.Name, sel.Sel.Name, why)
 				return true
 			})
+
+			if reason, required := identityRequired[fn.Name.Name]; required {
+				seenRequired[fn.Name.Name] = true
+				if !resolves {
+					t.Errorf("%s: %s serves %s but never calls x.AttachRequestIdentity, so a "+
+						"caller presenting a credential arrives unidentified.",
+						fset.Position(fn.Pos()), fn.Name.Name, reason)
+				}
+			}
 		}
+	}
+
+	// A renamed or deleted handler would otherwise drop out of the check silently.
+	for name := range identityRequired {
+		require.Truef(t, seenRequired[name],
+			"identityRequired lists %q, but no function by that name exists in this package", name)
 	}
 
 	// A stale exception is its own problem: it reads as a documented carve-out for
