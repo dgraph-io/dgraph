@@ -397,10 +397,13 @@ func getNextBlank() string {
 func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred string) (mapResponse, error) {
 	var mr mapResponse
 
-	// move all facets from global map to smaller mr.rawFacets map
-	mr.rawFacets = make(map[string]interface{})
+	// move all facets from global map to smaller mr.rawFacets map. The vast majority
+	// of input objects have no facet keys, so allocate the map lazily on first hit.
 	for k, v := range m {
 		if strings.Contains(k, x.FacetDelimiter) {
+			if mr.rawFacets == nil {
+				mr.rawFacets = make(map[string]interface{})
+			}
 			mr.rawFacets[k] = v
 			delete(m, k)
 		}
@@ -437,7 +440,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			}
 		}
 		if uid > 0 {
-			mr.uid = fmt.Sprintf("%d", uid)
+			mr.uid = strconv.FormatUint(uid, 10)
 		}
 	}
 
