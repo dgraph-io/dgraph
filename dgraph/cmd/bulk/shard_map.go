@@ -16,12 +16,16 @@ type shardMap struct {
 	numShards   int
 	predToShard map[string]int
 	nextShard   int
+	// pinned maps a namespaced predicate to its map shard, from --tablet_placement.
+	// Immutable after construction, so shardFor reads it without holding the lock.
+	pinned map[string]int
 }
 
-func newShardMap(numShards int) *shardMap {
+func newShardMap(numShards int, pinned map[string]int) *shardMap {
 	return &shardMap{
 		numShards:   numShards,
 		predToShard: make(map[string]int),
+		pinned:      pinned,
 	}
 }
 
@@ -29,6 +33,11 @@ func (m *shardMap) shardFor(pred string) int {
 	// Always assign NQuads with reserved predicates to the first map shard.
 	if x.IsReservedPredicate(pred) {
 		return 0
+	}
+	// Pinned predicates bypass round-robin and never advance nextShard, so the
+	// assignment of unpinned predicates is unaffected by pins.
+	if shard, ok := m.pinned[pred]; ok {
+		return shard
 	}
 
 	m.RLock()
