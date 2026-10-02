@@ -54,6 +54,13 @@ type Txn struct {
 	lastUpdate time.Time
 
 	cache *LocalCache // This pointer does not get modified.
+
+	// bm25Acc, when non-nil, redirects BM25 corpus-statistics updates into a shared
+	// accumulator instead of the per-transaction read-modify-write counter. Index
+	// rebuild sets this on its per-thread transactions so stats survive the streaming
+	// rebuild's independent caches and periodic resets, which would otherwise drop
+	// updates and undercount the corpus. nil on normal live transactions.
+	bm25Acc *bm25StatsAccum
 }
 
 // struct to implement Txn interface from vector-indexer
