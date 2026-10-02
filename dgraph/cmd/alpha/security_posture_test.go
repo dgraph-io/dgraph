@@ -9,7 +9,7 @@ import (
 	"go/ast"
 	"go/parser"
 	gotoken "go/token"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -149,45 +149,50 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 		"AttachRemoteIP":  "attaches the peer but resolves no Principal",
 	}
 
-	// Aliased: the integration-tagged run_test.go declares a package-level `token`.
-	fset := gotoken.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	// Every non-test file in the package, regardless of build tags. parser.ParseDir is
+	// deprecated, and ignoring tags is what this test wants anyway: a handler compiled
+	// only on one platform is still a handler.
+	paths, err := filepath.Glob("*.go")
 	require.NoError(t, err)
 
+	// Aliased: the integration-tagged run_test.go declares a package-level `token`.
+	fset := gotoken.NewFileSet()
 	seenExceptions := map[string]bool{}
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok {
-					continue
-				}
-				_, exempt := identityExceptions[fn.Name.Name]
-				ast.Inspect(fn, func(n ast.Node) bool {
-					sel, ok := n.(*ast.SelectorExpr)
-					if !ok {
-						return true
-					}
-					pkgIdent, ok := sel.X.(*ast.Ident)
-					if !ok || pkgIdent.Name != "x" {
-						return true
-					}
-					why, bad := banned[sel.Sel.Name]
-					if !bad {
-						return true
-					}
-					if exempt {
-						seenExceptions[fn.Name.Name] = true
-						return true
-					}
-					t.Errorf("%s: %s calls x.%s, which %s. Use x.AttachRequestIdentity, or add "+
-						"it to identityExceptions with a reason.",
-						fset.Position(sel.Pos()), fn.Name.Name, sel.Sel.Name, why)
-					return true
-				})
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		require.NoError(t, err)
+
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
 			}
+			_, exempt := identityExceptions[fn.Name.Name]
+			ast.Inspect(fn, func(n ast.Node) bool {
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				pkgIdent, ok := sel.X.(*ast.Ident)
+				if !ok || pkgIdent.Name != "x" {
+					return true
+				}
+				why, bad := banned[sel.Sel.Name]
+				if !bad {
+					return true
+				}
+				if exempt {
+					seenExceptions[fn.Name.Name] = true
+					return true
+				}
+				t.Errorf("%s: %s calls x.%s, which %s. Use x.AttachRequestIdentity, or add "+
+					"it to identityExceptions with a reason.",
+					fset.Position(sel.Pos()), fn.Name.Name, sel.Sel.Name, why)
+				return true
+			})
 		}
 	}
 
