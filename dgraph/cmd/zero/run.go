@@ -105,6 +105,10 @@ instances to achieve high-availability.
 		Flag("learner",
 			`Make this Zero a "learner" node. In learner mode, this Zero will not participate `+
 				"in Raft elections. This can be used to achieve a read-only replica.").
+		Flag("election-tick",
+			"Number of Raft ticks before a follower starts an election. Each production tick is "+
+				"100ms and Raft randomizes the timeout between N and 2N-1 ticks. Default 20 "+
+				"means ~2s-4s; values below 10 may cause spurious elections under jitter.").
 		String())
 
 	flag.String("security", worker.SecurityDefaults, z.NewSuperFlagHelp(worker.SecurityDefaults).
@@ -171,7 +175,8 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 		Group:     0,
 		IsLearner: opts.raft.GetBool("learner"),
 	}
-	m := conn.NewNode(&rc, store, opts.tlsClientConfig)
+	electionTick := opts.raft.GetInt64("election-tick")
+	m := conn.NewNode(&rc, store, opts.tlsClientConfig, int(electionTick))
 
 	// Zero followers should not be forwarding proposals to the leader, to avoid txn commits which
 	// were calculated in a previous Zero leader.
