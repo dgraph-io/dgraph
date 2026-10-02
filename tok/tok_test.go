@@ -6,6 +6,7 @@
 package tok
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -653,5 +654,20 @@ func TestNGramTokenizerNonStringInput(t *testing.T) {
 }
 
 func BenchmarkTermTokenizer(b *testing.B) {
-	b.Skip() // tmp
+	t := TermTokenizer{}
+	b.ReportAllocs()
+	for _, text := range []string{
+		"the quick brown fox jumps over the lazy dog",
+		"Lorem ipsum dolor sit amet, consectetur adipiscing elit",
+		"a b c d e f g h i j k l m n o p q r s t u v w x y z",
+	} {
+		b.Run(fmt.Sprintf("len=%d", len(text)), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err := t.Tokens(text)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
