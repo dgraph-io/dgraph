@@ -177,6 +177,9 @@ type Function struct {
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
 	IsLenVar   bool         // eq(len(s), 5)
+	// VectorFilterVar names a uid variable that restricts a similar_to ANN search to
+	// its uid set (pre-filtered ANN), set by the `filter: <var>` option.
+	VectorFilterVar string
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -1917,7 +1920,7 @@ L:
 					if ok && next.Typ == itemColon {
 						key := strings.ToLower(collectName(it, itemInFunc.Val))
 						switch key {
-						case "ef", "distance_threshold":
+						case "ef", "distance_threshold", "filter":
 						default:
 							return nil, itemInFunc.Errorf("Unknown option %q in similar_to", key)
 						}
@@ -1933,6 +1936,32 @@ L:
 							return nil, it.Errorf("Expected value for %s", key)
 						}
 						valItem := it.Item()
+
+						// `filter: <var>` restricts the ANN search to a uid variable's
+						// set (pre-filtered ANN). The value is a variable name, not a
+						// literal: register it as a uid dependency and record it on the
+						// function. It is resolved at the query layer and shipped to the
+						// worker as the search's allow-set, so it is NOT appended to Args.
+						if key == "filter" {
+							if valItem.Typ != itemName {
+								return nil, valItem.Errorf("filter option expects a uid variable name")
+							}
+							varName := strings.TrimSpace(collectName(it, valItem.Val))
+							if varName == "" {
+								return nil, valItem.Errorf("filter option expects a non-empty uid variable name")
+							}
+							function.NeedsVar = append(function.NeedsVar,
+								VarContext{Name: varName, Typ: UidVar})
+							function.VectorFilterVar = varName
+							// Emit a marker arg (not the var name) so the worker knows a
+							// filter is active even when the resolved allow-set is empty —
+							// an empty scope must reject all, not fall back to a global
+							// search. The allow-set itself travels via the task UidList.
+							function.Args = append(function.Args,
+								Arg{Value: "filter"}, Arg{Value: "1"})
+							expectArg = false
+							continue
+						}
 						switch valItem.Typ {
 						case itemDollar:
 							varName, err := parseVarName(it)
