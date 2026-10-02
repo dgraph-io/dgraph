@@ -122,21 +122,52 @@ type node struct {
 
 var nodeSize = int(unsafe.Sizeof(node{}))
 
+// encoderPool reuses the per-request scaffolding (attrMap and idSlice) across
+// requests. buf is deliberately NOT pooled: toFastJSON returns enc.buf.Bytes(),
+// a slice aliasing buf's backing array, to its caller after the encoder is
+// freed. Pooling buf would let a concurrent request overwrite that array and
+// corrupt an in-flight response, so each request gets a fresh buf. arena comes
+// from arenaPool and alloc is fresh per request (z.Allocator.Release
+// invalidates the underlying memory).
+var encoderPool = sync.Pool{
+	New: func() interface{} {
+		return &encoder{
+			attrMap: make(map[string]uint16),
+			idSlice: make([]string, 1),
+		}
+	},
+}
+
 func newEncoder() *encoder {
-	idSlice := make([]string, 1)
+	e := encoderPool.Get().(*encoder)
 
 	a := (arenaPool.Get()).(*arena)
 	a.reset()
-
-	e := &encoder{
-		attrMap: make(map[string]uint16),
-		idSlice: idSlice,
-		arena:   a,
-		alloc:   z.NewAllocator(4<<10, "OutputNode.Encoder"),
-		buf:     &bytes.Buffer{},
-	}
+	e.arena = a
+	e.alloc = z.NewAllocator(4<<10, "OutputNode.Encoder")
+	e.buf = &bytes.Buffer{}
+	e.curSize = 0
+	e.uidAttr = 0
 	e.uidAttr = e.idForAttr("uid")
 	return e
+}
+
+// free resets the reusable encoder scaffolding (attrMap, idSlice) and returns
+// it to the pool. arena is returned to arenaPool and alloc is released by the
+// caller (existing defer in toFastJSON); buf is dropped (not pooled — see
+// encoderPool) so the returned response bytes remain valid.
+func (e *encoder) free() {
+	for k := range e.attrMap {
+		delete(e.attrMap, k)
+	}
+	e.idSlice = e.idSlice[:1]
+	e.idSlice[0] = ""
+	e.arena = nil
+	e.alloc = nil
+	e.buf = nil
+	e.curSize = 0
+	e.uidAttr = 0
+	encoderPool.Put(e)
 }
 
 // Sort the given fastJson list
@@ -1189,6 +1220,8 @@ func (sg *SubGraph) toFastJSON(ctx context.Context, l *Latency, field gqlSchema.
 		// Put encoder's arena back to arena pool.
 		arenaPool.Put(enc.arena)
 		enc.alloc.Release()
+		// Return the encoder itself for reuse (clears attrMap, idSlice, buf).
+		enc.free()
 	}()
 
 	var err error
