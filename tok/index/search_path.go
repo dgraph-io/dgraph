@@ -12,6 +12,10 @@ type SearchPathResult struct {
 	// The collection of nearest neighbors in sorted order after filtering
 	// out neighbors that fail any Filter criteria.
 	Neighbors []uint64
+	// Distances holds the higher-is-better similarity score for each entry in
+	// Neighbors (positionally aligned). It is populated by scored searches and may
+	// be empty for callers that only need the neighbor uids.
+	Distances []float64
 	// The path from the start of search to the closest neighbor vector.
 	Path []uint64
 	// A collection of captured named counters that occurred for the
@@ -24,6 +28,7 @@ type SearchPathResult struct {
 func NewSearchPathResult() *SearchPathResult {
 	return &SearchPathResult{
 		Neighbors: []uint64{},
+		Distances: []float64{},
 		Path:      []uint64{},
 		Metrics:   make(map[string]uint64),
 	}
