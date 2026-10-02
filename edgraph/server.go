@@ -1514,6 +1514,20 @@ func (s *Server) doQuery(ctx context.Context, req *Request) (resp *api.Response,
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
+	if req.doAuth == NeedAuthorize {
+		// Gated on NeedAuthorize, which is what distinguishes a network-originated
+		// request from an in-process one: QueryNoAuth and the internal DQL callers
+		// run with NoAuthorize and a context.Background() that could never carry a
+		// Principal.
+		op := "query"
+		if isMutation {
+			op = "mutation"
+		}
+		if err := RequireIdentifiedCaller(ctx, op); err != nil {
+			return nil, err
+		}
+	}
+
 	if req.doAuth == NeedAuthorize && x.IsRootNsOperation(ctx) {
 		// Only the guardian of the galaxy can do a galaxy wide query/mutation. This operation is
 		// needed by live loader.
@@ -2154,6 +2168,10 @@ func (s *Server) CommitOrAbort(ctx context.Context, tc *api.TxnContext) (*api.Tx
 	defer span.End()
 
 	if err := x.HealthCheck(); err != nil {
+		return &api.TxnContext{}, err
+	}
+
+	if err := RequireIdentifiedCaller(ctx, "commit"); err != nil {
 		return &api.TxnContext{}, err
 	}
 
