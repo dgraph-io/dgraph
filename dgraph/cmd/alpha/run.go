@@ -173,7 +173,18 @@ they form a Raft group and provide synchronous replication.
 			"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you wish "+
 				"to whitelist for performing admin actions (i.e., --security "+
 				`"whitelist=144.142.126.254,127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.`+
-				`internal").`).
+				`internal"). Empty by default, which admits loopback only. This is a network `+
+				"location check, NOT authentication: every address in the range can run "+
+				"privileged operations without a credential unless you also set token= or enable "+
+				"ACL.").
+		Flag("anonymous",
+			"[full, data, none] What a caller that presents no verified credential may do. "+
+				"full (default) leaves authorization to whatever the whitelist, token, and ACL "+
+				"settings decide, which is the behavior of every earlier release. data allows "+
+				"queries, mutations, commits, and login while denying every administrative "+
+				"operation regardless of the whitelist. none additionally denies queries, "+
+				"mutations, and commits, leaving only login and the health endpoints. data and "+
+				"none require token= or ACL, otherwise no caller can ever be identified.").
 		String())
 
 	flag.String("limit", worker.LimitDefaults, z.NewSuperFlagHelp(worker.LimitDefaults).
@@ -310,7 +321,10 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
-		ctx := x.AttachAccessJwt(context.Background(), r)
+		// Full identity, not just the access JWT: Health(all) is a capability check,
+		// and under a closed --security "anonymous=..." posture a caller presenting
+		// only the --security token would otherwise arrive unidentified.
+		ctx := x.AttachRequestIdentity(context.Background(), r)
 		var resp *api.Response
 		if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
 			x.SetStatus(w, x.Error, err.Error())
@@ -355,8 +369,9 @@ func stateHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 
-	ctx := context.Background()
-	ctx = x.AttachAccessJwt(ctx, r)
+	// Full identity, not just the access JWT: State is a capability check. See the
+	// note on the /health?all branch above.
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 
 	var aResp *api.Response
 	if aResp, err = (&edgraph.Server{}).State(ctx); err != nil {
@@ -652,6 +667,8 @@ func run() {
 		FromSuperFlag(Alpha.Conf.GetString("badger"))
 	security := z.NewSuperFlag(Alpha.Conf.GetString("security")).MergeAndCheckDefault(
 		worker.SecurityDefaults)
+	anonymous, err := x.ParseAnonymousPosture(security.GetString("anonymous"))
+	x.Check(err)
 	conf := audit.GetAuditConf(Alpha.Conf.GetString("audit"))
 
 	x.Config.Limit = z.NewSuperFlag(Alpha.Conf.GetString("limit")).MergeAndCheckDefault(
@@ -720,6 +737,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		Security:            security,
+		Anonymous:           anonymous,
 		TLSClientConfig:     tlsClientConf,
 		TLSServerConfig:     tlsServerConf,
 		AclJwtAlg:           keys.AclJwtAlg,
@@ -729,10 +747,20 @@ func run() {
 	}
 	x.WorkerConfig.Parse(Alpha.Conf)
 
+	// The built-in authenticator: ACL's access JWT, plus the --security auth token as
+	// an identity rather than a boolean check. Installed before ConfigureIdentity so a
+	// deployment can compose with or replace it; see edgraph.PresharedAuthenticator.
+	x.SetAuthenticator(edgraph.PresharedAuthenticator())
+
 	// Install deployment-specific authentication and authorization now: the config
 	// is parsed, and nothing is serving yet. A misconfiguration here is fatal, which
 	// is why it runs before any listener rather than lazily on the first request.
 	ConfigureIdentity()
+
+	// The --security "anonymous=..." floor goes on last, so that it wraps whatever
+	// policy ConfigureIdentity installed rather than being replaced by it. Under the
+	// shipped anonymous=full this installs nothing.
+	edgraph.EnforceAnonymousPosture(anonymous)
 
 	// Set the directory for temporary buffers.
 	z.SetTmpDir(x.WorkerConfig.TmpDir)
@@ -741,6 +769,15 @@ func run() {
 
 	setupCustomTokenizers()
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
+
+	// Deliberately this late. It has to follow ConfigureIdentity, because a
+	// deployment authenticator changes who can be identified, and it has to follow
+	// the port offset, because the warning names the HTTP port.
+	builtinIdentity := x.AuthenticatorName() == edgraph.PresharedAuthenticator().Name()
+	for _, msg := range securityWarnings(anonymous, security.GetString("whitelist"), ips,
+		opts.AuthToken, keys.AclSecretKey != nil, builtinIdentity, httpPort()) {
+		glog.Warning(msg)
+	}
 	x.Config.LimitMutationsNquad = int(x.Config.Limit.GetInt64("mutations-nquad"))
 	x.Config.LimitQueryEdge = x.Config.Limit.GetUint64("query-edge")
 	x.Config.BlockClusterWideDrop = x.Config.Limit.GetBool("disallow-drop")

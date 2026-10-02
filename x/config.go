@@ -123,7 +123,11 @@ type WorkerOptions struct {
 	//
 	// whitelist string - comma separated IP addresses
 	// token string - if set, all Admin requests to Dgraph will have this token.
+	// anonymous string - what a caller with no verified identity may do.
 	Security *z.SuperFlag
+	// Anonymous is the parsed --security "anonymous=..." posture. Its zero value is
+	// AnonymousFull, which is the behavior every release before the flag existed.
+	Anonymous AnonymousPosture
 	// EncryptionKey is the key used for encryption at rest, backups, exports.
 	EncryptionKey Sensitive
 	// LogDQLRequest indicates whether alpha should log all query/mutation requests coming to it.
