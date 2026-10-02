@@ -8,7 +8,7 @@ package alpha
 import (
 	"go/ast"
 	"go/parser"
-	"go/token"
+	gotoken "go/token"
 	"os"
 	"strings"
 	"testing"
@@ -149,7 +149,8 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 		"AttachRemoteIP":  "attaches the peer but resolves no Principal",
 	}
 
-	fset := token.NewFileSet()
+	// Aliased: the integration-tagged run_test.go declares a package-level `token`.
+	fset := gotoken.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
 		return !strings.HasSuffix(fi.Name(), "_test.go")
 	}, 0)
