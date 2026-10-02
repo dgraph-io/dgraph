@@ -120,7 +120,7 @@ instances to achieve high-availability.
 		Flag("anonymous",
 			"[full, data, none] What a caller that presents no verified credential may do. full "+
 				"(default) is the behavior of every earlier release. Any other value requires the "+
-				"token above on every administrative HTTP endpoint, including /state and /assign, "+
+				"token= option on every administrative HTTP endpoint, including /state and /assign, "+
 				"and stops a whitelisted source IP from standing in for a credential.").
 		String())
 
