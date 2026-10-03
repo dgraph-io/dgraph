@@ -540,7 +540,6 @@ var builtInFilters = map[string]string{
 	"point":        "PointGeoFilter",
 	"polygon":      "PolygonGeoFilter",
 	"multiPolygon": "PolygonGeoFilter",
-	"hnsw":         "HNSWSearchFilter",
 }
 
 // GraphQL in-built type -> Dgraph scalar
@@ -1561,6 +1560,10 @@ func addFilterType(schema *ast.Schema, defn *ast.Definition, providesTypeMap map
 	}
 
 	for _, fld := range defn.Fields {
+		// Vector indexes support similarity queries, not ordinary field filters.
+		if hasEmbeddingDirective(fld) {
+			continue
+		}
 		// Ignore Fields with @external directives also excluding those which are present
 		// as an argument in @key directive. If the field is an argument to `@provides` directive
 		// then it can't be ignored.
