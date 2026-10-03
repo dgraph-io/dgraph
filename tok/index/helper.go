@@ -8,14 +8,13 @@ package index
 import (
 	"encoding/binary"
 	"math"
-	"reflect"
 	"unsafe"
 
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/golang/glog"
 )
 
-// BytesAsFloatArray[T c.Float](encoded) converts encoded into a []T,
+// BytesAsFloatArray converts encoded into a []T,
 // where T is either float32 or float64, depending on the value of floatBits.
 // Let floatBytes = floatBits/8. If len(encoded) % floatBytes is
 // not 0, it will ignore any trailing bytes, and simply convert floatBytes
@@ -40,10 +39,8 @@ func BytesAsFloatArray[T c.Float](encoded []byte, retVal *[]T, floatBits int) {
 		*retVal = make([]T, len(encoded)/floatBytes)
 	}
 	*retVal = (*retVal)[:0]
-	header := (*reflect.SliceHeader)(unsafe.Pointer(retVal))
-	header.Data = uintptr(unsafe.Pointer(&encoded[0]))
-	header.Len = len(encoded) / floatBytes
-	header.Cap = len(encoded) / floatBytes
+	floatSlice := unsafe.Slice((*T)(unsafe.Pointer(&encoded[0])), len(encoded)/floatBytes)
+	*retVal = append(*retVal, floatSlice...)
 }
 
 func BytesToFloat[T c.Float](encoded []byte, floatBits int) T {
