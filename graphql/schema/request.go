@@ -85,10 +85,20 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		interfaceImplFragFields: map[*ast.Field]string{},
 	}
 
-	// recursively expand fragments in operation as selection set fields
-	for _, s := range op.SelectionSet {
-		recursivelyExpandFragmentSelections(s.(*ast.Field), operation)
+	rootType := s.schema.Query
+	switch op.Operation {
+	case ast.Mutation:
+		rootType = s.schema.Mutation
+	case ast.Subscription:
+		rootType = s.schema.Subscription
 	}
+	// Normalize root fragments with the same type-aware collector used for nested selections.
+	root := &ast.Field{
+		Definition:   &ast.FieldDefinition{Type: ast.NamedType(rootType.Name, nil)},
+		SelectionSet: op.SelectionSet,
+	}
+	recursivelyExpandFragmentSelections(root, operation)
+	op.SelectionSet = root.SelectionSet
 
 	return operation, nil
 }

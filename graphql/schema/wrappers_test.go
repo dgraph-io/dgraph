@@ -21,6 +21,55 @@ import (
 	"github.com/dgraph-io/gqlparser/v2/ast"
 )
 
+// TestOperationRootFragments checks root normalization across all supported operation kinds.
+func TestOperationRootFragments(t *testing.T) {
+	handler, err := NewHandler(`type Book @withSubscription { id: ID! name: String }`, false)
+	require.NoError(t, err)
+	sch, err := FromString(handler.GQLSchema(), x.RootNamespace)
+	require.NoError(t, err)
+	for _, testCase := range []struct {
+		name, document, operation string
+		variables                 map[string]interface{}
+		aliases                   []string
+		mutation                  bool
+	}{
+		{"named_query", `query { ...Books } fragment Books on Query { first: queryBook { id } }`, "", nil, []string{"first"}, false},
+		{"inline_query", `query { ... on Query { first: queryBook { id } } }`, "", nil, []string{"first"}, false},
+		{"named_mutation", `mutation { ...Books } fragment Books on Mutation { first: addBook(input: [{name: "first"}]) { numUids } second: addBook(input: [{name: "second"}]) { numUids } }`, "", nil, []string{"first", "second"}, true},
+		{"named_subscription", `subscription { ...Books } fragment Books on Subscription { first: queryBook { id } }`, "", nil, []string{"first"}, false},
+		{"included_fragment", `query($enabled: Boolean!) { ...Books @include(if: $enabled) } fragment Books on Query { first: queryBook { id } }`, "", map[string]interface{}{"enabled": true}, []string{"first"}, false},
+		{"excluded_fragment", `query($enabled: Boolean!) { ...Books @include(if: $enabled) } fragment Books on Query { first: queryBook { id } }`, "", map[string]interface{}{"enabled": false}, nil, false},
+		{"shared_named_fragment", `query First { ...Books } query Second { ...Books } fragment Books on Query { first: queryBook { id } }`, "Second", nil, []string{"first"}, false},
+		{"merged_alias", `query { first: queryBook { id } ...Books } fragment Books on Query { first: queryBook { name } }`, "", nil, []string{"first"}, false},
+		{"skipped_inline", `query { ... on Query @skip(if: true) { first: queryBook { id } } }`, "", nil, nil, false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var op Operation
+			require.NotPanics(t, func() {
+				op, err = sch.Operation(&Request{Query: testCase.document, OperationName: testCase.operation, Variables: testCase.variables})
+			})
+			require.NoError(t, err)
+			var actual []string
+			if testCase.mutation {
+				for _, field := range op.Mutations() {
+					actual = append(actual, field.ResponseName())
+				}
+			} else {
+				for _, field := range op.Queries() {
+					actual = append(actual, field.ResponseName())
+				}
+			}
+			require.Equal(t, testCase.aliases, actual)
+			if testCase.name == "merged_alias" {
+				fields := op.Queries()[0].SelectionSet()
+				require.Len(t, fields, 2)
+				require.Equal(t, "id", fields[0].Name())
+				require.Equal(t, "name", fields[1].Name())
+			}
+		})
+	}
+}
+
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
 	schemaStr := `
 type Author {
