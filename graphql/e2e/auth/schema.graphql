@@ -989,8 +989,10 @@ type VectorDocument @auth(
     ]}
 ) {
     id: ID!
+    key: String @id
     owner: String! @search(by: [hash])
     title: String
+    related: VectorDocument
     embedding: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
 }
 

@@ -1926,6 +1926,318 @@ func TestDeepRBACValueCascade(t *testing.T) {
 	}
 }
 
+// TestSimilarityByIDAuthorization independently checks reference, candidate and nested visibility.
+func TestSimilarityByIDAuthorization(t *testing.T) {
+	adminHeaders := common.GetJWT(t, "user1", "ADMIN", metaInfo)
+	input := make([]map[string]interface{}, 5)
+	for i := range input {
+		owner := "user1"
+		if i == 2 || i == 3 {
+			owner = "user2"
+		}
+		input[i] = map[string]interface{}{
+			"key":   fmt.Sprintf("similarity-byid-%s-%d", metaInfo.Algo, i),
+			"owner": owner, "title": fmt.Sprintf("Synthetic similarity document %d", i),
+		}
+		if i == 0 {
+			delete(input[i], "title")
+		}
+		if i < 4 {
+			input[i]["embedding"] = []float64{1, float64(i+1) / 100}
+		}
+	}
+	add := &common.GraphQLParams{
+		Headers: adminHeaders,
+		Query: `mutation($input: [AddVectorDocumentInput!]!) {
+			addVectorDocument(input: $input) { vectorDocument { id key owner } }
+		}`,
+		Variables: map[string]interface{}{"input": input},
+	}
+	response := add.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, response)
+	var created struct {
+		Add struct {
+			Documents []struct {
+				ID    string `json:"id"`
+				Key   string `json:"key"`
+				Owner string `json:"owner"`
+			} `json:"vectorDocument"`
+		} `json:"addVectorDocument"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &created))
+	require.Len(t, created.Add.Documents, len(input))
+	byKey := make(map[string]string)
+	ids := make([]string, len(input))
+	for _, document := range created.Add.Documents {
+		byKey[document.Key] = document.ID
+	}
+	for i := range ids {
+		key := input[i]["key"].(string)
+		ids[i] = byKey[key]
+		require.NotEmpty(t, ids[i])
+	}
+	t.Cleanup(func() {
+		remove := &common.GraphQLParams{
+			Headers: adminHeaders,
+			Query: `mutation($ids: [ID!]!) {
+				deleteVectorDocument(filter: {id: $ids}) { numUids }
+			}`,
+			Variables: map[string]interface{}{"ids": ids},
+		}
+		common.RequireNoGQLErrors(t, remove.ExecuteAsPost(t, common.GraphqlURL))
+	})
+	link := &common.GraphQLParams{
+		Headers: adminHeaders,
+		Query: `mutation($ids: [ID!]!, $related: ID!) {
+			updateVectorDocument(input: {filter: {id: $ids}, set: {related: {id: $related}}}) { numUids }
+		}`,
+		Variables: map[string]interface{}{"ids": ids[:2], "related": ids[3]},
+	}
+	common.RequireNoGQLErrors(t, link.ExecuteAsPost(t, common.GraphqlURL))
+
+	queries := 0
+	for _, caller := range []struct {
+		name, user, role string
+		visible          []string
+	}{
+		{"owner", "user1", "USER", ids[:2]},
+		{"other_owner", "user2", "USER", ids[2:4]},
+		{"unrelated", "user3", "USER", nil},
+		{"admin", "user1", "ADMIN", ids[:4]},
+	} {
+		t.Run(caller.name, func(t *testing.T) {
+			headers := common.GetJWT(t, caller.user, caller.role, metaInfo)
+			for _, reference := range []struct {
+				name, argument, owner string
+				hasVector             bool
+			}{
+				{"owner_uid", fmt.Sprintf("id: %q", ids[0]), "user1", true},
+				{"other_uid", fmt.Sprintf("id: %q", ids[2]), "user2", true},
+				{"owner_xid", fmt.Sprintf("key: %q", input[0]["key"]), "user1", true},
+				{"other_xid", fmt.Sprintf("key: %q", input[2]["key"]), "user2", true},
+				{"missing_vector", fmt.Sprintf("id: %q", ids[4]), "user1", false},
+				{"missing_reference", `key: "similarity-byid-missing-reference"`, "", false},
+			} {
+				for _, selection := range []struct {
+					fields, directive string
+					nested, cascade   bool
+				}{
+					{fields: "id"},
+					{fields: "id title vector_distance related { id }", nested: true},
+					{fields: "id title", directive: `@cascade(fields: ["title"])`, cascade: true},
+				} {
+					params := &common.GraphQLParams{
+						Headers: headers,
+						Query: fmt.Sprintf(`query {
+							matches: querySimilarVectorDocumentById(%s, by: embedding, topK: 100) %s { %s }
+						}`, reference.argument, selection.directive, selection.fields),
+					}
+					result := params.ExecuteAsPost(t, common.GraphqlURL)
+					common.RequireNoGQLErrors(t, result)
+					queries++
+					var found struct {
+						Matches []struct {
+							ID      string `json:"id"`
+							Related *struct {
+								ID string `json:"id"`
+							} `json:"related"`
+						} `json:"matches"`
+					}
+					require.NoError(t, json.Unmarshal(result.Data, &found))
+					actual := make([]string, 0, len(found.Matches))
+					for _, match := range found.Matches {
+						actual = append(actual, match.ID)
+						if caller.role != "ADMIN" {
+							require.Nil(t, match.Related, "hidden nested candidate must remain null")
+						} else if selection.nested && (match.ID == ids[0] || match.ID == ids[1]) {
+							require.NotNil(t, match.Related, "admin must retain visible nested candidates")
+							require.Equal(t, ids[3], match.Related.ID)
+						}
+					}
+					var expected []string
+					if reference.hasVector && (caller.role == "ADMIN" || reference.owner == caller.user) {
+						for _, id := range caller.visible {
+							if !selection.cascade || id != ids[0] {
+								expected = append(expected, id)
+							}
+						}
+					}
+					require.ElementsMatch(t, expected, actual, "%s selection=%s", reference.name, selection.fields)
+				}
+			}
+		})
+	}
+	addAdmin := &common.GraphQLParams{
+		Headers: adminHeaders,
+		Query: `mutation {
+			addAdminVectorDocument(input: [{
+				title: "Synthetic static RBAC document", embedding: [1, 0.01]
+			}]) { adminVectorDocument { id } }
+		}`,
+	}
+	response = addAdmin.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, response)
+	var adminDocument struct {
+		Add struct {
+			Documents []struct {
+				ID string `json:"id"`
+			} `json:"adminVectorDocument"`
+		} `json:"addAdminVectorDocument"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &adminDocument))
+	require.Len(t, adminDocument.Add.Documents, 1)
+	adminID := adminDocument.Add.Documents[0].ID
+	t.Cleanup(func() {
+		remove := &common.GraphQLParams{
+			Headers: adminHeaders,
+			Query: `mutation($id: ID!) {
+				deleteAdminVectorDocument(filter: {id: [$id]}) { numUids }
+			}`,
+			Variables: map[string]interface{}{"id": adminID},
+		}
+		common.RequireNoGQLErrors(t, remove.ExecuteAsPost(t, common.GraphqlURL))
+	})
+	for _, role := range []string{"ADMIN", "USER", ""} {
+		for _, selection := range []string{"id", "id title vector_distance"} {
+			params := &common.GraphQLParams{
+				Headers: common.GetJWT(t, "user1", role, metaInfo),
+				Query: fmt.Sprintf(`query($id: ID!) {
+					matches: querySimilarAdminVectorDocumentById(id: $id, by: embedding, topK: 100) { %s }
+				}`, selection),
+				Variables: map[string]interface{}{"id": adminID},
+			}
+			result := params.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, result)
+			queries++
+			var found struct {
+				Matches []struct {
+					ID string `json:"id"`
+				} `json:"matches"`
+			}
+			require.NoError(t, json.Unmarshal(result.Data, &found))
+			if role == "ADMIN" {
+				require.Len(t, found.Matches, 1)
+				require.Equal(t, adminID, found.Matches[0].ID)
+			} else {
+				require.Empty(t, found.Matches, "statically denied RBAC must not fetch a vector")
+			}
+		}
+	}
+	require.Equal(t, 78, queries)
+	t.Logf("ById auth matrix: algorithm=%s successful=%d", metaInfo.Algo, queries)
+}
+
+// TestSimilarityByIDDocuments checks composition and filters independently of the reference lookup.
+func TestSimilarityByIDDocuments(t *testing.T) {
+	headers := common.GetJWT(t, "user1", "ADMIN", metaInfo)
+	input := []map[string]interface{}{
+		{"key": "document-reference", "owner": "user1", "embedding": []float64{1, 0.01}},
+		{"key": "document-neighbor", "owner": "user1", "embedding": []float64{1, 0.02}},
+		{"key": "document-other", "owner": "user2", "embedding": []float64{1, 0.03}},
+	}
+	add := &common.GraphQLParams{
+		Headers: headers,
+		Query: `mutation($input: [AddVectorDocumentInput!]!) {
+			addVectorDocument(input: $input) { vectorDocument { id key } }
+		}`,
+		Variables: map[string]interface{}{"input": input},
+	}
+	response := add.ExecuteAsPost(t, common.GraphqlURL)
+	common.RequireNoGQLErrors(t, response)
+	var created struct {
+		Add struct {
+			Documents []struct {
+				ID  string `json:"id"`
+				Key string `json:"key"`
+			} `json:"vectorDocument"`
+		} `json:"addVectorDocument"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &created))
+	require.Len(t, created.Add.Documents, 3)
+	ids := make(map[string]string)
+	var cleanup []string
+	for _, document := range created.Add.Documents {
+		ids[document.Key] = document.ID
+		cleanup = append(cleanup, document.ID)
+	}
+	t.Cleanup(func() {
+		remove := &common.GraphQLParams{
+			Headers: headers,
+			Query: `mutation($ids: [ID!]!) {
+				deleteVectorDocument(filter: {id: $ids}) { numUids }
+			}`,
+			Variables: map[string]interface{}{"ids": cleanup},
+		}
+		common.RequireNoGQLErrors(t, remove.ExecuteAsPost(t, common.GraphqlURL))
+	})
+	reference, neighbor, other := ids["document-reference"], ids["document-neighbor"], ids["document-other"]
+	for _, document := range []struct {
+		name, query string
+		variables   map[string]interface{}
+		expected    map[string][]string
+	}{
+		{
+			name: "native_uid_candidate_filter",
+			query: `query($reference: ID!, $neighbor: ID!) {
+				matches: querySimilarVectorDocumentById(id: $reference, by: embedding, topK: 100,
+					filter: {id: [$neighbor]}) { id }
+			}`,
+			variables: map[string]interface{}{"reference": reference, "neighbor": neighbor},
+			expected:  map[string][]string{"matches": {neighbor}},
+		},
+		{
+			name: "xid_candidate_filter",
+			query: `query($neighbor: ID!) {
+				matches: querySimilarVectorDocumentById(key: "document-reference", by: embedding, topK: 100,
+					filter: {id: [$neighbor]}) { id }
+			}`,
+			variables: map[string]interface{}{"neighbor": neighbor},
+			expected:  map[string][]string{"matches": {neighbor}},
+		},
+		{
+			name: "native_uid_owner_filter",
+			query: `query($reference: ID!) {
+				matches: querySimilarVectorDocumentById(id: $reference, by: embedding, topK: 100,
+					filter: {owner: {eq: "user1"}}) { id }
+			}`,
+			variables: map[string]interface{}{"reference": other},
+			expected:  map[string][]string{"matches": {reference, neighbor}},
+		},
+		{
+			name: "multiple_similarity_roots",
+			query: `query($reference: ID!, $other: ID!) {
+				left: querySimilarVectorDocumentById(id: $reference, by: embedding, topK: 100) { id }
+				right: querySimilarVectorDocumentById(id: $other, by: embedding, topK: 100) { id }
+				embedded: querySimilarVectorDocumentByEmbedding(by: embedding, topK: 100, vector: [1, 0.01]) { id }
+			}`,
+			variables: map[string]interface{}{"reference": reference, "other": other},
+			expected: map[string][]string{
+				"left": {reference, neighbor, other}, "right": {reference, neighbor, other},
+				"embedded": {reference, neighbor, other},
+			},
+		},
+	} {
+		t.Run(document.name, func(t *testing.T) {
+			params := &common.GraphQLParams{Headers: headers, Query: document.query, Variables: document.variables}
+			result := params.ExecuteAsPost(t, common.GraphqlURL)
+			common.RequireNoGQLErrors(t, result)
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(result.Data, &fields))
+			for alias, expected := range document.expected {
+				var matches []struct {
+					ID string `json:"id"`
+				}
+				require.NoError(t, json.Unmarshal(fields[alias], &matches))
+				actual := make([]string, len(matches))
+				for i, match := range matches {
+					actual[i] = match.ID
+				}
+				require.ElementsMatch(t, expected, actual)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	schema, data := common.BootstrapAuthData()
 	jwtAlgo := []string{jwt.SigningMethodHS256.Name, jwt.SigningMethodRS256.Name}
