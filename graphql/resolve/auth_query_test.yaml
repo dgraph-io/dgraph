@@ -2188,6 +2188,62 @@
       }
     }
 
+- name: Similarity query by embedding applies field cascade to sorted candidates
+  gqlquery: |
+    query {
+      querySimilarVectorDocumentByEmbedding(by: embedding, topK: 2, vector: [0.1, 0.2]) @cascade(fields: ["title"]) {
+        id
+        title
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query querySimilarVectorDocumentByEmbedding($search_vector:  float32vector = "[0.1,0.2]") {
+      var(func: similar_to(VectorDocument.embedding, 2, $search_vector)) @filter(uid(VectorDocumentRoot)) {
+        v2 as VectorDocument.embedding
+        distance as math(1.0 - ((($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector)) * (v2 dot v2) )))
+      }
+      VectorDocumentRoot as var(func: uid(VectorDocument_1)) @filter(uid(VectorDocument_Auth2))
+      VectorDocument_1 as var(func: type(VectorDocument))
+      VectorDocument_Auth2 as var(func: uid(VectorDocument_1)) @filter(eq(VectorDocument.owner, "user1")) @cascade {
+        VectorDocument.id : uid
+      }
+      querySimilarVectorDocumentByEmbedding(func: uid(distance), orderasc: val(distance)) @cascade(VectorDocument.title) {
+        VectorDocument.id : uid
+        VectorDocument.title : VectorDocument.title
+        VectorDocument.vector_distance : val(distance)
+      }
+    }
+
+- name: Similarity query by embedding applies full cascade to sorted candidates
+  gqlquery: |
+    query {
+      querySimilarVectorDocumentByEmbedding(by: embedding, topK: 2, vector: [0.1, 0.2]) @cascade {
+        id
+        title
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query querySimilarVectorDocumentByEmbedding($search_vector:  float32vector = "[0.1,0.2]") {
+      var(func: similar_to(VectorDocument.embedding, 2, $search_vector)) @filter(uid(VectorDocumentRoot)) {
+        v2 as VectorDocument.embedding
+        distance as math(1.0 - ((($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector)) * (v2 dot v2) )))
+      }
+      VectorDocumentRoot as var(func: uid(VectorDocument_1)) @filter(uid(VectorDocument_Auth2))
+      VectorDocument_1 as var(func: type(VectorDocument))
+      VectorDocument_Auth2 as var(func: uid(VectorDocument_1)) @filter(eq(VectorDocument.owner, "user1")) @cascade {
+        VectorDocument.id : uid
+      }
+      querySimilarVectorDocumentByEmbedding(func: uid(distance), orderasc: val(distance)) @cascade {
+        VectorDocument.id : uid
+        VectorDocument.title : VectorDocument.title
+        VectorDocument.vector_distance : val(distance)
+      }
+    }
+
 - name: Similarity query by embedding with RBAC rule true
   gqlquery: |
     query {

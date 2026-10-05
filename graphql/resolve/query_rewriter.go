@@ -974,8 +974,10 @@ func rewriteAsSimilarByEmbeddingQuery(
 			Name: "uid",
 			Args: []dql.Arg{{Value: "distance"}},
 		},
-		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Order:   []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Cascade: dgQuery[0].Cascade,
 	}
+	dgQuery[0].Cascade = nil
 
 	dgQuery = append(dgQuery, sortQuery)
 	return dgQuery

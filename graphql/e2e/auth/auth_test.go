@@ -1926,7 +1926,7 @@ func TestDeepRBACValueCascade(t *testing.T) {
 	}
 }
 
-// TestSimilarityByIDAuthorization independently checks reference, candidate and nested visibility.
+// TestSimilarityByIDAuthorization checks reference/candidate auth and both similarity cascade paths.
 func TestSimilarityByIDAuthorization(t *testing.T) {
 	adminHeaders := common.GetJWT(t, "user1", "ADMIN", metaInfo)
 	input := make([]map[string]interface{}, 5)
@@ -1995,7 +1995,7 @@ func TestSimilarityByIDAuthorization(t *testing.T) {
 	}
 	common.RequireNoGQLErrors(t, link.ExecuteAsPost(t, common.GraphqlURL))
 
-	queries := 0
+	queries, embeddingQueries := 0, 0
 	for _, caller := range []struct {
 		name, user, role string
 		visible          []string
@@ -2007,6 +2007,36 @@ func TestSimilarityByIDAuthorization(t *testing.T) {
 	} {
 		t.Run(caller.name, func(t *testing.T) {
 			headers := common.GetJWT(t, caller.user, caller.role, metaInfo)
+			for _, directive := range []string{"", `@cascade(fields: ["title"])`, "@cascade"} {
+				params := &common.GraphQLParams{
+					Headers: headers,
+					Query: fmt.Sprintf(`query {
+						matches: querySimilarVectorDocumentByEmbedding(by: embedding, topK: 100, vector: [1, 0.01]) %s {
+							id title
+						}
+					}`, directive),
+				}
+				result := params.ExecuteAsPost(t, common.GraphqlURL)
+				common.RequireNoGQLErrors(t, result)
+				embeddingQueries++
+				var found struct {
+					Matches []struct {
+						ID string `json:"id"`
+					} `json:"matches"`
+				}
+				require.NoError(t, json.Unmarshal(result.Data, &found))
+				actual := make([]string, 0, len(found.Matches))
+				for _, match := range found.Matches {
+					actual = append(actual, match.ID)
+				}
+				var expected []string
+				for _, id := range caller.visible {
+					if directive == "" || id != ids[0] {
+						expected = append(expected, id)
+					}
+				}
+				require.ElementsMatch(t, expected, actual, "ByEmbedding directive=%q", directive)
+			}
 			for _, reference := range []struct {
 				name, argument, owner string
 				hasVector             bool
@@ -2124,7 +2154,9 @@ func TestSimilarityByIDAuthorization(t *testing.T) {
 		}
 	}
 	require.Equal(t, 78, queries)
+	require.Equal(t, 12, embeddingQueries)
 	t.Logf("ById auth matrix: algorithm=%s successful=%d", metaInfo.Algo, queries)
+	t.Logf("ByEmbedding cascade matrix: algorithm=%s successful=%d", metaInfo.Algo, embeddingQueries)
 }
 
 // TestSimilarityByIDDocuments checks composition and filters independently of the reference lookup.
