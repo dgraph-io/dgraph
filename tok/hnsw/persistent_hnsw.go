@@ -615,9 +615,61 @@ func (ph *persistentHNSW[T]) PickStartNode(
 	}
 
 	if len(*startVec) == 0 {
+		// The persisted entry node's vector is gone (it was deleted). Pick a
+		// replacement that is a MEMBER OF THIS INDEX'S GRAPH by walking the dead
+		// entry's own adjacency (ph.vecKey) to the nearest live node. For a
+		// partitioned cluster sub-index ph.pred is the shared base predicate
+		// across every cluster, so calculateNewEntryVec's scan of ph.pred could
+		// return a vector that belongs to a different cluster — searching this
+		// cluster from a non-member entry reaches nothing and orphans the whole
+		// cluster. The graph walk stays within the cluster.
+		if newEntry, err := ph.liveEntryFromGraph(c, entry, startVec); err == nil {
+			return newEntry, nil
+		}
+		// Fallback (e.g. the dead entry has no surviving graph component): the
+		// base-predicate scan. Correct for monolithic; a last resort otherwise.
 		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
 	return entry, err
+}
+
+// liveEntryFromGraph walks this index's own graph keyspace (ph.vecKey) starting
+// from deadEntry and returns the first node whose vector is still live, loading
+// it into startVec. It stays within a single (possibly partitioned) graph, so
+// the replacement entry is always a member of the graph being searched. Returns
+// an error if no live node is reachable from deadEntry's graph component.
+func (ph *persistentHNSW[T]) liveEntryFromGraph(
+	c index.CacheType, deadEntry uint64, startVec *[]T) (uint64, error) {
+
+	seen := map[uint64]struct{}{deadEntry: {}}
+	queue := []uint64{deadEntry}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		var edges [][]uint64
+		ok, err := populateEdgeDataFromKeyWithCacheType(ph.vecKey, cur, c, &edges)
+		if err != nil || !ok {
+			continue
+		}
+		for _, level := range edges {
+			for _, n := range level {
+				if n == notAUid {
+					continue
+				}
+				if _, visited := seen[n]; visited {
+					continue
+				}
+				seen[n] = struct{}{}
+				// A neighbor with a live vector is a valid in-graph entry.
+				if verr := ph.getVecFromUid(n, c, startVec); verr == nil && len(*startVec) != 0 {
+					return n, nil
+				}
+				queue = append(queue, n)
+			}
+		}
+	}
+	return 0, errors.New(EmptyHNSWTreeError)
 }
 
 // SearchWithPath allows persistentHNSW to implement index.OptionalIndexSupport.

@@ -413,7 +413,7 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 		if errors.Is(err, errFetchingPostingList) {
 			// A storage/read failure — NOT an absent key. Propagate it so the
 			// query fails loudly instead of silently returning a short result
-			// set (a result-correctness bug this path used to hide).
+			// set.
 			return err
 		}
 		return err
@@ -460,13 +460,29 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	entry := BytesToUint64(data) // convert entry Uuid returned from Get to uint64
 	err := ph.getVecFromUid(entry, c, vec)
 	if err != nil || len(*vec) == 0 {
-		// The entry vector has been deleted. We have to create a new entry vector.
-		entry, err := ph.calculateNewEntryVec(ctx, c, vec)
-		if err != nil {
+		// The entry vector has been deleted. Prefer an existing LIVE MEMBER OF
+		// THIS INDEX'S GRAPH to insert against — found by walking this cluster's
+		// own graph from the dead entry (same reasoning as PickStartNode). For a
+		// partitioned cluster sub-index the base-predicate scan below would
+		// otherwise seat a node from ANOTHER cluster as this cluster's entry.
+		//
+		// Return it exactly like the live-entry case: do NOT route it through
+		// create_edges, which resets the node's adjacency to empty at all levels
+		// (correct for a brand-new start node, but it would sever an existing
+		// member's edges and orphan whatever was reachable only through it). The
+		// stale entry pointer is harmless — both the search (PickStartNode) and
+		// insert paths resolve a dead entry to a live in-cluster node on the fly.
+		if newEntry, gerr := ph.liveEntryFromGraph(c, entry, vec); gerr == nil {
+			return newEntry, edges, nil
+		}
+		// Fallback (monolithic with no reachable live component, or an empty
+		// graph): seed a fresh start node from the base scan, as before.
+		newEntry, cerr := ph.calculateNewEntryVec(ctx, c, vec)
+		if cerr != nil {
 			// No other node exists, go with the new node that has come
 			return create_edges(inUuid)
 		}
-		return create_edges(entry)
+		return create_edges(newEntry)
 	}
 
 	return entry, edges, nil

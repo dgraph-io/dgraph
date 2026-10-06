@@ -171,9 +171,9 @@ func (vsuite *VectorTestSuite) TestVectorSnapshot() {
 	testVectorQuery(t, gc, vectors, rdfs, pred, numVectors)
 
 	// Self-recall on the restarted alpha: every indexed vector must find
-	// itself. If the restart's replayed index rebuild raced the replayed
-	// mutations, some vectors are permanently unreachable via similar_to
-	// (the known reindex-vs-mutation restart race).
+	// itself. A vector that cannot is permanently unreachable via
+	// similar_to — a correctness failure after the restart's replayed
+	// index rebuild.
 	for i, vector := range vectors {
 		similar, err := gc.QueryMultipleVectorsUsingSimilarTo(vector, pred, numVectors)
 		require.NoError(t, err)
@@ -664,11 +664,10 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 			return err == nil && !strings.Contains(string(health), "opIndexing")
 		}, 60*time.Second, 500*time.Millisecond, "replayed index rebuild still running after 60s")
 		// Readiness: a wide query returns a healthy result set and the
-		// probe vector finds itself. The set may be one short of k: the
-		// vector deleted before the restart is tombstoned and filtered
-		// from results — asserting len == k here would demand the OLD
-		// buggy behavior, where the replayed delete was lost to the
-		// rebuild race and the deleted vector resurrected.
+		// probe vector finds itself. The set may be one short of k because
+		// the vector deleted before the restart is tombstoned and filtered
+		// from results, so readiness checks a lower bound rather than an
+		// exact count.
 		require.Eventually(t, func() bool {
 			res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[1], pred, 100)
 			if err != nil || len(res) < 90 {
@@ -681,20 +680,16 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 		// The delete must survive the restart: the WAL-replayed delete is
 		// captured while the replayed rebuild runs and drained into the
 		// dead list afterwards, so the deleted vector stays invisible.
-		// (Before the capture gate this was the data-loss race: the
-		// tombstone write raced the rebuild and the deleted vector came
-		// back from the dead.)
 		res, err := gc.QueryMultipleVectorsUsingSimilarTo(vectors[0], pred, 100)
 		require.NoError(t, err)
 		require.NotContainsf(t, res, vectors[0],
 			"vector deleted before restart must stay deleted after the replayed rebuild")
 
-		// Search routing must come back from the persisted centroids, and —
-		// with the capture gate replaying the WAL-replayed mutations — no
-		// vector may be lost: absence at a wide beam means an orphaned
-		// graph node (the old race's signature), which is a hard failure.
-		// Top-1 ranking keeps a small tolerance: it is ANN approximation,
-		// not integrity.
+		// Search routing must come back from the persisted centroids, and
+		// the capture gate's replayed mutations must all survive: absence
+		// at a wide beam means an orphaned graph node, which is a hard
+		// failure. Top-1 ranking keeps a small tolerance: it is ANN
+		// approximation, not integrity.
 		checked, found := 0, 0
 		var orphaned []int
 		for i := 0; i < len(vectors)-1; i += 40 {
@@ -718,15 +713,12 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 				orphaned = append(orphaned, 1+i)
 			}
 		}
-		// KNOWN ISSUE (pre-existing, tracked separately): the rebuild scans
-		// with 16+ concurrent stream workers whose unsynchronized
-		// read-modify-writes of shared adjacency rows can orphan a node or
-		// two per build — independent of the capture gate (reproduced with
-		// zero mutations in flight). Tolerate at most 2 of the ~30 sampled
-		// originals; the gate's own guarantee (replayed mutations are never
-		// lost) is asserted with zero tolerance via the liveVectors and
-		// post-insert sweeps.
-		require.LessOrEqualf(t, len(orphaned), 2,
+		// No original may be orphaned after the restart. The "deletes
+		// disappear" subtest deleted vectors[0] — the lowest uid, and so a
+		// cluster's entry node. A deleted entry node must not take the rest of
+		// its cluster down with it: entry recovery reseats the entry on a
+		// surviving member of the same cluster, so every vector stays reachable.
+		require.Emptyf(t, orphaned,
 			"vectors unreachable after restart (orphaned graph nodes): %v", orphaned)
 		require.GreaterOrEqualf(t, float64(found)/float64(checked), 0.9,
 			"post-restart top-1 self-recall collapsed: %d/%d — centroid hydration broken?", found, checked)
@@ -748,7 +740,8 @@ func (vsuite *VectorTestSuite) TestPartitionedPipelines() {
 		}
 
 		// Insert routing must be exact: these vectors arrive after the
-		// replayed rebuild, so the pre-existing race cannot touch them.
+		// replayed rebuild completes, so they take the normal live-insert
+		// path and every one must be recallable.
 		postRdfs, postVectors := dgraphapi.GenerateRandomVectors(
 			numVectors+50, numVectors+100, dim, pred)
 		_, err = gc.Mutate(&api.Mutation{SetNquads: []byte(postRdfs), CommitNow: true})
