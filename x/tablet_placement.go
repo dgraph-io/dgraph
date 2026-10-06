@@ -44,6 +44,11 @@ func ParseTabletPlacement(r io.Reader) ([]TabletPlacement, error) {
 	if err := dec.Decode(&entries); err != nil {
 		return nil, errors.Wrap(err, "parsing tablet placement")
 	}
+	// Decoding "null" succeeds and leaves the slice nil; without this check the
+	// loader would report zero pins and silently ignore the requested placement.
+	if entries == nil {
+		return nil, errors.New("parsing tablet placement: document must be a JSON array")
+	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return nil, errors.New("parsing tablet placement: trailing data after the JSON array")
 	}

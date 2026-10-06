@@ -112,6 +112,15 @@ func TestParseTabletPlacement(t *testing.T) {
 		_, err = parse(`[{"predicate": "name", "group": 1}] trailing`)
 		require.ErrorContains(t, err, "trailing data")
 	})
+
+	t.Run("null rejected, empty array allowed", func(t *testing.T) {
+		_, err := parse(`null`)
+		require.ErrorContains(t, err, "must be a JSON array")
+		entries, err := parse(`[]`)
+		require.NoError(t, err)
+		require.NotNil(t, entries)
+		require.Empty(t, entries)
+	})
 }
 
 func TestParseTabletPlacementFile(t *testing.T) {
