@@ -46,15 +46,27 @@ func SetAuthenticator(a Authenticator) {
 	authenticator.Store(&a)
 }
 
-// ACLAuthenticator returns the built-in authenticator, which verifies Dgraph's own
-// ACL access token.
+// ACLAuthenticator returns the authenticator that verifies Dgraph's own ACL access
+// token, and nothing else.
 //
-// Exported so a deployment installing its own Authenticator can compose with this
-// one rather than displace it. That matters more than it looks: Login is how an
-// ACL token is obtained, so an installed authenticator that cannot also verify an
-// ACL token takes away the cluster's ability to log in — and the failure surfaces
-// as an authorization error somewhere unrelated.
+// A deployment installing its own Authenticator should usually compose with
+// edgraph.PresharedAuthenticator instead, which is what dgraph alpha installs by
+// default: it verifies the ACL token first and then the --security auth token.
+// Composing with this one alone silently drops the auth token as an identity, so
+// under a closed --security "anonymous=..." posture a caller presenting the token
+// is turned away as anonymous. (edgraph cannot be named from here, so this is the
+// only place to say it.)
+//
+// Either way, compose rather than displace. Login is how an ACL token is obtained,
+// so an installed authenticator that cannot also verify one takes away the
+// cluster's ability to log in, and the failure surfaces as an authorization error
+// somewhere unrelated.
 func ACLAuthenticator() Authenticator { return aclAuthenticator{} }
+
+// AuthenticatorName reports the Name of the authenticator currently in effect,
+// whether installed or built in. It lets startup checks tell whether a deployment
+// replaced the default, without exposing the authenticator itself.
+func AuthenticatorName() string { return currentAuthenticator().Name() }
 
 // currentAuthenticator returns the installed authenticator, or the built-in ACL
 // one when none is installed. Mirrors how ResolveTenant falls back to

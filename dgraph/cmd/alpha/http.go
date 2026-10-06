@@ -240,8 +240,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachRequestIdentity(ctx, r)
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
@@ -467,7 +466,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	req.Hash = hash
 	req.CommitNow = commitNow
 
-	ctx := x.AttachAccessJwt(context.Background(), r)
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	resp, err := (&edgraph.Server{}).QueryNoGrpc(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -530,7 +529,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := x.AttachAccessJwt(context.Background(), r)
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	var response map[string]interface{}
 	if abort {
 		response, err = handleAbort(ctx, startTs, hash)

@@ -115,7 +115,13 @@ instances to achieve high-availability.
 		Flag("whitelist",
 			"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames that are "+
 				"allowed to reach Zero's administrative HTTP endpoints (loopback is always allowed). "+
-				`e.g. --security "whitelist=127.0.0.1,192.168.0.0/16,host.docker.internal".`).
+				`e.g. --security "whitelist=127.0.0.1,192.168.0.0/16,host.docker.internal". This is `+
+				"a network location check, NOT authentication.").
+		Flag("anonymous",
+			"[full, data, none] What a caller that presents no verified credential may do. full "+
+				"(default) is the behavior of every earlier release. Any other value requires the "+
+				"token= option on every administrative HTTP endpoint, including /state and /assign, "+
+				"and stops a whitelisted source IP from standing in for a credential.").
 		String())
 
 	flag.String("audit", worker.AuditDefaults, z.NewSuperFlagHelp(worker.AuditDefaults).
@@ -252,6 +258,15 @@ func run() {
 	ips, err := x.GetIPsFromString(security.GetString("whitelist"))
 	x.Check(err)
 	x.WorkerConfig.WhiteListedIPRanges = ips
+	anonymous, err := x.ParseAnonymousPosture(security.GetString("anonymous"))
+	x.Check(err)
+	x.WorkerConfig.Anonymous = anonymous
+	if anonymous.RequiresIdentityForCapability() && worker.Config.AuthToken == "" {
+		glog.Warningf(`SECURITY: --security "anonymous=%s" requires an identified caller, but no `+
+			`token is configured, so no request can ever be identified. Every administrative HTTP `+
+			`endpoint will be denied, including from loopback. Set --security "token=...".`,
+			anonymous)
+	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
