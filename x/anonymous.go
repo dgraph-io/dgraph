@@ -41,10 +41,11 @@ const (
 	// mutations, commits, Login, and the health endpoints -- while every
 	// administrative capability is denied regardless of the whitelist.
 	//
-	// "Administrative" means a Capability check: namespace create/drop/list, UID
+	// "Administrative" means a Capability check -- namespace create/drop/list, UID
 	// leasing, drop-all, arming an external-snapshot import, reading cluster state,
 	// and the privileged GraphQL admin surface (backup, restore, export, shutdown,
-	// removeNode, moveTablet, assign, draining, config).
+	// removeNode, moveTablet, assign, draining, config) -- and every Alter, schema
+	// changes and drops alike.
 	AnonymousData
 
 	// AnonymousNone additionally denies ordinary data access, leaving an anonymous

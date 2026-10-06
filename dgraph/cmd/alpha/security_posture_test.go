@@ -187,6 +187,19 @@ var identityRequired = map[string]string{
 	"healthCheck":            "/health?all, a tenant-admin capability check",
 	"stateHandler":           "/state, a tenant-admin capability check",
 	"resolveWithAdminServer": "the HTTP admin routes, which re-enter the /admin GraphQL server",
+	// graphql/subscription. Every subscription poll is a fresh query with no request
+	// behind it, so this is where its identity comes from. It sat outside this test's
+	// reach until a reviewer found it attaching only the access JWT.
+	"subscriberContext": "every GraphQL subscription poll",
+}
+
+// identityScanDirs are the packages whose code builds a request context from
+// client-supplied headers. The invariant is about that edge, not about a package,
+// which is why this test reaches outside its own directory: the subscription
+// poller is the same edge, and the same bug, in a different package.
+var identityScanDirs = []string{
+	".",
+	"../../../graphql/subscription",
 }
 
 // TestHTTPEdgeResolvesIdentityThroughOneHelper pins an invariant that a live test
@@ -211,8 +224,13 @@ func TestHTTPEdgeResolvesIdentityThroughOneHelper(t *testing.T) {
 	// Every non-test file in the package, regardless of build tags. parser.ParseDir is
 	// deprecated, and ignoring tags is what this test wants anyway: a handler compiled
 	// only on one platform is still a handler.
-	paths, err := filepath.Glob("*.go")
-	require.NoError(t, err)
+	var paths []string
+	for _, dir := range identityScanDirs {
+		matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		require.NoError(t, err)
+		require.NotEmptyf(t, matches, "no Go files in %s; has the package moved?", dir)
+		paths = append(paths, matches...)
+	}
 
 	// Aliased: the integration-tagged run_test.go declares a package-level `token`.
 	fset := gotoken.NewFileSet()

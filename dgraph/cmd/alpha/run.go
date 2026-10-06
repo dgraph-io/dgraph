@@ -182,7 +182,8 @@ they form a Raft group and provide synchronous replication.
 				"full (default) leaves authorization to whatever the whitelist, token, and ACL "+
 				"settings decide, which is the behavior of every earlier release. data allows "+
 				"queries, mutations, commits, and login while denying every administrative "+
-				"operation regardless of the whitelist. none additionally denies queries, "+
+				"operation, including schema changes and drops, regardless of the whitelist. "+
+				"none additionally denies queries, "+
 				"mutations, and commits, leaving only login and the health endpoints. data and "+
 				"none require token= or ACL, otherwise no caller can ever be identified.").
 		String())

@@ -222,6 +222,14 @@ func validateAlterOperation(ctx context.Context, op *api.Operation, doAuth AuthM
 		return nil
 	}
 
+	// Before hasAdminAuth, so an anonymous caller under a closed posture is told the
+	// actual reason -- no identity -- rather than whichever whitelist or token check
+	// happens to fail first. See RequireIdentifiedAdmin for why every Alter counts.
+	if err := RequireIdentifiedAdmin(ctx, "alter"); err != nil {
+		glog.Warningf("Alter denied with error: %v\n", err)
+		return err
+	}
+
 	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err

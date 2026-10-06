@@ -9,6 +9,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -251,6 +252,91 @@ func TestRequireIdentifiedCaller(t *testing.T) {
 
 			require.NoError(t, RequireIdentifiedCaller(identified, "query"),
 				"an identified caller is never refused by the data-plane floor")
+		})
+	}
+}
+
+// TestAlterRequiresIdentityUnderClosedPosture pins the fix for a gap a reviewer
+// found and a live run confirmed: under a closed posture, only drop_all reached a
+// Capability check, so an anonymous caller with an open whitelist could still
+// change the schema, drop a predicate, or drop_op DATA -- which empties the
+// namespace. It drives the real validateAlterOperation rather than the helper, so
+// the call site is pinned as well as the rule.
+func TestAlterRequiresIdentityUnderClosedPosture(t *testing.T) {
+	restoreSecurityConfig(t)
+	x.UpdateHealthStatus(true)
+	t.Cleanup(func() { x.UpdateHealthStatus(false) })
+
+	// The standalone posture: every address whitelisted, no token, no ACL. Under
+	// anonymous=full this admits everyone, which is the exposure being closed.
+	x.WorkerConfig.AclEnabled = false
+	worker.Config.AclSecretKey = nil
+	worker.Config.AuthToken = ""
+	ips, err := x.GetIPsFromString("0.0.0.0/0")
+	require.NoError(t, err)
+	x.WorkerConfig.WhiteListedIPRanges = ips
+
+	ops := map[string]*api.Operation{
+		"schema change": {Schema: "name: string @index(exact) ."},
+		"drop_attr":     {DropAttr: "name"},
+		"drop_op DATA":  {DropOp: api.Operation_DATA},
+		"drop_op TYPE":  {DropOp: api.Operation_TYPE, DropValue: "Person"},
+		"drop_op ATTR":  {DropOp: api.Operation_ATTR, DropValue: "name"},
+	}
+	anonymous := fromIP(t, "203.0.113.7")
+	identified := x.WithPrincipal(fromIP(t, "203.0.113.7"),
+		&x.Principal{Subject: PresharedSubject, Method: x.MethodPreshared})
+
+	for _, posture := range []x.AnonymousPosture{x.AnonymousFull, x.AnonymousData, x.AnonymousNone} {
+		for name, op := range ops {
+			t.Run(posture.String()+"/"+name, func(t *testing.T) {
+				x.WorkerConfig.Anonymous = posture
+
+				err := validateAlterOperation(anonymous, op, NeedAuthorize)
+				if posture == x.AnonymousFull {
+					require.NoError(t, err, "anonymous=full must keep the pre-existing behavior")
+				} else {
+					require.Error(t, err, "an anonymous Alter must be refused under a closed posture")
+					require.Equal(t, codes.Unauthenticated, status.Code(err))
+					require.Contains(t, status.Convert(err).Message(), "administrative operation")
+				}
+
+				require.NoError(t, validateAlterOperation(identified, op, NeedAuthorize),
+					"an identified caller is never refused by the floor")
+
+				// In-process callers (AlterNoAuth) run with NoAuthorize and a context
+				// that could never carry a Principal. They must be unaffected.
+				require.NoError(t, validateAlterOperation(context.Background(), op, NoAuthorize),
+					"trusted in-process Alter must not be gated by the posture")
+			})
+		}
+	}
+}
+
+func TestRequireIdentifiedAdmin(t *testing.T) {
+	restoreSecurityConfig(t)
+	identified := x.WithPrincipal(context.Background(), &x.Principal{Subject: "s"})
+
+	for _, tt := range []struct {
+		posture x.AnonymousPosture
+		wantErr bool
+	}{
+		{posture: x.AnonymousFull, wantErr: false},
+		// Unlike RequireIdentifiedCaller, this applies under data too: data closes the
+		// control plane, and Alter is control plane.
+		{posture: x.AnonymousData, wantErr: true},
+		{posture: x.AnonymousNone, wantErr: true},
+	} {
+		t.Run(tt.posture.String(), func(t *testing.T) {
+			x.WorkerConfig.Anonymous = tt.posture
+			err := RequireIdentifiedAdmin(context.Background(), "alter")
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Equal(t, codes.Unauthenticated, status.Code(err))
+			} else {
+				require.NoError(t, err)
+			}
+			require.NoError(t, RequireIdentifiedAdmin(identified, "alter"))
 		})
 	}
 }

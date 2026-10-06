@@ -73,6 +73,36 @@ func EnforceAnonymousPosture(posture x.AnonymousPosture) {
 		`(policy: %s)`, posture, inner.Name())
 }
 
+// RequireIdentifiedAdmin rejects an anonymous caller of an administrative
+// operation that is not a Capability check, under --security "anonymous=data" and
+// "anonymous=none".
+//
+// Alter is the case that needs it. Only drop_all reaches a Capability, so before
+// this an anonymous caller under a closed posture could still change the schema,
+// drop a predicate, or drop_op DATA -- which empties the namespace -- because the
+// remaining gates are the whitelist and token check (hasAdminAuth) and ACL
+// (authorizeAlter), and neither consults the Principal. With an open whitelist and
+// nothing else configured, that left one-request data destruction reachable under
+// exactly the posture meant to close it.
+//
+// It treats every Alter as administrative, schema changes included. Dgraph already
+// does: /alter is gated by hasAdminAuth, whose error reads "Token needed for Admin
+// operations". A posture that admitted schema changes but refused drops would be a
+// line operators had to learn, and drop_op DATA is what getting it wrong costs.
+func RequireIdentifiedAdmin(ctx context.Context, op string) error {
+	if !x.WorkerConfig.Anonymous.RequiresIdentityForCapability() {
+		return nil
+	}
+	if x.PrincipalFrom(ctx) != nil {
+		return nil
+	}
+	return status.Errorf(codes.Unauthenticated,
+		`%s is an administrative operation and requires an identified caller, and this `+
+			`request presented no credential that verified. This cluster runs with `+
+			`--security "anonymous=%s". Present the --security auth token, or log in with ACL.`,
+		op, x.WorkerConfig.Anonymous)
+}
+
 // RequireIdentifiedCaller rejects an anonymous caller's ordinary data access under
 // --security "anonymous=none".
 //
