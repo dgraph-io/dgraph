@@ -32,7 +32,7 @@ func partitionedSchema(attr string, numClusters string) *pb.SchemaUpdate {
 	}
 }
 
-// TestDropPrefixesCoverPartitionedClusters pins the rebuild-hygiene fix:
+// TestDropPrefixesCoverPartitionedClusters guards rebuild hygiene:
 // dropping a partitioned index must cover every per-cluster aux predicate of
 // both the old and the new layout, plus the persisted centroid key. Split
 // attrs are distinct predicates (length-prefixed keys), so the unsplit
@@ -72,7 +72,7 @@ func TestDropPrefixesCoverPartitionedClusters(t *testing.T) {
 	requireCovered(hnsw.ConcatStrings(attr, hnsw.VecKeyword))
 }
 
-// TestNumClustersChangeTriggersRebuild pins the factory-identity fix: a
+// TestNumClustersChangeTriggersRebuild guards factory identity: a
 // numClusters change alters the on-disk layout, so the schema diff must
 // register as a rebuild — and an identical re-apply must stay a no-op.
 func TestNumClustersChangeTriggersRebuild(t *testing.T) {

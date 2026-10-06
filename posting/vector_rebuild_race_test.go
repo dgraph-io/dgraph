@@ -123,10 +123,10 @@ func vecTestLiveIndexMutation(t *testing.T, ctx context.Context, attr string,
 //
 // strictUids (the uids replayed by the drain) get zero tolerance — their
 // reachability is precisely the invariant under test. For the rest of the
-// corpus at most ONE miss is tolerated: the concurrent builder itself can
-// rarely orphan a node in a tiny graph (pre-existing upstream behavior,
-// independent of the capture gate), while the race under test orphans the
-// corpus wholesale — so the red/green contract stays sharp.
+// corpus at most ONE miss is tolerated: the concurrent builder can rarely
+// orphan a node in a tiny graph on its own, independent of the capture gate,
+// while the race under test orphans the corpus wholesale — so the red/green
+// contract stays sharp.
 func vecTestSelfRecall(t *testing.T, ctx context.Context, attr string,
 	indexer tokIndex.VectorIndex[float32], vecs map[uint64][]float32,
 	readTs uint64, strictUids ...uint64) {
@@ -386,8 +386,8 @@ func TestPartitionedMidBuildMutationsSuppressedAndReplayed(t *testing.T) {
 			delete(vecs, du)
 		}
 		// Suppression: all 10 raced mutations must sit in the capture map,
-		// none applied to the graph. Non-fatal so that, on unfixed code, the
-		// test continues and shows the downstream corruption too.
+		// none applied to the graph. Non-fatal (assert, not require) so that a
+		// failure here still lets the test surface the downstream corruption.
 		assert.Equal(t, 10, VectorRebuildPendingCount(attr),
 			"mid-build vector mutations must be captured, not applied")
 	}

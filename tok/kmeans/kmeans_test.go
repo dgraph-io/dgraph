@@ -281,8 +281,8 @@ func TestRoutingWithoutPersistedCentroids(t *testing.T) {
 }
 
 // TestSetNumProbesChangesSearchWidth verifies a numProbes change takes effect
-// on the live instance (the core of the "numProbes ignored until restart" fix):
-// SetNumProbes must change how many clusters a subsequent search probes.
+// on the live instance without a restart: SetNumProbes must change how many
+// clusters a subsequent search probes.
 func TestSetNumProbesChangesSearchWidth(t *testing.T) {
 	centroids := [][]float32{{0, 0}, {10, 0}, {0, 10}, {10, 10}, {5, 5}}
 	cache := centroidCacheFor(t, "0-pred", centroids)

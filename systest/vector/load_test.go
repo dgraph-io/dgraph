@@ -534,8 +534,8 @@ func TestBulkLoadPartitionedVectorIndex(t *testing.T) {
 	exportDir := testExportDir(t)
 
 	// Load the vectors FIRST (predicate typed but not indexed), then alter to
-	// add the partitioned index. The alter-with-data path is the one that used
-	// to leak an internal vectorDimension option into the persisted schema.
+	// add the partitioned index. The alter-with-data path must not leak the
+	// internal vectorDimension option into the persisted schema.
 	require.NoError(t, gc.SetupSchema(`project_description_v: float32vector .`))
 
 	numVectors := 1000
@@ -624,8 +624,7 @@ func TestPartitionedVectorDimensionValidation(t *testing.T) {
 // ExistingVectorDimension must NOT treat those text bytes as a float array (which
 // would yield a bogus dimension of len(text)/4 and wrongly reject the alter); it
 // must leave the dimension unknown and let the alter through, so the build can
-// establish the true dimension. Before the fix this failed with a spurious
-// "contradicts the existing vector dimension" error.
+// establish the true dimension.
 func TestPartitionedVectorDimensionValidationUntyped(t *testing.T) {
 	gc, _ := setupTest(t)
 
