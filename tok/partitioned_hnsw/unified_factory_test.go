@@ -118,30 +118,37 @@ func TestUnifiedFlipTransition(t *testing.T) {
 	}
 }
 
-// TestUnifiedConcurrentCreateFindOrCreate exercises the uf.mu invariant under
-// `go test -race`: many goroutines hammer Create (monolithic opts) and
-// FindOrCreate (partitioned opts) on the SAME name. Without the factory lock,
-// pick()'s cross-factory "remove the stale registration from the other child"
-// step races the selected child's create, so both children can end up holding a
-// registration and Find becomes ambiguous. The test asserts no data race and
-// that the name still resolves to exactly one live instance afterwards.
+// TestUnifiedConcurrentCreateFindOrCreate pins the uf.mu invariant: a name must
+// end up registered in exactly ONE child factory. pick() removes the name from
+// the other child before the selected child creates it, and the child locks
+// guard each factory alone, not this cross-factory sequence. Without uf.mu a
+// concurrent Create (monolithic opts) and FindOrCreate (partitioned opts) on the
+// same name can both pick-remove before either creates, leaving BOTH children
+// holding a registration.
+//
+// That double registration is not an unsynchronized memory access (each child
+// has its own lock), so -race cannot flag it, and the unified Find returns
+// non-nil either way. The test therefore inspects the children directly and,
+// because a single check after the storm only reflects the last interleaving,
+// runs the racing pair in rounds and requires exactly one child to hold the
+// name after each round.
 func TestUnifiedConcurrentCreateFindOrCreate(t *testing.T) {
 	uf := CreateUnifiedFactory[float32](32)
+	ufc := uf.(*unifiedHNSWFactory[float32])
 	const name = "0-race"
 
-	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
+		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() { defer wg.Done(); _, _ = uf.Create(name, monoOpts(), 32) }()
 		go func() { defer wg.Done(); _, _ = uf.FindOrCreate(name, partitionedOpts(), 32) }()
-	}
-	wg.Wait()
+		wg.Wait()
 
-	found, err := uf.Find(name)
-	if err != nil {
-		t.Fatalf("Find after concurrent storm: %v", err)
-	}
-	if found == nil {
-		t.Fatal("Find returned nil after concurrent storm")
+		m, _ := ufc.mono.Find(name)
+		p, _ := ufc.part.Find(name)
+		if (m == nil) == (p == nil) {
+			t.Fatalf("round %d: expected exactly one child registration for %q; mono=%v part=%v",
+				i, name, m != nil, p != nil)
+		}
 	}
 }
