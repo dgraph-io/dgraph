@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
@@ -62,4 +63,16 @@ func TestBuildTabletPlacementForceNamespaceConflict(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[string]int{"5-payload": 3}, placement)
+}
+
+func TestWarnUnmatchedTabletPlacement(t *testing.T) {
+	schema := &schemaStore{schemaMap: map[string]*pb.SchemaUpdate{
+		"0-payload": {Predicate: "0-payload"},
+	}}
+
+	// A pin absent from the schema store (typo, or wrong namespace) is unmatched; a pin
+	// present in schema but without data is matched — that is a legitimate dataless pin.
+	require.Equal(t, []string{"0-paylaod", "5-payload"}, unmatchedTabletPlacement(
+		map[string]int{"0-payload": 1, "0-paylaod": 1, "5-payload": 2}, schema))
+	require.Empty(t, unmatchedTabletPlacement(map[string]int{"0-payload": 1}, schema))
 }

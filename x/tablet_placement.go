@@ -54,9 +54,6 @@ func ParseTabletPlacement(r io.Reader) ([]TabletPlacement, error) {
 		switch {
 		case e.Predicate == "":
 			faults = append(faults, fmt.Sprintf("entry %d: empty predicate", i))
-		case strings.Contains(e.Predicate, NsSeparator):
-			faults = append(faults, fmt.Sprintf("entry %d (%s): predicate must not contain %q; "+
-				"set the namespace via the namespace field", i, e, NsSeparator))
 		case isReservedName(e.Predicate):
 			faults = append(faults, fmt.Sprintf("entry %d (%s): reserved predicates are always "+
 				"served by group 1 and cannot be placed", i, e))

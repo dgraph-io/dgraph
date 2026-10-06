@@ -59,9 +59,24 @@ func TestParseTabletPlacement(t *testing.T) {
 		require.ErrorContains(t, err, "reserved")
 	})
 
-	t.Run("namespaced predicate spelling rejected", func(t *testing.T) {
-		_, err := parse(`[{"predicate": "0-name", "group": 1}]`)
-		require.ErrorContains(t, err, "namespace field")
+	t.Run("hyphenated predicates accepted", func(t *testing.T) {
+		// Hyphens are legal in predicate names (e.g. tweet-a in query tests); only the
+		// first separator in a namespaced attr is meaningful, so these all round-trip.
+		entries, err := parse(`[
+			{"predicate": "tweet-a", "group": 1},
+			{"predicate": "first-name-last", "group": 2, "namespace": 3},
+			{"predicate": "0-name", "group": 1}
+		]`)
+		require.NoError(t, err)
+		require.Equal(t, []TabletPlacement{
+			{Predicate: "tweet-a", Group: 1},
+			{Predicate: "first-name-last", Group: 2, Namespace: 3},
+			{Predicate: "0-name", Group: 1},
+		}, entries)
+		// The namespaced attr built from such an entry still parses back unambiguously.
+		ns, pred := ParseNamespaceAttr(NamespaceAttr(3, "first-name-last"))
+		require.Equal(t, uint64(3), ns)
+		require.Equal(t, "first-name-last", pred)
 	})
 
 	t.Run("duplicate entry rejected, same predicate across namespaces allowed", func(t *testing.T) {

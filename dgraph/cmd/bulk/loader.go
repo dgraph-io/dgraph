@@ -199,7 +199,7 @@ func newLoader(opt *BulkOptions, precomputedWriteTs uint64) *loader {
 	st := &state{
 		opt:    opt,
 		prog:   newProgress(),
-		shards: newShardMap(opt.MapShards, opt.tabletPlacement),
+		shards: newShardMap(opt.MapShards, unpinnedBaseShard(opt), opt.tabletPlacement),
 		// Lots of gz readers, so not much channel buffer needed.
 		readerChunkCh: make(chan *chunkWithMeta, opt.NumGoroutines),
 		writeTs:       writeTs,

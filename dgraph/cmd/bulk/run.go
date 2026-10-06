@@ -417,6 +417,10 @@ func RunBulkLoader(opt BulkOptions) {
 		}
 	}
 
+	if len(opt.tabletPlacement) > 0 {
+		warnUnmatchedTabletPlacement(opt.tabletPlacement, loader.schema)
+	}
+
 	if opt.SkipReducePhase {
 		fmt.Println("Skipping reduce phase. Map phase completed successfully.")
 		fmt.Println("Temp files preserved for later reduce phase processing.")

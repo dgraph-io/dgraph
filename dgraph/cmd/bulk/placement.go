@@ -8,6 +8,7 @@ package bulk
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -42,6 +43,40 @@ func buildTabletPlacement(opt *BulkOptions, entries []x.TabletPlacement) (map[st
 			opt.Namespace, strings.Join(wrongNs, ", "))
 	}
 	return placement, nil
+}
+
+// unpinnedBaseShard returns the first map shard unpinned predicates may round-robin
+// over. With placement active, map shards 0..ReduceShards-1 are designated for groups
+// and merge identity into them; routing unpinned predicates to the spare shards keeps
+// them eligible for size packing instead of being fixed to a group by arrival order.
+// Without placement, or without spare shards, every shard is fair game as today.
+func unpinnedBaseShard(opt *BulkOptions) int {
+	if len(opt.tabletPlacement) > 0 && opt.MapShards > opt.ReduceShards {
+		return opt.ReduceShards
+	}
+	return 0
+}
+
+// unmatchedTabletPlacement returns the pinned predicates that matched nothing in the
+// load — neither the schema nor any data — which is almost always a typo in the
+// placement file. Valid once the map phase (or its restored metadata) has populated
+// the schema store with every predicate seen.
+func unmatchedTabletPlacement(placement map[string]int, schema *schemaStore) []string {
+	var unmatched []string
+	for pred := range placement {
+		if schema.getSchema(pred) == nil {
+			unmatched = append(unmatched, pred)
+		}
+	}
+	sort.Strings(unmatched)
+	return unmatched
+}
+
+func warnUnmatchedTabletPlacement(placement map[string]int, schema *schemaStore) {
+	if unmatched := unmatchedTabletPlacement(placement, schema); len(unmatched) > 0 {
+		fmt.Printf("WARNING: %d pinned predicate(s) matched nothing in the schema or data "+
+			"(typo in the placement file?): %s\n", len(unmatched), strings.Join(unmatched, ", "))
+	}
 }
 
 // printTabletPlacement logs the routing every pinned predicate will get, so an operator
