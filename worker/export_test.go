@@ -589,8 +589,7 @@ func TestToSchema(t *testing.T) {
 				`@index(hnsw(metric:"euclidean",numClusters:"8",vectorDimension:"128")) . ` + "\n",
 		},
 		{
-			// Multiple index specs must be comma-separated (regression: the
-			// separator condition was inverted and emitted no comma).
+			// Multiple index specs must be comma-separated.
 			skv: &skv{
 				attr: x.AttrInRootNamespace("vectors"),
 				schema: pb.SchemaUpdate{

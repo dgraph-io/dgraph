@@ -198,9 +198,9 @@ func isVectorRebuildContext(ctx context.Context) bool {
 //   - Strictly increasing, one txn per uid: successive inserts into one
 //     shared transaction do not reliably see each other's uncommitted
 //     neighbor-row updates, so later inserts overwrite earlier ones' inbound
-//     links (observed: two replayed mutual nearest neighbors, neither
-//     linking the other). Distinct versions make every insert read its
-//     predecessors' committed rows.
+//     links (e.g. two replayed mutual nearest neighbors can end up with
+//     neither linking the other). Distinct versions make every insert read
+//     its predecessors' committed rows.
 //
 // The timestamp range cannot collide with live writes: each replayed uid
 // stems from at least one captured mutation, and every captured mutation
@@ -258,10 +258,10 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 		// otherwise every scoring read of this uid's vector inside the
 		// insert returns "no value", the uid scores as garbage, and the
 		// capped neighbor-row merges truncate it out of every row: zero
-		// back-links, orphaned vector (observed on monolithic, whose rows
-		// sit at the efConstruction cap; partitioned's small cluster rows
-		// masked it). Writes still commit at StartTs+i, which stays
-		// collision-free while the gate is up.
+		// back-links, an orphaned vector. Rows sitting at the efConstruction
+		// cap are the most exposed, since the cap is what drops the mis-scored
+		// uid; rows below the cap can hide it. Writes still commit at
+		// StartTs+i, which stays collision-free while the gate is up.
 		readTs := Oracle().MaxAssigned()
 		if readTs < ts {
 			readTs = ts
@@ -273,7 +273,7 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 		// adjacency rows per instance, scoped to a single transaction's
 		// view — reusing one instance across the per-uid replay
 		// transactions serves stale rows and silently drops earlier
-		// replays' back-links (observed: 66% of drained vectors orphaned).
+		// replays' back-links, orphaning them.
 		indexer, err := spec.FindOrCreateIndex(attr)
 		if err != nil {
 			return false, err
@@ -346,10 +346,10 @@ func drainVectorRebuildCapture(ctx context.Context, rb *IndexRebuild,
 	// replay under the capture lock.
 	carry := map[uint64]vectorPendingMutation{}
 	// graceUntil bounds, by WALL CLOCK, how long a resolved-but-not-yet-readable
-	// uid is retried before it is treated as aborted. A round-count budget was
-	// wrong: the per-round sleep only runs when no uid progressed, so if other
-	// uids keep progressing the budget could burn in microseconds and drop a
-	// still-committing uid.
+	// uid is retried before it is treated as aborted. Wall clock rather than a
+	// round count: the per-round sleep only runs when no uid progressed, so if
+	// other uids keep progressing a round-count budget could burn in
+	// microseconds and drop a still-committing uid.
 	graceUntil := map[uint64]time.Time{}
 	const graceDuration = 200 * time.Millisecond
 	stalls := 0

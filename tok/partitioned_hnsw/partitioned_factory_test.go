@@ -52,7 +52,7 @@ func TestFindOrCreateReturnsSameInstance(t *testing.T) {
 	}
 }
 
-// TestFindOrCreateAppliesNumProbesChange pins the numProbes fix: a
+// TestFindOrCreateAppliesNumProbesChange verifies numProbes handling: a
 // numProbes-only alter must NOT rebuild (numProbes is excluded from the index
 // identity), so FindOrCreate returns the same long-lived instance — and it
 // applies the new probe count in place rather than ignoring it.
