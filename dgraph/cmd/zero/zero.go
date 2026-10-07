@@ -99,7 +99,7 @@ func (s *Server) Init() {
 			opts.limiterConfig.RefillAfter, s.closer)
 	}
 
-	go s.rebalanceTablets()
+	go s.rebalanceTablets(opts.rebalanceInterval)
 }
 
 func (s *Server) periodicallyPostTelemetry() {

@@ -83,7 +83,8 @@ instances to achieve high-availability.
 		" The count includes the original shard.")
 	flag.String("peer", "", "Address of another dgraphzero server.")
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
-	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
+	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move. "+
+		"Set to 0 to disable automatic tablet rebalancing.")
 	flag.String("enterprise_license", "", "(deprecated) Path to the enterprise license file.")
 	flag.String("cid", "", "Cluster ID")
 
@@ -282,9 +283,9 @@ func run() {
 			"WAL directory and Audit output cannot be the same ('%s').", opts.audit.Output)
 	}
 
-	if opts.rebalanceInterval <= 0 {
-		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
-			opts.rebalanceInterval)
+	if opts.rebalanceInterval < 0 {
+		log.Fatalf("ERROR: Rebalance interval must be zero (to disable automatic tablet "+
+			"rebalancing) or positive. Found: %d", opts.rebalanceInterval)
 	}
 
 	addr := "localhost"
