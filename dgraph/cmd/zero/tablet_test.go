@@ -66,3 +66,20 @@ func TestMoveBackoff(t *testing.T) {
 	s.recordMoveResult(pred, time.Minute, nil)
 	require.False(t, s.skipMove(pred))
 }
+
+func TestRebalanceTabletsDisabled(t *testing.T) {
+	// A non-positive interval disables automatic rebalancing: the loop must return
+	// immediately instead of ticking (time.Tick would panic on these values).
+	for _, interval := range []time.Duration{0, -time.Minute} {
+		done := make(chan struct{})
+		go func() {
+			(&Server{}).rebalanceTablets(interval)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("rebalanceTablets(%v) did not return; rebalancing not disabled", interval)
+		}
+	}
+}
