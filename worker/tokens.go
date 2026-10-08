@@ -25,6 +25,8 @@ func verifyStringIndex(ctx context.Context, attr string, funcType FuncType) (str
 		requiredTokenizer = tok.NGramTokenizer{}
 	case fullTextSearchFn:
 		requiredTokenizer = tok.FullTextTokenizer{}
+	case bm25SearchFn:
+		requiredTokenizer = tok.BM25Tokenizer{}
 	case matchFn:
 		requiredTokenizer = tok.TrigramTokenizer{}
 	default:
@@ -64,6 +66,9 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType, query bo
 	}
 	if funcType == fullTextSearchFn {
 		return tok.GetFullTextTokens(funcArgs, lang)
+	}
+	if funcType == bm25SearchFn {
+		return tok.GetBM25QueryTokens(funcArgs, lang)
 	}
 	if funcType == ngramFn {
 		if query {
