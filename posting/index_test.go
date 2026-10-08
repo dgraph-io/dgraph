@@ -615,3 +615,20 @@ func TestNeedsListTypeRebuild(t *testing.T) {
 	require.False(t, rebuild)
 	require.Error(t, err)
 }
+
+func TestAddDeadNode(t *testing.T) {
+	// First delete records the uid.
+	out, changed := addDeadNode(nil, 5)
+	require.True(t, changed)
+	require.Equal(t, []uint64{5}, out)
+
+	// A distinct uid is appended.
+	out, changed = addDeadNode([]uint64{5}, 7)
+	require.True(t, changed)
+	require.Equal(t, []uint64{5, 7}, out)
+
+	// A uid already recorded as dead is a no-op: no change, no growth.
+	out, changed = addDeadNode([]uint64{5, 7}, 5)
+	require.False(t, changed)
+	require.Equal(t, []uint64{5, 7}, out)
+}
