@@ -28,7 +28,6 @@ RUN set -eu; \
             curl \
             iputils-ping \
             jq \
-            libjemalloc-dev \
             less \
             sysstat \
             gnupg \
@@ -44,5 +43,21 @@ ADD linux /usr/local/bin
 RUN mkdir /dgraph
 WORKDIR /dgraph
 
-ENV GODEBUG=madvdontneed=1
+# jemalloc tuning knob. The binary statically links jemalloc (built with
+# --with-jemalloc-prefix=je_ and a compile-time
+# --with-malloc-conf='background_thread:true,metadata_thp:auto'; see
+# dgraph/Makefile), so no libjemalloc shared object is loaded at runtime.
+# Because of the je_ prefix, the runtime override variable is JE_MALLOC_CONF,
+# not the standard MALLOC_CONF. To tighten RSS return under a cgroup memory
+# limit, run with e.g.
+#   -e JE_MALLOC_CONF=dirty_decay_ms:5000,muzzy_decay_ms:5000
+# (background_thread stays on via the compile-time default).
+# On a CPU-limited container also consider narenas:<GOMAXPROCS> or
+# percpu_arena:percpu -- jemalloc sizes arenas from the CPUs it detects (cpuset,
+# not the CFS quota), so it over-allocates arenas under a --cpus limit. Full
+# option reference: https://jemalloc.net/jemalloc.3.html
+#
+# The former GODEBUG=madvdontneed=1 was removed: MADV_DONTNEED is the Go runtime
+# default since Go 1.16, and it only ever governed the Go heap, never jemalloc's
+# off-heap arenas where Dgraph's large allocations live. It was a no-op here.
 CMD ["dgraph"]
