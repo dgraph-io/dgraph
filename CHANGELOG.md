@@ -6,6 +6,101 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
+## [v25.5.0] - 2026-10-08
+
+[v25.5.0]: https://github.com/dgraph-io/dgraph/compare/v25.4.1...v25.5.0
+
+- **Added**
+
+- **Zero**
+  - feat(zero): allow `--rebalance_interval=0` to disable automatic tablet rebalancing (#9848).
+    Positive values and the 8-minute default are unchanged. The flag must be set on every Zero in
+    the ensemble, and a Zero restarted without it reverts to the default. Manual moves via
+    `/moveTablet` keep working while automatic rebalancing is disabled.
+
+- **Bulk Loader**
+  - feat(bulk): deterministic initial tablet placement via `--tablet_placement` (#9842). An opt-in
+    JSON file pins predicates to groups so a cluster bootstrapped from bulk output starts with an
+    operator-chosen tablet layout. Placement is applied at load time only; Zero's rebalancer may
+    later move tablets unless it is disabled with `--rebalance_interval=0`.
+
+- **Security**
+  - feat(security): add a `--security "anonymous=full|data|none"` posture (#9844). It states what a
+    caller with no verified credential may do. The default is `full`, which is the behavior of every
+    earlier release, so existing clusters are unchanged. Zero honors the same key.
+
+- **Core**
+  - feat(edgraph): add an AccessController and separate identity from tenancy (#9813). Behavior with
+    no resolver, authenticator, or capability source installed is unchanged. Deliberate changes:
+    `authSuperAdmin` returns `Unauthenticated` when the namespace claim cannot be parsed instead of
+    continuing as namespace 0, and `/health` reports `multi_tenancy` separately from `acl`. The
+    exported `x.AttachJWTNamespace`, `x.AttachJWTNamespaceOutgoing`, and `x.ExtractNamespaceHTTP`
+    are replaced by variants that return an error.
+
+- **Fixed**
+
+- **Query**
+  - fix(query): avoid eager UID materialization on posting reads (#9809)
+
+    > **WARNING** `first: -N` now returns different results for a query whose index is lossy (for
+    > example `term`) or whose per-token posting lists are intersected. The worker no longer trims
+    > the posting list before the post-filter runs, so the last N rows are taken from the filtered
+    > result. The previous answer was wrong rather than merely different.
+
+- **Core**
+  - fix(unique): include language in value identity (#9820). For predicates with both `@unique` and
+    `@lang`, equal values under different language tags in one mutation are no longer rejected as
+    duplicates, matching the database-level uniqueness check.
+
+- **Changed**
+
+- **Core**
+  - chore(core): remove net/trace event log (#9593). The `/debug/requests` and `/debug/events`
+    endpoints are removed.
+
+    > **WARNING** `--expose_trace` is deprecated. It is still accepted and prints a deprecation
+    > notice; a future release will reject it. Remove it from startup flags and compose files.
+
+- **Performance**
+  - perf(unique): make verifyUniqueWithinMutation linear (#9822). The in-request duplicate check for
+    `@unique` predicates was quadratic in the number of edges per mutation; one check took 1.67s at
+    8,000 edges. It is now a single pass (585us at 8,000 edges).
+
+- **Chore**
+  - chore(test): pull MinIO test images from an org-owned ghcr mirror (#9843)
+  - chore(test): pull MinIO test images from quay.io instead of Docker Hub (#9832)
+  - docs: fix typo neccessary -> necessary (#9819)
+
+- **Dependency Updates**
+  - chore(deps): bump badger from v4.9.4 to v4.9.6 (fixes the compaction regression in
+    dgraph-io/badger#2327)
+  - chore(deps): bump google.golang.org/grpc from 1.82.1 to 1.83.2 (#9821, #9828)
+  - deps: upgrade golang.org/x/crypto to v0.55.0 (#9826)
+  - chore(deps): bump go.opentelemetry.io/otel/sdk from 1.44.0 to 1.45.0 (#9835)
+  - chore(deps): bump go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp from 1.44.0 to
+    1.45.0 (#9833)
+
+- **Security**
+  - grpc 1.83.1 and 1.83.2 carry upstream security fixes. 1.83.1 addresses GHSA-vp52-pcj8-j9qc /
+    CVE-2026-84304, a heap memory exhaustion via HTTP/2 DATA frame fragmentation that affects
+    grpc-go 1.83.0 and earlier, including the 1.82.1 shipped in v25.4.x; it also rejects nested
+    xds/rbac `Principal` and `Permission` rules with `:scheme` or `grpc-` prefixed header matchers.
+    1.83.2 rejects requests missing both `:authority` and `Host` headers with HTTP 400.
+
+## [v25.4.1] - 2026-08-24
+
+[v25.4.1]: https://github.com/dgraph-io/dgraph/compare/v25.4.0...v25.4.1
+
+- **Fixed**
+
+- **Core**
+  - fix(posting): make rollup failures diagnosable in logs (#9808). The warning logged when a rollup
+    fails had its format arguments reversed and printed the key as a decimal byte slice. It now
+    prints the error and a hex key that can be passed to `dgraph debug --lookup`.
+
+- **Chore**
+  - chore: upgrade Go to 1.27.0 (#9816)
+
 ## [v25.4.0] - 2026-07-30
 
 [v25.4.0]: https://github.com/dgraph-io/dgraph/compare/v25.3.8...v25.4.0
