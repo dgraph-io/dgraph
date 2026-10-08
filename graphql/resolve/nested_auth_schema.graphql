@@ -1,0 +1,28 @@
+type ProtectedFoo
+  @auth(
+    add: { rule: "{ $ROLE: { eq: \"ADMIN\" } }" }
+    update: { rule: "{ $ROLE: { eq: \"ADMIN\" } }" }
+  ) {
+  id: String! @id
+  items: [FooItem!]! @hasInverse(field: parent)
+}
+
+type FooItem {
+  parent: ProtectedFoo
+}
+
+type GuardedBase
+  @auth(add: {
+    or: [
+      { rule: "{ $ROLE: { eq: \"USER\" } }" }
+      { rule: "{ $ROLE: { eq: \"ADMIN\" } }" }
+    ]
+  }) {
+  id: String! @id
+  files: [GuardedFile!]! @hasInverse(field: base)
+}
+
+type GuardedFile @auth(add: { rule: "{ $ROLE: { eq: \"ADMIN\" } }" }) {
+  id: ID!
+  base: GuardedBase!
+}

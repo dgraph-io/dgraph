@@ -59,6 +59,10 @@ type AuthQueryRewritingCase struct {
 	AuthQuery string
 	AuthJson  string
 
+	// Second post-mutation auth round (e.g. update rules on existing nodes linked via @hasInverse)
+	AuthQuerySec string
+	AuthJsonSec  string
+
 	// Indicates if we should skip auth query verification when using authExecutor.
 	// Example: Top level RBAC rules is true.
 	SkipAuth bool
@@ -81,8 +85,8 @@ type authExecutor struct {
 	uids string
 
 	// auth
-	authQuery string
-	authJson  string
+	authQueries []string
+	authJsons   []string
 
 	skipAuth bool
 }
@@ -114,37 +118,23 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request,
 		// Check query generated along with mutation.
 		require.Equal(ex.t, ex.dgQuerySec, req.Query)
 
-		if len(assigned) == 0 {
-			// skip state 3, there's no new nodes to apply auth to
-			ex.state++
-		}
-
-		// For rules that don't require auth, it should directly go to step 4.
-		if ex.skipAuth {
-			ex.state++
-		}
-
 		return &dgoapi.Response{
 			Json:    []byte(ex.json),
 			Uids:    assigned,
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
 		}, nil
 
-	case 3:
-		// auth
+	default:
+		authIdx := ex.state - 3
+		if authIdx < len(ex.authQueries) {
+			require.Equal(ex.t, ex.authQueries[authIdx], req.Query)
+			return &dgoapi.Response{
+				Json:    []byte(ex.authJsons[authIdx]),
+				Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
+			}, nil
+		}
 
-		// check that we got the expected auth query
-		require.Equal(ex.t, ex.authQuery, req.Query)
-
-		// respond to query
-		return &dgoapi.Response{
-			Json:    []byte(ex.authJson),
-			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
-		}, nil
-
-	case 4:
-		// final result
-
+		// final result query from FromMutationResult
 		return &dgoapi.Response{
 			Json:    []byte(`{"done": "and done"}`),
 			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
@@ -772,9 +762,17 @@ func checkAddUpdateCase(
 		dgQuerySec:      tcase.DGQuerySec,
 		uids:            tcase.Uids,
 		dgQuery:         tcase.DGQuery,
-		authQuery:       tcase.AuthQuery,
-		authJson:        tcase.AuthJson,
 		skipAuth:        tcase.SkipAuth,
+	}
+	if !tcase.SkipAuth {
+		if tcase.AuthQuery != "" {
+			ex.authQueries = append(ex.authQueries, tcase.AuthQuery)
+			ex.authJsons = append(ex.authJsons, tcase.AuthJson)
+		}
+		if tcase.AuthQuerySec != "" {
+			ex.authQueries = append(ex.authQueries, tcase.AuthQuerySec)
+			ex.authJsons = append(ex.authJsons, tcase.AuthJsonSec)
+		}
 	}
 	resolver := NewDgraphResolver(rewriter(), ex)
 
