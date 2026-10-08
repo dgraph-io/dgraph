@@ -53,6 +53,17 @@ var errFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*queueItem
 
+func computeLowWatermark(maxFrontierSize int64) int64 {
+	if maxFrontierSize <= 0 {
+		return 1
+	}
+	lowWatermark := (maxFrontierSize * 60) / 100
+	if lowWatermark < 1 {
+		lowWatermark = 1
+	}
+	return lowWatermark
+}
+
 func (r *route) indexOf(uid uint64) int {
 	for i, val := range *r.route {
 		if val.uid == uid {
@@ -311,6 +322,8 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, nil
 	}
 
+	lowWatermark := computeLowWatermark(sg.Params.MaxFrontierSize)
+
 	minWeight := sg.Params.MinWeight
 	maxWeight := sg.Params.MaxWeight
 	next := make(chan bool, 2)
@@ -344,7 +357,8 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 		}
-		if item.hop > numHops-1 && numHops < maxHops {
+		shouldExpand := int64(pq.Len()) < lowWatermark
+		if item.hop > numHops-1 && numHops < maxHops && shouldExpand {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
@@ -490,6 +504,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		return nil, nil
 	}
 
+	lowWatermark := computeLowWatermark(sg.Params.MaxFrontierSize)
+
 	// next is a channel on to which we send a signal so as to perform another level of expansion.
 	next := make(chan bool, 2)
 	expandErr := make(chan error, 2)
@@ -521,7 +537,8 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			break
 		}
 
-		if numHops < maxHops && item.hop > numHops-1 {
+		shouldExpand := int64(pq.Len()) < lowWatermark
+		if numHops < maxHops && item.hop > numHops-1 && shouldExpand {
 			// Explore the next level by calling processGraph and add them to the queue.
 			if !stopExpansion {
 				next <- true
