@@ -113,10 +113,13 @@ func (slr *searchLayerResult[T]) updateFinalPath(r *index.SearchPathResult) {
 	r.Path = append(r.Path, slr.path...)
 }
 
-func (slr *searchLayerResult[T]) addFinalNeighbors(r *index.SearchPathResult) {
+func (slr *searchLayerResult[T]) addFinalNeighbors(r *index.SearchPathResult, simType SimilarityType[T]) {
 	for _, n := range slr.neighbors {
 		if !n.filteredOut {
 			r.Neighbors = append(r.Neighbors, n.index)
+			// Distances carries the higher-is-better similarity for each neighbor,
+			// positionally aligned with Neighbors, so scored searches can surface it.
+			r.Distances = append(r.Distances, simType.similarityScore(n.value))
 		}
 	}
 }
