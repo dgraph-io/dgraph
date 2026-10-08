@@ -114,6 +114,16 @@ type MutationRewriter interface {
 		result map[string]interface{}) []string
 }
 
+// XIDConflictVerifier is an optional interface implemented by MutationRewriter when it needs
+// to verify deferred @id conflicts post-execution. UpdateRewriter implements this to handle
+// the case where an @id field in an update set-patch holds its current (unchanged) value.
+type XIDConflictVerifier interface {
+	// VerifyXIDConflicts checks each deferred @id conflict against the UIDs that were actually
+	// mutated. If a conflict's existenceUID is not among the mutated UIDs, it belongs to a
+	// different node and is a genuine conflict — an error is returned.
+	VerifyXIDConflicts(mutatedUIDs []string, hasAuthRules bool) error
+}
+
 // A DgraphExecutor can execute a query/mutation and returns the request response and any errors.
 type DgraphExecutor interface {
 	// Execute performs the actual query/mutation and returns a Dgraph response. If an error
@@ -473,6 +483,23 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		copyTypeMap(upsert.NewNodes, newNodes)
 	}
 	mutationTimer.Stop()
+
+	// Verify any @id conflicts that were deferred during rewriting (UpdateWithSet only).
+	// Mirrors the DQL @unique verifyUnique pattern: compare the existence-query UID against
+	// the UIDs that were actually mutated. A mismatch means the @id value belongs to a
+	// different node — a genuine conflict.
+	//
+	// ORDERING INVARIANT: this check must run before CommitOrAbort. If a conflict is
+	// detected the function returns early with commit=false, triggering the deferred abort.
+	// Moving CommitOrAbort above this check would commit the conflicting write permanently.
+	if verifier, ok := mr.mutationRewriter.(XIDConflictVerifier); ok {
+		mutatedUIDs := mr.mutationRewriter.MutatedRootUIDs(mutation, mutResp.GetUids(), result)
+		hasAuthRules := queryAuthSelector(mutation.MutatedType()) != nil
+		if err := verifier.VerifyXIDConflicts(mutatedUIDs, hasAuthRules); err != nil {
+			return emptyResult(schema.GQLWrapf(err, "mutation %s failed", mutation.Name())),
+				resolverFailed
+		}
+	}
 
 	authErr := authorizeNewNodes(ctx, mutation, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {

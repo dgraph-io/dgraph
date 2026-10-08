@@ -6557,8 +6557,7 @@ func xidUpdateAndNullableTests(t *testing.T) {
                             }
                         }
                      }`,
-			error: "couldn't rewrite mutation updateEmployer because failed to rewrite mutation" +
-				" payload because id ABC already exists for field name inside type Employer",
+			error: "mutation updateEmployer failed because id ABC already exists for field name inside type Employer",
 		},
 		{
 			name: "updating root @id fields and also create a nested  link to nested object",
@@ -6622,4 +6621,707 @@ func xidUpdateAndNullableTests(t *testing.T) {
 			"regNo": map[string]interface{}{"in": []int{101, 102, 103, 105}}}
 	DeleteGqlType(t, "Employer", filterEmployer, 2, nil)
 	DeleteGqlType(t, "Worker", filterWorker, 4, nil)
+}
+
+func updateMutationWithUnchangedXID(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation addState($xcode: String!, $name: String!) {
+            addState(input: [{ xcode: $xcode, name: $name }]) {
+                state {
+                    id
+                    xcode
+                    name
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"xcode": "XIDTEST1",
+			"name":  "XID Test State",
+		},
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var addResult struct {
+		AddState struct {
+			State []*state
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addResult)
+	require.NoError(t, err)
+	require.Len(t, addResult.AddState.State, 1)
+	newState := addResult.AddState.State[0]
+	require.NotEmpty(t, newState.ID)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation updateState($xcode: String!, $name: String!) {
+            updateState(input: {
+                filter: { xcode: { eq: $xcode } },
+                set: { xcode: $xcode, name: $name }
+            }) {
+                numUids
+                state {
+                    id
+                    xcode
+                    name
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"xcode": "XIDTEST1",
+			"name":  "XID Test State Updated",
+		},
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var updateResult struct {
+		UpdateState *struct {
+			NumUids int
+			State   []*state
+		}
+	}
+	err = json.Unmarshal([]byte(gqlResponse.Data), &updateResult)
+	require.NoError(t, err)
+
+	require.NotNil(t, updateResult.UpdateState,
+		"updateState returned null when set patch contained unchanged @id field")
+	require.Equal(t, 1, updateResult.UpdateState.NumUids)
+	require.Len(t, updateResult.UpdateState.State, 1)
+	require.Equal(t, "XIDTEST1", updateResult.UpdateState.State[0].Code)
+	require.Equal(t, "XID Test State Updated", updateResult.UpdateState.State[0].Name)
+
+	newState.Name = "XID Test State Updated"
+	requireState(t, newState.ID, newState, postExecutor)
+
+	deleteState(t, map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": "XIDTEST1"},
+	}, 1, nil)
+}
+
+func updateMutationWithNestedUnchangedXID(t *testing.T) {
+	addRegionParams := &GraphQLParams{
+		Query: `mutation addRegion($id: String!, $name: String!) {
+            addRegion(input: [{ id: $id, name: $name }]) {
+                region {
+                    id
+                    name
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"id":   "NESTED_R1",
+			"name": "Nested Test Region",
+		},
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addRegionParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($xcode: String!, $name: String!, $regionId: String!) {
+            addState(input: [{
+                xcode: $xcode,
+                name: $name,
+                region: { id: $regionId }
+            }]) {
+                state {
+                    id
+                    xcode
+                    name
+                    region { id name }
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"xcode":    "NESTED_S1",
+			"name":     "Nested Test State",
+			"regionId": "NESTED_R1",
+		},
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, addStateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var addStateResult struct {
+		AddState struct {
+			State []*state
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &addStateResult)
+	require.NoError(t, err)
+	require.Len(t, addStateResult.AddState.State, 1)
+	stateID := addStateResult.AddState.State[0].ID
+	require.NotEmpty(t, stateID)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation updateState($xcode: String!, $name: String!, $regionId: String!) {
+            updateState(input: {
+                filter: { xcode: { eq: $xcode } },
+                set: {
+                    xcode: $xcode,
+                    name: $name,
+                    region: { id: $regionId }
+                }
+            }) {
+                numUids
+                state {
+                    id
+                    xcode
+                    name
+                    region { id name }
+                }
+            }
+        }`,
+		Variables: map[string]interface{}{
+			"xcode":    "NESTED_S1",
+			"name":     "Nested Test State Updated",
+			"regionId": "NESTED_R1",
+		},
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var updateResult struct {
+		UpdateState *struct {
+			NumUids int
+			State   []*state
+		}
+	}
+	err = json.Unmarshal([]byte(gqlResponse.Data), &updateResult)
+	require.NoError(t, err)
+
+	require.NotNil(t, updateResult.UpdateState,
+		"updateState returned null when set patch contained unchanged @id fields (top-level and nested)")
+	require.Equal(t, 1, updateResult.UpdateState.NumUids)
+	require.Len(t, updateResult.UpdateState.State, 1)
+	resultState := updateResult.UpdateState.State[0]
+	require.Equal(t, "NESTED_S1", resultState.Code)
+	require.Equal(t, "Nested Test State Updated", resultState.Name)
+	require.NotNil(t, resultState.Region)
+	require.Equal(t, "NESTED_R1", resultState.Region.ID)
+
+	deleteState(t, map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": "NESTED_S1"},
+	}, 1, nil)
+	DeleteGqlType(t, "Region", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "NESTED_R1"},
+	}, 1, nil)
+}
+
+func updateMutationWithNestedUnchangedXIDOnParent(t *testing.T) {
+	// Create a Comment1 that will be the nested child.
+	addCommentParams := &GraphQLParams{
+		Query: `mutation {
+            addComment1(input: [{ id: "NESTED_CMT1" }]) {
+                comment1 { id }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addCommentParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	// Create a Post1 that references the Comment1.
+	addPostParams := &GraphQLParams{
+		Query: `mutation {
+            addPost1(input: [{ id: "NESTED_POST1", comments: [{ id: "NESTED_CMT1" }] }]) {
+                post1 { id comments { id } }
+            }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, addPostParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updatePost1(input: {
+                filter: { id: { eq: "NESTED_POST1" } },
+                set: { id: "NESTED_POST1", comments: [{ id: "NESTED_CMT1" }] }
+            }) {
+                numUids
+                post1 { id comments { id } }
+            }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var updateResult struct {
+		UpdatePost1 *struct {
+			NumUids int
+			Post1   []struct {
+				ID       string `json:"id"`
+				Comments []struct {
+					ID string `json:"id"`
+				} `json:"comments"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &updateResult)
+	require.NoError(t, err)
+
+	require.NotNil(t, updateResult.UpdatePost1,
+		"updatePost1 returned null when set patch contained unchanged @id fields (top-level and nested)")
+	require.Equal(t, 1, updateResult.UpdatePost1.NumUids)
+	require.Len(t, updateResult.UpdatePost1.Post1, 1)
+	require.Equal(t, "NESTED_POST1", updateResult.UpdatePost1.Post1[0].ID)
+	require.Len(t, updateResult.UpdatePost1.Post1[0].Comments, 1)
+	require.Equal(t, "NESTED_CMT1", updateResult.UpdatePost1.Post1[0].Comments[0].ID)
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "NESTED_POST1"},
+	}, 1, nil)
+	DeleteGqlType(t, "Comment1", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "NESTED_CMT1"},
+	}, 1, nil)
+}
+
+func updateMutationXIDConflictStillErrors(t *testing.T) {
+	for _, id := range []string{"XIDTEST_P1", "XIDTEST_P2"} {
+		addParams := &GraphQLParams{
+			Query: fmt.Sprintf(`mutation { addPost1(input: [{ id: "%s" }]) { post1 { id } } }`, id),
+		}
+		gqlResponse := postExecutor(t, GraphqlURL, addParams)
+		RequireNoGQLErrors(t, gqlResponse)
+	}
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updatePost1(input: {
+                filter: { id: { eq: "XIDTEST_P2" } },
+                set: { id: "XIDTEST_P1" }
+            }) {
+                numUids
+                post1 { id }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, updateParams)
+	require.NotEmpty(t, gqlResponse.Errors,
+		"expected conflict error when setting @id to a value already owned by a different node")
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"in": []string{"XIDTEST_P1", "XIDTEST_P2"}},
+	}, 2, nil)
+}
+
+func updateMutationIntXIDUnchanged(t *testing.T) {
+	// Add a Chapter node with a unique Int @id value.
+	addParams := &GraphQLParams{
+		Query: `mutation { addChapter(input: [{ chapterId: 9001, name: "Chapter B1" }]) { chapter { chapterId } } }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateChapter(input: {
+                filter: { chapterId: { eq: 9001 } },
+                set: { chapterId: 9001, name: "Chapter B1 Updated" }
+            }) { numUids chapter { chapterId name } }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateChapter *struct {
+			NumUids int
+			Chapter []struct {
+				ChapterId int    `json:"chapterId"`
+				Name      string `json:"name"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateChapter,
+		"updateChapter must not be null when Int @id is unchanged in set patch")
+	require.Equal(t, 1, result.UpdateChapter.NumUids)
+	require.Equal(t, 9001, result.UpdateChapter.Chapter[0].ChapterId)
+	require.Equal(t, "Chapter B1 Updated", result.UpdateChapter.Chapter[0].Name)
+
+	DeleteGqlType(t, "Chapter", map[string]interface{}{
+		"chapterId": map[string]interface{}{"eq": 9001},
+	}, 1, nil)
+}
+
+func updateMutationIntXIDConflictErrors(t *testing.T) {
+	for _, id := range []int{9002, 9003} {
+		addParams := &GraphQLParams{
+			Query: fmt.Sprintf(`mutation { addChapter(input: [{ chapterId: %d, name: "Chapter %d" }]) { chapter { chapterId } } }`, id, id),
+		}
+		gqlResponse := postExecutor(t, GraphqlURL, addParams)
+		RequireNoGQLErrors(t, gqlResponse)
+	}
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateChapter(input: {
+                filter: { chapterId: { eq: 9003 } },
+                set: { chapterId: 9002 }
+            }) { numUids chapter { chapterId } }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, updateParams)
+	require.NotEmpty(t, gqlResponse.Errors,
+		"must return a conflict error when Int @id in set patch belongs to a different node")
+
+	DeleteGqlType(t, "Chapter", map[string]interface{}{
+		"chapterId": map[string]interface{}{"in": []int{9002, 9003}},
+	}, 2, nil)
+}
+
+func updateMutationInt64XIDUnchanged(t *testing.T) {
+	// Add a Book node with a large Int64 @id value.
+	addParams := &GraphQLParams{
+		Query: `mutation($id: Int64!) {
+            addBook(input: [{ bookId: $id, name: "Book B3" }]) { book { bookId } }
+        }`,
+		Variables: map[string]interface{}{"id": "9876543219001"},
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation($id: Int64!) {
+            updateBook(input: {
+                filter: { bookId: { eq: $id } },
+                set: { bookId: $id, name: "Book B3 Updated" }
+            }) { numUids book { bookId name } }
+        }`,
+		Variables: map[string]interface{}{"id": "9876543219001"},
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateBook *struct {
+			NumUids int
+			Book    []struct {
+				BookId int64  `json:"bookId"`
+				Name   string `json:"name"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateBook,
+		"updateBook must not be null when Int64 @id is unchanged in set patch")
+	require.Equal(t, 1, result.UpdateBook.NumUids)
+	require.Equal(t, "Book B3 Updated", result.UpdateBook.Book[0].Name)
+
+	DeleteGqlType(t, "Book", map[string]interface{}{
+		"bookId": map[string]interface{}{"eq": "9876543219001"},
+	}, 1, nil)
+}
+
+func updateMutationNullableXIDUnchanged(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation {
+            addWorker(input: [{ empId: "WRK-C1", name: "Worker C1", regNo: 8001 }]) {
+                worker { empId }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateWorker(input: {
+                filter: { empId: { eq: "WRK-C1" } },
+                set: { regNo: 8001, name: "Worker C1 Updated" }
+            }) { numUids worker { empId name } }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateWorker *struct {
+			NumUids int
+			Worker  []struct {
+				EmpId string `json:"empId"`
+				Name  string `json:"name"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateWorker,
+		"updateWorker must not be null when nullable Int @id is unchanged in set patch")
+	require.Equal(t, 1, result.UpdateWorker.NumUids)
+	require.Equal(t, "Worker C1 Updated", result.UpdateWorker.Worker[0].Name)
+
+	DeleteGqlType(t, "Worker", map[string]interface{}{
+		"empId": map[string]interface{}{"eq": "WRK-C1"},
+	}, 1, nil)
+}
+
+func updateMutationNullableXIDFirstTimeSet(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation {
+            addWorker(input: [{ empId: "WRK-C2", name: "Worker C2" }]) {
+                worker { empId }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateWorker(input: {
+                filter: { empId: { eq: "WRK-C2" } },
+                set: { regNo: 9202, name: "Worker C2 Updated" }
+            }) { numUids worker { empId regNo name } }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateWorker *struct {
+			NumUids int
+			Worker  []struct {
+				EmpId string `json:"empId"`
+				RegNo int    `json:"regNo"`
+				Name  string `json:"name"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateWorker)
+	require.Equal(t, 1, result.UpdateWorker.NumUids)
+	require.Equal(t, 9202, result.UpdateWorker.Worker[0].RegNo)
+
+	DeleteGqlType(t, "Worker", map[string]interface{}{
+		"empId": map[string]interface{}{"eq": "WRK-C2"},
+	}, 1, nil)
+}
+
+func updateMutationNullableXIDClearedViaRemove(t *testing.T) {
+	// Add a Worker with regNo set.
+	addParams := &GraphQLParams{
+		Query: `mutation {
+            addWorker(input: [{ empId: "WRK-C3", name: "Worker C3", regNo: 8003 }]) {
+                worker { empId }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateWorker(input: {
+                filter: { empId: { eq: "WRK-C3" } },
+                remove: { regNo: 8003 }
+            }) { numUids worker { empId name } }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateWorker *struct {
+			NumUids int
+			Worker  []struct {
+				EmpId string `json:"empId"`
+				Name  string `json:"name"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateWorker)
+	require.Equal(t, 1, result.UpdateWorker.NumUids)
+
+	DeleteGqlType(t, "Worker", map[string]interface{}{
+		"empId": map[string]interface{}{"eq": "WRK-C3"},
+	}, 1, nil)
+}
+
+func updateMutationRemovePatchNonXIDField(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation {
+            addWorker(input: [{ empId: "WRK-C3B", name: "Worker C3B", regNo: 8004 }]) {
+                worker { empId }
+            }
+        }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	updateParams := &GraphQLParams{
+		Query: `mutation {
+            updateWorker(input: {
+                filter: { empId: { eq: "WRK-C3B" } },
+                remove: { name: "Worker C3B" }
+            }) { numUids worker { empId } }
+        }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, updateParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		UpdateWorker *struct {
+			NumUids int
+			Worker  []struct {
+				EmpId string `json:"empId"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.UpdateWorker)
+	require.Equal(t, 1, result.UpdateWorker.NumUids)
+
+	DeleteGqlType(t, "Worker", map[string]interface{}{
+		"empId": map[string]interface{}{"eq": "WRK-C3B"},
+	}, 1, nil)
+}
+
+func updateMutationDeleteRecreateXID(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation { addPost1(input: [{ id: "XIDRECYCLE-P1" }]) { post1 { id } } }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "XIDRECYCLE-P1"},
+	}, 1, nil)
+
+	addParams = &GraphQLParams{
+		Query: `mutation { addPost1(input: [{ id: "XIDRECYCLE-P1" }]) { post1 { id } } }`,
+	}
+	gqlResponse = postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var result struct {
+		AddPost1 *struct {
+			Post1 []struct {
+				ID string `json:"id"`
+			}
+		}
+	}
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.AddPost1)
+	require.Len(t, result.AddPost1.Post1, 1)
+	require.Equal(t, "XIDRECYCLE-P1", result.AddPost1.Post1[0].ID)
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "XIDRECYCLE-P1"},
+	}, 1, nil)
+}
+
+func updateMutationConcurrentUnchangedXID(t *testing.T) {
+	addParams := &GraphQLParams{
+		Query: `mutation { addPost1(input: [{ id: "XIDH1-CONC" }]) { post1 { id } } }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, addParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	const n = 10
+	responses := make([]*GraphQLResponse, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			// unchanged id in set patch, run concurrently from n goroutines.
+			// Each goroutine independently resolves existenceUID == mutatedUID → no conflict.
+			p := &GraphQLParams{
+				Query: `mutation {
+                    updatePost1(input: {
+                        filter: { id: { eq: "XIDH1-CONC" } },
+                        set: { id: "XIDH1-CONC" }
+                    }) { numUids post1 { id } }
+                }`,
+			}
+			responses[idx] = p.ExecuteAsPost(t, GraphqlURL)
+		}(i)
+	}
+	wg.Wait()
+
+	succeeded := 0
+	for i, r := range responses {
+		for _, gqlErr := range r.Errors {
+			// Transaction aborts are a normal Dgraph MVCC outcome under concurrent writes
+			// and are unrelated to @id conflict detection.  Only the "already exists" error
+			// would indicate our fix regressed.
+			require.NotContains(t, gqlErr.Error(), "already exists for field",
+				"goroutine %d: @id conflict error must not occur for unchanged @id", i)
+		}
+		if len(r.Errors) == 0 {
+			var result struct {
+				UpdatePost1 struct {
+					NumUids int
+				}
+			}
+			require.NoError(t, json.Unmarshal(r.Data, &result))
+			if result.UpdatePost1.NumUids == 1 {
+				succeeded++
+			}
+		}
+	}
+	// Guard against a silent regression where every unchanged-@id update fails: even under
+	// MVCC contention, at least one of the n updates must have committed successfully.
+	require.GreaterOrEqual(t, succeeded, 1,
+		"expected at least one unchanged-@id update to succeed with numUids == 1")
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"eq": "XIDH1-CONC"},
+	}, 1, nil)
+}
+
+func updateMutationConcurrentXIDTheftAllError(t *testing.T) {
+	const n = 5
+	ownerParams := &GraphQLParams{
+		Query: `mutation { addPost1(input: [{ id: "XIDH2-OWNED" }]) { post1 { id } } }`,
+	}
+	gqlResponse := postExecutor(t, GraphqlURL, ownerParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	allIDs := []string{"XIDH2-OWNED"}
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("XIDH2-ATK%d", i)
+		allIDs = append(allIDs, id)
+		addParams := &GraphQLParams{
+			Query: fmt.Sprintf(`mutation { addPost1(input: [{ id: "%s" }]) { post1 { id } } }`, id),
+		}
+		gqlResponse = postExecutor(t, GraphqlURL, addParams)
+		RequireNoGQLErrors(t, gqlResponse)
+	}
+
+	responses := make([]*GraphQLResponse, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			atkID := fmt.Sprintf("XIDH2-ATK%d", idx)
+
+			p := &GraphQLParams{
+				Query: fmt.Sprintf(`mutation {
+                    updatePost1(input: {
+                        filter: { id: { eq: "%s" } },
+                        set: { id: "XIDH2-OWNED" }
+                    }) { numUids post1 { id } }
+                }`, atkID),
+			}
+			responses[idx] = p.ExecuteAsPost(t, GraphqlURL)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, r := range responses {
+		require.NotEmpty(t, r.Errors,
+			"goroutine %d: expected conflict error when stealing @id owned by a different node", i)
+	}
+
+	DeleteGqlType(t, "Post1", map[string]interface{}{
+		"id": map[string]interface{}{"in": allIDs},
+	}, len(allIDs), nil)
 }
