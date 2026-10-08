@@ -321,7 +321,8 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest, pidx uin
 		// still be restored to the correct Alpha's Badger store.
 		if strings.HasSuffix(pred, hnsw.VecEntry) ||
 			strings.HasSuffix(pred, hnsw.VecKeyword) ||
-			strings.HasSuffix(pred, hnsw.VecDead) {
+			strings.HasSuffix(pred, hnsw.VecDead) ||
+			strings.HasSuffix(pred, hnsw.VecQuant) {
 			continue
 		}
 
