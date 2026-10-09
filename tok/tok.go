@@ -20,8 +20,8 @@ import (
 	"golang.org/x/text/collate"
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
-	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	opts "github.com/dgraph-io/dgraph/v25/tok/options"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
 )
@@ -86,7 +86,7 @@ var indexFactories = make(map[string]IndexFactory)
 
 func init() {
 	registerTokenizer(BigFloatTokenizer{})
-	registerIndexFactory(createIndexFactory(hnsw.CreateFactory[float32](32)))
+	registerIndexFactory(createIndexFactory(partitioned_hnsw.CreateUnifiedFactory[float32](32)))
 	registerTokenizer(GeoTokenizer{})
 	registerTokenizer(IntTokenizer{})
 	registerTokenizer(FloatTokenizer{})

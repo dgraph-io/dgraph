@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/partitioned_hnsw"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/dgraph-io/ristretto/v2/z"
 )
@@ -207,6 +208,17 @@ func (w *grpcWorker) MovePredicate(ctx context.Context,
 	}
 	if len(in.Predicate) == 0 {
 		return &emptyPayload, errEmptyPredicate
+	}
+
+	// The partitioned vector index keeps per-cluster aux predicates and a
+	// centroid key that do not move with the tablet yet.
+	if su, ok := schema.State().Get(ctx, in.Predicate); ok {
+		for _, spec := range su.IndexSpecs {
+			if partitioned_hnsw.SpecHasOption(spec, partitioned_hnsw.NumClustersOpt) {
+				return &emptyPayload, errors.Errorf("cannot move predicate %s: partitioned vector "+
+					"indexes (numClusters) do not support predicate move yet", in.Predicate)
+			}
+		}
 	}
 
 	//TODO: need to find possibly a better way to not move __vector_ predicates
