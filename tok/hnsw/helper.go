@@ -53,6 +53,11 @@ const (
 var (
 	errNilVector           = errors.New("nil vector returned")
 	errFetchingPostingList = errors.New("error fetching posting list")
+	// errNoLiveGraphEntry means a graph walk from a deleted entry node reached
+	// no node with a live vector. It is a "nothing to recover" signal, not a
+	// failure: callers may fall back to a base-predicate scan. Any other error
+	// from the walk is a real read failure and must be propagated.
+	errNoLiveGraphEntry = errors.New("no live entry node found in graph")
 )
 
 // VectorIndexMeta is the JSON payload stored under the VecMeta key: derived,
@@ -461,22 +466,32 @@ func (ph *persistentHNSW[T]) createEntryAndStartNodes(
 	err := ph.getVecFromUid(entry, c, vec)
 	if err != nil || len(*vec) == 0 {
 		// The entry vector has been deleted. Prefer an existing LIVE MEMBER OF
-		// THIS INDEX'S GRAPH to insert against — found by walking this cluster's
+		// THIS INDEX'S GRAPH to insert against — found by walking this index's
 		// own graph from the dead entry (same reasoning as PickStartNode). For a
 		// partitioned cluster sub-index the base-predicate scan below would
 		// otherwise seat a node from ANOTHER cluster as this cluster's entry.
-		//
-		// Return it exactly like the live-entry case: do NOT route it through
-		// create_edges, which resets the node's adjacency to empty at all levels
-		// (correct for a brand-new start node, but it would sever an existing
-		// member's edges and orphan whatever was reachable only through it). The
-		// stale entry pointer is harmless — both the search (PickStartNode) and
-		// insert paths resolve a dead entry to a live in-cluster node on the fly.
-		if newEntry, gerr := ph.liveEntryFromGraph(c, entry, vec); gerr == nil {
+		newEntry, gerr := ph.liveEntryFromGraph(c, entry, vec)
+		if gerr == nil {
+			// Repoint the persisted entry key to newEntry so later searches and
+			// inserts skip the walk instead of repeating it on every call while
+			// the key stays dead. entryUuidInsert persists through
+			// AddMutationWithLockHeld (the entry key is already locked), so the
+			// write is NOT appended to edges: a non-empty edges slice makes
+			// insertHelper return early and skip linking the new node, which
+			// would also leave the node unlinked.
+			if _, werr := entryUuidInsert(ctx, entryKey, txn, ph.vecEntryKey,
+				Uint64ToBytes(newEntry)); werr != nil {
+				return 0, nil, werr
+			}
 			return newEntry, edges, nil
 		}
-		// Fallback (monolithic with no reachable live component, or an empty
-		// graph): seed a fresh start node from the base scan, as before.
+		if !errors.Is(gerr, errNoLiveGraphEntry) {
+			// A real read failure during the walk: surface it rather than
+			// falling back to the base-predicate scan.
+			return 0, nil, gerr
+		}
+		// No surviving in-graph component (or a monolithic index whose graph is
+		// empty): seed a fresh start node from the base scan, as before.
 		newEntry, cerr := ph.calculateNewEntryVec(ctx, c, vec)
 		if cerr != nil {
 			// No other node exists, go with the new node that has come
