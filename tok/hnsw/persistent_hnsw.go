@@ -623,11 +623,17 @@ func (ph *persistentHNSW[T]) PickStartNode(
 		// return a vector that belongs to a different cluster — searching this
 		// cluster from a non-member entry reaches nothing and orphans the whole
 		// cluster. The graph walk stays within the cluster.
-		if newEntry, err := ph.liveEntryFromGraph(c, entry, startVec); err == nil {
+		newEntry, lerr := ph.liveEntryFromGraph(c, entry, startVec)
+		if lerr == nil {
 			return newEntry, nil
 		}
-		// Fallback (e.g. the dead entry has no surviving graph component): the
-		// base-predicate scan. Correct for monolithic; a last resort otherwise.
+		if !errors.Is(lerr, errNoLiveGraphEntry) {
+			// A real read failure during the walk: surface it rather than
+			// falling back to the base-predicate scan.
+			return 0, lerr
+		}
+		// The dead entry has no surviving in-graph component: the base-predicate
+		// scan. Correct for monolithic; a last resort otherwise.
 		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
 	return entry, err
@@ -636,8 +642,13 @@ func (ph *persistentHNSW[T]) PickStartNode(
 // liveEntryFromGraph walks this index's own graph keyspace (ph.vecKey) starting
 // from deadEntry and returns the first node whose vector is still live, loading
 // it into startVec. It stays within a single (possibly partitioned) graph, so
-// the replacement entry is always a member of the graph being searched. Returns
-// an error if no live node is reachable from deadEntry's graph component.
+// the replacement entry is always a member of the graph being searched.
+//
+// It returns errNoLiveGraphEntry when the walk finds no live node, which callers
+// treat as "nothing to recover" and may handle with a base-predicate scan. Any
+// other error is a real read failure and is returned as-is: a transient failure
+// must not be mistaken for an absent vector, or the caller would fall back to the
+// cross-graph base scan this walk exists to avoid.
 func (ph *persistentHNSW[T]) liveEntryFromGraph(
 	c index.CacheType, deadEntry uint64, startVec *[]T) (uint64, error) {
 
@@ -649,7 +660,10 @@ func (ph *persistentHNSW[T]) liveEntryFromGraph(
 
 		var edges [][]uint64
 		ok, err := populateEdgeDataFromKeyWithCacheType(ph.vecKey, cur, c, &edges)
-		if err != nil || !ok {
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
 			continue
 		}
 		for _, level := range edges {
@@ -661,15 +675,20 @@ func (ph *persistentHNSW[T]) liveEntryFromGraph(
 					continue
 				}
 				seen[n] = struct{}{}
-				// A neighbor with a live vector is a valid in-graph entry.
-				if verr := ph.getVecFromUid(n, c, startVec); verr == nil && len(*startVec) != 0 {
+				verr := ph.getVecFromUid(n, c, startVec)
+				if verr == nil && len(*startVec) != 0 {
+					// A neighbor with a live vector is a valid in-graph entry.
 					return n, nil
+				}
+				if verr != nil && !errors.Is(verr, errNilVector) {
+					// A genuine read failure, not an absent vector.
+					return 0, verr
 				}
 				queue = append(queue, n)
 			}
 		}
 	}
-	return 0, errors.New(EmptyHNSWTreeError)
+	return 0, errNoLiveGraphEntry
 }
 
 // SearchWithPath allows persistentHNSW to implement index.OptionalIndexSupport.
