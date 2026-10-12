@@ -156,3 +156,160 @@ func TestParseSimilarTo_FilterNonNameValueErrors(t *testing.T) {
 		require.Contains(t, err.Error(), "not defined", "filter: %s", val)
 	}
 }
+
+// TestParseSimilarTo_FilterWithAllOptionsAnyOrder: filter composes with ef and
+// distance_threshold regardless of position, the other options stay in Args as
+// key/value pairs, and the var name still never leaks into Args.
+func TestParseSimilarTo_FilterWithAllOptionsAnyOrder(t *testing.T) {
+	orders := []string{
+		`distance_threshold: 0.5, filter: allowed, ef: 32`,
+		`filter: allowed, ef: 32, distance_threshold: 0.5`,
+		`ef: 32, distance_threshold: 0.5, filter: allowed`,
+	}
+	for _, opts := range orders {
+		query := `
+		{
+			allowed as var(func: type(Chunk))
+			q(func: similar_to(emb, 10, "[0.1, 0.2]", ` + opts + `)) { uid }
+		}`
+		res, err := Parse(Request{Str: query})
+		require.NoError(t, err, "options: %s", opts)
+
+		var sim *GraphQuery
+		for _, b := range res.Query {
+			if b.Func != nil && b.Func.Name == "similar_to" {
+				sim = b
+			}
+		}
+		require.NotNil(t, sim, "options: %s", opts)
+		require.Equal(t, "allowed", sim.Func.VectorFilterVar)
+
+		// k, vector, then three key/value pairs.
+		require.Len(t, sim.Func.Args, 2+3*2, "options: %s", opts)
+		got := map[string]string{}
+		for i := 2; i+1 < len(sim.Func.Args); i += 2 {
+			got[sim.Func.Args[i].Value] = sim.Func.Args[i+1].Value
+			require.NotEqual(t, "allowed", sim.Func.Args[i+1].Value)
+		}
+		require.Equal(t, map[string]string{"ef": "32", "distance_threshold": "0.5", "filter": "1"}, got,
+			"options: %s", opts)
+	}
+}
+
+// TestParseSimilarTo_FilterVarDefinedAfterUse: DQL resolves variables by dependency,
+// not by textual order, so defining the filter var in a later block must parse and
+// still register the uid dependency.
+func TestParseSimilarTo_FilterVarDefinedAfterUse(t *testing.T) {
+	query := `
+	{
+		q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: allowed)) { uid }
+		allowed as var(func: type(Chunk))
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	var sim *GraphQuery
+	for _, b := range res.Query {
+		if b.Func != nil && b.Func.Name == "similar_to" {
+			sim = b
+		}
+	}
+	require.NotNil(t, sim)
+	require.Equal(t, "allowed", sim.Func.VectorFilterVar)
+	found := false
+	for _, nv := range sim.NeedsVar {
+		if nv.Name == "allowed" && nv.Typ == UidVar {
+			found = true
+		}
+	}
+	require.True(t, found)
+}
+
+// TestParseSimilarTo_FilterVarReusedInFilterDirective: the same var may scope the
+// search and also appear in @filter(uid(...)) on the block; both uses parse.
+func TestParseSimilarTo_FilterVarReusedInFilterDirective(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: allowed)) @filter(uid(allowed)) {
+			uid
+		}
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	var sim *GraphQuery
+	for _, b := range res.Query {
+		if b.Func != nil && b.Func.Name == "similar_to" {
+			sim = b
+		}
+	}
+	require.NotNil(t, sim)
+	require.Equal(t, "allowed", sim.Func.VectorFilterVar)
+	require.NotNil(t, sim.Filter, "the @filter must still be attached")
+	require.NotNil(t, sim.Filter.Func)
+	require.Equal(t, "uid", sim.Filter.Func.Name)
+}
+
+// TestParseSimilarTo_FilterWithGraphQLVariableVector: the vector may come from a
+// GraphQL variable while the scope comes from a DQL variable.
+func TestParseSimilarTo_FilterWithGraphQLVariableVector(t *testing.T) {
+	query := `
+	query q($vec: string) {
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, $vec, filter: allowed)) { uid }
+	}`
+	res, err := Parse(Request{Str: query, Variables: map[string]string{"$vec": "[0.1, 0.2]"}})
+	require.NoError(t, err)
+	var sim *GraphQuery
+	for _, b := range res.Query {
+		if b.Func != nil && b.Func.Name == "similar_to" {
+			sim = b
+		}
+	}
+	require.NotNil(t, sim)
+	require.Equal(t, "allowed", sim.Func.VectorFilterVar)
+	require.Equal(t, "[0.1, 0.2]", sim.Func.Args[1].Value)
+}
+
+// TestParseSimilarTo_FilterByUidQueryVector: similar_to may take a uid instead of a
+// vector as its second argument; filter must compose with that form too.
+func TestParseSimilarTo_FilterByUidQueryVector(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, "0x30", filter: allowed)) { uid }
+	}`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	var sim *GraphQuery
+	for _, b := range res.Query {
+		if b.Func != nil && b.Func.Name == "similar_to" {
+			sim = b
+		}
+	}
+	require.NotNil(t, sim)
+	require.Equal(t, "allowed", sim.Func.VectorFilterVar)
+	require.Equal(t, "0x30", sim.Func.Args[1].Value)
+}
+
+// TestParseSimilarTo_FilterOnOtherFunctionsErrors: `filter:` is a similar_to option
+// only; on any other function it must not silently parse.
+func TestParseSimilarTo_FilterOnOtherFunctionsErrors(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: eq(name, "x", filter: allowed)) { uid }
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+}
+
+// TestParseSimilarTo_FilterMissingValueErrors: `filter:` with nothing after the colon.
+func TestParseSimilarTo_FilterMissingValueErrors(t *testing.T) {
+	query := `
+	{
+		allowed as var(func: type(Chunk))
+		q(func: similar_to(emb, 10, "[0.1, 0.2]", filter: )) { uid }
+	}`
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+}
