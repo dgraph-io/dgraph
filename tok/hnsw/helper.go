@@ -30,6 +30,7 @@ const (
 	DotProd              = "dotproduct"
 	EmptyHNSWTreeError   = "HNSW tree has no elements"
 	VecKeyword           = "__vector_"
+	VecQuant             = "__vector_q" // per-node int8-quantized vector (opt-in)
 	visitedVectorsLevel  = "visited_vectors_level_"
 	distanceComputations = "vector_distance_computations"
 	searchTime           = "vector_search_time"
@@ -365,6 +366,32 @@ var emptyVec = []byte{}
 // adds the data corresponding to a uid to the given vec variable in the form of []T
 // this does not allocate memory for vec, so it must be allocated before calling this function
 func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[]T) error {
+	// Quantized index: read the int8 blob from vecQKey and dequantize into the
+	// caller's reused buffer. On a missing/undecodable blob, fall back to the
+	// raw vector (graceful degradation; the build writes vecQKey for every node
+	// so misses are rare and indicate a partial/corrupt index).
+	if ph.quantize {
+		data, err := getDataFromKeyWithCacheType(ph.vecQKey, uid, c)
+		if err != nil && !errors.Is(err, errFetchingPostingList) {
+			return err
+		}
+		if len(data) > 0 {
+			if derr := index.DequantizeInto(data, vec); derr == nil {
+				// Accept only when the decoded length matches the index
+				// dimension. ph.dim is established solely from full-precision
+				// vectors (the raw path below), so a corrupt blob can never
+				// poison it, and a wrong-length slice never reaches the SIMD
+				// distance kernels. When dim is not yet known (d == 0) we fall
+				// back to raw, which both returns a correct-length vector and
+				// sets dim from trusted data.
+				if d := ph.dim.Load(); d != 0 && int(d) == len(*vec) {
+					return nil
+				}
+			}
+			// fall through to the raw vector on decode failure or dim mismatch.
+		}
+	}
+
 	data, err := getDataFromKeyWithCacheType(ph.pred, uid, c)
 	if err != nil {
 		if errors.Is(err, errFetchingPostingList) {
@@ -376,11 +403,53 @@ func (ph *persistentHNSW[T]) getVecFromUid(uid uint64, c index.CacheType, vec *[
 	}
 	if data != nil {
 		index.BytesAsFloatArray(data, vec, ph.floatBits)
+		ph.noteDim(len(*vec))
 		return nil
 	} else {
 		index.BytesAsFloatArray(emptyVec, vec, ph.floatBits)
 		return errNilVector
 	}
+}
+
+// noteDim records the index's vector dimension the first time a vector is
+// materialized. Safe for concurrent use during a multi-goroutine build.
+func (ph *persistentHNSW[T]) noteDim(n int) {
+	if n > 0 {
+		ph.dim.CompareAndSwap(0, int32(n))
+	}
+}
+
+// writeQuantizedVec stores the int8-quantized copy of inVec at vecQKey[uid].
+// No-op unless the index is quantized. It must be called before uid can be read
+// as a neighbor by a later insertion; since insertHelper calls it up front for
+// the node being inserted, and neighbors are always earlier insertions, the
+// blob is always present by the time it is needed.
+func (ph *persistentHNSW[T]) writeQuantizedVec(
+	ctx context.Context, tc *TxnCache, uid uint64, inVec []T) error {
+	if !ph.quantize || len(inVec) == 0 {
+		return nil
+	}
+	// Fast path: T is already float32 (the only width quantization supports),
+	// so avoid the per-insert copy.
+	f32, ok := any(inVec).([]float32)
+	if !ok {
+		f32 = make([]float32, len(inVec))
+		for i, x := range inVec {
+			f32[i] = float32(x)
+		}
+	}
+	blob := index.QuantizeFloat32(f32)
+	if blob == nil {
+		return nil
+	}
+	key := DataKey(ph.vecQKey, uid)
+	tc.txn.LockKey(key)
+	defer tc.txn.UnlockKey(key)
+	return tc.txn.AddMutationWithLockHeld(ctx, key, &index.KeyValue{
+		Entity: uid,
+		Attr:   ph.vecQKey,
+		Value:  blob,
+	})
 }
 
 // chooses whether to create the entry and start nodes based on if it already
