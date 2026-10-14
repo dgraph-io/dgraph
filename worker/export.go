@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
+	"github.com/dgraph-io/dgraph/v25/tok/kmeans"
 	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/x"
@@ -353,7 +354,7 @@ func formatVectorSchema(schema *pb.SchemaUpdate) string {
 			}
 		}
 		x.Check2(buf.WriteRune(')'))
-		if len(schema.IndexSpecs)-1 < j {
+		if len(schema.IndexSpecs)-1 > j {
 			x.Check2(buf.WriteString(","))
 		}
 	}
@@ -823,7 +824,15 @@ func exportInternal(ctx context.Context, in *pb.ExportRequest, db *badger.DB,
 			}
 		}
 
-		if strings.Contains(pk.Attr, hnsw.VecKeyword) {
+		// Vector indexes (monolithic and partitioned) are fully supported by
+		// export: only the raw vectors and the schema are emitted, and the
+		// index is rebuilt on (live/bulk) import. The internal index keys are
+		// intentionally skipped here — every one contains VecKeyword
+		// ("__vector_"), which covers the per-cluster split attrs
+		// (pred__vector__i, __vector_entry_i, __vector_dead_i) and the
+		// dimension metadata (__vector_meta_); centroids use CentroidPrefix.
+		if strings.Contains(pk.Attr, hnsw.VecKeyword) ||
+			strings.Contains(pk.Attr, kmeans.CentroidPrefix) {
 			return false
 		}
 		return pk.IsData()
