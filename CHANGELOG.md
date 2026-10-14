@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/). 
 to [Semantic Versioning](https://semver.org). When adding a new entry, please use the entries below
 as a guide.
 
-## [v25.5.0] - 2026-10-08
+## [v25.5.0] - 2026-10-14
 
 [v25.5.0]: https://github.com/dgraph-io/dgraph/compare/v25.4.1...v25.5.0
 
