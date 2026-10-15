@@ -167,7 +167,7 @@ install-deps-ack-darwin: check-install-deps-homebrew-darwin
 .PHONY: install-deps-cross-compiler-darwin
 install-deps-cross-compiler-darwin: check-install-deps-homebrew-darwin
 	@brew tap messense/macos-cross-toolchains && \
-	brew install messense/macos-cross-toolchains/$$(case $$(uname -m) in arm64|aarch64) echo aarch64-unknown-linux-gnu;; x86_64) echo x86_64-unknown-linux-gnu;; esac)
+	brew install messense/macos-cross-toolchains/$$(case $$(uname -m) in (arm64|aarch64) echo aarch64-unknown-linux-gnu;; (x86_64) echo x86_64-unknown-linux-gnu;; esac)
 
 .PHONY: install-deps-protoc-darwin
 install-deps-protoc-darwin: check-install-deps-homebrew-darwin
