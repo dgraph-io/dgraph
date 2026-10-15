@@ -14,15 +14,19 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	ostats "go.opencensus.io/stats"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
@@ -63,23 +67,1169 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Cannot convert value to scalar type")
 	}
 
 	var tokens []string
 	for _, it := range info.tokenizers {
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
-			return tokens, err
+			return tokens, errors.Wrapf(err, "Cannot build tokens for attribute %s", attr)
 		}
 		tokens = append(tokens, toks...)
 	}
 	return tokens, nil
 }
 
-// addIndexMutations adds mutation(s) for a single term, to maintain the index,
-// but only for the given tokenizers.
-// TODO - See if we need to pass op as argument as t should already have Op.
+// MutationPipeline applies a batch of DirectedEdges by grouping them per predicate
+// and processing each predicate in its own goroutine. The key performance advantage
+// over the legacy runMutation loop is that each predicate goroutine accumulates all
+// edges for the predicate into an in-memory map first, then issues one Badger write
+// per distinct uid — O(distinct_uids) reads instead of the legacy O(edges) reads.
+// Index, reverse, and count deltas are computed in one pass over the accumulated map.
+type MutationPipeline struct {
+	txn *Txn
+}
+
+func NewMutationPipeline(txn *Txn) *MutationPipeline {
+	return &MutationPipeline{txn: txn}
+}
+
+// PredicatePipeline is the per-predicate worker. The buffered edges channel decouples
+// the dispatcher (Process) from the processor (ProcessPredicate): the dispatcher can
+// fan out all predicates before any goroutine has finished, so predicate goroutines run
+// in parallel without the dispatcher blocking. Capacity 1000 is enough for most Raft
+// proposal batches; the dispatcher never blocks because it closes each channel after
+// the full scan.
+type PredicatePipeline struct {
+	attr  string
+	edges chan *pb.DirectedEdge
+	wg    *sync.WaitGroup
+	errCh chan error
+}
+
+func (pp *PredicatePipeline) close() {
+	pp.wg.Done()
+}
+
+func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
+	// Vector inserts must run serially within a txn. HNSW Insert does
+	// multi-key read-modify-write across the entry-pointer key, level edge
+	// lists, and neighbor back-edges; per-list locks make individual key
+	// updates atomic but the cross-key sequences are not. Concurrent
+	// inserters on the same txn cache lose updates and leave nodes
+	// unreachable from the entry point — visible as similar_to(k=N) returning
+	// fewer than N hits even though all N vectors are in the data list. The
+	// legacy applyMutations path arrives at the same result indirectly:
+	// x.DivideAndRule rounds num<256 down to numGo=1, so any vector mutation
+	// short of a few hundred edges runs single-threaded on main. Match that
+	// here. (TestVectorTwoTxnWithoutCommit reliably reproduced the corruption
+	// on Linux CI when this used 10 workers.)
+	for edge := range pipeline.edges {
+		uid := edge.Entity
+		key := x.DataKey(pipeline.attr, uid)
+		pl, err := mp.txn.Get(key)
+		if err != nil {
+			return err
+		}
+		if err := pl.AddMutationWithIndex(ctx, edge, mp.txn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
+	tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
+	if len(tokenizers) == 0 {
+		return nil
+	}
+
+	indexesGenInMutation := types.NewLockedShardedMap[string, *MutableLayer]()
+	wg := &sync.WaitGroup{}
+
+	syncMap := sync.Map{}
+
+	chanFn := func(uids chan uint64, estimatedSize int) {
+		defer wg.Done()
+		indexGenInThread := make(map[string]*pb.PostingList, estimatedSize)
+		tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
+
+		factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
+		if err != nil {
+			pipeline.errCh <- err
+			return
+		}
+
+		indexEdge := &pb.DirectedEdge{
+			Attr: pipeline.attr,
+		}
+
+		for uid := range uids {
+			postingList := (*postings)[uid]
+			// Sort Dels before Sets: when DEL and SET land in the same index
+			// bucket (e.g. case-insensitive tokenizer where the old and new
+			// values share a token), insertPosting's last-write-wins means SET
+			// must come last to keep the uid in the bucket.
+			newList := &pb.PostingList{
+				Postings: make([]*pb.Posting, len(postingList.Postings)),
+			}
+			copy(newList.Postings, postingList.Postings)
+			sort.SliceStable(newList.Postings, func(i, j int) bool {
+				return newList.Postings[i].Op == Del && newList.Postings[j].Op != Del
+			})
+			for _, posting := range newList.Postings {
+				info := &indexMutationInfo{
+					tokenizers:   tokenizers,
+					factorySpecs: factorySpecs,
+					op:           pb.DirectedEdge_SET,
+					val: types.Val{
+						Tid:   types.TypeID(posting.ValType),
+						Value: posting.Value,
+					},
+				}
+
+				info.edge = &pb.DirectedEdge{
+					Attr:  pipeline.attr,
+					Op:    pb.DirectedEdge_SET,
+					Lang:  string(posting.LangTag),
+					Value: posting.Value,
+				}
+
+				key := fmt.Sprintf("%s,%s", posting.LangTag, posting.Value)
+				tokens, loaded := syncMap.Load(key)
+
+				if !loaded {
+					tokens, err = indexTokens(ctx, info)
+					if err != nil {
+						x.Panic(err)
+					}
+					syncMap.Store(key, tokens)
+				}
+
+				indexEdge.Op = GetPostingOp(posting.Op)
+				indexEdge.ValueId = uid
+				mpost := makePostingFromEdge(mp.txn.StartTs, indexEdge)
+
+				for _, token := range tokens.([]string) {
+					key := x.IndexKey(pipeline.attr, token)
+					val, ok := indexGenInThread[string(key)]
+					if !ok {
+						val = &pb.PostingList{}
+					}
+					val.Postings = append(val.Postings, mpost)
+					indexGenInThread[string(key)] = val
+				}
+			}
+		}
+
+		for key, value := range indexGenInThread {
+			indexesGenInMutation.Update(key, func(val *MutableLayer, ok bool) *MutableLayer {
+				if !ok {
+					val = newMutableLayer()
+					val.currentEntries = &pb.PostingList{}
+				}
+				for _, posting := range value.Postings {
+					val.insertPosting(posting, false)
+				}
+				return val
+			})
+		}
+	}
+
+	numGo := 10
+	wg.Add(numGo)
+	chMap := make(map[int]chan uint64)
+
+	for i := 0; i < numGo; i++ {
+		uidCh := make(chan uint64, numGo)
+		chMap[i] = uidCh
+		go chanFn(uidCh, len(*postings)/numGo)
+	}
+
+	for uid := range *postings {
+		// uid is uint64; converting directly to int can produce a negative
+		// value for uid >= 2^63, which would index outside chMap and resolve
+		// to a nil channel (deadlocks the dispatcher). Hash unsigned, then
+		// cast.
+		chMap[int(uid%uint64(numGo))] <- uid
+	}
+
+	for i := 0; i < numGo; i++ {
+		close(chMap[i])
+	}
+
+	wg.Wait()
+
+	mp.txn.cache.Lock()
+	defer mp.txn.cache.Unlock()
+
+	indexGenInTxn := mp.txn.cache.deltas.GetIndexMapForPredicate(pipeline.attr)
+	if indexGenInTxn == nil {
+		indexGenInTxn = types.NewLockedShardedMap[string, *pb.PostingList]()
+		mp.txn.cache.deltas.indexMap[pipeline.attr] = indexGenInTxn
+	}
+
+	updateFn := func(key string, value *MutableLayer) {
+		indexGenInTxn.Update(key, func(val *pb.PostingList, ok bool) *pb.PostingList {
+			if !ok {
+				val = &pb.PostingList{}
+			}
+			val.Postings = append(val.Postings, value.currentEntries.Postings...)
+			return val
+		})
+	}
+
+	if info.hasUpsert {
+		err := indexesGenInMutation.Iterate(func(key string, value *MutableLayer) error {
+			updateFn(key, value)
+			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	} else {
+		err := indexesGenInMutation.Iterate(func(key string, value *MutableLayer) error {
+			updateFn(key, value)
+			mp.txn.addConflictKeyWithUid([]byte(key), value.currentEntries, info.hasUpsert, info.noConflict)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type predicateInfo struct {
+	isList     bool
+	index      bool
+	reverse    bool
+	count      bool
+	noConflict bool
+	hasUpsert  bool
+	isUid      bool
+
+	isSingleEdge bool
+}
+
+// ProcessList handles list predicates (multi-valued) and language predicates.
+// It first drains all edges into a uid→MutableLayer map (pure in-memory, zero Badger
+// reads in this phase), then runs reverse/index/count passes over the accumulated map.
+// This is the key difference from the legacy runMutation per-edge loop: a mutation
+// touching 500 entities for the same list predicate costs 500 Badger writes here vs
+// 500 Badger reads + 500 writes in the legacy path.
+func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
+	su, schemaExists := schema.State().Get(ctx, pipeline.attr)
+
+	mutations := make(map[uint64]*MutableLayer, 1000)
+	// rawIndexPostings preserves every batch posting in arrival order, bypassing
+	// insertPosting's collapse-on-Uid. For scalar @lang predicates mpost.Uid is
+	// fingerprint(Lang), so SET-new and DEL-old on the same lang collide in
+	// mutations and one of the two index emissions would be lost.
+	var rawIndexPostings map[uint64]*pb.PostingList
+	if info.index {
+		rawIndexPostings = make(map[uint64]*pb.PostingList, 1000)
+	}
+
+	for edge := range pipeline.edges {
+		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+		}
+
+		if err := ValidateAndConvert(edge, &su); err != nil {
+			return err
+		}
+
+		uid := edge.Entity
+		pl, exists := mutations[uid]
+		if !exists {
+			pl = newMutableLayer()
+			pl.currentEntries = &pb.PostingList{}
+		}
+
+		mpost := NewPosting(edge)
+		mpost.StartTs = mp.txn.StartTs
+		if mpost.PostingType != pb.Posting_REF {
+			edge.ValueId = FingerprintEdge(edge)
+			mpost.Uid = edge.ValueId
+		}
+
+		pl.insertPosting(mpost, false)
+		mutations[uid] = pl
+
+		if rawIndexPostings != nil {
+			rp, ok := rawIndexPostings[uid]
+			if !ok {
+				rp = &pb.PostingList{}
+				rawIndexPostings[uid] = rp
+			}
+			rp.Postings = append(rp.Postings, mpost)
+		}
+	}
+
+	postings := make(map[uint64]*pb.PostingList, 1000)
+	for uid, pl := range mutations {
+		postings[uid] = pl.currentEntries
+	}
+
+	if info.reverse {
+		if err := mp.ProcessReverse(ctx, pipeline, &postings, info); err != nil {
+			return err
+		}
+	}
+
+	if info.index {
+		if err := mp.handleOldDeleteForList(pipeline, rawIndexPostings, info); err != nil {
+			return err
+		}
+		if err := mp.InsertTokenizerIndexes(ctx, pipeline, &rawIndexPostings, info); err != nil {
+			return err
+		}
+	}
+
+	if info.count {
+		return mp.ProcessCount(ctx, pipeline, &postings, info, true, false)
+	}
+
+	dataKey := x.DataKey(pipeline.attr, 0)
+	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
+
+	for uid, pl := range postings {
+		if len(pl.Postings) == 0 {
+			continue
+		}
+
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		if newPl, err := mp.txn.AddDelta(baseKey+string(dataKey[len(dataKey)-8:]), pl, info.isUid, true); err != nil {
+			return err
+		} else {
+			if !info.noConflict {
+				mp.txn.addConflictKeyWithUid(dataKey, newPl, info.hasUpsert, info.noConflict)
+			}
+		}
+	}
+
+	return nil
+}
+
+func findSingleValueInPostingList(pb *pb.PostingList) *pb.Posting {
+	if pb == nil {
+		return nil
+	}
+	for _, p := range pb.Postings {
+		if p.Op == Set {
+			return p
+		}
+	}
+	return nil
+}
+
+func (mp *MutationPipeline) ProcessReverse(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo) error {
+	key := x.ReverseKey(pipeline.attr, 0)
+	edge := &pb.DirectedEdge{
+		Attr: pipeline.attr,
+	}
+	reverseredMap := make(map[uint64]*pb.PostingList, 1000)
+	for uid, postingList := range *postings {
+		for _, posting := range postingList.Postings {
+			postingList, ok := reverseredMap[posting.Uid]
+			if !ok {
+				postingList = &pb.PostingList{}
+			}
+			edge.Entity = posting.Uid
+			edge.ValueId = uid
+			edge.ValueType = posting.ValType
+			edge.Op = GetPostingOp(posting.Op)
+			edge.Facets = posting.Facets
+
+			postingList.Postings = append(postingList.Postings, makePostingFromEdge(mp.txn.StartTs, edge))
+			reverseredMap[posting.Uid] = postingList
+		}
+	}
+
+	if info.count {
+		newInfo := predicateInfo{
+			isList:     true,
+			index:      info.index,
+			reverse:    info.reverse,
+			count:      info.count,
+			noConflict: info.noConflict,
+			hasUpsert:  info.hasUpsert,
+		}
+		return mp.ProcessCount(ctx, pipeline, &reverseredMap, newInfo, true, true)
+	}
+
+	for uid, pl := range reverseredMap {
+		if len(pl.Postings) == 0 {
+			continue
+		}
+		binary.BigEndian.PutUint64(key[len(key)-8:], uid)
+		if newPl, err := mp.txn.AddDelta(string(key), pl, true, true); err != nil {
+			return err
+		} else {
+			mp.txn.addConflictKeyWithUid(key, newPl, info.hasUpsert, info.noConflict)
+		}
+	}
+
+	return nil
+}
+
+func makePostingFromEdge(startTs uint64, edge *pb.DirectedEdge) *pb.Posting {
+	mpost := NewPosting(edge)
+	mpost.StartTs = startTs
+	if mpost.PostingType != pb.Posting_REF {
+		edge.ValueId = FingerprintEdge(edge)
+		mpost.Uid = edge.ValueId
+	}
+	return mpost
+}
+
+func (mp *MutationPipeline) handleOldDeleteForSingle(pipeline *PredicatePipeline, postings map[uint64]*pb.PostingList) error {
+	edge := &pb.DirectedEdge{
+		Attr: pipeline.attr,
+	}
+
+	dataKey := x.DataKey(pipeline.attr, 0)
+
+	for uid, postingList := range postings {
+		currValue := findSingleValueInPostingList(postingList)
+		if currValue == nil {
+			continue
+		}
+
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		list, err := mp.txn.GetScalarList(dataKey)
+		if err != nil {
+			return err
+		}
+
+		oldValList, err := list.StaticValue(mp.txn.StartTs)
+		if err != nil {
+			return err
+		}
+
+		oldVal := findSingleValueInPostingList(oldValList)
+		if oldVal == nil {
+			continue
+		}
+
+		// For uid (REF) postings, Value is always nil — the target uid lives in
+		// posting.Uid. Compare Uid directly; fall back to Value comparison for scalars.
+		//
+		// When the new value matches the committed value, skip emitting the
+		// synthetic DEL-of-old-value (there is nothing to delete). Critically,
+		// do NOT clear postings[uid]: the SET must still flow through
+		// InsertTokenizerIndexes / ProcessReverse so a newly-added index or
+		// reverse edge can be populated for the (unchanged) value. Clearing
+		// here is what caused TestSchemaMutationIndexRemove to leave the term
+		// index empty after a same-value SET following an @index alter.
+		if currValue.PostingType == pb.Posting_REF && oldVal.PostingType == pb.Posting_REF {
+			if oldVal.Uid == currValue.Uid {
+				continue
+			}
+		} else if string(oldVal.Value) == string(currValue.Value) {
+			continue
+		}
+
+		edge.Op = pb.DirectedEdge_DEL
+		edge.Value = oldVal.Value
+		edge.ValueType = oldVal.ValType
+		edge.ValueId = oldVal.Uid
+
+		mpost := makePostingFromEdge(mp.txn.StartTs, edge)
+		postingList.Postings = append(postingList.Postings, mpost)
+		postings[uid] = postingList
+	}
+
+	return nil
+}
+
+// handleOldDeleteForList is the ProcessList counterpart of
+// handleOldDeleteForSingle: for each scalar @lang (uid, fingerprint(lang))
+// being mutated, read the committed posting and append a synthetic DEL of the
+// old value so InsertTokenizerIndexes can emit the corresponding index DEL.
+// Skipped for list-typed predicates because SET on a list appends rather than
+// replaces.
+func (mp *MutationPipeline) handleOldDeleteForList(pipeline *PredicatePipeline,
+	rawPostings map[uint64]*pb.PostingList, info predicateInfo) error {
+	if rawPostings == nil || info.isList {
+		return nil
+	}
+	for uid, pl := range rawPostings {
+		// REF (uid) postings have no prior scalar value to remove.
+		seenFps := make(map[uint64]struct{})
+		for _, p := range pl.Postings {
+			if p.PostingType != pb.Posting_REF {
+				seenFps[p.Uid] = struct{}{}
+			}
+		}
+		if len(seenFps) == 0 {
+			continue
+		}
+
+		l, err := mp.txn.Get(x.DataKey(pipeline.attr, uid))
+		if err != nil {
+			return err
+		}
+		if l == nil {
+			continue
+		}
+
+		err = l.Iterate(mp.txn.StartTs, 0, func(p *pb.Posting) error {
+			if _, ok := seenFps[p.Uid]; !ok {
+				return nil
+			}
+			if p.Op == Del {
+				return nil
+			}
+			pl.Postings = append(pl.Postings, &pb.Posting{
+				Uid:         p.Uid,
+				Value:       append([]byte(nil), p.Value...),
+				ValType:     p.ValType,
+				LangTag:     append([]byte(nil), p.LangTag...),
+				Op:          Del,
+				StartTs:     mp.txn.StartTs,
+				PostingType: p.PostingType,
+			})
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList, hasUpsert bool, hasNoConflict bool) {
+	if hasNoConflict {
+		return
+	}
+	txn.Lock()
+	defer txn.Unlock()
+	if txn.conflicts == nil {
+		txn.conflicts = make(map[uint64]struct{})
+	}
+	keyHash := farm.Fingerprint64(key)
+	if hasUpsert {
+		txn.conflicts[keyHash] = struct{}{}
+		return
+	}
+	for _, post := range pl.Postings {
+		txn.conflicts[keyHash^post.Uid] = struct{}{}
+	}
+}
+
+func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo, isListEdge bool, isReverseEdge bool) error {
+	dataKey := x.DataKey(pipeline.attr, 0)
+	if isReverseEdge {
+		dataKey = x.ReverseKey(pipeline.attr, 0)
+	}
+	edge := pb.DirectedEdge{
+		Attr: pipeline.attr,
+	}
+
+	countMap := make(map[int]*pb.PostingList, 2*len(*postings))
+
+	insertEdgeCount := func(count int) {
+		c, ok := countMap[count]
+		if !ok {
+			c = &pb.PostingList{}
+			countMap[count] = c
+		}
+		c.Postings = append(c.Postings, makePostingFromEdge(mp.txn.StartTs, &edge))
+		countMap[count] = c
+	}
+
+	for uid, postingList := range *postings {
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		list, err := mp.txn.Get(dataKey)
+		if err != nil {
+			return err
+		}
+
+		list.Lock()
+		prevCount := list.GetLength(mp.txn.StartTs)
+
+		// For scalar (non-list) predicates, handleOldDeleteForSingle may have
+		// appended a synthetic Del-of-old-value alongside the user's Set, so
+		// that InsertTokenizerIndexes / ProcessReverse / count diffing can see
+		// the prior value. The synthetic Del must NOT be applied to the data
+		// list: scalar value postings all share Uid == math.MaxUint64
+		// (fingerprintEdge returns MaxUint64 for non-Lang scalars), and
+		// updateMutationLayer in singleUidUpdate mode would overwrite the
+		// just-inserted Set with [DeleteAll] and drop the new value entirely.
+		// A user-initiated Del (no accompanying Set) must still be applied.
+		skipSyntheticDel := false
+		if !isListEdge {
+			hasSet := false
+			for _, post := range postingList.Postings {
+				if post.Op == Set || post.Op == Ovr {
+					hasSet = true
+					break
+				}
+			}
+			skipSyntheticDel = hasSet
+		}
+
+		for _, post := range postingList.Postings {
+			if skipSyntheticDel && post.Op == Del {
+				continue
+			}
+			found, _, _ := list.findPosting(post.StartTs, post.Uid)
+			if found {
+				if post.Op == Set && isListEdge {
+					post.Op = Ovr
+				}
+			} else {
+				if post.Op == Del {
+					continue
+				}
+			}
+
+			if err := list.updateMutationLayer(post, !isListEdge, true); err != nil {
+				return err
+			}
+		}
+
+		newCount := list.GetLength(mp.txn.StartTs)
+		updated := list.mutationMap.currentEntries != nil
+		list.Unlock()
+
+		if updated {
+			if !isListEdge {
+				if !info.noConflict {
+					mp.txn.addConflictKey(farm.Fingerprint64(dataKey))
+				}
+			} else {
+				mp.txn.addConflictKeyWithUid(dataKey, postingList, info.hasUpsert, info.noConflict)
+			}
+		}
+
+		if newCount == prevCount {
+			continue
+		}
+
+		edge.ValueId = uid
+		edge.Op = pb.DirectedEdge_DEL
+		if prevCount > 0 {
+			insertEdgeCount(prevCount)
+		}
+		edge.Op = pb.DirectedEdge_SET
+		if newCount > 0 {
+			insertEdgeCount(newCount)
+		}
+	}
+
+	for c, pl := range countMap {
+		ck := x.CountKey(pipeline.attr, uint32(c), isReverseEdge)
+		if newPl, err := mp.txn.AddDelta(string(ck), pl, true, true); err != nil {
+			return err
+		} else {
+			mp.txn.addConflictKeyWithUid(ck, newPl, info.hasUpsert, info.noConflict)
+		}
+	}
+
+	return nil
+}
+
+// ProcessSingle handles scalar (non-list) predicates without a language tag.
+// Phase 1: drain the edges channel into uid→PostingList map with no Badger reads —
+//
+//	multiple SET/DEL edges for the same uid are folded in-memory (last-SET wins).
+//
+// Phase 2: if indexed/reversed/counted, call handleOldDeleteForSingle to fetch the
+//
+//	current disk value for each uid once (O(distinct_uids) reads) so index/reverse
+//	Del entries for the old value can be generated correctly.
+//
+// Phase 3: batch-write all accumulated deltas via txn.AddDelta in one loop.
+// Contrast with legacy runMutation: every edge caused a GetScalarList (one Badger
+// read) plus AddMutationWithIndex (another read to fetch old value for index Del).
+func (mp *MutationPipeline) ProcessSingle(ctx context.Context, pipeline *PredicatePipeline, info predicateInfo) error {
+	su, schemaExists := schema.State().Get(ctx, pipeline.attr)
+
+	postings := make(map[uint64]*pb.PostingList, 1000)
+
+	dataKey := x.DataKey(pipeline.attr, 0)
+	insertDeleteAllEdge := !(info.index || info.reverse || info.count) // nolint
+
+	// For uid postings the target lives in Uid/ValueId; Value is nil so a
+	// bytewise comparison would always succeed and DEL would wrongly overwrite
+	// an accumulated SET in the same batch.
+	sameTarget := func(oldVal *pb.Posting, edge *pb.DirectedEdge) bool {
+		if info.isUid {
+			return oldVal.Uid == edge.ValueId
+		}
+		return string(oldVal.Value) == string(edge.Value)
+	}
+
+	for edge := range pipeline.edges {
+		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+		}
+
+		if err := ValidateAndConvert(edge, &su); err != nil {
+			return err
+		}
+
+		// oldVal is reset per edge so a stale value from a previous iteration
+		// can't bleed into the nil-guarded branch below.
+		var oldVal *pb.Posting
+		uid := edge.Entity
+		pl, exists := postings[uid]
+
+		setPosting := func() {
+			mpost := makePostingFromEdge(mp.txn.StartTs, edge)
+			if len(pl.Postings) == 0 {
+				if insertDeleteAllEdge {
+					pl = &pb.PostingList{
+						Postings: []*pb.Posting{createDeleteAllPosting(), mpost},
+					}
+				} else {
+					pl = &pb.PostingList{
+						Postings: []*pb.Posting{mpost},
+					}
+				}
+			} else {
+				if pl.Postings[len(pl.Postings)-1].Op == Set {
+					pl.Postings[len(pl.Postings)-1] = mpost
+				} else {
+					pl.Postings = append(pl.Postings, mpost)
+				}
+			}
+			postings[uid] = pl
+		}
+
+		if exists {
+			if edge.Op == pb.DirectedEdge_DEL {
+				// findSingleValueInPostingList returns nil when the
+				// accumulated postings for this uid hold only Del entries
+				// (no Set), which happens when the same uid receives
+				// multiple Del edges in one batch (e.g. GraphQL
+				// deleteTask cleanup deleting many predicates per entity).
+				oldVal = findSingleValueInPostingList(pl)
+				if oldVal != nil && sameTarget(oldVal, edge) {
+					setPosting()
+				}
+			} else {
+				setPosting()
+			}
+			continue
+		}
+
+		pl = &pb.PostingList{}
+		postings[uid] = pl
+
+		if edge.Op == pb.DirectedEdge_DEL {
+			binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+			list, err := mp.txn.GetScalarList(dataKey)
+			if err != nil {
+				return err
+			}
+			if list != nil {
+				l, err := list.StaticValue(mp.txn.StartTs)
+				if err != nil {
+					return err
+				}
+				oldVal = findSingleValueInPostingList(l)
+			}
+			if oldVal != nil {
+				if sameTarget(oldVal, edge) {
+					setPosting()
+				}
+			}
+		} else {
+			setPosting()
+		}
+	}
+
+	if info.index || info.reverse || info.count {
+		if err := mp.handleOldDeleteForSingle(pipeline, postings); err != nil {
+			return err
+		}
+	}
+
+	if info.index {
+		if err := mp.InsertTokenizerIndexes(ctx, pipeline, &postings, info); err != nil {
+			return err
+		}
+	}
+
+	if info.reverse {
+		if err := mp.ProcessReverse(ctx, pipeline, &postings, info); err != nil {
+			return err
+		}
+	}
+
+	if info.count {
+		// Count should take care of updating the posting list
+		return mp.ProcessCount(ctx, pipeline, &postings, info, false, false)
+	}
+
+	baseKey := string(dataKey[:len(dataKey)-8]) // Avoid repeated conversion
+	// handleOldDeleteForSingle may have appended a synthetic Del-of-old-value
+	// alongside the user's Set so InsertTokenizerIndexes / ProcessReverse can
+	// emit index/reverse Del entries for the prior value. The synthetic Del
+	// must NOT be written to the scalar data list: scalar value postings all
+	// share Uid == math.MaxUint64, and at read time pickPostings sorts the two
+	// equal-ts postings non-deterministically (Go's sort.Slice is unstable),
+	// while setMutationAfterCommit's committedUids[mpost.Uid] = mpost
+	// overwrites in append order. Either way Del can clobber the new Set, so
+	// the data list reads as "no value." Strip only for scalar (@index) predicates.
+	// For uid (@reverse) predicates the synthetic Del has a distinct Uid (the old
+	// target uid) so there is no collision — it must stay so the old forward edge
+	// is removed, mirroring the legacy isSingleUidUpdate explicit DEL.
+	stripSyntheticDel := info.index
+
+	for uid, pl := range postings {
+		// An empty PostingList means nothing was accumulated for this uid (e.g.
+		// a DEL whose value did not match the committed value, or a same-value
+		// SET-after-handleOldDeleteForSingle no-op). Writing an empty delta
+		// would call AddDelta → setMutation on the cached List with empty bytes,
+		// which resets the mutable layer's currentEntries to empty for this
+		// txn's startTs. A subsequent read through the same cached List then
+		// surfaces an empty data list. CommitToDisk skips empty deltas at the
+		// badger level, but the in-memory side effect on the cached List has
+		// already corrupted any concurrent reader holding that List. Skip the
+		// no-op uid entirely — matches the legacy per-edge path which simply
+		// does nothing when a DEL value does not match committed.
+		if len(pl.Postings) == 0 {
+			continue
+		}
+
+		binary.BigEndian.PutUint64(dataKey[len(dataKey)-8:], uid)
+		key := baseKey + string(dataKey[len(dataKey)-8:])
+
+		if !info.noConflict {
+			mp.txn.addConflictKey(farm.Fingerprint64([]byte(key)))
+		}
+
+		writePl := pl
+		if stripSyntheticDel && len(pl.Postings) > 1 {
+			hasSet := false
+			for _, post := range pl.Postings {
+				if post.Op == Set || post.Op == Ovr {
+					hasSet = true
+					break
+				}
+			}
+			if hasSet {
+				filtered := &pb.PostingList{}
+				for _, post := range pl.Postings {
+					if post.Op == Del {
+						continue
+					}
+					filtered.Postings = append(filtered.Postings, post)
+				}
+				writePl = filtered
+			}
+		}
+
+		if _, err := mp.txn.AddDelta(key, writePl, false, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
+	ctx = schema.GetWriteContext(ctx)
+
+	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
+	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
+	su, ok := schema.State().Get(ctx, edge.Attr)
+	if edge.Op != pb.DirectedEdge_DEL {
+		if !ok {
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+		}
+	}
+
+	key := x.DataKey(edge.Attr, edge.Entity)
+	// The following is a performance optimization which allows us to not read a posting list from
+	// disk. We calculate this based on how AddMutationWithIndex works. The general idea is that if
+	// we're not using the read posting list, we don't need to retrieve it. We need the posting list
+	// if we're doing count index or delete operation. For scalar predicates, we just get the last item merged.
+	// In other cases, we can just create a posting list facade in memory and use it to store the delta in Badger.
+	// Later, the rollup operation would consolidate all these deltas into a posting list.
+	isList := su.GetList()
+	var getFn func(key []byte) (*List, error)
+	switch {
+	case len(edge.Lang) == 0 && !isList:
+		// Scalar Predicates, without lang
+		getFn = txn.GetScalarList
+	case len(edge.Lang) > 0 || su.GetCount():
+		// Language or Count Index
+		getFn = txn.Get
+	case edge.Op == pb.DirectedEdge_DEL:
+		// Covers various delete cases to keep things simple.
+		getFn = txn.Get
+	default:
+		// Only count index needs to be read. For other indexes on list, we don't need to read any data.
+		// For indexes on scalar prediactes, only the last element needs to be left.
+		// Delete cases covered above.
+		getFn = txn.GetFromDelta
+	}
+
+	plist, err := getFn(key)
+	if err != nil {
+		return err
+	}
+	return plist.AddMutationWithIndex(ctx, edge, txn)
+}
+
+// ProcessPredicate is the per-predicate goroutine entry point. It reads the schema once
+// for the predicate and routes to the appropriate processor:
+//
+//	vector index  → ProcessVectorIndex  (serial; HNSW cross-key writes are not concurrent-safe)
+//	list/lang     → ProcessList         (batched uid-map accumulation)
+//	scalar        → ProcessSingle       (batched uid-map accumulation)
+//	unknown schema → runMutation fallback (legacy, edge-by-edge)
+//
+// The fallback at the bottom of the function handles edges that are neither list nor
+// scalar — these are drained from the channel after ProcessList/ProcessSingle return,
+// though in practice ProcessList/ProcessSingle consume all edges so the channel is
+// already empty.
+func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *PredicatePipeline) error {
+	defer pipeline.close()
+	ctx = schema.GetWriteContext(ctx)
+
+	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
+	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
+	su, ok := schema.State().Get(ctx, pipeline.attr)
+	info := predicateInfo{}
+	runForVectorIndex := false
+
+	if ok {
+		info.index = schema.State().IsIndexed(ctx, pipeline.attr)
+		info.count = schema.State().HasCount(ctx, pipeline.attr)
+		info.reverse = schema.State().IsReversed(ctx, pipeline.attr)
+		info.noConflict = schema.State().HasNoConflict(pipeline.attr)
+		info.hasUpsert = schema.State().HasUpsert(pipeline.attr)
+		info.isList = schema.State().IsList(pipeline.attr)
+		info.isUid = su.ValueType == pb.Posting_UID
+		factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
+		if err != nil {
+			return err
+		}
+		if len(factorySpecs) > 0 {
+			runForVectorIndex = true
+		}
+	}
+
+	if runForVectorIndex {
+		return mp.ProcessVectorIndex(ctx, pipeline, info)
+	}
+
+	runListFn := false
+
+	if ok {
+		if info.isList || su.Lang {
+			runListFn = true
+		}
+	}
+
+	info.isSingleEdge = !runListFn
+
+	if runListFn {
+		if err := mp.ProcessList(ctx, pipeline, info); err != nil {
+			return err
+		}
+	}
+
+	if ok && !runListFn {
+		if err := mp.ProcessSingle(ctx, pipeline, info); err != nil {
+			return err
+		}
+	}
+
+	for edge := range pipeline.edges {
+		if err := runMutation(ctx, edge, mp.txn); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func isStarAll(v []byte) bool {
+	return bytes.Equal(v, []byte(x.Star))
+}
+
+func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
+	if types.TypeID(edge.ValueType) == types.DefaultID && isStarAll(edge.Value) {
+		return nil
+	}
+
+	storageType := TypeID(edge)
+	schemaType := types.TypeID(su.ValueType)
+
+	// type checks
+	switch {
+	case edge.Lang != "" && !su.GetLang():
+		return errors.Errorf("Attr: [%v] should have @lang directive in schema to mutate edge: [%v]",
+			x.ParseAttr(edge.Attr), edge)
+
+	case !schemaType.IsScalar() && !storageType.IsScalar():
+		return nil
+
+	case !schemaType.IsScalar() && storageType.IsScalar():
+		return errors.Errorf("Input for predicate %q of type uid is scalar. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
+
+	case schemaType.IsScalar() && !storageType.IsScalar():
+		return errors.Errorf("Input for predicate %q of type scalar is uid. Edge: %v",
+			x.ParseAttr(edge.Attr), edge)
+
+	case schemaType == types.TypeID(pb.Posting_VFLOAT):
+		if !(storageType == types.TypeID(pb.Posting_VFLOAT) || storageType == types.TypeID(pb.Posting_STRING) || //nolint
+			storageType == types.TypeID(pb.Posting_DEFAULT)) {
+			return errors.Errorf("Input for predicate %q of type vector is not vector."+
+				" Did you forget to add quotes before []?. Edge: %v", x.ParseAttr(edge.Attr), edge)
+		}
+
+	// The suggested storage type matches the schema, OK! (Nothing to do ...)
+	case storageType == schemaType && schemaType != types.DefaultID:
+		return nil
+
+	// We accept the storage type iff we don't have a schema type and a storage type is specified.
+	case schemaType == types.DefaultID:
+		schemaType = storageType
+	}
+
+	var (
+		dst types.Val
+		err error
+	)
+
+	src := types.Val{Tid: types.TypeID(edge.ValueType), Value: edge.Value}
+	// check compatibility of schema type and storage type
+	// The goal is to convert value on edge to value type defined by schema.
+	if dst, err = types.Convert(src, schemaType); err != nil {
+		return err
+	}
+
+	// convert to schema type
+	b := types.ValueForType(types.BinaryID)
+	if err = types.Marshal(dst, &b); err != nil {
+		return err
+	}
+
+	if x.WorkerConfig.AclEnabled && x.ParseAttr(edge.GetAttr()) == "dgraph.rule.permission" {
+		perm, ok := dst.Value.(int64)
+		if !ok {
+			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
+		}
+		if perm < 0 || perm > 7 {
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this"+
+				" predicate should be between 0 and 7", perm)
+		}
+	}
+
+	// TODO: Figure out why this is Enum. It really seems like an odd choice -- rather than
+	//       specifying it as the same type as presented in su.
+	edge.ValueType = schemaType.Enum()
+	var ok bool
+	edge.Value, ok = b.Value.([]byte)
+	if !ok {
+		return errors.Errorf("failure to convert edge type: '%+v' to schema type: '%+v'",
+			storageType, schemaType)
+	}
+
+	return nil
+}
+
+// Process is the entry point for the mutation pipeline. It fans out one goroutine per
+// predicate so mutations for different predicates are parallelized, while all edges
+// for the same predicate are serialized through a single channel to a single goroutine.
+// This serialization per-predicate is intentional: ProcessSingle and ProcessList both
+// build a uid-keyed map that assumes they own all writes for their predicate, and the
+// index/reverse/count secondary-key updates must see the complete accumulated state to
+// produce correct deltas. Running two goroutines for the same predicate would cause
+// lost updates and incorrect index deltas.
+//
+// Edge shape entering this function:
+//
+//	edge.Entity  — subject UID  (e.g. 0x1234)
+//	edge.Attr    — predicate    (e.g. "name", "age", "friend")
+//	edge.Value   — object bytes for scalar predicates (e.g. []byte("Alice"))
+//	edge.ValueId — object UID  for uid predicates (e.g. 0x5678)
+//	edge.Op      — SET or DEL
+//	edge.Lang    — language tag (e.g. "en") or empty
+//	edge.Facets  — optional facet list
+//
+// Star-delete edges (entity=0, value="*") are handled inline before the fan-out
+// because they must run serially with respect to the data list they are clearing.
+func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdge) error {
+	// handleDeleteAll calls schema.State().IsIndexed/IsReversed/HasCount, all of
+	// which only consult the pending mutSchema (the new schema with the index
+	// being built) when the context carries the isWrite flag. The legacy path
+	// in runMutation already calls schema.GetWriteContext at the top; the
+	// pipeline must do the same here, otherwise during a background index
+	// build a star-delete won't generate the index Del entries for the prior
+	// value, leaving stale uids in the index permanently.
+	ctx = schema.GetWriteContext(ctx)
+	predicates := map[string]*PredicatePipeline{}
+	var wg sync.WaitGroup
+	numWg := 0
+	eg, egCtx := errgroup.WithContext(ctx)
+	var sendErr error
+sendLoop:
+	for _, edge := range edges {
+		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
+			l, err := mp.txn.Get(x.DataKey(edge.Attr, edge.Entity))
+			if err != nil {
+				sendErr = err
+				break sendLoop
+			}
+			if err = l.handleDeleteAll(ctx, edge, mp.txn); err != nil {
+				sendErr = err
+				break sendLoop
+			}
+			continue
+		}
+		pred, ok := predicates[edge.Attr]
+		if !ok {
+			pred = &PredicatePipeline{
+				attr:  edge.Attr,
+				edges: make(chan *pb.DirectedEdge, 1000),
+				wg:    &wg,
+			}
+			predicates[edge.Attr] = pred
+			wg.Add(1)
+			numWg += 1
+			// Capture pred by passing it as a parameter to the closure
+			eg.Go(func(p *PredicatePipeline) func() error {
+				return func() error {
+					return mp.ProcessPredicate(egCtx, p)
+				}
+			}(pred))
+		}
+		// Guard the send: if a predicate goroutine returns early on error, the
+		// channel reader is gone and a bare send blocks forever once the buffer fills.
+		select {
+		case pred.edges <- edge:
+		case <-egCtx.Done():
+			sendErr = egCtx.Err()
+			break sendLoop
+		}
+	}
+	for _, pred := range predicates {
+		close(pred.edges)
+	}
+	if numWg == 0 {
+		return sendErr
+	}
+	// Wait for all predicate processors; returns the first goroutine error,
+	// which is the real root cause when sendErr is just context cancellation.
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	return sendErr
+}
 
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) ([]*pb.DirectedEdge, error) {
 	if info.tokenizers == nil {
@@ -951,7 +2101,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
 		kvs := make([]*bpb.KV, 0)
 
-		for key, data := range streamTxn.cache.deltas {
+		if err := streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
@@ -960,7 +2110,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 				Version:  version,
 			}
 			kvs = append(kvs, &kv)
+			return nil
+		}); err != nil {
+			return nil, err
 		}
+
 		txns[threadId] = NewTxn(r.startTs)
 		return &bpb.KVList{Kv: kvs}, nil
 	}
@@ -1009,7 +2163,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		// Convert data into deltas.
 		streamTxn.Update()
 		// txn.cache.Lock() is not required because we are the only one making changes to txn.
-		for key, data := range streamTxn.cache.deltas {
+		if err := streamTxn.cache.deltas.IterateBytes(func(key string, data []byte) error {
 			version := atomic.AddUint64(&counter, 1)
 			kv := bpb.KV{
 				Key:      []byte(key),
@@ -1018,6 +2172,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 				Version:  version,
 			}
 			kvs = append(kvs, &kv)
+			return nil
+		}); err != nil {
+			return nil, err
 		}
 
 		txns[threadId] = NewTxn(r.startTs)
