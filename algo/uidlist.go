@@ -394,18 +394,21 @@ func internalMergeSortWithBuffer(lists []*pb.List, buffer []uint64) *pb.List {
 		return &pb.List{Uids: buffer[:0]}
 	}
 
-	h := &uint64Heap{}
-	heap.Init(h)
-
+	// Pre-size the heap to avoid grow-and-copy. Building the slice directly and
+	// calling heap.Init (O(n)) is also cheaper than n × heap.Push (each O(log n)
+	// + interface boxing).
+	hs := make(uint64Heap, 0, len(lists))
 	for i, l := range lists {
 		if l == nil || len(l.Uids) == 0 {
 			continue
 		}
-		heap.Push(h, elem{
+		hs = append(hs, elem{
 			val:     l.Uids[0],
 			listIdx: i,
 		})
 	}
+	h := &hs
+	heap.Init(h)
 
 	// Use the provided buffer
 	output := buffer[:0]
