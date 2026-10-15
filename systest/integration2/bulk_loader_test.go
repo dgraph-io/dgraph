@@ -10,6 +10,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,6 +121,62 @@ func TestBulkLoaderSkipReducePhase(t *testing.T) {
 		  "author": "USYMVFJYXA"
 		}
 	  }`, string(data)))
+}
+
+// TestBulkLoaderBM25 verifies the BM25 index is correctly built by the bulk loader:
+// term postings must carry their packed (term frequency, document length) value, and
+// the corpus statistics must be written, or bm25() queries return nothing. It loads a
+// small corpus via bulk, then checks that all documents containing the term are found
+// and that the densest/shortest document ranks first.
+func TestBulkLoaderBM25(t *testing.T) {
+	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).
+		WithACL(time.Hour).WithReplicas(1).WithBulkLoadOutDir(t.TempDir())
+	c, err := dgraphtest.NewLocalCluster(conf)
+	require.NoError(t, err)
+	defer func() { c.Cleanup(t.Failed()) }()
+
+	require.NoError(t, c.StartZero(0))
+	require.NoError(t, c.HealthCheck(true))
+
+	baseDir := t.TempDir()
+	schemaFile := filepath.Join(baseDir, "bm25.schema")
+	require.NoError(t, os.WriteFile(schemaFile,
+		[]byte("description_bm25: string @index(bm25) .\n"), os.ModePerm))
+
+	dataFile := filepath.Join(baseDir, "bm25.rdf")
+	rdf := `
+		<0x1> <description_bm25> "the quick brown fox jumps over the lazy dog" .
+		<0x2> <description_bm25> "fox fox fox" .
+		<0x3> <description_bm25> "the lazy dog sleeps in the warm sun all day" .
+		<0x4> <description_bm25> "quick brown foxes are agile animals" .
+	`
+	require.NoError(t, os.WriteFile(dataFile, []byte(rdf), os.ModePerm))
+
+	require.NoError(t, c.BulkLoad(dgraphtest.BulkOpts{
+		DataFiles:   []string{dataFile},
+		SchemaFiles: []string{schemaFile},
+	}))
+
+	require.NoError(t, c.Start())
+
+	hc, err := c.HTTPClient()
+	require.NoError(t, err)
+	require.NoError(t, hc.LoginIntoNamespace(dgraphapi.DefaultUser,
+		dgraphapi.DefaultPassword, x.RootNamespace))
+
+	// Both documents containing "fox" (0x1 and 0x2) must be found — proves the term
+	// postings and corpus statistics survived the bulk build.
+	data, err := hc.PostDqlQuery(`{ q(func: bm25(description_bm25, "fox")) { count(uid) } }`)
+	require.NoError(t, err)
+	require.Contains(t, string(data), `"count":3`,
+		"bulk-loaded bm25 index must find every document containing the term")
+
+	// The all-"fox" document (0x2, tf=3, shortest) must rank first.
+	data, err = hc.PostDqlQuery(
+		`{ q(func: bm25(description_bm25, "fox"), first: 1) { description_bm25 } }`)
+	require.NoError(t, err)
+	require.True(t, strings.Contains(string(data), "fox fox fox"),
+		"densest, shortest document must rank first after bulk load; got: %s", string(data))
 }
 
 func TestBulkLoaderNoDqlSchema(t *testing.T) {
