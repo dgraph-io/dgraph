@@ -196,6 +196,27 @@ endif
 .PHONY: image-local
 image-local: local-image ## Alias for local-image
 
+# Overridable knobs for local-image-jemalloc. BUILD_PLATFORM defaults to the
+# host arch so the build (and jemalloc compile) runs natively under Docker
+# Desktop; override to linux/amd64 to match amd64 CI (emulated via qemu).
+BUILD_PLATFORM ?= linux/$(GOHOSTARCH)
+GO_VERSION     ?= 1.26
+
+.PHONY: local-image-jemalloc
+local-image-jemalloc: ## Build jemalloc-enabled dgraph/dgraph:local by compiling natively in a Linux container (macOS-friendly; mirrors the CI/release build)
+	@echo "==> Compiling jemalloc-enabled dgraph binary in a Linux container ($(BUILD_PLATFORM), go $(GO_VERSION))"
+	@mkdir -p linux
+	@docker build \
+		--platform=$(BUILD_PLATFORM) \
+		--build-arg GO_VERSION=$(GO_VERSION) \
+		--target=artifact \
+		--output=type=local,dest=./linux \
+		-f contrib/Dockerfile.build .
+	@echo "==> Packaging dgraph/dgraph:local via contrib/Dockerfile (same runtime image as CI/CD)"
+	@docker build --platform=$(BUILD_PLATFORM) -f contrib/Dockerfile -t dgraph/dgraph:local .
+	@rm -rf linux
+	@echo "==> Done: dgraph/dgraph:local is in Docker Desktop ($(BUILD_PLATFORM), jemalloc enabled)"
+
 .PHONY: clean
 clean: ## Clean build artifacts
 	$(MAKE) -C dgraph clean
