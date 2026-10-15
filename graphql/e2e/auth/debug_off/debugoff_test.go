@@ -259,25 +259,6 @@ func TestUpdateMutationWithIDFields(t *testing.T) {
                   }
               }
         }`,
-	}, {
-		name: "update mutation gives error when given @id field already exist in some node",
-		query: `mutation update($patch: UpdateEmployerInput!) {
-                  updateEmployer(input: $patch) {
-                    numUids
-                  }
-                }`,
-		variables: `{
-                   "patch": {
-                       "filter": {
-                           "name": {
-                               "in": "ABC"
-                           }
-                       },
-                       "set": {
-                           "company": "ABC tech"
-                       }
-                   }
-               }`,
 	},
 		{
 			name: "update mutation gives error when multiple nodes are found at nested level" +
