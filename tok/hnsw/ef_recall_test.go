@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -208,4 +209,95 @@ func TestHNSWDistanceThreshold_Cosine(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, []uint64{1}, res)
+}
+
+// deadNodesTxn is a minimal index.Txn for exercising removeDeadNodes: Get reads
+// from an in-memory map and StartTs is fixed. The rest are unused no-ops.
+type deadNodesTxn struct {
+	startTs uint64
+	data    map[string][]byte
+}
+
+func (t *deadNodesTxn) StartTs() uint64                                { return t.startTs }
+func (t *deadNodesTxn) Get(key []byte) ([]byte, error)                 { return t.data[string(key)], nil }
+func (t *deadNodesTxn) GetWithLockHeld(key []byte) ([]byte, error)     { return t.data[string(key)], nil }
+func (t *deadNodesTxn) Find([]byte, func([]byte) bool) (uint64, error) { return 0, nil }
+func (t *deadNodesTxn) AddMutation(context.Context, []byte, *index.KeyValue) error {
+	return nil
+}
+func (t *deadNodesTxn) AddMutationWithLockHeld(context.Context, []byte, *index.KeyValue) error {
+	return nil
+}
+func (t *deadNodesTxn) LockKey([]byte)   {}
+func (t *deadNodesTxn) UnlockKey([]byte) {}
+
+// TestRemoveDeadNodesRefreshesAcrossTimestamps guards the fix for the
+// load-once-never-refresh bug: the dead-node set must be re-read when the
+// transaction timestamp advances, while staying stable within a single snapshot.
+func TestRemoveDeadNodesRefreshesAcrossTimestamps(t *testing.T) {
+	ph := &persistentHNSW[float64]{vecDead: ConcatStrings("0-dead", VecDead)}
+	deadKey := string(DataKey(ph.vecDead, 1))
+	store := map[string][]byte{}
+
+	// ts=10: nothing is dead yet, so nothing is filtered.
+	tc1 := NewTxnCache(&deadNodesTxn{startTs: 10, data: store}, 10)
+	out, err := ph.removeDeadNodes([]uint64{1, 2, 3}, tc1)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 2, 3}, out)
+
+	// A delete makes uid 2 dead. Reusing the same snapshot (ts=10) must NOT see
+	// it — reads at a fixed StartTs are snapshot-consistent.
+	store[deadKey] = []byte("[2]")
+	out, err = ph.removeDeadNodes([]uint64{1, 2, 3}, tc1)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 2, 3}, out)
+
+	// A newer transaction (ts=20) MUST observe the deletion. Before the fix the
+	// cache was loaded once and this still returned {1,2,3}.
+	tc2 := NewTxnCache(&deadNodesTxn{startTs: 20, data: store}, 20)
+	out, err = ph.removeDeadNodes([]uint64{1, 2, 3}, tc2)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 3}, out)
+}
+
+// TestRemoveDeadNodesSnapshotIsolation verifies the shared cache only advances
+// in time: once a newer snapshot is cached, an older-ts caller must still see
+// its own (older) view, not the newer set of deletions.
+func TestRemoveDeadNodesSnapshotIsolation(t *testing.T) {
+	ph := &persistentHNSW[float64]{vecDead: ConcatStrings("0-dead", VecDead)}
+	deadKey := string(DataKey(ph.vecDead, 1))
+
+	// Newer txn (ts=20) sees uid 2 as dead and installs the cache at ts=20.
+	tcNew := NewTxnCache(&deadNodesTxn{startTs: 20, data: map[string][]byte{deadKey: []byte("[2]")}}, 20)
+	out, err := ph.removeDeadNodes([]uint64{1, 2, 3}, tcNew)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 3}, out)
+
+	// Older txn (ts=10), at whose snapshot uid 2 is NOT yet dead, must not be
+	// affected by the newer cached snapshot.
+	tcOld := NewTxnCache(&deadNodesTxn{startTs: 10, data: map[string][]byte{}}, 10)
+	out, err = ph.removeDeadNodes([]uint64{1, 2, 3}, tcOld)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{1, 2, 3}, out)
+}
+
+// TestLoadDeadNodesConcurrent exercises the lock-free publication path under the
+// race detector: many goroutines at mixed timestamps loading concurrently.
+func TestLoadDeadNodesConcurrent(t *testing.T) {
+	ph := &persistentHNSW[float64]{vecDead: ConcatStrings("0-dead", VecDead)}
+	deadKey := string(DataKey(ph.vecDead, 1))
+	data := map[string][]byte{deadKey: []byte("[2]")}
+
+	var wg sync.WaitGroup
+	for g := range 32 {
+		wg.Add(1)
+		go func(ts uint64) {
+			defer wg.Done()
+			tc := NewTxnCache(&deadNodesTxn{startTs: ts, data: data}, ts)
+			out, err := ph.removeDeadNodes([]uint64{1, 2, 3}, tc)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1, 3}, out)
+		}(uint64(10 + g%4)) // timestamps 10..13
+	}
+	wg.Wait()
 }
