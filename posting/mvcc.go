@@ -598,6 +598,18 @@ func (ml *MemoryLayer) updateItemInCache(key string, delta []byte, startTs, comm
 	val.lastUpdate = commitTs
 
 	if val.list != nil {
+		// A commit at or below minTs is already in the rolled-up version this list was read from
+		// (rollups are versioned newest commit + 1); it gets here when the Raft log is replayed
+		// after a restart. Applying it again would put a delta below minTs into the list and
+		// break every read it serves, so drop the entry and let the next read rebuild it.
+		val.list.RLock()
+		minTs := val.list.minTs
+		val.list.RUnlock()
+		if commitTs <= minTs {
+			ml.del([]byte(key))
+			return
+		}
+
 		p := new(pb.PostingList)
 		x.Check(proto.Unmarshal(delta, p))
 
@@ -706,6 +718,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 		switch item.UserMeta() {
 		case BitEmptyPosting:
+			l.minTs = item.Version()
 			return l, nil
 		case BitCompletePosting:
 			if err := unmarshalOrCopy(l.plist, item); err != nil {
