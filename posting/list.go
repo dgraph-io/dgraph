@@ -1457,6 +1457,7 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 	if readTs != math.MaxUint64 {
 		kv.Version += 1
 	}
+	parentVersion := kv.Version
 
 	kv.Key = alloc.Copy(l.key)
 	kvs = append(kvs, kv)
@@ -1471,8 +1472,23 @@ func (l *List) Rollup(alloc *z.Allocator, readTs uint64) ([]*bpb.KV, error) {
 		kvs = append(kvs, kv)
 	}
 
+	// At newMinTs, readers still resolve the old parent and need its removed parts.
+	// Retire them at the parent's version (+1 for finite readTs).
+	for _, startUid := range l.plist.Splits {
+		if _, retained := out.parts[startUid]; retained {
+			continue
+		}
+		part, err := out.marshalPostingListPart(alloc, l.key, startUid, &pb.PostingList{})
+		if err != nil {
+			return nil, errors.Wrapf(err, "cannot marshal removed posting list part")
+		}
+		part.Version = parentVersion
+		kvs = append(kvs, part)
+	}
+
 	// Sort the KVs by their key so that the main part of the list is at the
 	// start of the list and all other parts appear in the order of their start UID.
+	// Keep the parent first: crash recovery must not retain tombstones without it.
 	sort.Slice(kvs, func(i, j int) bool {
 		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
 	})
