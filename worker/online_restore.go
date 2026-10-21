@@ -559,6 +559,7 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 		}
 	}
 
+	var maxUid, maxNs uint64
 	for gid := range manifest.Groups {
 		req := &pb.RestoreRequest{
 			Location:          location,
@@ -577,9 +578,12 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 			}
 		}()
 
-		if _, err := RunMapper(req, mapDir); err != nil {
+		mapRes, err := RunMapper(req, mapDir)
+		if err != nil {
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to map")}
 		}
+		maxUid = x.Max(maxUid, mapRes.maxUid)
+		maxNs = x.Max(maxNs, mapRes.maxNs)
 		pdir := filepath.Join(dir, fmt.Sprintf("p%d", gid))
 		db, err := badger.OpenManaged(badger.DefaultOptions(pdir).
 			WithCompression(ctype).
@@ -609,8 +613,8 @@ func RunOfflineRestore(dir, location, backupId, keyFile string, key x.Sensitive,
 			return LoadResult{Err: errors.Wrap(err, "RunRestore failed to write group id file")}
 		}
 	}
-	// TODO: Fix this return value.
-	return LoadResult{Version: manifest.ValidReadTs()}
+	// The caller bumps Zero's uid and namespace leases past these, as the online restore does.
+	return LoadResult{Version: manifest.ValidReadTs(), MaxLeaseUid: maxUid, MaxLeaseNsId: maxNs}
 }
 
 func buildPredsForDefaultNamespace(restorePreds []string, fromNamespace uint64) []string {
