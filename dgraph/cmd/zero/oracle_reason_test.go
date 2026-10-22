@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: © 2017-2025 Istari Digital, Inc.
+ * SPDX-FileCopyrightText: © 2017-2026 Istari Digital, Inc.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
+	"github.com/dgraph-io/dgraph/v25/x"
 )
 
 // The abort-reason wire format is a contract with gRPC clients (e.g. dgraph4j parses the
@@ -82,11 +83,11 @@ func TestAbortVocabulary(t *testing.T) {
 			"conflict detail should name the key kinds it cannot distinguish between")
 	}
 
-	// The out-of-band abort names its three causes rather than guessing a category. None of them is
-	// a predicate move — they all arrive via TryAbort, which records no cause — so labelling this
-	// predicate-move would be wrong. Before it was handled, commit() returned nil and the abort
+	// The out-of-band abort names its known causes rather than guessing a category. None of them is
+	// a predicate move, and the abort proposal that delivers each records no cause, so labelling
+	// this predicate-move would be wrong. Before it was handled, commit() returned nil and the abort
 	// reached the client as a bare dgo.ErrAborted with no reason at all.
-	for _, want := range []string{"schema update", "drop-predicate", "txn-abort-after"} {
+	for _, want := range []string{"schema update", "drop-predicate", "txn-abort-after", "discarded"} {
 		require.Contains(t, abortDetailPreAborted, want,
 			"pre-abort detail should name the causes it cannot distinguish between")
 	}
@@ -117,8 +118,8 @@ func TestAbortVocabulary(t *testing.T) {
 // TestAbortReasonUncategorized pins the withholding contract: when the server cannot substantiate
 // one of the published categories it emits the bare detail with no prefix, rather than borrowing a
 // category that would imply the wrong remedy. That is byte-identical to what a pre-feature server
-// sends, and both dgraph4j and pydgraph already degrade a prefix-less message to UNKNOWN. The
-// absence of a colon-delimited prefix is the whole contract, so it must not regress.
+// sends, and the proposed dgraph4j, pydgraph and dgo parsers map a prefix-less message to UNKNOWN.
+// The absence of a colon-delimited prefix is the whole contract, so it must not regress.
 func TestAbortReasonUncategorized(t *testing.T) {
 	require.Equal(t, "Tablet for foo is nil",
 		abortReason(abortReasonUncategorized, "Tablet for foo is nil"))
@@ -228,6 +229,29 @@ func TestCheckPredsCategories(t *testing.T) {
 		}
 	})
 
+	t.Run("details name the predicate without its namespace", func(t *testing.T) {
+		// The Alpha sends "<gid>-<namespaced attr>", so after the group id is split off the predicate
+		// is still "<hex ns>-name". Lookups must use that form, but the client-visible detail must
+		// show the name the user wrote.
+		for _, ns := range []uint64{x.RootNamespace, 0x2a} {
+			attr := x.NamespaceAttr(ns, pred)
+			s := &Server{state: &pb.MembershipState{Groups: map[uint32]*pb.Group{
+				2: {Tablets: map[string]*pb.Tablet{attr: {GroupId: 2, Predicate: attr}}},
+			}}}
+			s.blockCommitsOn = new(sync.Map)
+
+			_, err := s.checkPreds([]string{"1-" + attr})
+			require.EqualError(t, err, fmt.Sprintf(abortDetailGroupMismatchFmt, 1, pred, 2))
+
+			s.blockCommitsOn.Store(attr, struct{}{})
+			_, err = s.checkPreds([]string{"2-" + attr})
+			require.EqualError(t, err, fmt.Sprintf(abortDetailPredicateBlockedFmt, pred))
+
+			_, err = s.checkPreds([]string{"2-" + x.NamespaceAttr(ns, "other")})
+			require.EqualError(t, err, fmt.Sprintf(abortDetailTabletNilFmt, "other"))
+		}
+	})
+
 	t.Run("healthy predicate does not abort", func(t *testing.T) {
 		reason, err := servingIn(1).checkPreds([]string{"1-" + pred})
 		require.NoError(t, err)
@@ -283,4 +307,22 @@ func TestLateAbortStaleStartTs(t *testing.T) {
 	require.False(t, o.isStaleStartTs(second), "above the floor, so not stale")
 	require.True(t, strings.HasPrefix(conflictAbortReason(o.isStaleStartTs(second)),
 		abortReasonConflict+": "), "a real write-write conflict must stay a conflict")
+}
+
+// TestDisplayPred pins that stripping the namespace for display can never panic on a hand-crafted
+// Preds entry, which is client-supplied. x.ParseAttr would index past the end of a separator-less
+// split.
+func TestDisplayPred(t *testing.T) {
+	for in, want := range map[string]string{
+		"0-name":     "name",
+		"2a-name":    "name",
+		"0-a-b":      "a-b",
+		"nodash":     "nodash",
+		"0-":         "0-",
+		"":           "",
+		"0-name@en":  "name@en",
+		"-leadingns": "leadingns",
+	} {
+		require.Equal(t, want, displayPred(in), "displayPred(%q)", in)
+	}
 }

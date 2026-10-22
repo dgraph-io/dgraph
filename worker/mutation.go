@@ -859,8 +859,13 @@ func CommitOverNetwork(ctx context.Context, tc *api.TxnContext) (uint64, error) 
 		// Zero signals a server-decided abort as a codes.Aborted status carrying a categorized
 		// reason (e.g. "conflict: ...", "predicate-move: ..."). Record the abort metric and
 		// forward the reason rather than treating it as a generic transport error or flattening
-		// it to the reasonless dgo.ErrAborted.
-		if status.Code(err) == codes.Aborted {
+		// it to the reasonless dgo.ErrAborted. Emit the same "Commit status" event as a
+		// non-error abort, plus the reason, so server-decided aborts stay visible in traces.
+		if st, ok := status.FromError(err); ok && st.Code() == codes.Aborted {
+			span.AddEvent("Commit status", trace.WithAttributes(
+				attribute.Int64("commitTs", 0),
+				attribute.Bool("committed", false),
+				attribute.String("abortReason", st.Message())))
 			if !clientDiscard {
 				ostats.Record(ctx, x.TxnAborts.M(1))
 			}

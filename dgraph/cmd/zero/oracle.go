@@ -326,13 +326,11 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 		return err
 	}
 
-	// There might be race between this proposal trying to commit and predicate
-	// move aborting it. A predicate move, triggered by Zero, would abort all
-	// pending transactions.  At the same time, a client which has already done
-	// mutations, can proceed to commit it. A race condition can happen here,
-	// with both proposing their respective states, only one can succeed after
-	// the proposal is done. So, check again to see the fate of the transaction
-	// here.
+	// This proposal can race with an abort proposed for the same start ts elsewhere: a TryAbort
+	// from an Alpha (schema update, drop-predicate, or the idle-transaction reaper), or a client
+	// Discard of the same transaction. Both sides propose their respective states and only one
+	// can succeed, so check again to see the fate of the transaction here. (A predicate move does
+	// not abort pending transactions; it blocks their commits in checkPreds instead.)
 	src.CommitTs = s.orc.commitTs(src.StartTs)
 	if src.CommitTs == 0 {
 		src.Aborted = true
@@ -344,13 +342,14 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 // client as the prefix of a codes.Aborted gRPC status message, formatted as "<code>: <detail>".
 // api.TxnContext (external dgo module) has no field for the reason, so the reason rides on the
 // error instead; the status code stays codes.Aborted, so existing abort handling is unaffected.
-// The dgraph4j and pydgraph clients parse these prefixes into their AbortReason enums — keep all
-// three in sync.
+// Client support for parsing these prefixes into an AbortReason enum is proposed in
+// dgraph-io/dgraph4j#290, dgraph-io/pydgraph#307 and dgraph-io/dgo#288; keep the server and
+// those parsers in sync.
 //
 // These three codes are the entire published vocabulary. A cause that cannot be mapped onto one of
 // them emits the detail with *no* prefix (abortReasonUncategorized) rather than borrowing a code
-// that would imply the wrong remedy. Both dgraph4j and pydgraph already degrade an absent or
-// unrecognized prefix to UNKNOWN, so "no category" is a supported and truthful answer. Withholding
+// that would imply the wrong remedy. Each of those client parsers maps an absent or unrecognized
+// prefix to UNKNOWN, so "no category" is a supported and truthful answer. Withholding
 // also keeps a later phase purely additive: naming a new category then only adds precision to
 // something that was already UNKNOWN, and never reclassifies a code clients have shipped against.
 const (
@@ -417,27 +416,33 @@ const (
 		"snapshot). Please retry"
 
 	// Reported when proposeTxn comes back with the transaction already aborted while this commit
-	// decided nothing itself — i.e. something aborted it out of band, before the commit was
-	// arbitrated. Zero records no cause when that happens (TryAbort carries only timestamps), so the
-	// category is withheld and the detail names the possibilities instead of guessing. All three
-	// reach Zero through the same TryAbort RPC, and none of them is a predicate *move*, so
-	// predicate-move would be the wrong label:
+	// decided nothing itself — i.e. something else proposed an abort for the same start timestamp
+	// before this commit was arbitrated. Zero records no cause when that happens (an abort proposal
+	// carries only timestamps), so the category is withheld and the detail names the possibilities
+	// instead of guessing. None of them is a predicate *move* — a move blocks commits in checkPreds
+	// before a commit timestamp is leased, and never aborts pending transactions — so
+	// predicate-move would be the wrong label. The known producers are:
 	//
 	//   - a schema or type update on a predicate the transaction touched, which cancels pending
 	//     transactions so the index can be rebuilt (detectPendingTxns, worker/draft.go)
 	//   - a drop-predicate (S * * delete) on a predicate the transaction touched (same function)
 	//   - the Alpha leader ageing out transactions idle longer than --limit "txn-abort-after"
 	//     (abortOldTransactions, worker/draft.go)
+	//   - a client Discard of the same transaction racing this commit, which reaches commit()'s own
+	//     src.Aborted early return and proposes the abort there
+	//
+	// The first three reach Zero through TryAbort (blockingAbort, worker/draft.go).
 	//
 	// Before this was handled, commit() returned nil here and the abort reached the client as a
 	// bare dgo.ErrAborted with no reason at all.
 	abortDetailPreAborted = "Transaction has been aborted. Please retry. It was already aborted " +
-		"before this commit was decided, which happens when a schema update or a drop-predicate " +
-		"cancels pending transactions on a predicate it touched, or when the server ages out " +
-		"transactions idle for longer than --limit \"txn-abort-after\""
+		"before this commit was decided, for example because a schema update or a drop-predicate " +
+		"cancelled pending transactions on a predicate it touched, the server aged it out after " +
+		"--limit \"txn-abort-after\" of idleness, or the client discarded it concurrently"
 
 	// Details produced by checkPreds. Wording is unchanged from before the abort-reason work; only
-	// the declaration moved here, so existing log-scrapers and docs still match.
+	// the declaration moved here, so existing log-scrapers and docs still match. The predicate
+	// argument is the name as the user wrote it (see displayPred), not the namespaced attribute.
 	abortDetailMissingGroupIDFmt   = "Unable to find group id in %s"
 	abortDetailBadGroupIDFmt       = "unable to parse group id from %s"
 	abortDetailTabletNilFmt        = "Tablet for %s is nil"
@@ -480,7 +485,8 @@ func (o *Oracle) isStaleStartTs(src *api.TxnContext) bool {
 // those return abortReasonUncategorized rather than claiming a move that did not happen. Every exit
 // still aborts the transaction, exactly as before; only the reported category changes.
 //
-// Each entry in preds is a "<group id>-<predicate name>" string built by the Alpha.
+// Each entry in preds is a "<group id>-<namespaced predicate>" string built by the Alpha
+// (LocalCache.fillPreds).
 func (s *Server) checkPreds(preds []string) (string, error) {
 	for _, pkey := range preds {
 		splits := strings.SplitN(pkey, "-", 2)
@@ -504,21 +510,31 @@ func (s *Server) checkPreds(preds []string) (string, error) {
 		// move can never be reported as anything else, and it lets the tablet == nil case below mean
 		// only "no group serves this predicate" and never "it is moving".
 		if s.isBlocked(pred) {
-			return abortReasonPredicateMove, errors.Errorf(abortDetailPredicateBlockedFmt, pred)
+			return abortReasonPredicateMove, errors.Errorf(abortDetailPredicateBlockedFmt,
+				displayPred(pred))
 		}
 		tablet := s.ServingTablet(pred)
 		if tablet == nil {
-			return abortReasonUncategorized, errors.Errorf(abortDetailTabletNilFmt, pred)
+			return abortReasonUncategorized, errors.Errorf(abortDetailTabletNilFmt, displayPred(pred))
 		}
 		// The predicate finished moving to another group while this transaction was open: the
 		// mutation was written against group gid, but the predicate now belongs elsewhere.
 		if tablet.GroupId != uint32(gid) {
 			return abortReasonPredicateMove, errors.Errorf(abortDetailGroupMismatchFmt,
-				gid, pred, tablet.GroupId)
+				gid, displayPred(pred), tablet.GroupId)
 		}
-
 	}
 	return abortReasonUncategorized, nil
+}
+
+// displayPred turns a namespaced attribute ("0-name") into the predicate name the user wrote
+// ("name") for use in an abort detail. Preds is client-supplied, so unlike x.ParseAttr this must not
+// assume the separator is present: a missing separator or an empty name returns the input as is.
+func displayPred(pred string) string {
+	if _, attr, ok := strings.Cut(pred, x.NsSeparator); ok && attr != "" {
+		return attr
+	}
+	return pred
 }
 
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
