@@ -260,8 +260,9 @@ func TestConflict(t *testing.T) {
 // TxnConflictException.AbortReason.
 //
 // It must inspect the raw CommitOrAbort response rather than dgo's high-level
-// Txn.Commit, because dgo intentionally replaces any codes.Aborted error with the
-// static dgo.ErrAborted (txn.go), discarding the reason for the Go client.
+// Txn.Commit, because the dgo version this repo builds against replaces any
+// codes.Aborted error with the static dgo.ErrAborted, discarding the reason
+// (dgraph-io/dgo#288 keeps it).
 func TestConflictAbortReason(t *testing.T) {
 	op := &api.Operation{}
 	op.DropAll = true
@@ -291,7 +292,7 @@ func TestConflictAbortReason(t *testing.T) {
 	require.NoError(t, txn.Commit(context.Background()))
 
 	// Commit the loser via the raw gRPC stub so we observe the unflattened status the
-	// server sends (dgo's Txn.Commit would replace it with the reasonless ErrAborted).
+	// server sends (this repo's dgo replaces it with the reasonless ErrAborted).
 	conn, err := grpc.NewClient(alphaSockAdd, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
@@ -995,6 +996,6 @@ func TestTxnDiscardBeforeCommit(t *testing.T) {
 	require.NoError(t, err, "unable to mutate")
 
 	err = txn.Discard(context.Background())
-	// Since client is discarding this transaction server should not throw ErrAborted err.
-	require.NotEqual(t, err, dgo.ErrAborted)
+	// Since client is discarding this transaction server should not return an error.
+	require.NoError(t, err)
 }

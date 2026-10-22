@@ -33,8 +33,8 @@ import (
 // with the stale-startts reason rather than a plain write-write conflict.
 //
 // As in the alpha-level reason tests, the commit goes through the raw CommitOrAbort stub so we
-// observe the unflattened codes.Aborted status (dgo's Txn.Commit would replace it with the
-// reasonless ErrAborted).
+// observe the unflattened codes.Aborted status (the dgo version this repo builds against replaces
+// it with the reasonless ErrAborted).
 func TestStaleStartTsAbortReason(t *testing.T) {
 	conf := dgraphtest.NewClusterConfig().WithNumAlphas(1).WithNumZeros(1).WithReplicas(1)
 	c, err := dgraphtest.NewLocalCluster(conf)
