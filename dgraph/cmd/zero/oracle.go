@@ -122,10 +122,19 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 }
 
+// errStaleStartTs is returned by Oracle.commit when the start timestamp is below startTxnTs. It is
+// decided under the same lock as the conflict check, so the late abort path in Server.commit reports
+// what the oracle actually saw. Re-reading startTxnTs afterwards could mislabel the abort, because
+// purgeBelow and updateStartTxnTs can both move it in between.
+var errStaleStartTs = errors.New("transaction start timestamp is stale")
+
 func (o *Oracle) commit(src *api.TxnContext) error {
 	o.Lock()
 	defer o.Unlock()
 
+	if o.isStaleStartTs(src) {
+		return errStaleStartTs
+	}
 	if o.hasConflict(src) {
 		return x.ErrConflict
 	}
@@ -366,7 +375,8 @@ const (
 // abort is declared here rather than at its call site, so the published surface is a single block:
 // adding a new abort means adding a constant next to the existing vocabulary, where the category it
 // should pair with is visible. Entries ending in Fmt are format strings and must be given their
-// arguments; the other two are complete messages.
+// arguments; the others are complete. abortReason frames each one as
+// "<category>: Transaction has been aborted. Please retry. <detail>".
 //
 //	category         detail
 //	───────────────  ──────────────────────────────────────────────────────────
@@ -396,24 +406,21 @@ const (
 	// upsert-heavy ingest it is the most likely cause of this abort, which is why it is worth the
 	// extra sentence.
 	//
-	// The leading sentence is load-bearing and must stay verbatim at the front. Three tests in this
-	// repo substring-match it against the live server message — including the retry loop at
-	// dgraph/cmd/alpha/upsert_test.go, which would exit immediately and fail if it stopped matching
-	// — and it is also the text of dgo.ErrAborted, so user log-scrapers key off it. Extend this
-	// detail only by appending.
-	abortDetailConflict = "Transaction has been aborted. Please retry. Another transaction " +
-		"committed to one of the same keys. The conflicting key cannot be identified: it may be " +
-		"the data key written directly, or an index or count key derived from it. On an @upsert " +
-		"predicate the uid is excluded, so any two transactions writing the same value conflict"
+	// abortReason puts abortLegacyMessage in front of this, so the wire message still starts with the
+	// sentence that dgraph/cmd/alpha/upsert_test.go, query/query4_test.go and systest/unique_test.go
+	// match against the live server.
+	abortDetailConflict = "Another transaction committed to one of the same keys. The conflicting " +
+		"key cannot be identified: it may be the data key written directly, or an index or count " +
+		"key derived from it. On an @upsert predicate the uid is excluded, so any two transactions " +
+		"writing the same value conflict"
 	// A start timestamp goes stale for two different reasons, so this detail deliberately names
 	// both rather than asserting one. Zero raises startTxnTs either when a Zero becomes leader and
 	// renews its leases (updateLeases, assign.go) or when it trims its conflict map while applying
 	// a snapshot (purgeBelow via applySnapshot, raft.go) — the second is not a leader change at
 	// all. Both mean the same thing to a caller: this transaction's start timestamp is older than
 	// the oldest timestamp Zero can still validate against, so retry with a fresh transaction.
-	abortDetailStaleStartTs = "Transaction start timestamp is older than the oldest timestamp " +
-		"Zero can still validate (Zero leader change, or its conflict map was trimmed at a " +
-		"snapshot). Please retry"
+	abortDetailStaleStartTs = "Its start timestamp is older than the oldest timestamp Zero can " +
+		"still validate (Zero leader change, or its conflict map was trimmed at a snapshot)"
 
 	// Reported when proposeTxn comes back with the transaction already aborted while this commit
 	// decided nothing itself — i.e. something else proposed an abort for the same start timestamp
@@ -435,14 +442,14 @@ const (
 	//
 	// Before this was handled, commit() returned nil here and the abort reached the client as a
 	// bare dgo.ErrAborted with no reason at all.
-	abortDetailPreAborted = "Transaction has been aborted. Please retry. It was already aborted " +
-		"before this commit was decided, for example because a schema update or a drop-predicate " +
-		"cancelled pending transactions on a predicate it touched, the server aged it out after " +
-		"--limit \"txn-abort-after\" of idleness, or the client discarded it concurrently"
+	abortDetailPreAborted = "It was already aborted before this commit was decided, for example " +
+		"because a schema update or a drop-predicate cancelled pending transactions on a predicate " +
+		"it touched, the server aged it out after --limit \"txn-abort-after\" of idleness, or the " +
+		"client discarded it concurrently"
 
-	// Details produced by checkPreds. Wording is unchanged from before the abort-reason work; only
-	// the declaration moved here, so existing log-scrapers and docs still match. The predicate
-	// argument is the name as the user wrote it (see displayPred), not the namespaced attribute.
+	// Details produced by checkPreds. The wording predates the abort-reason work, but commit() used to
+	// discard these errors, so clients have never seen them. The predicate argument is the name as
+	// the user wrote it (see displayPred), not the namespaced attribute.
 	abortDetailMissingGroupIDFmt   = "Unable to find group id in %s"
 	abortDetailBadGroupIDFmt       = "unable to parse group id from %s"
 	abortDetailTabletNilFmt        = "Tablet for %s is nil"
@@ -450,13 +457,23 @@ const (
 	abortDetailGroupMismatchFmt    = "Mutation done in group: %d. Predicate %s assigned to %d"
 )
 
-// abortReason builds the wire string the client parses: "<code>: <detail>". An empty code yields
-// the bare detail, which is exactly what a client receives from a server without this feature.
+// abortLegacyMessage is the text of every abort from a server without abort reasons, and the text
+// of dgo.ErrAborted. abortReason puts it in front of every detail, so each abort message still
+// contains it. Clients that recognise aborts by message text rely on that: the dgraph-js-http
+// client treats an HTTP error as an abort only when its message contains "abort" and "retry", and
+// rethrows anything else as a hard failure. Tests in this repo and user log-scrapers also
+// substring-match it. Never change it, and never emit an abort that bypasses abortReason.
+const abortLegacyMessage = "Transaction has been aborted. Please retry"
+
+// abortReason builds the wire string the client parses: "<code>: <legacy sentence>. <detail>". An
+// empty code drops the "<code>: " prefix, so the client reports no category, but the message still
+// starts with the legacy sentence a server without this feature sent for every abort.
 func abortReason(code, detail string) string {
+	msg := abortLegacyMessage + ". " + detail
 	if code == abortReasonUncategorized {
-		return detail
+		return msg
 	}
-	return code + ": " + detail
+	return code + ": " + msg
 }
 
 // conflictAbortReason returns the wire reason for an abort decided by hasConflict, distinguishing a
@@ -466,6 +483,29 @@ func conflictAbortReason(stale bool) string {
 		return abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)
 	}
 	return abortReason(abortReasonConflict, abortDetailConflict)
+}
+
+// lateAbortReason returns the wire reason for an abort decided after the commit timestamp was
+// leased, and false if nothing aborted the transaction. orcErr is Oracle.commit's verdict and ctxErr
+// is the request context's error, read after it. Two unrelated causes can abort here. An oracle
+// rejection takes precedence: the oracle would have aborted the transaction whatever the context
+// said, so that is the honest cause to report.
+func lateAbortReason(orcErr, ctxErr error) (string, bool) {
+	switch {
+	case orcErr != nil:
+		// Oracle.commit re-runs the conflict check, and a start timestamp that went stale since the
+		// early check in commit() (a lease renewal or snapshot purge in between) is not a write-write
+		// conflict. Oracle.commit reports that case as errStaleStartTs so it can be told apart.
+		return conflictAbortReason(errors.Is(orcErr, errStaleStartTs)), true
+	case ctxErr != nil:
+		// The context was cancelled or timed out; no conflict occurred. No published category
+		// describes this, so report the context's own message with no category rather than claiming
+		// a conflict that did not happen. The gRPC status code stays codes.Aborted because the
+		// transaction genuinely did abort; switching to Canceled or DeadlineExceeded would change
+		// retry behaviour for clients that already treat Aborted as retryable.
+		return abortReason(abortReasonUncategorized, ctxErr.Error()), true
+	}
+	return "", false
 }
 
 // isStaleStartTs reports whether this transaction's start timestamp (src.StartTs) is below the
@@ -588,55 +628,23 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span.AddEvent(fmt.Sprintf("TXN Context: %+v", src))
 
 	// Past this point the transaction already holds a commit timestamp, so an abort here is a "late"
-	// abort. Two unrelated causes can trigger one, tracked separately because they report
-	// differently. A conflict found here takes precedence: if the oracle rejected the transaction it
-	// would have aborted whatever the context said, so that is the honest cause to report.
-	aborted := false
-	lateReason := abortReasonUncategorized
-	lateDetail := abortDetailConflict
-	if err := s.orc.commit(src); err != nil {
+	// abort. See lateAbortReason for how its cause is reported.
+	reason, aborted := lateAbortReason(s.orc.commit(src), ctx.Err())
+	if aborted {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
-		aborted = true
-		// Oracle.commit re-runs hasConflict, which aborts a stale start timestamp just as readily as
-		// a genuine write-write conflict found in the keyCommit tree, and collapses both into
-		// x.ErrConflict. Re-check staleness here so this path can report stale-startts, instead of
-		// labelling every late abort a conflict. The early check at the top of commit() already
-		// draws that distinction; without this, the stale-startts category was only ever reachable
-		// from the early path.
-		s.orc.RLock()
-		stale := s.orc.isStaleStartTs(src)
-		s.orc.RUnlock()
-		lateReason = abortReasonConflict
-		if stale {
-			lateReason = abortReasonStaleStartTs
-			lateDetail = abortDetailStaleStartTs
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-		if !aborted {
-			// The context was cancelled or timed out; no conflict occurred. No published category
-			// describes this, so report the context's own message with no category prefix rather
-			// than claiming a conflict that did not happen — the client degrades that to UNKNOWN.
-			// The gRPC status code stays codes.Aborted because the transaction genuinely did abort;
-			// switching to Canceled or DeadlineExceeded would change retry behaviour for clients
-			// that already treat Aborted as retryable.
-			lateDetail = err.Error()
-		}
-		aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
 	if err := s.proposeTxn(ctx, src); err != nil {
 		return err
 	}
 	if aborted {
-		return status.Error(codes.Aborted, abortReason(lateReason, lateDetail))
+		return status.Error(codes.Aborted, reason)
 	}
 	// proposeTxn sets src.Aborted when it finds no commit timestamp for this transaction, meaning
-	// something aborted it out of band while this commit was in flight — a TryAbort from a schema
-	// update, a drop-predicate, or the idle-transaction reaper. Nothing above set `aborted`, because
+	// something aborted it out of band while this commit was in flight: a TryAbort from a schema
+	// update, a drop-predicate, or the idle-transaction reaper, or a concurrent client Discard of the
+	// same transaction. Nothing above set `aborted`, because
 	// this commit itself decided to proceed. Returning nil here (as this did previously) loses the
 	// abort entirely: CommitOverNetwork then sees tctx.Aborted with no error and falls through to a
 	// bare dgo.ErrAborted, so the caller learns nothing. Report it instead.

@@ -6,6 +6,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -24,9 +25,12 @@ import (
 // silently without an integration cluster.
 
 func TestAbortReasonFormat(t *testing.T) {
-	require.Equal(t, "conflict: boom", abortReason(abortReasonConflict, "boom"))
-	require.Equal(t, "stale-startts: x", abortReason(abortReasonStaleStartTs, "x"))
-	require.Equal(t, "predicate-move: y", abortReason(abortReasonPredicateMove, "y"))
+	const legacy = "Transaction has been aborted. Please retry"
+	require.Equal(t, legacy, abortLegacyMessage, "the legacy sentence must never change")
+	require.Equal(t, "conflict: "+legacy+". boom", abortReason(abortReasonConflict, "boom"))
+	require.Equal(t, "stale-startts: "+legacy+". x", abortReason(abortReasonStaleStartTs, "x"))
+	require.Equal(t, "predicate-move: "+legacy+". y", abortReason(abortReasonPredicateMove, "y"))
+	require.Equal(t, legacy+". z", abortReason(abortReasonUncategorized, "z"))
 }
 
 // TestAbortVocabulary pins the entire published surface: every category, and every detail a client
@@ -66,11 +70,18 @@ func TestAbortVocabulary(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			wire := abortReason(tc.category, tc.rendered)
+			// Every abort, categorized or not, must still contain the legacy sentence. Clients that
+			// spot aborts by message text (dgraph-js-http requires "abort" and "retry") would
+			// otherwise treat it as a hard failure instead of retrying.
+			lower := strings.ToLower(wire)
+			require.Contains(t, lower, "abort")
+			require.Contains(t, lower, "retry")
+			legacy := abortLegacyMessage + ". " + tc.rendered
 			if tc.category == abortReasonUncategorized {
-				require.Equal(t, tc.rendered, wire, "a withheld cause must carry no prefix")
+				require.Equal(t, legacy, wire, "a withheld cause must carry no prefix")
 				return
 			}
-			require.Equal(t, tc.category+": "+tc.rendered, wire)
+			require.Equal(t, tc.category+": "+legacy, wire)
 		})
 	}
 
@@ -91,16 +102,16 @@ func TestAbortVocabulary(t *testing.T) {
 		require.Contains(t, abortDetailPreAborted, want,
 			"pre-abort detail should name the causes it cannot distinguish between")
 	}
-	require.True(t, strings.HasPrefix(abortDetailPreAborted, "Transaction has been aborted. Please retry"),
-		"pre-abort detail must keep the legacy sentence as its prefix; got %q", abortDetailPreAborted)
 
-	// Backwards-compatibility guard. This exact sentence must remain a prefix of the conflict
-	// detail: dgraph/cmd/alpha/upsert_test.go loops while the live server error contains it (so a
-	// change would exit the loop immediately and fail), query/query4_test.go and
-	// systest/unique_test.go assert Contains on it, and it is verbatim the text of dgo.ErrAborted,
-	// which user log-scrapers key off. Extend abortDetailConflict by appending only.
-	require.True(t, strings.HasPrefix(abortDetailConflict, "Transaction has been aborted. Please retry"),
-		"conflict detail must keep the legacy sentence as its prefix; got %q", abortDetailConflict)
+	// Backwards-compatibility guard: the conflict abort on the wire is byte-identical to what it was
+	// before abortReason took over the legacy sentence. dgraph/cmd/alpha/upsert_test.go loops while
+	// the live server error contains that sentence, and query/query4_test.go and
+	// systest/unique_test.go assert Contains on it.
+	require.Equal(t, "conflict: Transaction has been aborted. Please retry. Another transaction "+
+		"committed to one of the same keys. The conflicting key cannot be identified: it may be the "+
+		"data key written directly, or an index or count key derived from it. On an @upsert "+
+		"predicate the uid is excluded, so any two transactions writing the same value conflict",
+		conflictAbortReason(false))
 
 	// Wording of the checkPreds details, verbatim from before the abort-reason work.
 	require.Equal(t, "Unable to find group id in 1foo",
@@ -117,13 +128,15 @@ func TestAbortVocabulary(t *testing.T) {
 
 // TestAbortReasonUncategorized pins the withholding contract: when the server cannot substantiate
 // one of the published categories it emits the bare detail with no prefix, rather than borrowing a
-// category that would imply the wrong remedy. That is byte-identical to what a pre-feature server
-// sends, and the proposed dgraph4j, pydgraph and dgo parsers map a prefix-less message to UNKNOWN.
-// The absence of a colon-delimited prefix is the whole contract, so it must not regress.
+// category that would imply the wrong remedy. It starts with the same sentence a pre-feature server
+// sends for every abort, and the proposed dgraph4j, pydgraph and dgo parsers map a message without
+// a category prefix to UNKNOWN. The absence of a colon-delimited prefix is the whole contract, so it
+// must not regress.
 func TestAbortReasonUncategorized(t *testing.T) {
-	require.Equal(t, "Tablet for foo is nil",
+	require.Equal(t, "Transaction has been aborted. Please retry. Tablet for foo is nil",
 		abortReason(abortReasonUncategorized, "Tablet for foo is nil"))
-	require.Equal(t, "context canceled", abortReason(abortReasonUncategorized, "context canceled"))
+	require.Equal(t, "Transaction has been aborted. Please retry. context canceled",
+		abortReason(abortReasonUncategorized, "context canceled"))
 
 	// No withheld detail may begin with a token a client would parse as a real category, otherwise
 	// withholding would be silently reinterpreted as a category.
@@ -281,32 +294,53 @@ func TestHasConflictStaleStartTs(t *testing.T) {
 	require.False(t, o.isStaleStartTs(fresh), "must not be flagged stale")
 }
 
-// TestLateAbortStaleStartTs guards the late-abort path. Oracle.commit re-runs hasConflict and
-// collapses a stale start timestamp and a genuine keyCommit conflict into the same x.ErrConflict, so
-// before this fix every late abort was reported as "conflict" and the stale-startts category was
-// reachable only from the early check. Both causes are exercised here through the same discriminator
-// commit() now uses.
+// TestLateAbortStaleStartTs guards the late-abort path. Oracle.commit must tell a stale start
+// timestamp apart from a genuine keyCommit conflict itself, under its own lock, and lateAbortReason
+// must report each under its own category. Re-reading startTxnTs after Oracle.commit returned could
+// mislabel the abort, since a snapshot purge or lease renewal can move it in between.
 func TestLateAbortStaleStartTs(t *testing.T) {
 	o := &Oracle{}
 	o.Init()
 	defer o.close()
 	o.updateStartTxnTs(100)
 
-	// Stale: Oracle.commit rejects it, and the late path must report stale-startts, not conflict.
-	stale := &api.TxnContext{StartTs: 42, CommitTs: 200}
-	require.Error(t, o.commit(stale), "a stale start timestamp must be rejected by Oracle.commit")
-	require.True(t, o.isStaleStartTs(stale))
-	require.True(t, strings.HasPrefix(conflictAbortReason(o.isStaleStartTs(stale)),
-		abortReasonStaleStartTs+": "), "late stale abort must not be labelled a conflict")
+	stale := o.commit(&api.TxnContext{StartTs: 42, CommitTs: 200})
+	require.ErrorIs(t, stale, errStaleStartTs)
 
-	// A genuine write-write conflict above the floor still reports conflict.
 	first := &api.TxnContext{StartTs: 100, CommitTs: 150, Keys: []string{"a"}}
 	require.NoError(t, o.commit(first))
-	second := &api.TxnContext{StartTs: 120, CommitTs: 200, Keys: []string{"a"}}
-	require.Error(t, o.commit(second), "second writer of key a must conflict")
-	require.False(t, o.isStaleStartTs(second), "above the floor, so not stale")
-	require.True(t, strings.HasPrefix(conflictAbortReason(o.isStaleStartTs(second)),
-		abortReasonConflict+": "), "a real write-write conflict must stay a conflict")
+	conflict := o.commit(&api.TxnContext{StartTs: 120, CommitTs: 200, Keys: []string{"a"}})
+	require.ErrorIs(t, conflict, x.ErrConflict, "second writer of key a must conflict")
+
+	for _, tc := range []struct {
+		name           string
+		orcErr, ctxErr error
+		want           string
+	}{
+		{"stale start ts", stale, nil,
+			abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)},
+		{"write-write conflict", conflict, nil,
+			abortReason(abortReasonConflict, abortDetailConflict)},
+		{"cancelled context", nil, context.Canceled,
+			abortReason(abortReasonUncategorized, "context canceled")},
+		{"timed out context", nil, context.DeadlineExceeded,
+			abortReason(abortReasonUncategorized, "context deadline exceeded")},
+		// The oracle would have aborted regardless of the context, so its cause wins.
+		{"conflict wins over context", conflict, context.Canceled,
+			abortReason(abortReasonConflict, abortDetailConflict)},
+		{"stale wins over context", stale, context.DeadlineExceeded,
+			abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, aborted := lateAbortReason(tc.orcErr, tc.ctxErr)
+			require.True(t, aborted)
+			require.Equal(t, tc.want, got)
+		})
+	}
+
+	got, aborted := lateAbortReason(nil, nil)
+	require.False(t, aborted, "nothing rejected the commit")
+	require.Empty(t, got)
 }
 
 // TestDisplayPred pins that stripping the namespace for display can never panic on a hand-crafted
