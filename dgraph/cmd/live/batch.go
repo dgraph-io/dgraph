@@ -7,6 +7,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -123,7 +124,7 @@ func handleError(err error, isRetry bool) {
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != x.ErrConflict && err != dgo.ErrAborted:
+	case !errors.Is(err, x.ErrConflict) && !errors.Is(err, dgo.ErrAborted):
 		fmt.Printf("Error while mutating: %v s.Code %v\n", s.Message(), s.Code())
 	}
 }

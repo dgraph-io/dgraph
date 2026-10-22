@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -2055,7 +2056,7 @@ func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelUIDList() {
 
 				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err != nil && err != dgo.ErrAborted {
+				if err != nil && !errors.Is(err, dgo.ErrAborted) {
 					require.Failf(t, "unable to inserted uid with err: %s", err.Error())
 				}
 				if err == nil { // Successful insertion.
@@ -2106,7 +2107,7 @@ func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelUIDList() {
 
 				mu.DelNquads = []byte(fmt.Sprintf("<0x1> <friend> <%#x> .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err != nil && err != dgo.ErrAborted {
+				if err != nil && !errors.Is(err, dgo.ErrAborted) {
 					require.Failf(t, "unable to delete uid with err: %s", err.Error())
 				}
 				if err == nil { // Successful deletion.
@@ -2181,7 +2182,7 @@ func (ssuite *SystestTestSuite) TestCountIndexConcurrentSetDelScalarPredicate() 
 
 				mu.SetNquads = []byte(fmt.Sprintf("<0x1> <name> \"name%d\" .", id))
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err != nil && err != dgo.ErrAborted {
+				if err != nil && !errors.Is(err, dgo.ErrAborted) {
 					require.Fail(t, "unable to inserted uid with err: %s", err)
 				}
 			}
@@ -2374,7 +2375,7 @@ func (ssuite *SystestTestSuite) TestReverseCountIndex() {
 			mu.SetJson = []byte(`{"uid": "_:b", "friend": [{"uid": "` + id + `"}]}`)
 			for i := 0; i < 10; i++ {
 				_, err := dg.NewTxn().Mutate(context.Background(), mu)
-				if err == nil || err != dgo.ErrAborted {
+				if !errors.Is(err, dgo.ErrAborted) {
 					break
 				}
 			}
