@@ -1,8 +1,6 @@
 module github.com/dgraph-io/dgraph/v25
 
-go 1.27.0
-
-toolchain go1.27.3
+go 1.27.3
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
