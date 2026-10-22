@@ -778,6 +778,34 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 	return uidList, fcsList, nil
 }
 
+func shouldPrecalculateUids(q *pb.Query, srcFn *functionContext, facetsTree *facetsTree,
+	opts posting.ListOptions) bool {
+	if q.DoCount || q.FacetParam != nil || facetsTree != nil {
+		return false
+	}
+	if opts.Intersect != nil || (opts.First > 0 && opts.First < math.MaxInt32) {
+		return false
+	}
+	switch srcFn.fnType {
+	case compareScalarFn, hasFn, uidInFn:
+		return false
+	default:
+		return true
+	}
+}
+
+// Negative first ignores offset, while zero and MaxInt32 both mean that the worker must read
+// the whole list. Only positive bounded reads can safely stop after first + offset entries.
+func uidReadFirst(q *pb.Query) int {
+	if q.First <= 0 || q.First == math.MaxInt32 {
+		return int(q.First)
+	}
+	// A negative offset counts as no offset, which is how x.PageRange reads one when it paginates
+	// the result. Adding it instead would read fewer uids than were asked for, and a large enough
+	// one would push the read negative, which drops the bound altogether.
+	return int(int64(q.First) + int64(max(q.Offset, 0)))
+}
+
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
 // keys store uid posting lists.
 func (qs *queryState) handleUidPostings(
@@ -824,6 +852,7 @@ func (qs *queryState) handleUidPostings(
 	isList := schema.State().IsList(q.Attr)
 
 	outputs := make([]*pb.Result, numGo)
+	precalculateUids := shouldPrecalculateUids(q, srcFn, facetsTree, opts)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	calculate := func(start, end int) error {
@@ -855,7 +884,13 @@ func (qs *queryState) handleUidPostings(
 			}
 
 			// Get or create the posting list for an entity, attribute combination.
-			pl, err := qs.cache.GetUids(key)
+			var pl *posting.List
+			var err error
+			if precalculateUids {
+				pl, err = qs.cache.GetUids(key)
+			} else {
+				pl, err = qs.cache.Get(key)
+			}
 			if err != nil {
 				return err
 			}
@@ -936,7 +971,7 @@ func (qs *queryState) handleUidPostings(
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
 					Intersect: reqList,
-					First:     int(args.q.First + args.q.Offset),
+					First:     uidReadFirst(args.q),
 				}
 				plist, err := pl.Uids(topts)
 				if err != nil {
@@ -1120,7 +1155,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	opts := posting.ListOptions{
 		ReadTs:   q.ReadTs,
 		AfterUid: q.AfterUid,
-		First:    int(q.First + q.Offset),
+		First:    uidReadFirst(q),
 	}
 	// If we have srcFunc and Uids, it means its a filter. So we intersect.
 	if srcFn.fnType != notAFunction && q.UidList != nil && len(q.UidList.Uids) > 0 {

@@ -75,8 +75,14 @@ This would trigger G1 to get latest state. Wait for it.
 */
 
 // TODO: Have a event log for everything.
-func (s *Server) rebalanceTablets() {
-	ticker := time.Tick(opts.rebalanceInterval)
+func (s *Server) rebalanceTablets(interval time.Duration) {
+	// A zero interval disables automatic rebalancing; it must not reach time.Tick,
+	// which panics on non-positive durations.
+	if interval <= 0 {
+		glog.Infof("Automatic tablet rebalancing is disabled (rebalance_interval=%v).", interval)
+		return
+	}
+	ticker := time.Tick(interval)
 	for range ticker {
 		predicate, srcGroup, dstGroup := s.chooseTablet()
 		if len(predicate) == 0 {

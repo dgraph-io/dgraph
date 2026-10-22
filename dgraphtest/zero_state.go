@@ -23,11 +23,36 @@ type ZeroMember struct {
 	Leader bool   `json:"leader"`
 }
 
+// ZeroTablet is a minimal view of a tablet in Zero's /state response. The
+// predicate is in namespaced form (e.g. "0-name").
+type ZeroTablet struct {
+	Predicate string `json:"predicate"`
+	GroupID   uint32 `json:"groupId"`
+}
+
+// ZeroGroup is a minimal view of one group in Zero's /state response, keyed
+// fields only.
+type ZeroGroup struct {
+	Tablets map[string]ZeroTablet `json:"tablets"`
+}
+
 // ZeroState is the subset of Zero's /state response that we care about for
 // testing. It intentionally mirrors only the fields used by tests, keeping
 // unmarshal resilient to unrelated schema changes.
 type ZeroState struct {
-	Zeros map[string]ZeroMember `json:"zeros"`
+	Zeros  map[string]ZeroMember `json:"zeros"`
+	Groups map[string]ZeroGroup  `json:"groups"`
+}
+
+// TabletGroup returns the group serving the given namespaced predicate, or
+// (0, false) if no group serves it.
+func (s *ZeroState) TabletGroup(pred string) (uint32, bool) {
+	for _, g := range s.Groups {
+		if _, ok := g.Tablets[pred]; ok {
+			return g.Tablets[pred].GroupID, true
+		}
+	}
+	return 0, false
 }
 
 // GetZeroStateURL returns the full HTTP URL of a Zero's /state endpoint.

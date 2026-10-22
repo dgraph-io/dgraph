@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft/v3"
 	"go.etcd.io/etcd/raft/v3/raftpb"
-	"golang.org/x/net/trace"
 
 	"github.com/dgraph-io/dgraph/v25/x"
 )
@@ -58,8 +57,7 @@ import (
 // HardSync is set, msync is called after every write, which flushes those
 // writes to disk.
 type DiskStorage struct {
-	dir  string
-	elog trace.EventLog
+	dir string
 
 	meta *metaFile
 	wal  *wal
@@ -91,8 +89,6 @@ func InitEncrypted(dir string, encKey x.Sensitive) (*DiskStorage, error) {
 	if w.wal, err = openWal(dir); err != nil {
 		return nil, err
 	}
-
-	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.meta.snapshot()
 	if err != nil {
@@ -150,8 +146,6 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	w.elog.Printf("InitialState")
-	defer w.elog.Printf("Done")
 	hs, err = w.meta.HardState()
 	if err != nil {
 		return

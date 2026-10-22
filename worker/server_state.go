@@ -32,7 +32,7 @@ const (
 	BadgerDefaults = `compression=snappy; numgoroutines=8;`
 	RaftDefaults   = `learner=false; snapshot-after-entries=10000; ` +
 		`snapshot-after-duration=30m; pending-proposals=256; idx=; group=;`
-	SecurityDefaults = `token=; whitelist=;`
+	SecurityDefaults = `token=; whitelist=; anonymous=full;`
 	CDCDefaults      = `file=; kafka=; sasl_user=; sasl_password=; ca_cert=; client_cert=; ` +
 		`client_key=; sasl-mechanism=PLAIN; tls=false;`
 	LimitDefaults = `mutations=allow; query-edge=1000000; normalize-node=10000; ` +

@@ -34,10 +34,17 @@ func adminSecurityConfigured() bool {
 // A request is authorized when it carries the configured poor man's auth token
 // (--security "token=...") in the X-Dgraph-AuthToken header, or its source IP is loopback or
 // within a configured whitelist range (--security "whitelist=...").
+//
+// Under a closed --security "anonymous=..." posture the whitelist stops standing in for the
+// token. The two answer different questions -- where a request came from, and who sent it --
+// and the whole point of the posture is that only the second one counts.
 func isAdminRequestAuthorized(r *http.Request) bool {
 	if token := worker.Config.AuthToken; token != "" &&
 		subtle.ConstantTimeCompare([]byte(token), []byte(r.Header.Get("X-Dgraph-AuthToken"))) == 1 {
 		return true
+	}
+	if x.WorkerConfig.Anonymous.RequiresIdentityForCapability() {
+		return false
 	}
 	return x.IsIpWhitelisted(remoteHost(r))
 }
@@ -54,16 +61,19 @@ func isAdminRequestAuthorized(r *http.Request) bool {
 //
 //   - strict=false is used for the informational and allocation endpoints (/state, /assign),
 //     which existing tooling (dashboards, monitoring, loaders) reads over HTTP. Enforcement is
-//     opt-in: auth is applied only once the operator sets a token or whitelist via --security.
-//     Until then the request is allowed, preserving prior behavior. Network isolation of the
-//     port remains the primary control for these, as it already is for Zero's gRPC surface.
+//     opt-in: auth is applied only once the operator sets a token or whitelist via --security,
+//     or selects a closed --security "anonymous=..." posture. Until then the request is allowed,
+//     preserving prior behavior. Network isolation of the port remains the primary control for
+//     these, as it already is for Zero's gRPC surface.
 func adminAuthHandler(strict bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x.AddCorsHeaders(w)
 		if r.Method == http.MethodOptions {
 			return
 		}
-		if (strict || adminSecurityConfigured()) && !isAdminRequestAuthorized(r) {
+		enforce := strict || adminSecurityConfigured() ||
+			x.WorkerConfig.Anonymous.RequiresIdentityForCapability()
+		if enforce && !isAdminRequestAuthorized(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			x.SetStatus(w, x.ErrorUnauthorized,
 				"Request is not from a whitelisted IP and does not carry a valid X-Dgraph-AuthToken. "+

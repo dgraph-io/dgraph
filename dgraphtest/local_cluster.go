@@ -864,6 +864,15 @@ func (c *LocalCluster) waitUntilLogin() error {
 }
 
 func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
+	// The probes below are admin GraphQL operations, and every admin GraphQL
+	// operation carries IpWhitelistingMW — login included. On a cluster whose
+	// whitelist does not admit this process, neither can ever succeed, so wait on
+	// /probe/graphql instead: no whitelist middleware, no auth, and its whole
+	// purpose is answering "is GraphQL serving yet".
+	if c.conf.whitelist != defaultWhitelist {
+		return c.waitUntilGraphqlProbe()
+	}
+
 	hc, err := c.HTTPClient()
 	if err != nil {
 		return errors.Wrap(err, "error creating http client while graphql health check")
@@ -899,6 +908,33 @@ func (c *LocalCluster) waitUntilGraphqlHealthCheck() error {
 		}
 	}
 	return errors.Wrap(err, "error during graphql health check")
+}
+
+// waitUntilGraphqlProbe waits for GraphQL to serve using /probe/graphql, which
+// carries no IP-whitelist and no auth middleware. It is the probe to use when the
+// cluster's whitelist may not admit the test process.
+func (c *LocalCluster) waitUntilGraphqlProbe() error {
+	url, err := c.serverURL("alpha", "/probe/graphql")
+	if err != nil {
+		return errors.Wrap(err, "error getting graphql probe URL")
+	}
+
+	var lastErr error
+	for attempt := range 10 {
+		time.Sleep(waitDurBeforeRetry)
+		req, err := http.NewRequest(http.MethodGet, "http://"+url, nil)
+		if err != nil {
+			return errors.Wrap(err, "error building graphql probe request")
+		}
+		if _, lastErr = dgraphapi.DoReq(req); lastErr == nil {
+			log.Printf("[INFO] graphql probe succeeded for %v", c.conf.prefix)
+			return nil
+		}
+		if attempt > 5 {
+			log.Printf("[WARNING] problem during graphql probe: %v", lastErr)
+		}
+	}
+	return errors.Wrap(lastErr, "error during graphql probe")
 }
 
 // Upgrades the cluster to the provided dgraph version

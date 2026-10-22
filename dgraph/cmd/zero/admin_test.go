@@ -31,11 +31,14 @@ func resetSecurityConfig(t *testing.T) {
 	t.Helper()
 	prevToken := worker.Config.AuthToken
 	prevRanges := x.WorkerConfig.WhiteListedIPRanges
+	prevAnon := x.WorkerConfig.Anonymous
 	worker.Config.AuthToken = ""
 	x.WorkerConfig.WhiteListedIPRanges = nil
+	x.WorkerConfig.Anonymous = x.AnonymousFull
 	t.Cleanup(func() {
 		worker.Config.AuthToken = prevToken
 		x.WorkerConfig.WhiteListedIPRanges = prevRanges
+		x.WorkerConfig.Anonymous = prevAnon
 	})
 }
 
@@ -138,4 +141,63 @@ func TestZeroAdminAuth_WhitelistAllowsRemote(t *testing.T) {
 	rr, reached = doAdminRequest(t, true, "9.9.9.9:5555", "")
 	require.False(t, reached, "non-whitelisted remote request was admitted")
 	require.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+// TestZeroAdminAuth_ClosedPostureRequiresToken pins what --security
+// "anonymous=..." means on Zero. The whitelist and the token answer different
+// questions -- where a request came from, and who sent it -- and a closed posture
+// says only the second one counts. Without that, an operator who set
+// anonymous=data on Alpha would still have a Zero whose control plane admits
+// anyone inside the range.
+func TestZeroAdminAuth_ClosedPostureRequiresToken(t *testing.T) {
+	for _, posture := range []x.AnonymousPosture{x.AnonymousData, x.AnonymousNone} {
+		t.Run(posture.String(), func(t *testing.T) {
+			resetSecurityConfig(t)
+			x.WorkerConfig.Anonymous = posture
+			worker.Config.AuthToken = "s3cr3t"
+			ips, err := x.GetIPsFromString("0.0.0.0/0")
+			require.NoError(t, err)
+			x.WorkerConfig.WhiteListedIPRanges = ips
+
+			// Whitelisted and loopback callers are both refused without the token.
+			for _, addr := range []string{"203.0.113.7:12345", "127.0.0.1:12345"} {
+				rr, reached := doAdminRequest(t, false, addr, "")
+				require.False(t, reached, "%s must not reach the handler without the token", addr)
+				require.Equal(t, http.StatusUnauthorized, rr.Code)
+			}
+
+			// The token is sufficient, from anywhere.
+			rr, reached := doAdminRequest(t, false, "203.0.113.7:12345", "s3cr3t")
+			require.True(t, reached)
+			require.Equal(t, http.StatusOK, rr.Code)
+		})
+	}
+}
+
+// TestZeroAdminAuth_ClosedPostureEnforcesNonStrictRoutes: /state and /assign are
+// registered non-strict, so they are unguarded until an operator configures
+// something. A closed posture is that configuration.
+func TestZeroAdminAuth_ClosedPostureEnforcesNonStrictRoutes(t *testing.T) {
+	resetSecurityConfig(t)
+
+	// Control: with nothing configured, a non-strict route is open.
+	_, reached := doAdminRequest(t, false, "203.0.113.7:12345", "")
+	require.True(t, reached, "precondition: non-strict routes are open by default")
+
+	x.WorkerConfig.Anonymous = x.AnonymousData
+	rr, reached := doAdminRequest(t, false, "203.0.113.7:12345", "")
+	require.False(t, reached)
+	require.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+// TestZeroAdminAuth_FullPostureIsUnchanged is the v25 default: every existing
+// behavior of adminAuthHandler survives.
+func TestZeroAdminAuth_FullPostureIsUnchanged(t *testing.T) {
+	resetSecurityConfig(t)
+	ips, err := x.GetIPsFromString("203.0.113.0/24")
+	require.NoError(t, err)
+	x.WorkerConfig.WhiteListedIPRanges = ips
+
+	_, reached := doAdminRequest(t, true, "203.0.113.7:12345", "")
+	require.True(t, reached, "a whitelisted IP still stands in for a credential under full")
 }

@@ -55,6 +55,24 @@ type subscriber struct {
 
 // AddSubscriber tries to add subscription into the existing polling goroutine if it exists.
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
+// subscriberContext builds the context each subscription query runs under, from
+// the headers the subscriber presented when it connected.
+//
+// It resolves identity the same way the HTTP edge does, through
+// x.AttachRequestIdentity, rather than attaching only the access JWT. A poll is a
+// fresh query on every tick with no request of its own behind it, so these stored
+// headers are the only place a credential can come from. With the JWT alone, the
+// --security auth token never reached the context and no Principal was ever
+// resolved, so under --security "anonymous=none" every poll was refused -- even for
+// a subscriber that had presented a valid token or ACL JWT.
+//
+// The synthetic request has no RemoteAddr, so no peer is attached. Nothing on this
+// path reads one: a subscription runs ordinary GraphQL queries, which are
+// authorized on identity and predicates, never on the caller's address.
+func subscriberContext(h http.Header) context.Context {
+	return x.AttachRequestIdentity(context.Background(), &http.Request{Header: h})
+}
+
 func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error) {
 	p.RLock()
 	resolver := p.resolver
@@ -99,8 +117,7 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	p.Lock()
 	defer p.Unlock()
 
-	res := resolver.Resolve(x.AttachAccessJwt(context.Background(),
-		&http.Request{Header: req.Header}), req)
+	res := resolver.Resolve(subscriberContext(req.Header), req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}
@@ -179,8 +196,7 @@ func (p *Poller) poll(req *pollRequest) {
 			p.terminateSubscriptions(req.bucketID)
 		}
 
-		ctx := x.AttachAccessJwt(context.Background(), &http.Request{Header: req.graphqlReq.Header})
-		res := resolver.Resolve(ctx, req.graphqlReq)
+		res := resolver.Resolve(subscriberContext(req.graphqlReq.Header), req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
 

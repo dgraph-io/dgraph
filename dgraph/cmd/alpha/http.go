@@ -240,8 +240,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
+	ctx = x.AttachRequestIdentity(ctx, r)
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
@@ -467,7 +466,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	req.Hash = hash
 	req.CommitNow = commitNow
 
-	ctx := x.AttachAccessJwt(context.Background(), r)
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	resp, err := (&edgraph.Server{}).QueryNoGrpc(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -530,7 +529,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := x.AttachAccessJwt(context.Background(), r)
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	var response map[string]interface{}
 	if abort {
 		response, err = handleAbort(ctx, startTs, hash)
@@ -652,10 +651,9 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
 
-	// Pass in PoorMan's auth, ACL and IP information if present.
-	ctx := x.AttachAuthToken(context.Background(), r)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
+	// Pass in PoorMan's auth, ACL and IP information if present, and resolve the
+	// caller's identity from it.
+	ctx := x.AttachRequestIdentity(context.Background(), r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
@@ -705,7 +703,12 @@ func graphqlProbeHandler(gqlHealthStore *admin.GraphQLHealthStore, globalEpoch m
 		w.Header().Set("Content-Type", "application/json")
 		// lazy load the schema so that just by making a probe request,
 		// one can boot up GraphQL for their namespace
-		namespace := x.ExtractNamespaceHTTP(r)
+		namespace, err := x.ResolveTenantHTTP(r)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			x.Check2(fmt.Fprintf(w, `{"error":"%s"}`, err))
+			return
+		}
 		if err := admin.LazyLoadSchema(namespace); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			x.Check2(w.Write([]byte(fmt.Sprintf(`{"error":"%s"}`, err))))
@@ -732,10 +735,11 @@ func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
 	adminServer admin.IServeGraphQL) *schema.Response {
 	md := metadata.New(nil)
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
-	ctx = x.AttachAuthToken(ctx, r)
-	ctx = x.AttachJWTNamespace(ctx)
+	ctx = x.AttachRequestIdentity(ctx, r)
+	ctx, err := x.ResolveTenant(ctx)
+	if err != nil {
+		return schema.ErrorResponse(err)
+	}
 
 	return adminServer.ResolveWithNs(ctx, x.RootNamespace, gqlReq)
 }

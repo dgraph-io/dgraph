@@ -3,18 +3,5 @@
   "extends": ["github>dgraph-io/renovate-config"],
   "rangeStrategy": "widen",
   "ignorePaths": ["contrib/**"],
-  "baseBranches": ["main", "release/v24.1"],
-  "packageRules": [
-    {
-      "matchBaseBranches": ["release/v24.1"],
-      "groupName": "v24.1 patch",
-      "matchUpdateTypes": ["digest", "patch"],
-      "minimumReleaseAge": "3 days"
-    },
-    {
-      "matchBaseBranches": ["release/v24.1"],
-      "matchUpdateTypes": ["minor", "major"],
-      "enabled": false
-    }
-  ]
+  "baseBranches": ["main"]
 }

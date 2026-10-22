@@ -2,8 +2,8 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/dgraph-io/dgraph/blob/main/openvex.json",
   "author": "Dgraph maintainers",
-  "timestamp": "2026-07-30T00:00:00Z",
-  "version": 3,
+  "timestamp": "2026-10-22T00:00:00Z",
+  "version": 4,
   "statements": [
     {
       "vulnerability": {
@@ -79,12 +79,13 @@
     },
     {
       "vulnerability": {
-        "@id": "https://github.com/advisories/GHSA-qj98-gp63-54xj",
-        "name": "GHSA-qj98-gp63-54xj"
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-102748",
+        "name": "CVE-2026-102748",
+        "aliases": ["GHSA-qj98-gp63-54xj"]
       },
       "products": [{ "@id": "pkg:golang/github.com/dgraph-io/dgraph/v25" }],
       "status": "fixed",
-      "impact_statement": "Zero's administrative HTTP endpoints were registered without authentication, allowing an unauthenticated caller who could reach the HTTP port (default 6080) to take down the control plane via /removeNode. Fixed by commit c32f60413 (2026-07-23), released in 25.4.0. No CVE has been assigned and the advisory is unpublished as of this document's timestamp, so this statement is pre-emptive."
+      "impact_statement": "Zero's administrative HTTP endpoints were registered without authentication, allowing an unauthenticated caller who could reach the HTTP port (default 6080) to take down the control plane via /removeNode. Fixed by commit c32f60413 (2026-07-23), released in 25.4.0. GHSA-qj98-gp63-54xj records that fixed version, so this statement covers only nightly CI builds, which embed a Go pseudo-version that sorts below the tag."
     }
   ]
 }
