@@ -111,7 +111,7 @@ jemalloc:
 	@if [ -z "$(HAS_JEMALLOC)" ] ; then \
 		mkdir -p /tmp/jemalloc-temp && cd /tmp/jemalloc-temp ; \
 		echo "Downloading jemalloc" ; \
-		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 ; \
+		curl -f -s -L ${JEMALLOC_URL} -o jemalloc.tar.bz2 && \
 		tar xjf ./jemalloc.tar.bz2 ; \
 		cd jemalloc-5.3.1 ; \
 		sed -i.bak 's|std::__throw_bad_alloc()|throw std::bad_alloc()|g' src/jemalloc_cpp.cpp ; \
