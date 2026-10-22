@@ -443,6 +443,39 @@ func resolveTokenizers(updates []*pb.SchemaUpdate) error {
 			if !has {
 				return errors.Errorf("Invalid tokenizer %s", t)
 			}
+			if schema.GetList() && tokenizer.Name() == "bm25" {
+				// BM25 scores a single document (one value) per UID: document length
+				// and corpus statistics are not well-defined for a list predicate, and
+				// the bulk loader's per-(attr, uid) stats dedup would silently collapse
+				// distinct list values. The live path also rejects this combination in
+				// worker.ValidateSchema; enforcing it here covers every schema ingest
+				// path (alter, bulk, live loader).
+				return errors.Errorf(
+					"Tokenizer 'bm25' cannot be applied to list predicate: %s",
+					x.ParseAttr(schema.Predicate))
+			}
+			if schema.Lang && tokenizer.Name() == "bm25" {
+				// Lang-tagged values are indexed under lang-qualified keys and are only
+				// searchable through a pred@lang qualifier, which bm25() does not
+				// support. Allowing the combination silently makes every tagged value
+				// unsearchable (and its corpus-stats contribution asymmetric). Reject it
+				// until bm25 defines @lang semantics.
+				return errors.Errorf(
+					"Tokenizer bm25 cannot be used with @lang on predicate %s: "+
+						"bm25 does not support language-qualified values",
+					x.ParseAttr(schema.Predicate))
+			}
+			if schema.NoConflict && tokenizer.Name() == "bm25" {
+				// BM25 maintains corpus statistics (doc count, total terms) via a
+				// read-modify-write that relies on transaction conflict detection to
+				// serialize concurrent updates to the same stats bucket. @noconflict
+				// emits no conflict key, so concurrent updates would silently lose
+				// counts and drift avgDL/IDF. Reject the combination.
+				return errors.Errorf(
+					"Tokenizer bm25 cannot be used with @noconflict on predicate %s: "+
+						"BM25 corpus statistics require conflict detection to stay consistent",
+					x.ParseAttr(schema.Predicate))
+			}
 			tokenizerType, ok := types.TypeForName(tokenizer.Type())
 			x.AssertTrue(ok) // Type is validated during tokenizer loading.
 			if tokenizerType != typ {
