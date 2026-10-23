@@ -974,3 +974,31 @@ type Home @auth(
     favouriteMember: HomeMember
 }
 # union testing - end
+
+# vector similarity testing - start
+type VectorDocument @auth(
+    query: { or: [
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+        { rule: """
+            query($USER: String!) {
+                queryVectorDocument(filter: { owner: { eq: $USER } }) {
+                    id
+                }
+            }
+        """ }
+    ]}
+) {
+    id: ID!
+    owner: String! @search(by: [hash])
+    title: String
+    embedding: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
+}
+
+type AdminVectorDocument @auth(
+    query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+) {
+    id: ID!
+    title: String
+    embedding: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
+}
+# vector similarity testing - end
