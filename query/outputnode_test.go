@@ -212,6 +212,21 @@ func BenchmarkFastJsonNode2Chilren(b *testing.B) {
 	}
 }
 
+// BenchmarkEncoderLifecycle measures the per-request cost of acquiring and
+// releasing an encoder. This is the path /query → toFastJSON walks for every
+// query response, so it is a direct proxy for response allocation overhead.
+func BenchmarkEncoderLifecycle(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		enc := newEncoder()
+		// Touch the encoder so it is not optimized away.
+		_ = enc.newNode(enc.idForAttr(testAttr))
+		arenaPool.Put(enc.arena)
+		enc.alloc.Release()
+		enc.free()
+	}
+}
+
 func TestChildrenOrder(t *testing.T) {
 	enc := newEncoder()
 	root := enc.newNode(1)
