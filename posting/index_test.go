@@ -140,6 +140,22 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	txn := Oracle().RegisterStartTs(startTs)
 	txn.cache.SetIfAbsent(string(l.key), l)
 
+	// Production creates a schema entry for any new predicate in applyMutations before the
+	// mutation runs; mirror that here so tests that never declare one behave the same way.
+	if _, ok := schema.State().Get(context.Background(), edge.Attr); !ok {
+		su := &pb.SchemaUpdate{Predicate: edge.Attr}
+		if edge.ValueId != 0 && len(edge.Value) == 0 {
+			su.ValueType = pb.Posting_UID
+			su.List = true
+		} else {
+			su.ValueType = edge.ValueType
+			if su.ValueType == pb.Posting_DEFAULT {
+				su.ValueType = pb.Posting_STRING
+			}
+		}
+		schema.State().Set(edge.Attr, su)
+	}
+
 	mp := NewMutationPipeline(txn)
 	err := mp.Process(context.Background(), []*pb.DirectedEdge{edge})
 	require.NoError(t, err)
