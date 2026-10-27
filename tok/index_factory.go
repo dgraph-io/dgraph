@@ -64,6 +64,32 @@ func (fcs *FactoryCreateSpec) CreateIndex(name string) (index.VectorIndex[float3
 	return fcs.factory.CreateOrReplace(name, fcs.opts, 32)
 }
 
+// FindOrCreateIndex returns the long-lived VectorIndex for name, creating it
+// on first use. Mutation and query paths use this so in-memory index state
+// (partition routing centroids) survives across calls; index rebuilds keep
+// calling CreateIndex, whose CreateOrReplace swaps in the freshly built
+// instance.
+func (fcs *FactoryCreateSpec) FindOrCreateIndex(name string) (index.VectorIndex[float32], error) {
+	if fcs == nil || fcs.factory == nil {
+		return nil,
+			errors.Errorf(
+				"cannot find or create Index for '%s' with nil factory",
+				name)
+	}
+	return fcs.factory.FindOrCreate(name, fcs.opts, 32)
+}
+
+// Remove evicts the long-lived in-memory VectorIndex cached under name (if any).
+// Callers use this when a predicate is dropped so a later re-create starts from
+// a fresh instance rather than inheriting stale in-memory state (e.g. a cached
+// vector dimension or routing centroids) on a long-running Alpha.
+func (fcs *FactoryCreateSpec) Remove(name string) error {
+	if fcs == nil || fcs.factory == nil {
+		return nil
+	}
+	return fcs.factory.Remove(name)
+}
+
 func createIndexFactory(f index.IndexFactory[float32]) IndexFactory {
 	return &indexFactory{delegate: f}
 }
@@ -93,6 +119,12 @@ func (f *indexFactory) CreateOrReplace(
 	o opts.Options,
 	floatBits int) (index.VectorIndex[float32], error) {
 	return f.delegate.CreateOrReplace(name, o, floatBits)
+}
+func (f *indexFactory) FindOrCreate(
+	name string,
+	o opts.Options,
+	floatBits int) (index.VectorIndex[float32], error) {
+	return f.delegate.FindOrCreate(name, o, floatBits)
 }
 
 func (f *indexFactory) GetOptions(o opts.Options) string {
