@@ -821,12 +821,16 @@ func rewriteAsSimilarByIdQuery(
 func rewriteAsSimilarByEmbeddingQuery(
 	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
 
+	typ := query.Type()
 	dgQuery := rewriteAsQuery(query, auth)
+	// A query denied by static RBAC rules is already rewritten to an empty block.
+	if auth.evaluateStaticRules(typ) == schema.Negative {
+		return dgQuery
+	}
 
 	// Remember dgQuery[0].Children as result type for the last block
 	// in the rewritten query
 	result := dgQuery[0].Children
-	typ := query.Type()
 
 	// Get all the arguments from graphQL query
 	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
@@ -849,7 +853,9 @@ func rewriteAsSimilarByEmbeddingQuery(
 	// Save vectorString as a query variable, $search_vector
 	queryArgs := dgQuery[0].Args
 	if queryArgs == nil {
+		// Auth rewriting moves the query arguments to its root block.
 		queryArgs = make(map[string]string)
+		dgQuery[0].Args = queryArgs
 	}
 	queryArgs["$search_vector"] = " float32vector = \"" + string(vecStr) + "\""
 	thisFilter := &dql.FilterTree{
