@@ -133,7 +133,7 @@ func euclideanDistance[T c.Float](a, b []T, floatBits int) (T, error) {
 }
 
 func EuclideanDistanceSq[T c.Float](a, b []T, floatBits int) (T, error) {
-	return applyDistanceFunction(a, b, floatBits, "euclidean distance", vek32.Distance, vek.Distance)
+	return applyDistanceFunction(a, b, floatBits, "euclidean distance", euclideanF32, euclideanF64)
 }
 
 // Used for distance, since shorter distance is better
