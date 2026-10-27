@@ -240,7 +240,9 @@ func runRestoreCmd() error {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			if _, err = zc.AssignIds(ctx, &pb.Num{Val: val, Type: typ}); err != nil {
+			// Bump rather than lease val more ids, as the online restore does: the lease must reach
+			// the backup's max, and a repeated restore must not move it again.
+			if err := worker.BumpLease(ctx, zc, val, typ); err != nil {
 				fmt.Printf("Failed to assign %s %d in Zero: %v\n",
 					pb.NumLeaseType_name[int32(typ)], val, err)
 				return err
