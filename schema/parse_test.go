@@ -148,6 +148,20 @@ func TestSchemaIndex_Error1(t *testing.T) {
 	require.Error(t, ParseBytes([]byte(schemaIndexVal2), 1))
 }
 
+// BM25 corpus-stats maintenance relies on transaction conflict detection, which
+// @noconflict disables — the combination would drift avgDL/IDF and must be rejected.
+func TestSchemaBM25NoConflict_Error(t *testing.T) {
+	err := ParseBytes([]byte(`description: string @index(bm25) @noconflict .`), 1)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bm25")
+	require.Contains(t, err.Error(), "noconflict")
+}
+
+// The guard is specific to bm25: a bm25 index without @noconflict is valid.
+func TestSchemaBM25WithoutNoConflict(t *testing.T) {
+	require.NoError(t, ParseBytes([]byte(`description: string @index(bm25) .`), 1))
+}
+
 var schemaIndexVal3Uid = `
 person: uid @index .
 `

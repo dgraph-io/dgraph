@@ -318,6 +318,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

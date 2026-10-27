@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"sort"
@@ -268,6 +269,14 @@ type SubGraph struct {
 	// In graph terms, a list is a slice of outgoing edges from a node.
 	uidMatrix []*pb.List
 
+	// bm25Scores maps a matched document UID to its BM25 relevance score. It is
+	// snapshotted from the (uid-aligned) worker result the moment it arrives, before
+	// filters or pagination can shrink/reorder uidMatrix out of step with valueMatrix.
+	// populateUidValVar binds the score variable from this map keyed by UID, so the
+	// score stays correct even when the bm25 block carries an @filter. nil unless the
+	// source function is bm25.
+	bm25Scores map[uint64]float64
+
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
 	facetsMatrix []*pb.FacetsList
@@ -315,6 +324,14 @@ func (sg *SubGraph) IsGroupBy() bool {
 // IsInternal returns whether this subgraph is marked as internal.
 func (sg *SubGraph) IsInternal() bool {
 	return sg.Params.IsInternal
+}
+
+// isBM25 reports whether this subgraph's source function is bm25. The bm25 result
+// carries per-UID scores that the query layer snapshots and binds as a value
+// variable, and its worker-side pagination is score-ordered, so several shared
+// paths special-case it through this single predicate.
+func (sg *SubGraph) isBM25() bool {
+	return sg.SrcFunc != nil && sg.SrcFunc.Name == "bm25"
 }
 
 func (sg *SubGraph) createSrcFunction(gf *dql.Function) {
@@ -1591,6 +1608,24 @@ func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*Su
 			Value: int64(len(sg.SrcUIDs.Uids)),
 		}
 		doneVars[sg.Params.Var].Vals.Set(math.MaxUint64, val)
+	case sg.isBM25() && sg.bm25Scores != nil:
+		// A query-side ranker (BM25) binds its per-document relevance score as a
+		// value variable. We populate BOTH the matched uid set and the uid->score
+		// map so the variable works with uid(var), val(var) and orderdesc: val(var)
+		// — surfacing and ordering by score without a pseudo-predicate or a
+		// ParentVars channel. Scores are looked up from the uid-keyed snapshot taken
+		// at result time (sg.bm25Scores), so they remain correct even after an
+		// @filter on the bm25 block shrinks DestUIDs.
+		if v, ok = doneVars[sg.Params.Var]; !ok {
+			v = varValue{Vals: types.NewShardedMap(), path: sgPath, strList: sg.valueMatrix}
+		}
+		v.Uids = sg.DestUIDs
+		for _, uid := range sg.DestUIDs.GetUids() {
+			if score, has := sg.bm25Scores[uid]; has {
+				v.Vals.Set(uid, types.Val{Tid: types.FloatID, Value: score})
+			}
+		}
+		doneVars[sg.Params.Var] = v
 	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
 		// 3. A uid variable. The variable could be defined in one of two places.
 		// a) Either on the actual predicate.
@@ -2173,6 +2208,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		rch <- nil
 		return
 	}
+
 	var err error
 	switch {
 	case parent == nil && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid":
@@ -2275,6 +2311,25 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			sg.List = result.List
 			sg.vectorMetrics = result.VectorMetrics
 
+			// bm25 returns its per-document scores in valueMatrix positionally aligned
+			// with uidMatrix[0]. Snapshot them into a uid-keyed map now, while the two
+			// are still aligned — later filters/pagination shrink uidMatrix without
+			// touching valueMatrix, which would otherwise misbind scores to UIDs.
+			if sg.isBM25() && len(result.UidMatrix) > 0 {
+				uids := result.UidMatrix[0].GetUids()
+				sg.bm25Scores = make(map[uint64]float64, len(uids))
+				for idx, uid := range uids {
+					if idx >= len(result.ValueMatrix) || len(result.ValueMatrix[idx].Values) == 0 {
+						continue
+					}
+					tv := result.ValueMatrix[idx].Values[0]
+					if len(tv.Val) != 8 {
+						continue
+					}
+					sg.bm25Scores[uid] = math.Float64frombits(binary.LittleEndian.Uint64(tv.Val))
+				}
+			}
+
 			if sg.Params.DoCount {
 				if len(sg.Filters) == 0 {
 					// If there is a filter, we need to do more work to get the actual count.
@@ -2373,9 +2428,12 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	}
 
 	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
-		// for `has` function when there is no filtering and ordering, we fetch
-		// correct paginated results so no need to apply pagination here.
-		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil && sg.SrcFunc.Name == "has") {
+		// For `has` and `bm25`, the worker already returns correctly paginated
+		// results (bm25 paginates over score order, which the uid-sorted query-layer
+		// pagination cannot reproduce), so applying pagination again here would
+		// double-apply first/offset. Skip it when there is no filtering/ordering.
+		if !(len(sg.Filters) == 0 && sg.SrcFunc != nil &&
+			(sg.SrcFunc.Name == "has" || sg.isBM25())) {
 			// There is no ordering. Just apply pagination and return.
 			if err = sg.applyPagination(ctx); err != nil {
 				rch <- err
@@ -2452,6 +2510,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 
 		child.SrcUIDs = sg.DestUIDs // Make the connection.
+
 		if child.IsInternal() {
 			// We dont have to execute these nodes.
 			continue
@@ -2751,7 +2810,7 @@ func isValidArg(a string) bool {
 func isValidFuncName(f string) bool {
 	switch f {
 	case "anyofterms", "allofterms", "val", "regexp", "anyoftext", "alloftext", "ngram",
-		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to":
+		"has", "uid", "uid_in", "anyof", "allof", "type", "match", "similar_to", "bm25":
 		return true
 	}
 	return isInequalityFn(f) || types.IsGeoFunc(f)
