@@ -383,7 +383,7 @@
         Tweets_5 as User.tweets
       }
       UserRoot as var(func: uid(User_1)) @filter((uid(User_Auth2) AND uid(User_Auth3)))
-      User_1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
+      User_1 as var(func: eq(User.username, "userxyz")) @filter(type(User))
       User_Auth2 as var(func: uid(User_1)) @filter(eq(User.username, "user1")) @cascade
       User_Auth3 as var(func: uid(User_1)) @filter(eq(User.isPublic, true)) @cascade
     }
