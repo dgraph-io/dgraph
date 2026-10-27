@@ -137,6 +137,46 @@ func TestStringJsonMarshal(t *testing.T) {
 	}
 }
 
+// TestValToBytesByteSlice covers the []byte payload branch for StringID and
+// DefaultID. Callers (e.g. worker/task.go, query/query.go) construct
+// types.Val with Value typed as []byte; the JSON output must be a plain
+// quoted string identical to json.Marshal(string(b)) — not the base64
+// encoding that json.Marshal would produce for a raw []byte.
+func TestValToBytesByteSlice(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"ascii", "hello world"},
+		{"empty", ""},
+		{"with-quote", `a"b`},
+		{"with-backslash", `a\b`},
+		{"control-chars", "a\nb\tc"},
+		{"html-unsafe", "<script>&"},
+		{"unicode", "héllo 🌍"},
+		{"line-separator", "a b"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, tid := range []types.TypeID{types.StringID, types.DefaultID} {
+				expected, err := json.Marshal(tc.in)
+				require.NoError(t, err)
+
+				gotBytes, err := valToBytes(types.Val{Tid: tid, Value: []byte(tc.in)})
+				require.NoError(t, err)
+				require.Equal(t, expected, gotBytes,
+					"tid=%v []byte input must produce plain JSON string, not base64", tid)
+
+				gotString, err := valToBytes(types.Val{Tid: tid, Value: tc.in})
+				require.NoError(t, err)
+				require.Equal(t, gotBytes, gotString,
+					"tid=%v []byte and string payloads must yield identical JSON", tid)
+			}
+		})
+	}
+}
+
 func TestFastJsonNode(t *testing.T) {
 	attrId := uint16(20)
 	scalarVal := bytes.Repeat([]byte("a"), 160)
