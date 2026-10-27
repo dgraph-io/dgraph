@@ -14,6 +14,7 @@ import (
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
 )
 
@@ -918,5 +919,32 @@ func TestSearchReturnsCorrectOrderForAllMetrics(t *testing.T) {
 				t.Errorf("Expected uid 10 or 20 to be first, but got uid 30 (farthest vector)")
 			}
 		})
+	}
+}
+
+// TestAddPathNodeNonPositiveMaxResults is a regression test for a crash reachable
+// from an unvalidated similar_to number-of-neighbors argument. A non-positive
+// maxResults made effectiveMaxLen negative and panicked addPathNode: a negative
+// slice bound (slr.neighbors[:-1]) for a negative value, and an empty-slice index
+// (slr.neighbors[0]) once the neighbors were truncated to zero. Both must now be
+// handled without panicking.
+func TestAddPathNodeNonPositiveMaxResults(t *testing.T) {
+	simType := GetSimType[float64](Euclidean, 64)
+	for _, maxResults := range []int{-1, 0} {
+		slr := newLayerResult[float64](0)
+		slr.setFirstPathNode(persistentHeapElement[float64]{value: 0.1, index: 1})
+
+		require.NotPanicsf(t, func() {
+			slr.addPathNode(persistentHeapElement[float64]{value: 0.2, index: 2}, simType, maxResults)
+		}, "addPathNode panicked with maxResults=%d", maxResults)
+
+		// A non-positive limit clamps effectiveMaxLen to 0, so the neighbor set
+		// truncates to empty and the bottom-of-path append is skipped. Pin that
+		// resulting state, not just the absence of a panic: neighbors is empty and
+		// the path is left exactly as setFirstPathNode set it.
+		require.Emptyf(t, slr.neighbors,
+			"neighbors should truncate to empty for maxResults=%d", maxResults)
+		require.Equalf(t, []uint64{1}, slr.path,
+			"path should be unchanged for maxResults=%d", maxResults)
 	}
 }

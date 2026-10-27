@@ -361,6 +361,10 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		if err != nil {
 			return fmt.Errorf("invalid value for number of neighbors: %s", q.SrcFunc.Args[0])
 		}
+		if numNeighbors < 1 {
+			return fmt.Errorf(
+				"invalid value for number of neighbors, must be a positive integer: %d", numNeighbors)
+		}
 		cspec, err := pickFactoryCreateSpec(ctx, args.q.Attr)
 		if err != nil {
 			return err
