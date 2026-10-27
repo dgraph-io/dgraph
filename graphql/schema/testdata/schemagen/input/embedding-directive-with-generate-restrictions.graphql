@@ -1,0 +1,5 @@
+type Product @generate(mutation: {update: false}) {
+  id: String! @id
+  title: String @search(by: [term])
+  product_vector: [Float!] @embedding @search(by: ["hnsw(metric: cosine)"])
+}
