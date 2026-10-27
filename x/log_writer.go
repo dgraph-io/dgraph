@@ -307,10 +307,25 @@ func (l *LogWriter) open() error {
 }
 
 func backupName(name string) string {
+	return nextBackupName(name, time.Now().UTC())
+}
+
+// nextBackupName returns the backup path for name stamped with ts. backupTimeFormat only has millisecond resolution,
+// so two rotations can land on the same stamp; renaming onto an existing backup (or compressing over its .gz) would
+// silently drop the older one. On a collision the stamp is pushed forward until neither form exists, which keeps the
+// name parseable by processOldLogFiles and the backups ordered.
+func nextBackupName(name string, ts time.Time) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().UTC().Format(backupTimeFormat)
-	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
+	for {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, ts.Format(backupTimeFormat), ext))
+		_, errPlain := os.Lstat(candidate)
+		_, errGz := os.Lstat(candidate + ".gz")
+		if errPlain != nil && errGz != nil {
+			return candidate
+		}
+		ts = ts.Add(time.Millisecond)
+	}
 }
 
 func compress(src string) error {
@@ -424,8 +439,8 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 			continue
 		}
 
-		_, e := prefixAndExt(fp)
-		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
+		name := strings.TrimSuffix(f.Name(), ".gz")
+		tsString := name[len(defPrefix) : len(name)-len(defExt)]
 		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue

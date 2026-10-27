@@ -16,9 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,7 +75,6 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		require.Equal(t, n, len(msg)+20, "write length is not equal")
 	}
 
-	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
 	file, err := os.Open(path)
 	require.NoError(t, err)
@@ -120,23 +121,26 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
+	var wg sync.WaitGroup
 	for range 10 {
-		go func() {
+		wg.Go(func() {
 			for range 1000 {
 				n, err := lw.Write(msg)
-				require.NoError(t, err)
-				require.Equal(t, n, len(msg), "write length is not equal")
+				assert.NoError(t, err)
+				assert.Equal(t, len(msg), n, "write length is not equal")
 			}
-		}()
+		})
 	}
-	time.Sleep(time.Second * 10)
+	wg.Wait()
 	require.NoError(t, lw.Close())
 	files, err := os.ReadDir("./log_test")
 	require.NoError(t, err)
 
 	lineCount := 0
 	for _, f := range files {
-		file, _ := os.Open(filepath.Join(filepath.Dir(path), f.Name()))
+		file, err := os.Open(filepath.Join(filepath.Dir(path), f.Name()))
+		require.NoError(t, err)
+		defer file.Close()
 
 		var fileScanner *bufio.Scanner
 		if strings.HasSuffix(file.Name(), ".gz") {
@@ -154,5 +158,28 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 		}
 	}
 
-	require.Equal(t, lineCount, 10000)
+	require.Equal(t, 10000, lineCount)
+}
+
+func TestNextBackupName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.log")
+	ts := time.Date(2026, 10, 27, 9, 40, 12, 682_000_000, time.UTC)
+
+	first := nextBackupName(path, ts)
+	require.Equal(t, filepath.Join(dir, "audit-2026-10-27T09-40-12.682.log"), first)
+
+	// A backup already rotated within the same millisecond must not be overwritten.
+	require.NoError(t, os.WriteFile(first, nil, 0600))
+	second := nextBackupName(path, ts)
+	require.Equal(t, filepath.Join(dir, "audit-2026-10-27T09-40-12.683.log"), second)
+
+	// Nor may one that has already been compressed, since compress() truncates the .gz.
+	require.NoError(t, os.WriteFile(second+".gz", nil, 0600))
+	require.Equal(t, filepath.Join(dir, "audit-2026-10-27T09-40-12.684.log"), nextBackupName(path, ts))
+
+	// Bumped names, plain or compressed, must stay parseable so they still age out.
+	toRemove, toKeep, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.Len(t, append(toRemove, toKeep...), 2)
 }
