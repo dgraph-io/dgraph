@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/badger/v4"
+	bpb "github.com/dgraph-io/badger/v4/pb"
 	"github.com/dgraph-io/dgraph/v25/codec"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -642,4 +643,118 @@ func TestPostingListRead(t *testing.T) {
 	addEdgeToUID(t, attr, 1, 6, 13, 14)
 	addEdgeToUID(t, attr, 1, 7, 15, 16)
 	assertLength(17, 3)
+}
+
+// uidsAt reads the uid list of key the way a query does.
+func uidsAt(t *testing.T, key []byte, readTs uint64) []uint64 {
+	t.Helper()
+	pl, err := NoCache(readTs).GetUids(key)
+	require.NoError(t, err)
+	uids, err := pl.Uids(ListOptions{ReadTs: readTs})
+	require.NoError(t, err)
+	return uids.Uids
+}
+
+// rollUpKey rolls key up at rollupTs, writes the result to pstore and returns it.
+func rollUpKey(t *testing.T, key []byte, rollupTs uint64) *bpb.KV {
+	t.Helper()
+	l, err := GetNoStore(key, rollupTs)
+	require.NoError(t, err)
+	kvs, err := l.Rollup(nil, rollupTs)
+	require.NoError(t, err)
+	require.Len(t, kvs, 1)
+	RemoveCacheFor(key)
+	writer := NewTxnWriter(pstore)
+	require.NoError(t, writer.Write(&bpb.KVList{Kv: kvs}))
+	require.NoError(t, writer.Flush())
+	return kvs[0]
+}
+
+// addDeleteAllToUID commits <src> <attr> * . through Txn.UpdateCachedKeys, like a real commit.
+func addDeleteAllToUID(t *testing.T, attr string, src uint64, startTs, commitTs uint64) {
+	t.Helper()
+	edge := &pb.DirectedEdge{
+		Attr:   attr,
+		Entity: src,
+		Value:  []byte(x.Star),
+		Op:     pb.DirectedEdge_DEL,
+	}
+	l, err := GetNoStore(x.DataKey(attr, src), startTs)
+	require.NoError(t, err)
+	addMutation(t, l, edge, Del, startTs, commitTs, false)
+}
+
+// A read at snapshot S must not see a delete committed at C > S after rollup has rewritten the
+// emptied key as a BitEmptyPosting at C+1. That needs ReadPostingList to set minTs for the marker.
+func TestReadAtSnapshotAfterEmptyRollup(t *testing.T) {
+	useMemoryLayer(t, 10<<20) // TestMain runs without the posting list cache.
+	require.NoError(t, pstore.DropAll())
+	attr := x.AttrInRootNamespace("emptyRollupSnapshot")
+	key := x.DataKey(attr, 1)
+
+	const (
+		addTs      = 2
+		snapshotTs = 3
+		delTs      = 5
+		rollupTs   = 10
+	)
+
+	addEdgeToUID(t, attr, 1, 2, addTs-1, addTs)
+	addDelEdgeToUID(t, attr, 1, 2, delTs-1, delTs)
+	require.Equal(t, []uint64{2}, uidsAt(t, key, snapshotTs))
+
+	kv := rollUpKey(t, key, rollupTs)
+	require.Equal(t, []byte{BitEmptyPosting}, kv.UserMeta)
+	require.Equal(t, uint64(delTs+1), kv.Version)
+
+	require.Equal(t, []uint64{2}, uidsAt(t, key, snapshotTs))
+	require.Empty(t, uidsAt(t, key, delTs))
+}
+
+// After a restart the Raft log replays commits that are already part of the rolled-up version.
+// Folding such a commit into the cached list puts a delta below minTs into it, and a delete-all
+// there makes every read of the entry fail in pIterator.seek. updateItemInCache must drop the entry.
+func TestReplayedCommitBelowMinTsKeepsCachedListReadable(t *testing.T) {
+	const (
+		addTs    = 2
+		delTs    = 5
+		readdTs  = 7
+		rollupTs = 10
+	)
+
+	for _, tc := range []struct {
+		name     string
+		readd    bool
+		wantMeta byte
+		wantVer  uint64
+		want     []uint64
+	}{
+		{name: "empty", wantMeta: BitEmptyPosting, wantVer: delTs + 1, want: nil},
+		{name: "complete", readd: true, wantMeta: BitCompletePosting, wantVer: readdTs + 1, want: []uint64{3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			useMemoryLayer(t, 10<<20)
+			require.NoError(t, pstore.DropAll())
+			attr := x.AttrInRootNamespace("replayBelowMinTs" + tc.name)
+			key := x.DataKey(attr, 1)
+
+			addEdgeToUID(t, attr, 1, 2, addTs-1, addTs)
+			addDeleteAllToUID(t, attr, 1, delTs-1, delTs)
+			if tc.readd {
+				addEdgeToUID(t, attr, 1, 3, readdTs-1, readdTs)
+			}
+
+			kv := rollUpKey(t, key, rollupTs)
+			require.Equal(t, []byte{tc.wantMeta}, kv.UserMeta)
+			require.Equal(t, tc.wantVer, kv.Version)
+
+			// A cache entry serves minTs <= readTs <= maxTs; the rollup's version is both.
+			readTs := kv.Version
+			require.ElementsMatch(t, tc.want, uidsAt(t, key, readTs))
+
+			// Replay the delete-all with its original start and commit ts.
+			addDeleteAllToUID(t, attr, 1, delTs-1, delTs)
+			require.ElementsMatch(t, tc.want, uidsAt(t, key, readTs))
+		})
+	}
 }
