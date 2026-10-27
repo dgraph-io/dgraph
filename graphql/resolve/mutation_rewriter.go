@@ -77,12 +77,13 @@ type deleteRewriter struct {
 // of add a new object for the XID and another for link to an existing XID, depending
 // on what condition evaluates to true in the upsert.
 type mutationFragment struct {
-	queries    []*dql.GraphQuery
-	conditions []string
-	fragment   interface{}
-	deletes    []interface{}
-	check      resultChecker
-	newNodes   map[string]schema.Type
+	queries       []*dql.GraphQuery
+	conditions    []string
+	fragment      interface{}
+	deletes       []interface{}
+	check         resultChecker
+	newNodes      map[string]schema.Type
+	affectedNodes map[string]schema.Type
 }
 
 // xidMetadata is used to handle cases where we get multiple objects which have same xid value in a
@@ -446,6 +447,7 @@ func (arw *AddRewriter) Rewrite(
 	// Example
 	// newNodes["Project3"] = schema.Type(Project)
 	newNodes := make(map[string]schema.Type)
+	affectedNodes := make(map[string]schema.Type)
 	// mutationsAll stores mutations computed from fragment. These are returned as Mutation parameter
 	// of UpsertMutation
 	var mutationsAll []*dgoapi.Mutation
@@ -540,13 +542,15 @@ func (arw *AddRewriter) Rewrite(
 		}
 		queries = append(queries, frag.queries...)
 		copyTypeMap(frag.newNodes, newNodes)
+		copyAffectedNodeMap(frag.affectedNodes, affectedNodes)
 	}
 
 	if len(mutationsAll) > 0 {
 		ret = append(ret, &UpsertMutation{
-			Query:     queries,
-			Mutations: mutationsAll,
-			NewNodes:  newNodes,
+			Query:         queries,
+			Mutations:     mutationsAll,
+			NewNodes:      newNodes,
+			AffectedNodes: affectedNodes,
 		})
 	}
 
@@ -605,6 +609,7 @@ func (urw *UpdateRewriter) Rewrite(
 	// Example
 	// newNodes["Project3"] = schema.Type(Project)
 	newNodes := make(map[string]schema.Type)
+	affectedNodes := make(map[string]schema.Type)
 	// mutations stores mutations computed from fragment. These are returned as Mutation parameter
 	// of UpsertMutation
 	var mutations []*dgoapi.Mutation
@@ -732,16 +737,19 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if urw.setFrag != nil {
 		copyTypeMap(urw.setFrag.newNodes, newNodes)
+		copyAffectedNodeMap(urw.setFrag.affectedNodes, affectedNodes)
 	}
 	if urw.delFrag != nil {
 		copyTypeMap(urw.delFrag.newNodes, newNodes)
+		copyAffectedNodeMap(urw.delFrag.affectedNodes, affectedNodes)
 	}
 
 	if len(mutations) > 0 {
 		ret = append(ret, &UpsertMutation{
-			Query:     queries,
-			Mutations: mutations,
-			NewNodes:  newNodes,
+			Query:         queries,
+			Mutations:     mutations,
+			NewNodes:      newNodes,
+			AffectedNodes: affectedNodes,
 		})
 	}
 	return ret, retErrors
@@ -1301,6 +1309,7 @@ func asIDReference(
 	result["uid"] = val // val will contain the UID string.
 
 	addInverseLink(result, srcField, srcUID)
+	recordAffectedNode(frag, srcField, val.(string), isRemove)
 
 	// Delete any additional old edges from inverse nodes in case this is not a remove
 	// as part of an Update Mutation.
@@ -1653,9 +1662,10 @@ func rewriteObject(
 
 	updateFromChildren := func(parentFragment, childFragment *mutationFragment) {
 		copyTypeMap(childFragment.newNodes, parentFragment.newNodes)
-		frag.queries = append(parentFragment.queries, childFragment.queries...)
-		frag.deletes = append(parentFragment.deletes, childFragment.deletes...)
-		frag.check = func(lcheck, rcheck resultChecker) resultChecker {
+		copyAffectedNodeMap(childFragment.affectedNodes, parentFragment.affectedNodes)
+		parentFragment.queries = append(parentFragment.queries, childFragment.queries...)
+		parentFragment.deletes = append(parentFragment.deletes, childFragment.deletes...)
+		parentFragment.check = func(lcheck, rcheck resultChecker) resultChecker {
 			return func(m map[string]interface{}) error {
 				return schema.AppendGQLErrs(lcheck(m), rcheck(m))
 			}
@@ -2427,15 +2437,36 @@ func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition,
 
 func newFragment(f interface{}) *mutationFragment {
 	return &mutationFragment{
-		fragment: f,
-		check:    func(m map[string]interface{}) error { return nil },
-		newNodes: make(map[string]schema.Type),
+		fragment:      f,
+		check:         func(m map[string]interface{}) error { return nil },
+		newNodes:      make(map[string]schema.Type),
+		affectedNodes: make(map[string]schema.Type),
 	}
 }
 
 func copyTypeMap(from, to map[string]schema.Type) {
 	for name, typ := range from {
 		to[name] = typ
+	}
+}
+
+// recordAffectedNode tracks an existing node that will be modified through an inverse
+// edge when a nested object links to it.
+func recordAffectedNode(
+	frag *mutationFragment,
+	srcField schema.FieldDefinition,
+	parentUID string,
+	isRemove bool) {
+
+	if isRemove || srcField == nil || srcField.Inverse() == nil {
+		return
+	}
+	frag.affectedNodes[parentUID] = srcField.Type()
+}
+
+func copyAffectedNodeMap(from, to map[string]schema.Type) {
+	for uid, typ := range from {
+		to[uid] = typ
 	}
 }
 
