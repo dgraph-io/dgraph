@@ -1157,6 +1157,34 @@ func TestLenFunctionInsideUidError(t *testing.T) {
 	require.Contains(t, err.Error(), "len function only allowed inside inequality")
 }
 
+func TestValFunctionInsideUidError(t *testing.T) {
+	queries := []string{
+		`{
+			var(func: uid(0x0a)) {
+				a as count(friends)
+			}
+
+			me(func: uid(val(a))) {
+				name
+			}
+		}`,
+		`{
+			var(func: uid(0x0a)) {
+				a as count(friends)
+			}
+
+			me(func: uid(0x0a)) @filter(uid(val(a))) {
+				name
+			}
+		}`,
+	}
+	for _, query := range queries {
+		_, err := Parse(Request{Str: query})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "val() is not allowed inside uid(), use uid(a) instead")
+	}
+}
+
 func TestLenFunctionWithNoVariable(t *testing.T) {
 	query := `
 	{
