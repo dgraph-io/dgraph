@@ -62,7 +62,7 @@ func TestAclCache(t *testing.T) {
 		"the anonymous user should not have access when the acl cache is empty")
 }
 
-func TestAclCacheMergesSameUserAcrossNamespaces(t *testing.T) {
+func TestAclCacheIsolatesSameUserAcrossNamespaces(t *testing.T) {
 	const (
 		userID = "shared-user"
 		nsOne  = uint64(1)
