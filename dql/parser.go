@@ -1790,6 +1790,12 @@ L:
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
+					if function.Name == uidFunc {
+						// uid(val(a)) would otherwise parse into a uid function with no
+						// variables to resolve and silently return nothing.
+						return nil, itemInFunc.Errorf("val() is not allowed inside uid(),"+
+							" use uid(%s) instead", nestedFunc.NeedsVar[0].Name)
+					}
 					// Variable is used in place of attribute, eq(val(a), 5)
 					if len(function.Attr) == 0 {
 						function.Attr = nestedFunc.NeedsVar[0].Name
