@@ -16,6 +16,8 @@ name: ci-dgraph-pipeline-shakeout
 #                     cache, snapshots). Correctness only; a race-built image is a
 #                     future enhancement.
 on:
+  push:
+    branches: [rebase-9762] # one-off shakeout: runs on push to this branch (no PR needed)
   workflow_dispatch:
     inputs:
       intra_mutation:
@@ -66,7 +68,8 @@ jobs:
         run: make docker-image
       - name: Run integration2 through the pipeline (forced fan-out)
         env:
-          DGRAPH_TEST_INTRA_MUTATION: ${{ github.event.inputs.intra_mutation }}
+          # push event has no inputs, so fall back to the forced-fanout shakeout config
+          DGRAPH_TEST_INTRA_MUTATION: ${{ github.event.inputs.intra_mutation || '1;8;1' }}
         run: |
           #!/bin/bash
           export GOPATH=~/go
