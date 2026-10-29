@@ -402,7 +402,7 @@ func summariesToManifests(summaries []*ManifestSummary) []*Manifest {
 
 // CreateManifestSummary writes a lightweight manifest_summary.json that omits
 // Groups and DropOperations. The full manifest.json is left untouched.
-func CreateManifestSummary(h UriHandler, master *MasterManifest) (retErr error) {
+func CreateManifestSummary(h UriHandler, master *MasterManifest) error {
 	summary := &MasterManifestSummary{
 		Manifests: make([]*ManifestSummary, len(master.Manifests)),
 	}
@@ -413,13 +413,13 @@ func CreateManifestSummary(h UriHandler, master *MasterManifest) (retErr error) 
 	if err != nil {
 		return errors.Wrap(err, "createManifestSummary failed to create tmp file")
 	}
-	defer func() {
-		if err := w.Close(); err != nil && retErr == nil {
-			retErr = err
-		}
-	}()
-	if err = json.NewEncoder(w).Encode(summary); err != nil {
-		return err
+	encodeErr := json.NewEncoder(w).Encode(summary)
+	closeErr := w.Close()
+	if encodeErr != nil {
+		return encodeErr
+	}
+	if closeErr != nil {
+		return closeErr
 	}
 	return errors.Wrapf(h.Rename(tmpManifestSummary, backupManifestSummary),
 		"MOVING TEMPORARY SUMMARY MANIFEST FAILED! Move %s to %s manually.",

@@ -5,7 +5,7 @@
 
 package dgraphtest
 
-import "github.com/docker/docker/api/types/container"
+import "github.com/moby/moby/api/types/container"
 
 // This file declares public extensibility hooks for the dgraphtest test
 // harness. See testutil/hooks.go for the full convention. Each hook
