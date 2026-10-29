@@ -143,11 +143,10 @@ func TestDatetime(t *testing.T) {
 }
 
 type indexMutationInfo struct {
-	tokenizers   []tok.Tokenizer
-	factorySpecs []*tok.FactoryCreateSpec
-	edge         *pb.DirectedEdge // Represents the original uid -> value edge.
-	val          types.Val
-	op           pb.DirectedEdge_Op
+	tokenizers []tok.Tokenizer
+	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
+	val        types.Val
+	op         pb.DirectedEdge_Op
 }
 
 func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
@@ -211,10 +210,11 @@ func TestStringIndexWithLang(t *testing.T) {
 
 	attr := x.AttrInRootNamespace("name")
 
-	// Prepare 400 mutations across 4 threads, 100 per thread (kept modest for stability).
+	// Prepare 20,000 mutations across 10 threads, 2,000 per thread. Kept modest for
+	// unit-test runtime/memory; what this exercises is concurrent writers, not volume.
 	const (
 		threads     = 10
-		perThread   = 20000
+		perThread   = 2000
 		total       = threads * perThread
 		baseStartTs = uint64(10)
 	)
