@@ -106,7 +106,6 @@ type PredicatePipeline struct {
 	attr  string
 	edges chan *pb.DirectedEdge
 	wg    *sync.WaitGroup
-	errCh chan error
 	// workers is this predicate's grant from the global intra-predicate budget
 	// (see allocateWorkers). 0 means the budget is disabled/unset: data-write
 	// stays serial and InsertTokenizerIndexes uses the legacy numGo=10 — exactly
@@ -157,15 +156,25 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 
 	syncMap := sync.Map{}
 
+	// A worker that hits an error (schema dropped between Tokenizer and
+	// FactoryCreateSpec, or a tokenization failure) records the first one and keeps
+	// draining its channel so the dispatcher never blocks on a buffered channel whose
+	// worker has left. InsertTokenizerIndexes returns the error after wg.Wait().
+	var (
+		errOnce  sync.Once
+		firstErr error
+	)
+	recordErr := func(err error) { errOnce.Do(func() { firstErr = err }) }
+
 	chanFn := func(uids chan uint64, estimatedSize int) {
 		defer wg.Done()
 		indexGenInThread := make(map[string]*pb.PostingList, estimatedSize)
 		tokenizers := schema.State().Tokenizer(ctx, pipeline.attr)
 
 		factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
-		if err != nil {
-			pipeline.errCh <- err
-			return
+		failed := err != nil
+		if failed {
+			recordErr(err)
 		}
 
 		indexEdge := &pb.DirectedEdge{
@@ -173,6 +182,10 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 		}
 
 		for uid := range uids {
+			if failed {
+				// Keep draining so the dispatcher's channel sends never block.
+				continue
+			}
 			postingList := (*postings)[uid]
 			// Sort Dels before Sets: when DEL and SET land in the same index
 			// bucket (e.g. case-insensitive tokenizer where the old and new
@@ -209,7 +222,9 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 				if !loaded {
 					tokens, err = indexTokens(ctx, info)
 					if err != nil {
-						x.Panic(err)
+						recordErr(err)
+						failed = true
+						break
 					}
 					syncMap.Store(key, tokens)
 				}
@@ -274,6 +289,10 @@ func (mp *MutationPipeline) InsertTokenizerIndexes(ctx context.Context, pipeline
 	}
 
 	wg.Wait()
+
+	if firstErr != nil {
+		return firstErr
+	}
 
 	// Buffer conflict keys and flush them with ONE txn.Lock() acquisition.
 	//
@@ -1003,12 +1022,6 @@ func (txn *Txn) flushConflicts(c *conflictBuf) {
 	c.keys = c.keys[:0]
 }
 
-func (txn *Txn) addConflictKeyWithUid(key []byte, pl *pb.PostingList, hasUpsert bool, hasNoConflict bool) {
-	var c conflictBuf
-	c.addForPostings(key, pl, hasUpsert, hasNoConflict)
-	txn.flushConflicts(&c)
-}
-
 func (mp *MutationPipeline) ProcessCount(ctx context.Context, pipeline *PredicatePipeline, postings *map[uint64]*pb.PostingList, info predicateInfo, isListEdge bool, isReverseEdge bool) error {
 	// Conflict keys are buffered and flushed with ONE txn.Lock() acquisition.
 	// ProcessCount runs single-goroutine (called serially from ProcessList and
@@ -1644,7 +1657,7 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 // store". Those two decisions used to be tied together, which made the
 // disabled setting also opt out of the lock-free store — the single largest
 // win in this whole change — and made the flag non-monotonic. The kill switch
-// is intra-mutation-min-edges=0, which bypasses this path entirely.
+// is intra-mutation-threshold=0, which bypasses this path entirely.
 //
 // Apportionment is Hamilton / largest-remainder with a floor of 1:
 //   - If P := len(edgeCounts) >= budget, the batch already saturates the budget

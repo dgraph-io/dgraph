@@ -165,9 +165,11 @@ func addMutation(t *testing.T, l *List, edge *pb.DirectedEdge, op uint32,
 	require.NoError(t, txn.CommitToDisk(writer, commitTs))
 	require.NoError(t, writer.Flush())
 	newTxn := Oracle().RegisterStartTs(commitTs + 1)
-	l1, err := newTxn.Get(l.key)
+	// Reload at commitTs+1 to warm the cache for the committed data. Callers do not
+	// read l after this, so there is no need to copy the reloaded List back into it
+	// (that copies List.uidWarmState, an atomic that must not be copied / fails vet).
+	_, err = newTxn.Get(l.key)
 	require.NoError(t, err)
-	*l = *l1 //nolint
 }
 
 const schemaPreVal = `

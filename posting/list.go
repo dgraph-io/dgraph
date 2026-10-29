@@ -2228,14 +2228,16 @@ func (l *List) findStaticValue(readTs uint64) *pb.PostingList {
 	}
 	if l.plist != nil && l.plist.Pack != nil {
 		uids := codec.Decode(l.plist.Pack, 0)
-		return &pb.PostingList{
-			Postings: []*pb.Posting{
-				{
-					Uid:     uids[0],
-					ValType: pb.Posting_UID,
-					Op:      Set,
+		if len(uids) > 0 {
+			return &pb.PostingList{
+				Postings: []*pb.Posting{
+					{
+						Uid:     uids[0],
+						ValType: pb.Posting_UID,
+						Op:      Set,
+					},
 				},
-			},
+			}
 		}
 	}
 	return nil
