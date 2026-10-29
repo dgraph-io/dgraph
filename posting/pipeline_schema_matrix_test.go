@@ -407,7 +407,7 @@ func TestSchemaMatrixByteIdentical(t *testing.T) {
 			t.Run(sc.name+"/"+bc.name, func(t *testing.T) {
 				// Baseline: the REAL legacy path — a serial runMutation loop, the
 				// same per-edge call draft.go makes when
-				// intra-mutation-min-edges=0 sends a mutation around the pipeline.
+				// intra-mutation-threshold=0 sends a mutation around the pipeline.
 				//
 				// This used to be "the pipeline with the budget off", which was an
 				// in-pipeline replica of legacy semantics (locked AddDelta). Once

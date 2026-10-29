@@ -145,15 +145,16 @@ type WorkerOptions struct {
 	HardSync bool
 	// Audit contains the audit flags that enables the audit.
 	Audit bool
-	// IntraMutationMinEdges gates the parallel mutation path in applyMutations: a
-	// mutation takes it only when IntraMutationMinEdges > 0 and len(m.Edges) >=
-	// it. 0 disables that path entirely and is the single kill switch for this
-	// whole mechanism; 1 (the default) always takes it. A value above 1 keeps
-	// small interactive mutations on the legacy path, which is worth doing only
-	// if per-predicate goroutine spin-up measurably hurts them (crossover ~100
-	// edges in benchmarks here).
-	// Superflag key: "intra-mutation-min-edges".
-	IntraMutationMinEdges int
+	// IntraMutationThreshold gates the parallel mutation path in applyMutations: a
+	// mutation takes it only when IntraMutationThreshold > 0 and len(m.Edges) >=
+	// it. 0 (the default) disables that path entirely and is the single kill
+	// switch for this whole mechanism — the feature ships OFF and is opt-in. A
+	// value of 1 always takes it; a value above 1 keeps small interactive
+	// mutations on the legacy path, which is the recommended way to enable it
+	// since the parallel path only pays off above the crossover (~100 edges in
+	// benchmarks here).
+	// Superflag key: "intra-mutation-threshold"; default 0 (off).
+	IntraMutationThreshold int
 	// IntraMutationParallelism sizes the pool of worker goroutines used inside a
 	// single mutation. The pool is shared across the predicates that mutation
 	// touches and apportioned by edge count, so a hot predicate is granted most
@@ -273,10 +274,10 @@ func (w WorkerOptions) String() string {
 		"WhiteListedIPRanges:%v StrictMutations:%v AclEnabled:%v AclJwtAlg:%v "+
 		"AclPublicKey:**** AbortOlderThan:%v ProposedGroupId:%d StartTime:%v "+
 		"Security:**** EncryptionKey:**** LogDQLRequest:%d SlowQueryThreshold:%v HardSync:%v Audit:%v "+
-		"IntraMutationMinEdges:%d IntraMutationParallelism:%v IntraMutationEdgesPerWorker:%d}",
+		"IntraMutationThreshold:%d IntraMutationParallelism:%v IntraMutationEdgesPerWorker:%d}",
 		w.TmpDir, w.ExportPath, w.MyAddr, w.ZeroAddr, w.Raft,
 		w.WhiteListedIPRanges, w.StrictMutations, w.AclEnabled, w.AclJwtAlg,
 		w.AbortOlderThan, w.ProposedGroupId, w.StartTime,
 		w.LogDQLRequest, w.SlowQueryLogThreshold, w.HardSync, w.Audit,
-		w.IntraMutationMinEdges, w.IntraMutationParallelism, w.IntraMutationEdgesPerWorker)
+		w.IntraMutationThreshold, w.IntraMutationParallelism, w.IntraMutationEdgesPerWorker)
 }

@@ -43,7 +43,7 @@ const (
 		`lambda-url=;`
 	CacheDefaults        = `size-mb=4096; percentage=40,40,20; remove-on-update=false`
 	FeatureFlagsDefaults = `normalize-compatibility-mode=; enable-detailed-metrics=false; ` +
-		`log-slow-query-threshold=0; intra-mutation-min-edges=1; ` +
+		`log-slow-query-threshold=0; intra-mutation-threshold=0; ` +
 		`intra-mutation-parallelism=auto; intra-mutation-edges-per-worker=256`
 )
 

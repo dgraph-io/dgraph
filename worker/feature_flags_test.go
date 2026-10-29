@@ -26,7 +26,8 @@ func TestFeatureFlagsIntraMutationKeys(t *testing.T) {
 	// No overrides: the shipped defaults must parse and be what we documented.
 	sf := z.NewSuperFlag("").MergeAndCheckDefault(FeatureFlagsDefaults)
 
-	require.Equal(t, int64(1), sf.GetInt64("intra-mutation-min-edges"))
+	require.Equal(t, int64(0), sf.GetInt64("intra-mutation-threshold"),
+		"intra-mutation parallelism must ship OFF by default")
 	require.Equal(t, int64(256), sf.GetInt64("intra-mutation-edges-per-worker"))
 
 	par, err := x.ParseIntraMutationParallelism(sf.GetString("intra-mutation-parallelism"))
@@ -59,9 +60,9 @@ func TestFeatureFlagsIntraMutationKeys(t *testing.T) {
 	require.Error(t, err)
 
 	// The other two keys still override as plain ints.
-	sf = z.NewSuperFlag("intra-mutation-min-edges=0; intra-mutation-edges-per-worker=64").
+	sf = z.NewSuperFlag("intra-mutation-threshold=0; intra-mutation-edges-per-worker=64").
 		MergeAndCheckDefault(FeatureFlagsDefaults)
-	require.Equal(t, int64(0), sf.GetInt64("intra-mutation-min-edges"))
+	require.Equal(t, int64(0), sf.GetInt64("intra-mutation-threshold"))
 	require.Equal(t, int64(64), sf.GetInt64("intra-mutation-edges-per-worker"))
 }
 
@@ -71,12 +72,12 @@ func TestFeatureFlagsIntraMutationKeys(t *testing.T) {
 // added there by hand.
 func TestWorkerOptionsStringShowsIntraMutation(t *testing.T) {
 	w := x.WorkerOptions{
-		IntraMutationMinEdges:       1,
+		IntraMutationThreshold:      1,
 		IntraMutationParallelism:    x.IntraMutationParallelism{PerCPU: 1.5},
 		IntraMutationEdgesPerWorker: 256,
 	}
 	s := w.String()
-	require.Contains(t, s, "IntraMutationMinEdges:1")
+	require.Contains(t, s, "IntraMutationThreshold:1")
 	require.Contains(t, s, "IntraMutationParallelism:1.5x")
 	require.Contains(t, s, "IntraMutationEdgesPerWorker:256")
 }
