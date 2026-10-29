@@ -1,0 +1,75 @@
+name: ci-dgraph-pipeline-shakeout
+
+# Manual shakeout for the intra-mutation pipeline. Routes tests through the
+# pipeline with forced fan-out (edges-per-worker=1) to flush out correctness and
+# concurrency bugs before the feature is enabled for real. This is NOT a per-PR
+# gate — trigger it by hand (gh workflow run ci-dgraph-pipeline-shakeout.yml).
+#
+# Two legs, because the race detector only instruments the process it is compiled
+# into:
+#   * race-unit     : the pipeline runs IN the test process, so `go test -race`
+#                     instruments it directly — the real concurrency check.
+#   * integration   : alpha is a SEPARATE binary, so -race would not reach the
+#                     pipeline; instead we route the whole integration2 suite
+#                     through it (DGRAPH_TEST_INTRA_MUTATION) to catch integration
+#                     bugs the in-process tests cannot see (gate, Raft/commit,
+#                     cache, snapshots). Correctness only; a race-built image is a
+#                     future enhancement.
+on:
+  workflow_dispatch:
+    inputs:
+      intra_mutation:
+        description: "threshold;parallelism;epw forced on every alpha (integration leg)"
+        default: "1;8;1"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Leg 1 — in-process race check of the pipeline. The posting pipeline tests
+  # drive NewMutationPipeline at high worker counts in-process, so -race here
+  # genuinely exercises the concurrent write paths.
+  pipeline-race-unit:
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Race-check the pipeline in-process
+        run: |
+          #!/bin/bash
+          go clean -testcache
+          go test -race -v -timeout=60m ./posting/... ./worker/...
+
+  # Leg 2 — route the entire integration2 suite through the pipeline with forced
+  # fan-out. DGRAPH_TEST_INTRA_MUTATION is read in dgraphtest/dgraph.go and
+  # injected into every alpha's --feature-flags; epw=1 makes even tiny mutations
+  # fan out, so the whole suite exercises the parallel paths.
+  pipeline-integration:
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Make Linux Build and Docker Image
+        run: make docker-image
+      - name: Run integration2 through the pipeline (forced fan-out)
+        env:
+          DGRAPH_TEST_INTRA_MUTATION: ${{ github.event.inputs.intra_mutation }}
+        run: |
+          #!/bin/bash
+          export GOPATH=~/go
+          cp dgraph/dgraph ~/go/bin/dgraph
+          go clean -testcache
+          go test -v -timeout=120m -failfast -tags=integration2 ./...

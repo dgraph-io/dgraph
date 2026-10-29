@@ -8,6 +8,7 @@ package dgraphtest
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -299,8 +300,22 @@ func (a *alpha) cmd(c *LocalCluster) []string {
 	}
 	acmd = append(acmd, zeroAddrsArg)
 
-	if len(c.conf.featureFlags) > 0 {
-		acmd = append(acmd, fmt.Sprintf("--feature-flags=%v", strings.Join(c.conf.featureFlags, ";")))
+	featureFlags := c.conf.featureFlags
+	// Shakeout hook: DGRAPH_TEST_INTRA_MUTATION="threshold;parallelism;epw" routes
+	// EVERY cluster in a suite through the mutation pipeline with no per-test edits.
+	// Appended last so it overrides any flags a test set itself. Use "1;8;1" to
+	// force fan-out even on tiny mutations (epw=1) for the concurrency shakeout.
+	if v := os.Getenv("DGRAPH_TEST_INTRA_MUTATION"); v != "" {
+		if parts := strings.Split(v, ";"); len(parts) == 3 {
+			featureFlags = append(featureFlags, fmt.Sprintf(
+				"intra-mutation-threshold=%s;intra-mutation-parallelism=%s;intra-mutation-edges-per-worker=%s",
+				parts[0], parts[1], parts[2]))
+		} else {
+			log.Printf("[WARNING] ignoring malformed DGRAPH_TEST_INTRA_MUTATION=%q (want threshold;parallelism;epw)", v)
+		}
+	}
+	if len(featureFlags) > 0 {
+		acmd = append(acmd, fmt.Sprintf("--feature-flags=%v", strings.Join(featureFlags, ";")))
 	}
 
 	if c.conf.customPlugins {

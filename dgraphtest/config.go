@@ -272,6 +272,18 @@ func (cc ClusterConfig) WithNormalizeCompatibilityMode(mode string) ClusterConfi
 	return cc
 }
 
+// WithIntraMutation sets the three intra-mutation parallelism feature flags for
+// alpha. threshold=0 is OFF (legacy path); parallelism is off|N|Fx|auto; epw is
+// edges-per-worker. Used by the pipeline differential test and, via the
+// DGRAPH_TEST_INTRA_MUTATION env hook (see dgraph.go), to route a whole suite
+// through the pipeline for the shakeout.
+func (cc ClusterConfig) WithIntraMutation(threshold int, parallelism string, epw int) ClusterConfig {
+	cc.featureFlags = append(cc.featureFlags, fmt.Sprintf(
+		"intra-mutation-threshold=%d;intra-mutation-parallelism=%s;intra-mutation-edges-per-worker=%d",
+		threshold, parallelism, epw))
+	return cc
+}
+
 // Enables generation of the custom_plugins in testutil/custom_plugins
 func (cc ClusterConfig) WithCustomPlugins() ClusterConfig {
 	cc.customPlugins = true
