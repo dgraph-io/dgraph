@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
@@ -44,8 +45,7 @@ import (
 func cloneEdges(in []*pb.DirectedEdge) []*pb.DirectedEdge {
 	out := make([]*pb.DirectedEdge, len(in))
 	for i, e := range in {
-		c := *e
-		out[i] = &c
+		out[i] = proto.Clone(e).(*pb.DirectedEdge)
 	}
 	return out
 }
@@ -414,7 +414,7 @@ func TestAllocateWorkers(t *testing.T) {
 	// locked store". Tying those together made the disabled setting also give up
 	// the lock-free store — about two thirds of this branch's measured gain — and
 	// made the flag non-monotonic. The real kill switch is
-	// intra-mutation-min-edges=0, which never reaches this code.
+	// intra-mutation-threshold=0, which never reaches this code.
 	require.Equal(t, map[string]int{"a": 1, "b": 1},
 		allocateWorkers(map[string]int{"a": 5, "b": 3}, 0))
 	require.Equal(t, map[string]int{"a": 1, "b": 1},

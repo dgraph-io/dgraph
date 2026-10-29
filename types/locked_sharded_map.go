@@ -144,16 +144,25 @@ func (s *LockedShardedMap[K, V]) Merge(other *LockedShardedMap[K, V], ag func(a,
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			otherShard := other.shards[i]
+			// Snapshot other's shard under its read lock before touching s, so a
+			// concurrent Set/Update on other cannot race this read, and we never
+			// hold both maps' locks at once (reciprocal Merge calls can't deadlock).
+			other.locks[i].RLock()
+			otherShard := make(map[K]V, len(other.shards[i]))
+			for k, v := range other.shards[i] {
+				otherShard[k] = v
+			}
+			other.locks[i].RUnlock()
+
+			s.locks[i].Lock()
 			for k, v := range otherShard {
-				s.locks[i].Lock()
 				if existing, ok := s.shards[i][k]; ok {
 					s.shards[i][k] = ag(existing, v)
 				} else {
 					s.shards[i][k] = v
 				}
-				s.locks[i].Unlock()
 			}
+			s.locks[i].Unlock()
 		}(i)
 	}
 	wg.Wait()
