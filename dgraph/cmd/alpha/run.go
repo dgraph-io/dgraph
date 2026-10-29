@@ -283,16 +283,19 @@ they form a Raft group and provide synchronous replication.
 			"with structured fields including trace ID for correlation with distributed traces. "+
 			"Disabled by default (0). Note: enabling this logs query text which may contain "+
 			"sensitive data; do not enable in deployments with strict data privacy requirements.").
-		Flag("intra-mutation-min-edges",
+		Flag("intra-mutation-threshold",
 			"Minimum edge count for a mutation to take the parallel apply path, "+
 				"which spreads the predicates in ONE mutation across goroutines. "+
-				"0 disables that path entirely (all mutations take the legacy path) "+
-				"and is the single kill switch for intra-mutation parallelism. "+
-				"1 (default) always takes it. A value N>1 takes it only when "+
-				"len(edges) >= N, leaving small interactive mutations on the legacy "+
-				"path — the parallel path pays per-predicate goroutine spin-up cost, "+
-				"so tiny mutations are slightly slower on it; bulk multi-predicate "+
-				"mutations are faster (crossover ~100 edges in benchmarks here).").
+				"0 (default) disables that path entirely — the feature is OFF and "+
+				"every mutation takes the legacy path — making this the single kill "+
+				"switch for intra-mutation parallelism. Set N>=1 to enable it: the "+
+				"parallel path is then taken when len(edges) >= N (1 = always on). "+
+				"Keep N above the crossover (~100 edges in benchmarks here) so small "+
+				"interactive mutations, which are slightly slower on the parallel "+
+				"path, stay on the legacy path while bulk multi-predicate mutations "+
+				"get the speed-up. Qualifying mutations then run through the mutation "+
+				"pipeline; intra-mutation-parallelism controls how many worker "+
+				"goroutines each one uses (off = pipeline runs with no fan-out).").
 		Flag("intra-mutation-parallelism",
 			"Concurrent worker goroutines used INSIDE a single mutation, shared "+
 				"across the predicates it touches and apportioned by edge count so a "+
@@ -839,7 +842,7 @@ func run() {
 	x.Config.NormalizeCompatibilityMode = featureFlagsConf.GetString("normalize-compatibility-mode")
 	enableDetailedMetrics := featureFlagsConf.GetBool("enable-detailed-metrics")
 	x.WorkerConfig.SlowQueryLogThreshold = featureFlagsConf.GetDuration("log-slow-query-threshold")
-	x.WorkerConfig.IntraMutationMinEdges = int(featureFlagsConf.GetInt64("intra-mutation-min-edges"))
+	x.WorkerConfig.IntraMutationThreshold = int(featureFlagsConf.GetInt64("intra-mutation-threshold"))
 	// The superflag layer cannot validate this one — it is off|auto|N|Fx, not a
 	// plain int — so a typo must fail here at startup rather than silently
 	// resolve to the zero value and disable fan-out for the life of the process.
