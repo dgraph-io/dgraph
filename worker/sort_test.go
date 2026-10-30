@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1755,4 +1756,314 @@ func TestRemoveDuplicates(t *testing.T) {
 		require.Equal(t, uidsOut, test.uidsOut)
 		require.Equal(t, set, toSet(test.setOut))
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline-vs-legacy differential.
+//
+// Apply the SAME edges through the legacy ordered path and the mutation
+// pipeline (forced fan-out) on a freshly wiped store, then compare the entire
+// committed key-space. requireSame asserts the two paths agree.
+//
+// Below the harness: a broad fuzz gate (TestPipelineLegacyDifferential) plus
+// one deterministic, minimal case per divergence class the fuzz surfaced. These
+// are permanent correctness tests that must stay in the suite; each failing
+// case must go green once its class is fixed, and the pipeline must not be made
+// default-on while any of them is red.
+// ---------------------------------------------------------------------------
+
+type diffH struct {
+	t  *testing.T
+	ps *badger.DB
+	ts uint64
+}
+
+func newDiffH(t *testing.T) *diffH {
+	dir, err := os.MkdirTemp("", "pipediff_")
+	require.NoError(t, err)
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir).WithLoggingLevel(badger.ERROR))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ps.Close(); _ = os.RemoveAll(dir) })
+
+	posting.Init(ps, 0, false)
+	Init(ps)
+	require.NoError(t, schema.ParseBytes([]byte(`
+		sv: string   @index(exact) .
+		lv: [uid]    @reverse .
+		lc: [uid]    @reverse @count .
+		lp: string   @lang .
+		ls: [string] @index(term) .
+	`), 1))
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: 8}
+	x.WorkerConfig.IntraMutationEdgesPerWorker = 1
+	return &diffH{t: t, ps: ps, ts: 10}
+}
+
+func (h *diffH) A(p string) string { return x.AttrInRootNamespace(p) }
+
+func (h *diffH) dump() map[string]string {
+	out := map[string]string{}
+	txn := h.ps.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	for it.Rewind(); it.Valid(); it.Next() {
+		key := it.Item().KeyCopy(nil)
+		pk, err := x.Parse(key)
+		if err != nil || !(pk.IsData() || pk.IsIndex() || pk.IsReverse() || pk.IsCountOrCountRev()) {
+			continue
+		}
+		pl, err := posting.GetNoStore(key, math.MaxUint64)
+		if err != nil {
+			continue
+		}
+		var parts []string
+		_ = pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+			parts = append(parts, fmt.Sprintf("u%d:v%x:l%s:t%d", p.Uid, p.Value, p.LangTag, p.PostingType))
+			return nil
+		})
+		sort.Strings(parts)
+		if len(parts) > 0 {
+			out[fmt.Sprintf("%x", key)] = fmt.Sprintf("%v", parts)
+		}
+	}
+	return out
+}
+
+func cloneEdges(in []*pb.DirectedEdge) []*pb.DirectedEdge {
+	out := make([]*pb.DirectedEdge, len(in))
+	for i, e := range in {
+		out[i] = &pb.DirectedEdge{
+			Entity:    e.Entity,
+			Attr:      e.Attr,
+			Value:     append([]byte(nil), e.Value...),
+			ValueId:   e.ValueId,
+			ValueType: e.ValueType,
+			Lang:      e.Lang,
+			Op:        e.Op,
+		}
+	}
+	return out
+}
+
+func (h *diffH) apply(edges []*pb.DirectedEdge, pipeline bool) map[string]string {
+	require.NoError(h.t, h.ps.DropAll())
+	posting.ResetCache()
+	posting.Oracle().ResetTxns()
+	startTs, commitTs := h.ts, h.ts+1
+	h.ts += 10
+	ctx := schema.GetWriteContext(context.Background())
+	txn := posting.Oracle().RegisterStartTs(startTs)
+	if pipeline {
+		require.NoError(h.t, posting.NewMutationPipeline(txn).Process(ctx, cloneEdges(edges)))
+	} else {
+		es := cloneEdges(edges)
+		sort.SliceStable(es, func(i, j int) bool {
+			if es[i].Attr != es[j].Attr {
+				return es[i].Attr < es[j].Attr
+			}
+			return es[i].Entity < es[j].Entity
+		})
+		for _, e := range es {
+			require.NoError(h.t, runMutation(ctx, e, txn))
+		}
+	}
+	txn.Update()
+	w := posting.NewTxnWriter(h.ps)
+	require.NoError(h.t, txn.CommitToDisk(w, commitTs))
+	require.NoError(h.t, w.Flush())
+	txn.UpdateCachedKeys(commitTs)
+	return h.dump()
+}
+
+// requireSame fails if the pipeline's committed state differs from legacy's.
+func (h *diffH) requireSame(edges []*pb.DirectedEdge) {
+	legacy := h.apply(edges, false)
+	pipe := h.apply(edges, true)
+	require.Equal(h.t, legacy, pipe, "pipeline diverged from legacy\n  edges: %s", fmtEdges(edges))
+}
+
+// ---- edge builders ----
+
+func eSetStr(attr string, uid uint64, v string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_SET}
+}
+func eDelStr(attr string, uid uint64, v string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_DEL}
+}
+func eSetUid(attr string, uid, tgt uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, ValueId: tgt, ValueType: pb.Posting_UID, Op: pb.DirectedEdge_SET}
+}
+func eLangSet(attr string, uid uint64, v, lang string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Lang: lang, Op: pb.DirectedEdge_SET}
+}
+func eLangDel(attr string, uid uint64, v, lang string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Lang: lang, Op: pb.DirectedEdge_DEL}
+}
+func eStarDel(attr string, uid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(x.Star), Op: pb.DirectedEdge_DEL}
+}
+
+func fmtEdges(edges []*pb.DirectedEdge) string {
+	var b []string
+	for _, e := range edges {
+		op := "SET"
+		if e.Op == pb.DirectedEdge_DEL {
+			op = "DEL"
+		}
+		v := string(e.Value)
+		if e.ValueType == pb.Posting_UID {
+			v = fmt.Sprintf("uid(%d)", e.ValueId)
+		}
+		lang := ""
+		if e.Lang != "" {
+			lang = "@" + e.Lang
+		}
+		b = append(b, fmt.Sprintf("%s %s e=%d v=%q%s", op, e.Attr, e.Entity, v, lang))
+	}
+	return fmt.Sprintf("%v", b)
+}
+
+// TestPipelineLegacyDifferential is the broad fuzz gate (discovery + acceptance).
+// Star-deletes are excluded here; they have their own deterministic case below.
+func TestPipelineLegacyDifferential(t *testing.T) {
+	h := newDiffH(t)
+	uids := []uint64{0x1, 0x2, 0x3, 0x4}
+	strs := []string{"a", "b", "c", "d"}
+	tgts := []uint64{0x100, 0x101, 0x102}
+	langs := []string{"en", "de", "fr"}
+	gen := func(rng *rand.Rand) []*pb.DirectedEdge {
+		n := 3 + rng.Intn(8)
+		var edges []*pb.DirectedEdge
+		for i := 0; i < n; i++ {
+			uid := uids[rng.Intn(len(uids))]
+			del := rng.Intn(2) == 1
+			switch rng.Intn(5) {
+			case 0:
+				e := eSetStr(h.A("sv"), uid, strs[rng.Intn(len(strs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 1:
+				e := eSetUid(h.A("lv"), uid, tgts[rng.Intn(len(tgts))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 2:
+				e := eSetUid(h.A("lc"), uid, tgts[rng.Intn(len(tgts))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 3:
+				e := eLangSet(h.A("lp"), uid, strs[rng.Intn(len(strs))], langs[rng.Intn(len(langs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 4:
+				e := eSetStr(h.A("ls"), uid, strs[rng.Intn(len(strs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			}
+		}
+		return edges
+	}
+	const iters = 2000
+	mism := 0
+	byPred := map[string]int{}
+	for seed := 0; seed < iters; seed++ {
+		rng := rand.New(rand.NewSource(int64(seed) + 1))
+		edges := gen(rng)
+		legacy := h.apply(edges, false)
+		pipe := h.apply(edges, true)
+		if fmt.Sprintf("%v", legacy) != fmt.Sprintf("%v", pipe) {
+			mism++
+			for k := range symDiff(legacy, pipe) {
+				if pk, err := x.Parse(mustHex(k)); err == nil {
+					byPred[pk.Attr]++
+				}
+			}
+		}
+	}
+	t.Logf("fuzz differential (no star): %d/%d seeds diverged; by predicate: %v", mism, iters, byPred)
+	require.Zero(t, mism, "pipeline must match legacy")
+}
+
+func symDiff(a, b map[string]string) map[string]bool {
+	out := map[string]bool{}
+	for k, v := range a {
+		if b[k] != v {
+			out[k] = true
+		}
+	}
+	for k, v := range b {
+		if a[k] != v {
+			out[k] = true
+		}
+	}
+	return out
+}
+
+func mustHex(s string) []byte {
+	out := make([]byte, len(s)/2)
+	for i := 0; i < len(out); i++ {
+		fmt.Sscanf(s[i*2:i*2+2], "%02x", &out[i])
+	}
+	return out
+}
+
+// Divergence class 1 — star-delete reorder. A SET followed by a star-delete on
+// the same (pred,entity) in one proposal. The pipeline runs the delete inline
+// and the set via a worker afterward, so the value (and its index) survive when
+// they should be cleared.
+func TestPipeline_StarDeleteThenSet(t *testing.T) {
+	h := newDiffH(t)
+	sv := h.A("sv")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetStr(sv, 1, "a"),
+		eStarDel(sv, 1), // after this, sv(1) must be empty
+	})
+}
+
+// Divergence class 2 — @count with repeated/multiple SETs changing a target's
+// in-degree. The @count index diverges from the reverse data (preliminary
+// analysis points at legacy being the stale side).
+func TestPipeline_CountDuplicateSets(t *testing.T) {
+	h := newDiffH(t)
+	lc := h.A("lc")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetUid(lc, 1, 0x100),
+		eSetUid(lc, 1, 0x100), // duplicate source->target
+		eSetUid(lc, 3, 0x100), // target 0x100 in-degree 2
+		eSetUid(lc, 3, 0x101), // target 0x101 in-degree 1
+	})
+}
+
+// Divergence class 3 — @lang. A value-specific delete on one language tag
+// wrongly drops a DIFFERENT language's value in the pipeline.
+func TestPipeline_LangValueDelete(t *testing.T) {
+	h := newDiffH(t)
+	lp := h.A("lp")
+	h.requireSame([]*pb.DirectedEdge{
+		eLangSet(lp, 1, "b", "en"),
+		eLangSet(lp, 1, "c", "de"),
+		eLangDel(lp, 1, "c", "en"), // deletes nothing (en is "b"); de must remain
+	})
+}
+
+// Divergence class 4 — value-indexed list. SET/DELETE churn on a
+// [string] @index(term) leaves a stale term in the index in the pipeline.
+func TestPipeline_IndexedListValueChurn(t *testing.T) {
+	h := newDiffH(t)
+	ls := h.A("ls")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetStr(ls, 1, "c"),
+		eDelStr(ls, 1, "c"), // index entry for "c" must be removed
+		eSetStr(ls, 1, "d"),
+	})
 }
