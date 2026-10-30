@@ -1,0 +1,35 @@
+# Prometheus config for the local Compose stack. The relabeling gives every series the namespace/pod/container
+# labels the rules expect from Kubernetes, so dgraph-rules.yaml works here unchanged.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/dgraph-rules.yaml
+
+scrape_configs:
+  - job_name: dgraph-alpha
+    metrics_path: /debug/prometheus_metrics
+    static_configs:
+      - targets: ["alpha:8080"]
+        labels: {namespace: compose, pod: alpha, container: alpha}
+
+  - job_name: memwatch
+    static_configs:
+      - targets: ["memwatch:9095"]
+        labels: {namespace: compose, pod: alpha, container: memwatch}
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    metric_relabel_configs:
+      # Keep only this project's alpha container and label it like a pod's container.
+      - source_labels: [container_label_com_docker_compose_project, container_label_com_docker_compose_service]
+        regex: dgraph-memwatch;alpha
+        action: keep
+      - target_label: namespace
+        replacement: compose
+      - target_label: pod
+        replacement: alpha
+      - target_label: container
+        replacement: alpha
