@@ -45,30 +45,40 @@ via kube-prometheus-stack, which also runs cAdvisor scraping and kube-state-metr
    docker push <registry>/memwatch:<tag>
    ```
 
-2. **Add the sidecar.** Edit `k8s/alpha-memwatch-patch.yaml`: set the image, and replace `ALPHA_STATEFULSET` and
-   `ALPHA_CONTAINER` with your alpha StatefulSet's and container's names. Then patch the StatefulSet, or list the
-   file under `patches:` in a kustomization. This restarts the alpha pods one at a time.
+2. **Add the sidecar.** Edit `contrib/monitoring/k8s/alpha-memwatch-patch.yaml`: set the image, and replace
+   `ALPHA_STATEFULSET` and `ALPHA_CONTAINER` with your alpha StatefulSet's and container's names. Then patch the
+   StatefulSet, or list the file under `patches:` in a kustomization.
 
    ```bash
-   kubectl -n dgraph patch statefulset <alpha-statefulset> --patch-file k8s/alpha-memwatch-patch.yaml
+   kubectl -n dgraph patch statefulset <alpha-statefulset> \
+     --patch-file contrib/monitoring/k8s/alpha-memwatch-patch.yaml
    ```
+
+   With the default `RollingUpdate` strategy, Kubernetes then restarts the alpha pods one at a time. With
+   `OnDelete`, or a rolling-update `partition`, pods keep the old template until you delete them yourself
+   (`kubectl -n dgraph delete pod <pod>`), one at a time so the group keeps quorum.
 
    The patch sets `shareProcessNamespace: true` so memwatch can see the alpha process. It passes the alpha's memory
    limit through the downward API and stores captures in an `emptyDir`. That survives alpha restarts, including OOM
    kills, but not pod deletion.
 
-3. **Scrape and alert.** Edit the `release` label, selector, namespace and port name in `prometheus/podmonitor.yaml`
-   to match your setup, then apply it along with the rules:
+3. **Scrape and alert.** Edit the `release` label, selector, namespace and port name in
+   `contrib/monitoring/prometheus/podmonitor.yaml` to match your setup, then apply it along with the rules:
 
    ```bash
-   kubectl -n dgraph apply -f prometheus/podmonitor.yaml
-   kubectl -n dgraph apply -f prometheus/dgraph-prometheusrule.yaml
+   kubectl -n dgraph apply -f contrib/monitoring/prometheus/podmonitor.yaml
+   kubectl -n dgraph apply -f contrib/monitoring/prometheus/dgraph-prometheusrule.yaml
    ```
 
    The rules find alpha containers with `container=~".*alpha.*"`. If yours is named differently, change that matcher
-   in `dgraph-rules.yaml` and run `prometheus/gen-prometheusrule.sh > prometheus/dgraph-prometheusrule.yaml`.
+   in `contrib/monitoring/prometheus/dgraph-rules.yaml` and regenerate the PrometheusRule:
 
-4. **Import the dashboard.** In Grafana, go to Dashboards, then Import, and upload `grafana/dgraph-memory.json`.
+   ```bash
+   contrib/monitoring/prometheus/gen-prometheusrule.sh > contrib/monitoring/prometheus/dgraph-prometheusrule.yaml
+   ```
+
+4. **Import the dashboard.** In Grafana, go to Dashboards, then Import, and upload
+   `contrib/monitoring/grafana/dgraph-memory.json`.
 
 ## Try it locally
 
