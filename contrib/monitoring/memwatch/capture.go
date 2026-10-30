@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -250,14 +251,23 @@ func isRestartDir(name string) bool {
 	return false
 }
 
+// dirSize sums the sizes of the files under dir. Files can disappear while it walks, because a capture running
+// concurrently removes a partial artifact when a fetch fails, so missing files are skipped rather than failing the
+// whole prune.
 func dirSize(dir string) (uint64, error) {
 	var size uint64
 	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			return err
 		}
 		if !d.IsDir() {
 			info, err := d.Info()
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			if err != nil {
 				return err
 			}

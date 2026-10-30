@@ -54,7 +54,7 @@ func NewTrigger(c *Config, now time.Time) *Trigger {
 // reason means the caller should capture and then call Fired. The ring must already contain cur.
 func (t *Trigger) Evaluate(cur Sample, ring *Ring) string {
 	now := cur.Time
-	reason := t.thresholdReason(cur.Usage())
+	reason := t.crossedThreshold(cur.Usage())
 	if reason == "" {
 		reason = t.riseReason(cur, ring)
 	}
@@ -90,8 +90,13 @@ func (t *Trigger) Fired(reason string, usage uint64, now time.Time) {
 	}
 }
 
-// thresholdReason re-arms levels memory has dropped well below, and returns the highest armed level crossed.
-func (t *Trigger) thresholdReason(usage uint64) string {
+// thresholdReason is the capture reason for crossing threshold th, e.g. "threshold-85".
+func thresholdReason(th float64) string {
+	return fmt.Sprintf("threshold-%d", int(math.Round(th*100)))
+}
+
+// crossedThreshold re-arms levels memory has dropped well below, and returns the highest armed level crossed.
+func (t *Trigger) crossedThreshold(usage uint64) string {
 	if t.limit == 0 {
 		return ""
 	}
@@ -102,7 +107,7 @@ func (t *Trigger) thresholdReason(usage uint64) string {
 		case !t.armed[i] && frac < th-t.rearm:
 			t.armed[i] = true
 		case t.armed[i] && frac >= th:
-			reason = fmt.Sprintf("threshold-%d", int(math.Round(th*100)))
+			reason = thresholdReason(th)
 		}
 	}
 	return reason

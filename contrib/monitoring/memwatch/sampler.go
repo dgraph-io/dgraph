@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -288,6 +289,13 @@ func (h *httpSampler) Sample(ctx context.Context) (Sample, error) {
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
+		// A timeout means the alpha is alive but slow, which is likely under memory pressure, and cancellation
+		// means memwatch is shutting down. Neither is a restart, so neither should reset the timeline.
+		var netErr net.Error
+		if ctx.Err() != nil || (errors.As(err, &netErr) && netErr.Timeout()) {
+			return Sample{}, fmt.Errorf("sampling %s: %w", h.url, err)
+		}
+		// Anything else, such as a refused connection, means nothing is listening: the alpha is down.
 		return Sample{}, fmt.Errorf("%w: %v", errNotFound, err)
 	}
 	defer resp.Body.Close()

@@ -244,6 +244,13 @@ func listDirs(t *testing.T, dir string) []string {
 	return out
 }
 
+func TestDirSizeToleratesVanishedDir(t *testing.T) {
+	size, err := dirSize(filepath.Join(t.TempDir(), "pruned-meanwhile"))
+	if err != nil || size != 0 {
+		t.Fatalf("dirSize of a missing dir = %d, %v; want 0, nil", size, err)
+	}
+}
+
 func TestIsRestartDir(t *testing.T) {
 	for name, want := range map[string]bool{
 		"20261028T180000.000Z-restart":      true,
@@ -282,7 +289,7 @@ func TestWatcherRestartDetection(t *testing.T) {
 	}
 	gone := func() (Sample, error) { return Sample{}, errNotFound }
 	w := &watcher{
-		cfg: cfg, log: slog.New(slog.NewTextHandler(io.Discard, nil)), metrics: NewMetrics(),
+		cfg: cfg, log: slog.New(slog.NewTextHandler(io.Discard, nil)), metrics: NewMetrics(cfg.Thresholds),
 		sampler: &scriptedSampler{steps: []func() (Sample, error){
 			ok(0, "a", 100<<20), ok(1, "a", 200<<20), // first incarnation
 			gone, gone, // OOM-killed, container restarting
