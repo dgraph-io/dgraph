@@ -1,0 +1,90 @@
+# Local stack for trying memwatch, the alert rules, and the dashboard against a real alpha.
+#
+#   docker compose up -d --build                                   # Dgraph v24.0.5 (the default)
+#   DGRAPH_IMAGE=dgraph/dgraph:local docker compose up -d --build  # a local build (make image-local)
+#   ./spike.sh                                                     # load data and run a memory-hungry query
+#
+# Prometheus: http://localhost:9090   Grafana: http://localhost:3000 (anonymous admin)   memwatch: :9095/metrics
+# Captures land in ./captures.
+name: dgraph-memwatch
+
+services:
+  # Owns the PID namespace that alpha and memwatch share, like the pause container in a Kubernetes pod. When a
+  # namespace's first process exits, the kernel kills everything else in it, so if alpha owned the namespace an OOM
+  # kill would take memwatch down too.
+  pidns:
+    image: registry.k8s.io/pause:3.10
+
+  zero:
+    image: ${DGRAPH_IMAGE:-dgraph/dgraph:v24.0.5}
+    command: dgraph zero --my=zero:5080 --replicas=1
+    volumes: [zero:/dgraph]
+
+  alpha:
+    image: ${DGRAPH_IMAGE:-dgraph/dgraph:v24.0.5}
+    # The cache is sized for the 1g limit. v25's default (size-mb=4096) preallocates about 800 MiB of cache
+    # bookkeeping at startup, which on its own would put a 1g alpha near its limit.
+    command: >-
+      dgraph alpha --my=alpha:7080 --zero=zero:5080
+      --security "whitelist=0.0.0.0/0" --cache "size-mb=512"
+    pid: "service:pidns"
+    mem_limit: 1g
+    memswap_limit: 1g
+    restart: unless-stopped
+    ports: ["8080:8080", "9080:9080"]
+    volumes: [alpha:/dgraph]
+    depends_on: [zero, pidns]
+
+  memwatch:
+    build:
+      context: ../../..
+      dockerfile: contrib/monitoring/memwatch/Dockerfile
+    pid: "service:pidns"
+    # The bind-mounted ./captures directory belongs to the host user, so run as root to be able to write it.
+    user: "0"
+    command:
+      - --alpha-url=http://alpha:8080
+      - --out-dir=/captures
+      - --cooldown=20s
+      - --periodic=10m
+    environment:
+      MEMWATCH_LIMIT_BYTES: 1Gi # matches alpha's mem_limit
+    ports: ["9095:9095"]
+    volumes: ["./captures:/captures"]
+    depends_on: [pidns]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    privileged: true
+    devices: ["/dev/kmsg"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      # Docker Desktop needs the socket mounted explicitly; on Linux the /var/run mount already covers it.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command: [--docker_only=true, --housekeeping_interval=5s, --store_container_labels=true]
+
+  prometheus:
+    image: prom/prometheus:latest
+    command: [--config.file=/etc/prometheus/prometheus.yml]
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/dgraph-rules.yaml:/etc/prometheus/dgraph-rules.yaml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports: ["3000:3000"]
+    volumes:
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+      - ../grafana:/var/lib/grafana/dashboards:ro
+
+volumes:
+  zero:
+  alpha:

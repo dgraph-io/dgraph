@@ -1,0 +1,61 @@
+# Strategic-merge patch that adds memwatch to the alpha StatefulSet. Apply with:
+#   kubectl -n dgraph patch statefulset <alpha-statefulset> --patch-file alpha-memwatch-patch.yaml
+# or list it under `patches:` in a kustomization.
+#
+# Adjust before applying:
+#   - ALPHA_CONTAINER below: the name of your alpha container (`kubectl get sts <name> -o
+#     jsonpath='{.spec.template.spec.containers[*].name}'`). The official Helm chart uses <release>-dgraph-alpha.
+#   - the image: build it with `docker build -f contrib/monitoring/memwatch/Dockerfile -t <registry>/memwatch:<tag> .`
+#     from the repository root and push it to a registry your cluster can pull from.
+#
+# Changing the pod template restarts the alpha pods one at a time.
+spec:
+  template:
+    spec:
+      # Lets memwatch see the alpha process in /proc and sample its memory every second (proc mode). Without it,
+      # memwatch falls back to scraping the alpha's metrics endpoint every 5s (http mode) and can't record
+      # anonymous vs file-backed memory.
+      shareProcessNamespace: true
+      containers:
+        - name: memwatch
+          image: memwatch:local
+          args:
+            - --alpha-url=http://localhost:8080
+            - --out-dir=/captures
+          env:
+            # The alpha container's memory limit, in bytes. Thresholds are fractions of this.
+            - name: MEMWATCH_LIMIT_BYTES
+              valueFrom:
+                resourceFieldRef:
+                  containerName: ALPHA_CONTAINER
+                  resource: limits.memory
+          ports:
+            - name: memwatch
+              containerPort: 9095
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: memwatch
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: memwatch-captures
+              mountPath: /captures
+      volumes:
+        # emptyDir survives alpha container restarts (including OOM kills) but not pod deletion. Download captures
+        # with `kubectl port-forward pod/<pod> 9095` and `curl -sO -J localhost:9095/captures.tar.gz`, or use a
+        # PersistentVolumeClaim instead.
+        # Keep sizeLimit above memwatch's --max-bytes (default 1Gi).
+        - name: memwatch-captures
+          emptyDir:
+            sizeLimit: 2Gi
