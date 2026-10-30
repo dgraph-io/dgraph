@@ -11,7 +11,8 @@
 #   - the image: build it with `docker build -f contrib/monitoring/memwatch/Dockerfile -t <registry>/memwatch:<tag> .`
 #     from the repository root and push it to a registry your cluster can pull from.
 #
-# Changing the pod template restarts the alpha pods one at a time.
+# With the default RollingUpdate strategy, changing the pod template restarts the alpha pods one at a time. With
+# OnDelete, or a rolling-update partition, delete each pod yourself to pick up the change.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
