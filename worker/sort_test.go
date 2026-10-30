@@ -8,16 +8,25 @@ package worker
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
+	"sort"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
 	bpb "github.com/dgraph-io/badger/v4/pb"
+	"github.com/dgraph-io/dgo/v250/protos/api"
 	"github.com/dgraph-io/dgraph/v25/posting"
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
+	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/types"
 	"github.com/dgraph-io/dgraph/v25/x"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,6 +99,952 @@ func TestEmptyTypeSchema(t *testing.T) {
 	x.ParseNamespaceAttr(types[0].TypeName)
 }
 
+func TestDatetime(t *testing.T) {
+	// Setup temporary directory for Badger DB
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	require.NoError(t, err)
+	posting.Init(ps, 0, false)
+	Init(ps)
+
+	// Set schema
+	schemaTxt := `
+		t: datetime @index(year) .
+	`
+	err = schema.ParseBytes([]byte(schemaTxt), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		for _, edge := range edges {
+			require.NoError(t, newRunMutation(ctx, edge, txn))
+		}
+		txn.Update()
+		writer := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+		txn.UpdateCachedKeys(commitTs)
+	}
+
+	newRunMutation(1, 3, []*pb.DirectedEdge{
+		{
+			Entity:    1,
+			Attr:      x.AttrInRootNamespace("t"),
+			Value:     []byte("2020-01-01T00:00:00Z"),
+			ValueType: pb.Posting_DEFAULT,
+			Op:        pb.DirectedEdge_SET,
+		},
+	})
+
+}
+
+type indexMutationInfo struct {
+	tokenizers []tok.Tokenizer
+	edge       *pb.DirectedEdge // Represents the original uid -> value edge.
+	val        types.Val
+	op         pb.DirectedEdge_Op
+}
+
+func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
+	attr := info.edge.Attr
+	lang := info.edge.GetLang()
+
+	schemaType, err := schema.State().TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
+		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
+	}
+
+	if !schema.State().IsIndexed(ctx, attr) {
+		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+	}
+	sv, err := types.Convert(info.val, schemaType)
+	if err != nil {
+		return nil, errors.Wrap(err, "Cannot convert value to scalar type")
+	}
+
+	var tokens []string
+	for _, it := range info.tokenizers {
+		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
+		if err != nil {
+			return tokens, errors.Wrapf(err, "Cannot build tokens for attribute %s", attr)
+		}
+		tokens = append(tokens, toks...)
+	}
+	return tokens, nil
+}
+
+func TestStringIndexWithLang(t *testing.T) {
+	// Setup temporary directory for Badger DB
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	require.NoError(t, err)
+	posting.Init(ps, 0, false)
+	Init(ps)
+
+	// Set schema
+	schemaTxt := `
+		name: string @index(fulltext, trigram, term, exact) @lang .
+	`
+
+	err = schema.ParseBytes([]byte(schemaTxt), 1)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		require.NoError(t, newRunMutations(ctx, edges, txn))
+		txn.Update()
+		writer := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+		txn.UpdateCachedKeys(commitTs)
+	}
+
+	attr := x.AttrInRootNamespace("name")
+
+	// Prepare 20,000 mutations across 10 threads, 2,000 per thread. Kept modest for
+	// unit-test runtime/memory; what this exercises is concurrent writers, not volume.
+	const (
+		threads     = 10
+		perThread   = 2000
+		total       = threads * perThread
+		baseStartTs = uint64(10)
+	)
+
+	// uid -> value map
+	values := make(map[uint64]string, total)
+	for i := 0; i < total; i++ {
+		uid := uint64(i + 1)
+		// Simple deterministic values with shared tokens and unique numbers.
+		values[uid] = fmt.Sprintf("title %d", i+1)
+	}
+
+	// Build expected token -> set of uids
+	tokenizers := schema.State().Tokenizer(ctx, attr)
+	expected := make(map[string]map[uint64]struct{}, total)
+	for uid, val := range values {
+		info := &indexMutationInfo{
+			tokenizers: tokenizers,
+			op:         pb.DirectedEdge_SET,
+			val:        types.Val{Tid: types.StringID, Value: []byte(val)},
+			edge: &pb.DirectedEdge{
+				Attr:  attr,
+				Value: []byte(val),
+				Lang:  "en",
+				Op:    pb.DirectedEdge_SET,
+			},
+		}
+		toks, err := indexTokens(ctx, info)
+		require.NoError(t, err)
+		for _, tk := range toks {
+			if expected[tk] == nil {
+				expected[tk] = make(map[uint64]struct{})
+			}
+			expected[tk][uid] = struct{}{}
+		}
+	}
+
+	// Run 4 threads; each thread writes 100 edges with distinct ts
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	for th := 0; th < threads; th++ {
+		th := th
+		go func() {
+			defer wg.Done()
+			start := th*perThread + 1
+			end := start + perThread
+			edges := make([]*pb.DirectedEdge, 0, perThread)
+			for i := start; i < end; i++ {
+				uid := uint64(i)
+				edges = append(edges, &pb.DirectedEdge{
+					Entity:    uid,
+					Attr:      attr,
+					Value:     []byte(values[uid]),
+					ValueType: pb.Posting_DEFAULT,
+					Lang:      "en",
+					Op:        pb.DirectedEdge_SET,
+				})
+			}
+			sTs := baseStartTs + uint64(th*10)
+			cTs := sTs + 2
+			newRunMutation(sTs, cTs, edges)
+		}()
+	}
+	wg.Wait()
+
+	// Verify all tokens have the expected UIDs.
+	readTs := baseStartTs + uint64(threads*10) + 10
+	for tk, uidset := range expected {
+		key := x.IndexKey(attr, tk)
+		txn := posting.Oracle().RegisterStartTs(readTs)
+		pl, err := txn.Get(key)
+		require.NoError(t, err)
+		lst, err := pl.Uids(posting.ListOptions{ReadTs: readTs})
+		require.NoError(t, err)
+		got := make(map[uint64]struct{}, len(lst.Uids))
+		for _, u := range lst.Uids {
+			got[u] = struct{}{}
+		}
+		// Compare sets
+		require.Equal(t, len(uidset), len(got), "mismatch uid count for token %q", tk)
+		for u := range uidset {
+			if _, ok := got[u]; !ok {
+				t.Fatalf("missing uid %d for token %q", u, tk)
+			}
+		}
+	}
+}
+
+func TestCount(t *testing.T) {
+	t.Skip("Inherently racy: bypasses the Oracle conflict-checking commit path. " +
+		"Legacy and new pipeline both fail. Re-enable when the harness uses real txn conflicts.")
+	// Setup temporary directory for Badger DB
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	opt := badger.DefaultOptions(dir)
+	ps, err := badger.OpenManaged(opt)
+	require.NoError(t, err)
+	posting.Init(ps, 0, false)
+	Init(ps)
+
+	// Set schema
+	schemaTxt := `
+		friends: [uid] @count .
+	`
+
+	err = schema.ParseBytes([]byte(schemaTxt), 1)
+	require.NoError(t, err)
+	ctx := context.Background()
+	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		require.NoError(t, newRunMutations(ctx, edges, txn))
+		txn.Update()
+		writer := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+		txn.UpdateCachedKeys(commitTs)
+	}
+
+	pred := x.AttrInRootNamespace("friends")
+
+	// Prepare mutations such that each subject gets multiple uid edges, and
+	// each edge is added from a different thread. We also send multiple
+	// batches per thread.
+	const (
+		subjects    = 10 // total number of subjects/entities
+		edgesPer    = 5  // number of edges per subject
+		threads     = 2  // one thread per edge ordinal, touching all subjects
+		baseStartTs = uint64(10)
+		total       = subjects * edgesPer
+	)
+
+	// 1) Pre-generate all mutations into one big slice
+	edgesAll := make([]*pb.DirectedEdge, 0, total)
+	for subj := 1; subj <= subjects; subj++ {
+		uid := uint64(subj)
+		for e := 0; e < edgesPer; e++ {
+			// Unique object per (subject, edge-ordinal) pair to avoid duplicates.
+			// Ensures exactly 'edgesPer' distinct UIDs per subject.
+			obj := uint64(1_000_000 + subj*100 + e)
+			edgesAll = append(edgesAll, &pb.DirectedEdge{
+				Entity:    uid,
+				Attr:      pred,
+				ValueId:   obj,
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+
+	// Shuffle the edges to simulate randomness (determinism depends on rand.Seed in package scope)
+	for i := range edgesAll {
+		j := rand.Intn(i + 1)
+		edgesAll[i], edgesAll[j] = edgesAll[j], edgesAll[i]
+	}
+
+	// 2) Dispatch pre-generated mutations into threads, in multiple batches per thread
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	for th := 0; th < threads; th++ {
+		th := th
+		go func() {
+			defer wg.Done()
+			// Split each thread's disjoint chunk into multiple batches/transactions
+			const batches = 5
+			chunk := total / threads
+			chunkStart := th * chunk
+			chunkEnd := chunkStart + chunk
+			perBatch := chunk / batches
+			for b := 0; b < batches; b++ {
+				batchStart := chunkStart + b*perBatch
+				batchEnd := batchStart + perBatch
+				if b == batches-1 {
+					batchEnd = chunkEnd
+				}
+				batch := edgesAll[batchStart:batchEnd]
+				// Space out start/commit timestamps per thread and per batch to avoid collisions
+				sTs := baseStartTs + uint64(th*100) + uint64(b*2)
+				cTs := sTs + 1
+				newRunMutation(sTs, cTs, batch)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Verify the @count index for the exact number of edges per subject.
+	countKey := x.CountKey(pred, edgesPer, false)
+	txn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+	pl, err := txn.Get(countKey)
+	require.NoError(t, err)
+	uids, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+	require.NoError(t, err)
+	fmt.Println(uids.Uids)
+	require.Equal(t, subjects, len(uids.Uids))
+}
+
+// fakeOracle is an in-memory stand-in for the zero Oracle. It hands out
+// monotonically increasing timestamps and rejects commits whose conflict
+// keys overlap a higher commitTs — same algorithm as
+// dgraph/cmd/zero/oracle.go's hasConflict.
+type fakeOracle struct {
+	mu        sync.Mutex
+	nextTs    uint64
+	keyCommit map[uint64]uint64 // conflict-key fingerprint -> commitTs
+	committed atomic.Int64
+	aborted   atomic.Int64
+}
+
+func newFakeOracle(initialTs uint64) *fakeOracle {
+	return &fakeOracle{nextTs: initialTs, keyCommit: map[uint64]uint64{}}
+}
+
+func (o *fakeOracle) reserveStartTs() uint64 {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.nextTs++
+	return o.nextTs
+}
+
+// tryCommit mirrors zero/oracle.go: for each conflict key, if a later
+// commitTs already exists, abort. Else stamp all keys with a fresh
+// commitTs and return it.
+func (o *fakeOracle) tryCommit(startTs uint64, conflictKeys []uint64) (uint64, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, k := range conflictKeys {
+		if last, ok := o.keyCommit[k]; ok && last > startTs {
+			o.aborted.Add(1)
+			return 0, false
+		}
+	}
+	o.nextTs++
+	commitTs := o.nextTs
+	for _, k := range conflictKeys {
+		o.keyCommit[k] = commitTs
+	}
+	o.committed.Add(1)
+	return commitTs, true
+}
+
+// runPipelineTxn drives a single mutation through the new pipeline with
+// real conflict-aware commit semantics. Returns (committed, error).
+func runPipelineTxn(t *testing.T, ps *badger.DB, oracle *fakeOracle,
+	edges []*pb.DirectedEdge) bool {
+	t.Helper()
+	startTs := oracle.reserveStartTs()
+	txn := posting.Oracle().RegisterStartTs(startTs)
+
+	if err := newRunMutations(context.Background(), edges, txn); err != nil {
+		t.Fatalf("pipeline failed at startTs=%d: %v", startTs, err)
+	}
+
+	// FillContext bridges plists -> deltas (via Update) and emits the
+	// txn's conflict keys as base-36 strings on ctx.Keys.
+	ctxApi := &api.TxnContext{}
+	txn.FillContext(ctxApi, 1, false)
+
+	keys := make([]uint64, 0, len(ctxApi.Keys))
+	for _, k := range ctxApi.Keys {
+		ki, err := strconv.ParseUint(k, 36, 64)
+		require.NoError(t, err)
+		keys = append(keys, ki)
+	}
+
+	commitTs, ok := oracle.tryCommit(startTs, keys)
+	if !ok {
+		return false
+	}
+	writer := posting.NewTxnWriter(ps)
+	require.NoError(t, txn.CommitToDisk(writer, commitTs))
+	require.NoError(t, writer.Flush())
+	txn.UpdateCachedKeys(commitTs)
+	return true
+}
+
+// TestPipelineCountIndexConcurrent mirrors the systest's
+// TestCountIndexConcurrentSetDelScalarPredicate at unit-test scope: many
+// concurrent transactions setting <0x1> <name> "name<rand>" against a
+// scalar string predicate with @index(exact) @count, with real
+// conflict-checking commit semantics. After everything settles, the data
+// list for 0x1 should hold exactly one value, the count(1) bucket should
+// reference exactly 0x1, and no other count bucket should reference 0x1.
+func TestPipelineCountIndexConcurrent(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`name: string @index(exact) @count .`), 1))
+
+	pred := x.AttrInRootNamespace("name")
+	const target uint64 = 1
+
+	oracle := newFakeOracle(10)
+
+	const (
+		numRoutines  = 10
+		txnsPerRoute = 20
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(numRoutines)
+	for r := 0; r < numRoutines; r++ {
+		go func(seed int) {
+			defer wg.Done()
+			rnd := rand.New(rand.NewSource(int64(seed)))
+			for i := 0; i < txnsPerRoute; i++ {
+				value := []byte(fmt.Sprintf("name%d", rnd.Intn(10000)))
+				// Retry on conflict — same as a client doing dg.NewTxn().Mutate().
+				// Each attempt uses a fresh edge: makePostingFromEdge mutates
+				// edge.ValueId during processing, and reusing the object across
+				// attempts would make ValidateAndConvert see it as a uid edge.
+				// Real production gets a freshly-deserialized edge per Raft apply.
+				for attempt := 0; attempt < 100; attempt++ {
+					edge := &pb.DirectedEdge{
+						Entity:    target,
+						Attr:      pred,
+						Value:     value,
+						ValueType: pb.Posting_STRING,
+						Op:        pb.DirectedEdge_SET,
+					}
+					if runPipelineTxn(t, ps, oracle, []*pb.DirectedEdge{edge}) {
+						break
+					}
+				}
+			}
+		}(r)
+	}
+	wg.Wait()
+
+	t.Logf("committed=%d aborted=%d", oracle.committed.Load(), oracle.aborted.Load())
+
+	// Verify final state: exactly one value on 0x1, that uid in count(1) only.
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	dataKey := x.DataKey(pred, target)
+	dpl, err := readTxn.Get(dataKey)
+	require.NoError(t, err)
+	// Scalar string predicate: AllValues returns the live posting list values
+	// (one entry for a non-list scalar with a current value).
+	vals, err := dpl.AllValues(math.MaxUint64)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(vals),
+		"scalar predicate should retain exactly one value, got %v", vals)
+
+	for c := 0; c <= 5; c++ {
+		ck := x.CountKey(pred, uint32(c), false)
+		cpl, err := readTxn.Get(ck)
+		require.NoError(t, err)
+		cuids, err := cpl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		switch c {
+		case 1:
+			require.Equal(t, []uint64{target}, cuids.Uids,
+				"count(1) bucket must contain exactly the target uid")
+		default:
+			require.NotContains(t, cuids.Uids, target,
+				"count(%d) bucket must not contain the target uid", c)
+		}
+	}
+}
+
+// TestPipelineReverseListCount mirrors the [uid] @reverse @count shape from
+// the 21million live-load test (genre predicate). One subject points at
+// multiple objects in a single transaction; we then verify that BOTH the
+// forward data list and the reverse data list are complete.
+//
+// Background: systest/21million/live's TestQueries/Run_queries/query-017
+// fails consistently with one specific film's `genre = Animation` edge
+// missing, while other genre edges from the same film are intact. This
+// is the smallest in-process repro of the same forward/reverse fanout
+// pattern that the live loader hits.
+func TestPipelineReverseListCount(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	// Subject -> list of object uids. Mirrors a film with multiple genres,
+	// and several films sharing some genres.
+	const (
+		madagascar = uint64(100)
+		brotherly  = uint64(101)
+		animation  = uint64(200)
+		shortFilm  = uint64(201)
+		comedy     = uint64(202)
+	)
+	wantForward := map[uint64][]uint64{
+		madagascar: {animation, shortFilm},
+		brotherly:  {animation, shortFilm, comedy},
+	}
+
+	// Single transaction containing all edges (the simplest case — no
+	// concurrency, no batching, no Oracle conflict path). If this fails,
+	// the bug is purely in the forward+reverse fanout within ProcessList.
+	edges := []*pb.DirectedEdge{}
+	for subj, objs := range wantForward {
+		for _, obj := range objs {
+			edges = append(edges, &pb.DirectedEdge{
+				Entity:    subj,
+				Attr:      pred,
+				ValueId:   obj,
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+
+	txn := posting.Oracle().RegisterStartTs(10)
+	require.NoError(t, newRunMutations(context.Background(), edges, txn))
+	txn.Update()
+	w := posting.NewTxnWriter(ps)
+	require.NoError(t, txn.CommitToDisk(w, 11))
+	require.NoError(t, w.Flush())
+	txn.UpdateCachedKeys(11)
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	// Forward: each subject must have all its expected objects.
+	for subj, wantObjs := range wantForward {
+		key := x.DataKey(pred, subj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantObjs, got.Uids,
+			"forward list for subject %d", subj)
+	}
+
+	// Reverse: each object must have all the subjects that point at it.
+	wantReverse := map[uint64][]uint64{}
+	for subj, objs := range wantForward {
+		for _, obj := range objs {
+			wantReverse[obj] = append(wantReverse[obj], subj)
+		}
+	}
+	for obj, wantSubjs := range wantReverse {
+		key := x.ReverseKey(pred, obj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantSubjs, got.Uids,
+			"reverse list for object %d", obj)
+	}
+}
+
+// TestPipelineReverseListCountMultiBatch escalates TestPipelineReverseListCount
+// by spreading edges across many sequential transactions, similar to how the
+// live loader chunks edges into many batches. Each batch is one transaction.
+func TestPipelineReverseListCountMultiBatch(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount2_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	// Many subjects, many objects, every (subject, object) combination — a
+	// dense forward fanout that pushes every reverse list to grow as well.
+	const (
+		nSubjects = 50
+		nObjects  = 20
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	// Build every edge.
+	allEdges := make([]*pb.DirectedEdge, 0, nSubjects*nObjects)
+	for s := 0; s < nSubjects; s++ {
+		for o := 0; o < nObjects; o++ {
+			allEdges = append(allEdges, &pb.DirectedEdge{
+				Entity:    subjBase + uint64(s),
+				Attr:      pred,
+				ValueId:   objBase + uint64(o),
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+
+	// Split into batches of 7 — a value chosen to make each batch carry a
+	// non-trivial mix of subjects and objects per ProcessList run.
+	const batchSize = 7
+	ts := uint64(10)
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batch := allEdges[start:end]
+
+		txn := posting.Oracle().RegisterStartTs(ts)
+		require.NoError(t, newRunMutations(context.Background(), batch, txn))
+		txn.Update()
+		w := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(w, ts+1))
+		require.NoError(t, w.Flush())
+		txn.UpdateCachedKeys(ts + 1)
+		ts += 2
+	}
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	// Forward: each subject must hold exactly all nObjects objects.
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		key := x.DataKey(pred, subj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantForwardObjs, got.Uids,
+			"forward list for subject %d (s=%d): missing some objects", subj, s)
+	}
+
+	// Reverse: each object must hold exactly all nSubjects subjects.
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		key := x.ReverseKey(pred, obj)
+		pl, err := readTxn.Get(key)
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+			"reverse list for object %d (o=%d): missing some subjects", obj, o)
+	}
+}
+
+// TestPipelineReverseListCountMultiPred escalates further: multiple
+// list-uid predicates with @reverse @count are mutated together in each
+// batch, so the per-predicate pipeline goroutines for each predicate run
+// in parallel inside Process(). This is the live-loader's actual shape
+// (genre + director.film + starring + rated all live in the same payload).
+func TestPipelineReverseListCountMultiPred(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount3_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes([]byte(`
+		genre: [uid] @reverse @count .
+		starring: [uid] @reverse @count .
+		director_film: [uid] @reverse @count .
+	`), 1))
+
+	preds := []string{
+		x.AttrInRootNamespace("genre"),
+		x.AttrInRootNamespace("starring"),
+		x.AttrInRootNamespace("director_film"),
+	}
+
+	const (
+		nSubjects = 30
+		nObjects  = 12
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	allEdges := make([]*pb.DirectedEdge, 0, len(preds)*nSubjects*nObjects)
+	for _, pred := range preds {
+		for s := 0; s < nSubjects; s++ {
+			for o := 0; o < nObjects; o++ {
+				allEdges = append(allEdges, &pb.DirectedEdge{
+					Entity:    subjBase + uint64(s),
+					Attr:      pred,
+					ValueId:   objBase + uint64(o),
+					ValueType: pb.Posting_UID,
+					Op:        pb.DirectedEdge_SET,
+				})
+			}
+		}
+	}
+	// Shuffle so each batch carries an interleaved mix of predicates.
+	rnd := rand.New(rand.NewSource(1))
+	rnd.Shuffle(len(allEdges), func(i, j int) {
+		allEdges[i], allEdges[j] = allEdges[j], allEdges[i]
+	})
+
+	const batchSize = 23
+	ts := uint64(10)
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batch := allEdges[start:end]
+
+		txn := posting.Oracle().RegisterStartTs(ts)
+		require.NoError(t, newRunMutations(context.Background(), batch, txn))
+		txn.Update()
+		w := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(w, ts+1))
+		require.NoError(t, w.Flush())
+		txn.UpdateCachedKeys(ts + 1)
+		ts += 2
+	}
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+
+	for _, pred := range preds {
+		for s := 0; s < nSubjects; s++ {
+			subj := subjBase + uint64(s)
+			pl, err := readTxn.Get(x.DataKey(pred, subj))
+			require.NoError(t, err)
+			got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+			require.NoError(t, err)
+			require.ElementsMatch(t, wantForwardObjs, got.Uids,
+				"forward list for pred=%q subj=%d", pred, subj)
+		}
+		for o := 0; o < nObjects; o++ {
+			obj := objBase + uint64(o)
+			pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+			require.NoError(t, err)
+			got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+			require.NoError(t, err)
+			require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+				"reverse list for pred=%q obj=%d", pred, obj)
+		}
+	}
+}
+
+// TestPipelineReverseListCountConcurrent mirrors the live-loader's actual
+// concurrency: many goroutines submitting batched transactions in parallel,
+// going through a real conflict-checking commit (the fakeOracle harness
+// also used by TestPipelineCountIndexConcurrent), against a [uid] @reverse
+// @count predicate. This is the closest in-process reproduction of the
+// systest/21million/live shape that we have without standing up a real
+// cluster.
+func TestPipelineReverseListCountConcurrent(t *testing.T) {
+	dir, err := os.MkdirTemp("", "pipelinerevcount4_")
+	require.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	require.NoError(t, err)
+	defer ps.Close()
+	posting.Init(ps, 0, false)
+	Init(ps)
+	posting.Oracle().ResetTxns()
+
+	require.NoError(t, schema.ParseBytes(
+		[]byte(`genre: [uid] @reverse @count .`), 1))
+
+	pred := x.AttrInRootNamespace("genre")
+
+	const (
+		nSubjects = 60 // films
+		nObjects  = 25 // genres
+	)
+	subjBase := uint64(10000)
+	objBase := uint64(20000)
+
+	allEdges := make([]*pb.DirectedEdge, 0, nSubjects*nObjects)
+	for s := 0; s < nSubjects; s++ {
+		for o := 0; o < nObjects; o++ {
+			allEdges = append(allEdges, &pb.DirectedEdge{
+				Entity:    subjBase + uint64(s),
+				Attr:      pred,
+				ValueId:   objBase + uint64(o),
+				ValueType: pb.Posting_UID,
+				Op:        pb.DirectedEdge_SET,
+			})
+		}
+	}
+	rnd := rand.New(rand.NewSource(7))
+	rnd.Shuffle(len(allEdges), func(i, j int) {
+		allEdges[i], allEdges[j] = allEdges[j], allEdges[i]
+	})
+
+	// Chunk into many small batches so multiple goroutines compete on the
+	// same predicate, mimicking `dgraph live -c 10` behavior.
+	const batchSize = 17
+	type batch []*pb.DirectedEdge
+	batches := []batch{}
+	for start := 0; start < len(allEdges); start += batchSize {
+		end := start + batchSize
+		if end > len(allEdges) {
+			end = len(allEdges)
+		}
+		batches = append(batches, allEdges[start:end])
+	}
+
+	oracle := newFakeOracle(10)
+	const concurrency = 10
+
+	jobs := make(chan batch, len(batches))
+	for _, b := range batches {
+		jobs <- b
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for w := 0; w < concurrency; w++ {
+		go func() {
+			defer wg.Done()
+			for b := range jobs {
+				// Retry until commit, with a fresh edge clone each attempt
+				// (the pipeline mutates edge.ValueId during processing).
+				for attempt := 0; attempt < 200; attempt++ {
+					clones := make([]*pb.DirectedEdge, len(b))
+					for i, e := range b {
+						clones[i] = &pb.DirectedEdge{
+							Entity: e.Entity, Attr: e.Attr,
+							ValueId: e.ValueId, ValueType: e.ValueType, Op: e.Op,
+						}
+					}
+					if runPipelineTxn(t, ps, oracle, clones) {
+						break
+					}
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	t.Logf("committed=%d aborted=%d", oracle.committed.Load(), oracle.aborted.Load())
+
+	readTxn := posting.Oracle().RegisterStartTs(math.MaxUint64)
+
+	wantForwardObjs := make([]uint64, nObjects)
+	for o := 0; o < nObjects; o++ {
+		wantForwardObjs[o] = objBase + uint64(o)
+	}
+	wantReverseSubjs := make([]uint64, nSubjects)
+	for s := 0; s < nSubjects; s++ {
+		wantReverseSubjs[s] = subjBase + uint64(s)
+	}
+
+	missingForward := []string{}
+	missingReverse := []string{}
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		pl, err := readTxn.Get(x.DataKey(pred, subj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		if len(got.Uids) != nObjects {
+			missingForward = append(missingForward,
+				fmt.Sprintf("subj=%d has %d/%d", subj, len(got.Uids), nObjects))
+		}
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		if len(got.Uids) != nSubjects {
+			missingReverse = append(missingReverse,
+				fmt.Sprintf("obj=%d has %d/%d", obj, len(got.Uids), nSubjects))
+		}
+	}
+	require.Empty(t, missingForward, "forward lists missing entries")
+	require.Empty(t, missingReverse, "reverse lists missing entries")
+
+	// And the strict version: each list must match exactly.
+	for s := 0; s < nSubjects; s++ {
+		subj := subjBase + uint64(s)
+		pl, err := readTxn.Get(x.DataKey(pred, subj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantForwardObjs, got.Uids,
+			"forward list for subj %d", subj)
+	}
+	for o := 0; o < nObjects; o++ {
+		obj := objBase + uint64(o)
+		pl, err := readTxn.Get(x.ReverseKey(pred, obj))
+		require.NoError(t, err)
+		got, err := pl.Uids(posting.ListOptions{ReadTs: math.MaxUint64})
+		require.NoError(t, err)
+		require.ElementsMatch(t, wantReverseSubjs, got.Uids,
+			"reverse list for obj %d", obj)
+	}
+}
+
 func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	// Setup temporary directory for Badger DB
 	dir, err := os.MkdirTemp("", "storetest_")
@@ -119,10 +1074,10 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	uidRoom := uint64(1)
 	uidJohn := uint64(2)
 
-	runMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
+	newRunMutation := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			require.NoError(t, runMutation(ctx, edge, txn))
+			require.NoError(t, newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
 		writer := posting.NewTxnWriter(ps)
@@ -132,7 +1087,7 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	}
 
 	// Initial mutation: Set John → Leopard
-	runMutation(1, 3, []*pb.DirectedEdge{
+	newRunMutation(1, 3, []*pb.DirectedEdge{
 		{
 			Entity:    uidJohn,
 			Attr:      attrPerson,
@@ -162,7 +1117,7 @@ func TestDeleteSetWithVarEdgeCorruptsData(t *testing.T) {
 	// Second mutation: Remove John from Leopard, assign Amanda
 	uidAmanda := uint64(3)
 
-	runMutation(6, 8, []*pb.DirectedEdge{
+	newRunMutation(6, 8, []*pb.DirectedEdge{
 		{
 			Entity:    uidJohn,
 			Attr:      attrOffice,
@@ -225,7 +1180,7 @@ func TestGetScalarList(t *testing.T) {
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			x.Check(runMutation(context.Background(), edge, txn))
+			x.Check(newRunMutation(context.Background(), edge, txn))
 		}
 		txn.Update()
 		writer := posting.NewTxnWriter(pstore)
@@ -283,7 +1238,7 @@ func TestMultipleTxnListCount(t *testing.T) {
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			x.Check(runMutation(ctx, edge, txn))
+			x.Check(newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
 		writer := posting.NewTxnWriter(pstore)
@@ -342,7 +1297,7 @@ func TestScalarPredicateRevCount(t *testing.T) {
 	runM := func(startTs, commitTs uint64, edges []*pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
 		for _, edge := range edges {
-			x.Check(runMutation(ctx, edge, txn))
+			x.Check(newRunMutation(ctx, edge, txn))
 		}
 		txn.Update()
 		writer := posting.NewTxnWriter(pstore)
@@ -423,7 +1378,7 @@ func TestScalarPredicateIntCount(t *testing.T) {
 
 	runM := func(startTs, commitTs uint64, edge *pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
-		x.Check(runMutation(ctx, edge, txn))
+		x.Check(newRunMutation(ctx, edge, txn))
 		txn.Update()
 		writer := posting.NewTxnWriter(pstore)
 		require.NoError(t, txn.CommitToDisk(writer, commitTs))
@@ -477,7 +1432,7 @@ func TestScalarPredicateCount(t *testing.T) {
 
 	runM := func(startTs, commitTs uint64, edge *pb.DirectedEdge) {
 		txn := posting.Oracle().RegisterStartTs(startTs)
-		x.Check(runMutation(ctx, edge, txn))
+		x.Check(newRunMutation(ctx, edge, txn))
 		txn.Update()
 		writer := posting.NewTxnWriter(pstore)
 		require.NoError(t, txn.CommitToDisk(writer, commitTs))
@@ -531,7 +1486,7 @@ func TestSingleUidReplacement(t *testing.T) {
 	attr := x.AttrInRootNamespace("singleUidReplaceTest")
 
 	// Txn 1. Set 1 -> 2
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		ValueId: 2,
 		Attr:    attr,
 		Entity:  1,
@@ -547,7 +1502,7 @@ func TestSingleUidReplacement(t *testing.T) {
 	// Txn 2. Set 1 -> 3
 	txn = posting.Oracle().RegisterStartTs(9)
 
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		ValueId: 3,
 		Attr:    attr,
 		Entity:  1,
@@ -591,14 +1546,14 @@ func TestSingleString(t *testing.T) {
 	attr := x.AttrInRootNamespace("singleUidTest")
 
 	// Txn 1. Set 1 -> david 2 -> blush
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		Value:  []byte("david"),
 		Attr:   attr,
 		Entity: 1,
 		Op:     pb.DirectedEdge_SET,
 	}, txn))
 
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		Value:  []byte("blush"),
 		Attr:   attr,
 		Entity: 2,
@@ -614,14 +1569,14 @@ func TestSingleString(t *testing.T) {
 	// Txn 2. Set 2 -> david 1 -> blush
 	txn = posting.Oracle().RegisterStartTs(9)
 
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		Value:  []byte("david"),
 		Attr:   attr,
 		Entity: 2,
 		Op:     pb.DirectedEdge_SET,
 	}, txn))
 
-	x.Check(runMutation(ctx, &pb.DirectedEdge{
+	x.Check(newRunMutation(ctx, &pb.DirectedEdge{
 		Value:  []byte("blush"),
 		Attr:   attr,
 		Entity: 1,
@@ -693,7 +1648,7 @@ func TestLangExact(t *testing.T) {
 		Lang:   "en",
 	}
 
-	x.Check(runMutation(ctx, edge, txn))
+	x.Check(newRunMutation(ctx, edge, txn))
 
 	edge = &pb.DirectedEdge{
 		Value:  []byte("hindi"),
@@ -703,7 +1658,7 @@ func TestLangExact(t *testing.T) {
 		Lang:   "hi",
 	}
 
-	x.Check(runMutation(ctx, edge, txn))
+	x.Check(newRunMutation(ctx, edge, txn))
 
 	txn.Update()
 	writer := posting.NewTxnWriter(pstore)
@@ -745,7 +1700,6 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 	posting.Init(ps, 0, false)
 	Init(ps)
 	err = schema.ParseBytes([]byte("benchmarkadd: string @index(term) ."), 1)
-	fmt.Println(err)
 	if err != nil {
 		panic(err)
 	}
@@ -767,7 +1721,7 @@ func BenchmarkAddMutationWithIndex(b *testing.B) {
 			Op:     pb.DirectedEdge_SET,
 		}
 
-		x.Check(runMutation(ctx, edge, txn))
+		x.Check(newRunMutation(ctx, edge, txn))
 	}
 }
 
@@ -802,4 +1756,318 @@ func TestRemoveDuplicates(t *testing.T) {
 		require.Equal(t, uidsOut, test.uidsOut)
 		require.Equal(t, set, toSet(test.setOut))
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline-vs-legacy differential.
+//
+// Apply the SAME edges through the legacy ordered path and the mutation
+// pipeline (forced fan-out) on a freshly wiped store, then compare the entire
+// committed key-space. requireSame asserts the two paths agree.
+//
+// Below the harness: a broad fuzz gate (TestPipelineLegacyDifferential) plus
+// one deterministic, minimal case per divergence class the fuzz surfaced. These
+// are permanent correctness tests that must stay in the suite; each failing
+// case must go green once its class is fixed, and the pipeline must not be made
+// default-on while any of them is red.
+// ---------------------------------------------------------------------------
+
+type diffH struct {
+	t  *testing.T
+	ps *badger.DB
+	ts uint64
+}
+
+func newDiffH(t *testing.T) *diffH {
+	dir, err := os.MkdirTemp("", "pipediff_")
+	require.NoError(t, err)
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir).WithLoggingLevel(badger.ERROR))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ps.Close(); _ = os.RemoveAll(dir) })
+
+	posting.Init(ps, 0, false)
+	Init(ps)
+	require.NoError(t, schema.ParseBytes([]byte(`
+		sv: string   @index(exact) .
+		lv: [uid]    @reverse .
+		lc: [uid]    @reverse @count .
+		lp: string   @lang .
+		ls: [string] @index(term) .
+	`), 1))
+	prevPar := x.WorkerConfig.IntraMutationParallelism
+	prevEPW := x.WorkerConfig.IntraMutationEdgesPerWorker
+	t.Cleanup(func() {
+		x.WorkerConfig.IntraMutationParallelism = prevPar
+		x.WorkerConfig.IntraMutationEdgesPerWorker = prevEPW
+	})
+	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: 8}
+	x.WorkerConfig.IntraMutationEdgesPerWorker = 1
+	return &diffH{t: t, ps: ps, ts: 10}
+}
+
+func (h *diffH) A(p string) string { return x.AttrInRootNamespace(p) }
+
+func (h *diffH) dump() map[string]string {
+	out := map[string]string{}
+	txn := h.ps.NewTransactionAt(math.MaxUint64, false)
+	defer txn.Discard()
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+	for it.Rewind(); it.Valid(); it.Next() {
+		key := it.Item().KeyCopy(nil)
+		pk, err := x.Parse(key)
+		if err != nil || (!pk.IsData() && !pk.IsIndex() && !pk.IsReverse() && !pk.IsCountOrCountRev()) {
+			continue
+		}
+		pl, err := posting.GetNoStore(key, math.MaxUint64)
+		require.NoError(h.t, err)
+		var parts []string
+		require.NoError(h.t, pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+			parts = append(parts, fmt.Sprintf("u%d:v%x:l%s:t%d", p.Uid, p.Value, p.LangTag, p.PostingType))
+			return nil
+		}))
+		sort.Strings(parts)
+		if len(parts) > 0 {
+			out[fmt.Sprintf("%x", key)] = fmt.Sprintf("%v", parts)
+		}
+	}
+	return out
+}
+
+func cloneEdges(in []*pb.DirectedEdge) []*pb.DirectedEdge {
+	out := make([]*pb.DirectedEdge, len(in))
+	for i, e := range in {
+		out[i] = &pb.DirectedEdge{
+			Entity:    e.Entity,
+			Attr:      e.Attr,
+			Value:     append([]byte(nil), e.Value...),
+			ValueId:   e.ValueId,
+			ValueType: e.ValueType,
+			Lang:      e.Lang,
+			Op:        e.Op,
+		}
+	}
+	return out
+}
+
+func (h *diffH) apply(edges []*pb.DirectedEdge, pipeline bool) map[string]string {
+	require.NoError(h.t, h.ps.DropAll())
+	posting.ResetCache()
+	posting.Oracle().ResetTxns()
+	startTs, commitTs := h.ts, h.ts+1
+	h.ts += 10
+	ctx := schema.GetWriteContext(context.Background())
+	txn := posting.Oracle().RegisterStartTs(startTs)
+	if pipeline {
+		require.NoError(h.t, posting.NewMutationPipeline(txn).Process(ctx, cloneEdges(edges)))
+	} else {
+		es := cloneEdges(edges)
+		sort.SliceStable(es, func(i, j int) bool {
+			if es[i].Attr != es[j].Attr {
+				return es[i].Attr < es[j].Attr
+			}
+			return es[i].Entity < es[j].Entity
+		})
+		for _, e := range es {
+			require.NoError(h.t, runMutation(ctx, e, txn))
+		}
+	}
+	txn.Update()
+	w := posting.NewTxnWriter(h.ps)
+	require.NoError(h.t, txn.CommitToDisk(w, commitTs))
+	require.NoError(h.t, w.Flush())
+	txn.UpdateCachedKeys(commitTs)
+	return h.dump()
+}
+
+// requireSame fails if the pipeline's committed state differs from legacy's.
+func (h *diffH) requireSame(edges []*pb.DirectedEdge) {
+	legacy := h.apply(edges, false)
+	pipe := h.apply(edges, true)
+	require.Equal(h.t, legacy, pipe, "pipeline diverged from legacy\n  edges: %s", fmtEdges(edges))
+}
+
+// ---- edge builders ----
+
+func eSetStr(attr string, uid uint64, v string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_SET}
+}
+func eDelStr(attr string, uid uint64, v string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Op: pb.DirectedEdge_DEL}
+}
+func eSetUid(attr string, uid, tgt uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, ValueId: tgt, ValueType: pb.Posting_UID, Op: pb.DirectedEdge_SET}
+}
+func eLangSet(attr string, uid uint64, v, lang string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Lang: lang, Op: pb.DirectedEdge_SET}
+}
+func eLangDel(attr string, uid uint64, v, lang string) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(v), ValueType: pb.Posting_STRING, Lang: lang, Op: pb.DirectedEdge_DEL}
+}
+func eStarDel(attr string, uid uint64) *pb.DirectedEdge {
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: []byte(x.Star), Op: pb.DirectedEdge_DEL}
+}
+
+func fmtEdges(edges []*pb.DirectedEdge) string {
+	var b []string
+	for _, e := range edges {
+		op := "SET"
+		if e.Op == pb.DirectedEdge_DEL {
+			op = "DEL"
+		}
+		v := string(e.Value)
+		if e.ValueType == pb.Posting_UID {
+			v = fmt.Sprintf("uid(%d)", e.ValueId)
+		}
+		lang := ""
+		if e.Lang != "" {
+			lang = "@" + e.Lang
+		}
+		b = append(b, fmt.Sprintf("%s %s e=%d v=%q%s", op, e.Attr, e.Entity, v, lang))
+	}
+	return fmt.Sprintf("%v", b)
+}
+
+// TestPipelineLegacyDifferential is the broad fuzz gate (discovery + acceptance).
+// Star-deletes are excluded here; they have their own deterministic case below.
+func TestPipelineLegacyDifferential(t *testing.T) {
+	h := newDiffH(t)
+	uids := []uint64{0x1, 0x2, 0x3, 0x4}
+	strs := []string{"a", "b", "c", "d"}
+	tgts := []uint64{0x100, 0x101, 0x102}
+	langs := []string{"en", "de", "fr"}
+	gen := func(rng *rand.Rand) []*pb.DirectedEdge {
+		n := 3 + rng.Intn(8)
+		var edges []*pb.DirectedEdge
+		for i := 0; i < n; i++ {
+			uid := uids[rng.Intn(len(uids))]
+			del := rng.Intn(2) == 1
+			switch rng.Intn(5) {
+			case 0:
+				e := eSetStr(h.A("sv"), uid, strs[rng.Intn(len(strs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 1:
+				e := eSetUid(h.A("lv"), uid, tgts[rng.Intn(len(tgts))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 2:
+				e := eSetUid(h.A("lc"), uid, tgts[rng.Intn(len(tgts))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 3:
+				e := eLangSet(h.A("lp"), uid, strs[rng.Intn(len(strs))], langs[rng.Intn(len(langs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			case 4:
+				e := eSetStr(h.A("ls"), uid, strs[rng.Intn(len(strs))])
+				if del {
+					e.Op = pb.DirectedEdge_DEL
+				}
+				edges = append(edges, e)
+			}
+		}
+		return edges
+	}
+	const iters = 2000
+	mism := 0
+	byPred := map[string]int{}
+	for seed := 0; seed < iters; seed++ {
+		rng := rand.New(rand.NewSource(int64(seed) + 1))
+		edges := gen(rng)
+		legacy := h.apply(edges, false)
+		pipe := h.apply(edges, true)
+		if fmt.Sprintf("%v", legacy) != fmt.Sprintf("%v", pipe) {
+			mism++
+			for k := range symDiff(legacy, pipe) {
+				if pk, err := x.Parse(mustHex(k)); err == nil {
+					byPred[pk.Attr]++
+				}
+			}
+		}
+	}
+	t.Logf("fuzz differential (no star): %d/%d seeds diverged; by predicate: %v", mism, iters, byPred)
+	require.Zero(t, mism, "pipeline must match legacy")
+}
+
+func symDiff(a, b map[string]string) map[string]bool {
+	out := map[string]bool{}
+	for k, v := range a {
+		if b[k] != v {
+			out[k] = true
+		}
+	}
+	for k, v := range b {
+		if a[k] != v {
+			out[k] = true
+		}
+	}
+	return out
+}
+
+func mustHex(s string) []byte {
+	out := make([]byte, len(s)/2)
+	for i := 0; i < len(out); i++ {
+		fmt.Sscanf(s[i*2:i*2+2], "%02x", &out[i])
+	}
+	return out
+}
+
+// Divergence class 1 — star-delete reorder. A SET followed by a star-delete on
+// the same (pred,entity) in one proposal. The pipeline runs the delete inline
+// and the set via a worker afterward, so the value (and its index) survive when
+// they should be cleared.
+func TestPipeline_StarDeleteThenSet(t *testing.T) {
+	h := newDiffH(t)
+	sv := h.A("sv")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetStr(sv, 1, "a"),
+		eStarDel(sv, 1), // after this, sv(1) must be empty
+	})
+}
+
+// Divergence class 2 — @count with repeated/multiple SETs changing a target's
+// in-degree. The @count index diverges from the reverse data (preliminary
+// analysis points at legacy being the stale side).
+func TestPipeline_CountDuplicateSets(t *testing.T) {
+	h := newDiffH(t)
+	lc := h.A("lc")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetUid(lc, 1, 0x100),
+		eSetUid(lc, 1, 0x100), // duplicate source->target
+		eSetUid(lc, 3, 0x100), // target 0x100 in-degree 2
+		eSetUid(lc, 3, 0x101), // target 0x101 in-degree 1
+	})
+}
+
+// Divergence class 3 — @lang. A value-specific delete on one language tag
+// wrongly drops a DIFFERENT language's value in the pipeline.
+func TestPipeline_LangValueDelete(t *testing.T) {
+	h := newDiffH(t)
+	lp := h.A("lp")
+	h.requireSame([]*pb.DirectedEdge{
+		eLangSet(lp, 1, "b", "en"),
+		eLangSet(lp, 1, "c", "de"),
+		eLangDel(lp, 1, "c", "en"), // deletes nothing (en is "b"); de must remain
+	})
+}
+
+// Divergence class 4 — value-indexed list. SET/DELETE churn on a
+// [string] @index(term) leaves a stale term in the index in the pipeline.
+func TestPipeline_IndexedListValueChurn(t *testing.T) {
+	h := newDiffH(t)
+	ls := h.A("ls")
+	h.requireSame([]*pb.DirectedEdge{
+		eSetStr(ls, 1, "c"),
+		eDelStr(ls, 1, "c"), // index entry for "c" must be removed
+		eSetStr(ls, 1, "d"),
+	})
 }
