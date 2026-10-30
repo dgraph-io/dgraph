@@ -1,0 +1,31 @@
+# Scrapes the alpha's metrics and memwatch's metrics from every alpha pod. Requires the Prometheus Operator
+# (e.g. kube-prometheus-stack), which also provides the cAdvisor and kube-state-metrics series the rules use.
+#
+# Adjust before applying:
+#   - metadata.labels.release: must match your Prometheus's podMonitorSelector
+#   - spec.selector: must match your alpha pods' labels (shown here for the official Dgraph Helm chart)
+#   - spec.namespaceSelector: the namespace Dgraph runs in
+#   - the alpha port name: the name of containerPort 8080 on your alpha container
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: dgraph-alpha
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [dgraph]
+  selector:
+    matchLabels:
+      app: dgraph
+      component: alpha
+  podMetricsEndpoints:
+    # Dgraph's own metrics: dgraph_*, go_*, process_*, badger_*. Same names in v24 and v25.
+    - port: http-alpha
+      path: /debug/prometheus_metrics
+      interval: 30s
+    # memwatch, the flight-recorder sidecar (k8s/alpha-memwatch-patch.yaml). Its window-max gauge holds the peak
+    # of the last minute, so a 30s interval never misses a spike.
+    - port: memwatch
+      path: /metrics
+      interval: 30s

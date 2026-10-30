@@ -1,0 +1,210 @@
+# Prometheus recording and alerting rules for Dgraph alphas on Kubernetes.
+#
+# Sources:
+#   - the alpha's own metrics (scrape :8080/debug/prometheus_metrics, see podmonitor.yaml)
+#   - memwatch, the flight-recorder sidecar (:9095/metrics)
+#   - cAdvisor (kubelet) for container_* series, and kube-state-metrics for kube_* series
+#
+# Every metric used here has the same name and labels in Dgraph v24 and v25.
+#
+# Alpha containers are matched with container=~".*alpha.*", which fits the official Helm chart and most hand-written
+# StatefulSets. If your alpha container is named differently, replace that matcher throughout this file.
+groups:
+  - name: dgraph-alpha-memory.rules
+    interval: 30s
+    rules:
+      # Memory limit of the alpha container. Falls back to memwatch's --limit-bytes when cAdvisor reports no limit.
+      - record: dgraph:alpha_memory_limit_bytes
+        expr: |
+          max by (namespace, pod) (container_spec_memory_limit_bytes{container=~".*alpha.*"} > 0)
+            or
+          max by (namespace, pod) (memwatch_limit_bytes > 0)
+
+      # Anonymous memory (cgroup "anon"/"rss"): Go heap, jemalloc, stacks. This is what the OOM killer can't
+      # reclaim, so it is the number to compare against the limit.
+      - record: dgraph:alpha_anon_bytes
+        expr: max by (namespace, pod) (container_memory_rss{container=~".*alpha.*"})
+
+      # Page cache charged to the container, mostly Badger's mmapped SST and value-log files. Clean pages are
+      # reclaimed before an OOM kill, so this is normally harmless.
+      - record: dgraph:alpha_file_bytes
+        expr: max by (namespace, pod) (container_memory_cache{container=~".*alpha.*"})
+
+      - record: dgraph:alpha_mapped_file_bytes
+        expr: max by (namespace, pod) (container_memory_mapped_file{container=~".*alpha.*"})
+
+      # What `kubectl top` and the kubelet show: usage minus inactive page cache. It includes active page cache,
+      # so it overstates how close the container is to an OOM kill.
+      - record: dgraph:alpha_working_set_bytes
+        expr: max by (namespace, pod) (container_memory_working_set_bytes{container=~".*alpha.*"})
+
+      # Resident memory outside the Go heap: jemalloc (Badger block cache, memtables), Go runtime overhead, and
+      # mapped files. dgraph_memory_inuse_bytes only refreshes once a minute.
+      - record: dgraph:alpha_offheap_bytes
+        expr: |
+          max by (namespace, pod) (process_resident_memory_bytes and on (namespace, pod, instance)
+            dgraph_memory_inuse_bytes)
+            -
+          max by (namespace, pod) (dgraph_memory_inuse_bytes)
+
+      - record: dgraph:alpha_anon_ratio
+        expr: dgraph:alpha_anon_bytes / on (namespace, pod) dgraph:alpha_memory_limit_bytes
+
+      - record: dgraph:alpha_working_set_ratio
+        expr: dgraph:alpha_working_set_bytes / on (namespace, pod) dgraph:alpha_memory_limit_bytes
+
+      # Peak memory between scrapes, as seen by memwatch every second. Anonymous memory when memwatch runs in proc
+      # mode, total RSS in http mode.
+      - record: dgraph:alpha_peak_ratio
+        expr: |
+          (
+            max by (namespace, pod) (memwatch_rss_window_max_bytes{type="anon"})
+              or
+            max by (namespace, pod) (memwatch_rss_window_max_bytes{type="total"})
+          ) / on (namespace, pod) dgraph:alpha_memory_limit_bytes
+
+  - name: dgraph-alpha-memory.alerts
+    rules:
+      - alert: DgraphAlphaOOMKilled
+        expr: |
+          max by (namespace, pod) (increase(container_oom_events_total{container=~".*alpha.*"}[10m])) > 0
+            or
+          max by (namespace, pod) (
+            (kube_pod_container_status_last_terminated_reason{reason="OOMKilled", container=~".*alpha.*"} == 1)
+              and on (namespace, pod, container)
+            (increase(kube_pod_container_status_restarts_total{container=~".*alpha.*"}[10m]) > 0)
+          )
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} was OOM-killed"
+          description: >-
+            The alpha container hit its memory limit and was killed. If memwatch is running, the memory timeline
+            leading into the kill is in its newest *-restart capture directory, and any threshold or rise captures
+            just before it hold heap profiles and goroutine dumps from the spike. Check the node's kernel log for
+            the "Killed process" line: its anon-rss vs file-rss split shows whether this was heap growth.
+
+      - alert: DgraphAnonMemoryNearLimit
+        expr: dgraph:alpha_anon_ratio > 0.80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} anonymous memory at {{ $value | humanizePercentage }} of its limit"
+          description: >-
+            Anonymous memory (Go heap, jemalloc, stacks) can't be reclaimed by the kernel, so this is the real OOM
+            risk. Compare dgraph_memory_inuse_bytes (Go heap) with dgraph:alpha_offheap_bytes on the dashboard to
+            see which part is growing.
+
+      - alert: DgraphWorkingSetNearLimit
+        expr: dgraph:alpha_working_set_ratio > 0.90 and on (namespace, pod) dgraph:alpha_anon_ratio <= 0.80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} working set at {{ $value | humanizePercentage }} of its limit"
+          description: >-
+            Working set is high but anonymous memory isn't, so most of it is active page cache from Badger's mmapped
+            files. The kernel reclaims that before an OOM kill, so this is usually safe, but it does mean dashboards
+            and the kubelet report the pod as nearly full.
+
+      - alert: DgraphMemorySpike
+        expr: dgraph:alpha_peak_ratio > 0.90
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} memory spiked to {{ $value | humanizePercentage }} of its limit"
+          description: >-
+            memwatch saw a peak above 90% of the limit within its window, possibly between Prometheus scrapes.
+            memwatch takes a capture (heap profile, goroutine dump, timeline) when this happens; check its newest
+            threshold-* or rise capture. A single expensive query is the usual cause of short spikes.
+
+      - alert: DgraphMemoryGrowthTrend
+        expr: |
+          predict_linear(dgraph:alpha_anon_bytes[12h], 48 * 3600)
+            > on (namespace, pod) dgraph:alpha_memory_limit_bytes
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} anonymous memory is on track to hit its limit within 48h"
+          description: >-
+            Anonymous memory has grown steadily over the last 12 hours. Compare memwatch's periodic heap profiles
+            with `go tool pprof -diff_base <early>/heap.pb.gz <late>/heap.pb.gz` (inuse_space) to find what is
+            being retained.
+
+      - alert: DgraphGoMemLimitAboveContainerLimit
+        expr: |
+          max by (namespace, pod) (
+            go_gc_gomemlimit_bytes < 9e18 and on (namespace, pod, instance) dgraph_memory_inuse_bytes
+          ) >= on (namespace, pod) dgraph:alpha_memory_limit_bytes
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GOMEMLIMIT on {{ $labels.namespace }}/{{ $labels.pod }} is at or above the container memory limit"
+          description: >-
+            GOMEMLIMIT only bounds the Go heap, and here the Go runtime believes it has more room than the
+            container does. The container will be OOM-killed before the Go garbage collector reacts. Set GOMEMLIMIT
+            below the container limit, leaving room for off-heap memory (see dgraph:alpha_offheap_bytes).
+
+  - name: dgraph-alpha-health.alerts
+    rules:
+      - alert: DgraphFrequentRestarts
+        expr: max by (namespace, pod) (increase(kube_pod_container_status_restarts_total{container=~".*alpha.*"}[1h])) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} restarted {{ $value | humanize }} times in the last hour"
+
+      - alert: DgraphPendingQueriesHigh
+        expr: max by (namespace, pod) (dgraph_pending_queries_total) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} has {{ $value | humanize }} queries in flight"
+          description: >-
+            Queries are piling up faster than the alpha completes them. That is often a few slow, expensive queries,
+            which also raise memory. The count includes mutations.
+
+      - alert: DgraphQueryLatencyHigh
+        expr: |
+          histogram_quantile(0.99,
+            sum by (namespace, pod, le) (rate(dgraph_latency_bucket{method="Server.Query"}[5m]))
+          ) / 1000 > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} p99 query latency is {{ $value | humanizeDuration }}"
+
+      - alert: DgraphNoRaftLeader
+        expr: max by (namespace, pod) (dgraph_raft_has_leader) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dgraph alpha {{ $labels.namespace }}/{{ $labels.pod }} sees no Raft leader for its group"
+
+  - name: memwatch.alerts
+    rules:
+      - alert: MemwatchCaptureTaken
+        expr: max by (namespace, pod, reason) (increase(memwatch_captures_total{reason!="periodic"}[5m])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "memwatch saved a {{ $labels.reason }} capture for {{ $labels.namespace }}/{{ $labels.pod }}"
+          description: >-
+            Download it with: kubectl -n {{ $labels.namespace }} port-forward pod/{{ $labels.pod }} 9095, then
+            curl -sO -J localhost:9095/captures.tar.gz
+
+      - alert: MemwatchTargetDown
+        expr: max by (namespace, pod) (memwatch_target_up) == 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "memwatch on {{ $labels.namespace }}/{{ $labels.pod }} can't sample the alpha"
+          description: >-
+            In proc mode, check that the pod has shareProcessNamespace: true. In http mode, check --alpha-url.

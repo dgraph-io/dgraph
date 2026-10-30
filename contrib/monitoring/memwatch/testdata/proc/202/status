@@ -1,0 +1,15 @@
+Name:	dgraph
+Umask:	0022
+State:	S (sleeping)
+Tgid:	101
+Pid:	101
+VmPeak:	 3145728 kB
+VmSize:	 2929688 kB
+VmLck:	       0 kB
+VmHWM:	  819200 kB
+VmRSS:	  524288 kB
+RssAnon:	  409600 kB
+RssFile:	  112640 kB
+RssShmem:	    2048 kB
+VmData:	 1048576 kB
+Threads:	42

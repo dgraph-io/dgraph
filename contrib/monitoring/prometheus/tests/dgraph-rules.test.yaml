@@ -1,0 +1,337 @@
+# promtool unit tests for ../dgraph-rules.yaml. Run from contrib/monitoring/prometheus:
+#   promtool test rules tests/dgraph-rules.test.yaml
+# Every alert has a pod that fires and a pod that must not. Limits are 2GiB (2147483648) unless noted.
+rule_files:
+  - ../dgraph-rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # --- Recording rules --------------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'process_resident_memory_bytes{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '629145600x10' # 600MiB
+      - series: 'dgraph_memory_inuse_bytes{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '209715200x10' # 200MiB
+      # Another process in the same pod (e.g. a mesh sidecar) must not be mistaken for the alpha.
+      - series: 'process_resident_memory_bytes{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:15020"}'
+        values: '2147483648x10'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2147483648x10'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="istio-proxy"}'
+        values: '134217728x10'
+      # alpha-1 has no cAdvisor limit, so memwatch's --limit-bytes is used.
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '0x10'
+      - series: 'memwatch_limit_bytes{namespace="dgraph",pod="alpha-1",container="memwatch"}'
+        values: '1073741824x10'
+    promql_expr_test:
+      - expr: dgraph:alpha_offheap_bytes
+        eval_time: 2m
+        exp_samples:
+          - labels: 'dgraph:alpha_offheap_bytes{namespace="dgraph",pod="alpha-0"}'
+            value: 419430400 # 400MiB
+      - expr: dgraph:alpha_memory_limit_bytes
+        eval_time: 2m
+        exp_samples:
+          - labels: 'dgraph:alpha_memory_limit_bytes{namespace="dgraph",pod="alpha-0"}'
+            value: 2147483648
+          - labels: 'dgraph:alpha_memory_limit_bytes{namespace="dgraph",pod="alpha-1"}'
+            value: 1073741824
+
+  # --- DgraphAlphaOOMKilled ---------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_oom_events_total{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '0x10 1x30'
+      # An OOM in a different container of alpha-0 must not alert.
+      - series: 'container_oom_events_total{namespace="dgraph",pod="alpha-0",container="istio-proxy"}'
+        values: '0x10 1x30'
+      - series: 'container_oom_events_total{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '0x40'
+      # kube-state-metrics path, for clusters whose cAdvisor lacks container_oom_events_total.
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="dgraph",pod="alpha-2",container="dgraph-alpha",reason="OOMKilled"}'
+        values: '1x40'
+      - series: 'kube_pod_container_status_restarts_total{namespace="dgraph",pod="alpha-2",container="dgraph-alpha"}'
+        values: '0x10 1x30'
+      # Restarted for another reason: no alert.
+      - series: 'kube_pod_container_status_last_terminated_reason{namespace="dgraph",pod="alpha-3",container="dgraph-alpha",reason="Error"}'
+        values: '1x40'
+      - series: 'kube_pod_container_status_restarts_total{namespace="dgraph",pod="alpha-3",container="dgraph-alpha"}'
+        values: '0x10 1x30'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DgraphAlphaOOMKilled
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "The alpha container hit its memory limit and was killed. If memwatch is running, the memory timeline leading into the kill is in its newest *-restart capture directory, and any threshold or rise captures just before it hold heap profiles and goroutine dumps from the spike. Check the node's kernel log for the \"Killed process\" line: its anon-rss vs file-rss split shows whether this was heap growth."
+              summary: "Dgraph alpha dgraph/alpha-1 was OOM-killed"
+          - exp_labels: {severity: critical, namespace: dgraph, pod: alpha-2}
+            exp_annotations:
+              description: "The alpha container hit its memory limit and was killed. If memwatch is running, the memory timeline leading into the kill is in its newest *-restart capture directory, and any threshold or rise captures just before it hold heap profiles and goroutine dumps from the spike. Check the node's kernel log for the \"Killed process\" line: its anon-rss vs file-rss split shows whether this was heap growth."
+              summary: "Dgraph alpha dgraph/alpha-2 was OOM-killed"
+      - eval_time: 18m
+        alertname: DgraphAlphaOOMKilled
+        exp_alerts: []
+
+  # --- DgraphAnonMemoryNearLimit ----------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2147483648x20'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '2147483648x20'
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '1073741824x20' # 50%
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '1825361101x20' # 85%
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: DgraphAnonMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: DgraphAnonMemoryNearLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "Anonymous memory (Go heap, jemalloc, stacks) can't be reclaimed by the kernel, so this is the real OOM risk. Compare dgraph_memory_inuse_bytes (Go heap) with dgraph:alpha_offheap_bytes on the dashboard to see which part is growing."
+              summary: "Dgraph alpha dgraph/alpha-1 anonymous memory at 85% of its limit"
+
+  # --- DgraphWorkingSetNearLimit ----------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2147483648x30'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '2147483648x30'
+      # alpha-1: working set high from page cache, anon low. Fires.
+      - series: 'container_memory_working_set_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '2040109466x30' # 95%
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '1073741824x30' # 50%
+      # alpha-0: working set high and anon high. DgraphAnonMemoryNearLimit covers it, so this one stays quiet.
+      - series: 'container_memory_working_set_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2040109466x30'
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '1825361101x30'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: DgraphWorkingSetNearLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "Working set is high but anonymous memory isn't, so most of it is active page cache from Badger's mmapped files. The kernel reclaims that before an OOM kill, so this is usually safe, but it does mean dashboards and the kubelet report the pod as nearly full."
+              summary: "Dgraph alpha dgraph/alpha-1 working set at 95% of its limit"
+
+  # --- DgraphMemorySpike ------------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2147483648x10'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '2147483648x10'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-2",container="dgraph-alpha"}'
+        values: '2147483648x10'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-3",container="dgraph-alpha"}'
+        values: '0x10'
+      - series: 'memwatch_limit_bytes{namespace="dgraph",pod="alpha-3",container="memwatch"}'
+        values: '1073741824x10'
+      # alpha-0, proc mode: anon peaked at 95%. Fires.
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-0",container="memwatch",type="anon"}'
+        values: '2040109466x10'
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-0",container="memwatch",type="total"}'
+        values: '2104533975x10'
+      # alpha-1, http mode: only total, at 92%. Fires through the fallback.
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-1",container="memwatch",type="total"}'
+        values: '1975684956x10'
+      # alpha-2, proc mode: total is high from mapped files, but anon is 50%. Anon wins, so no alert.
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-2",container="memwatch",type="anon"}'
+        values: '1073741824x10'
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-2",container="memwatch",type="total"}'
+        values: '2040109466x10'
+      # alpha-3: no cAdvisor limit, memwatch limit 1GiB, anon peak 95% of that. Fires.
+      - series: 'memwatch_rss_window_max_bytes{namespace="dgraph",pod="alpha-3",container="memwatch",type="anon"}'
+        values: '1020054733x10'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: DgraphMemorySpike
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-0}
+            exp_annotations:
+              description: "memwatch saw a peak above 90% of the limit within its window, possibly between Prometheus scrapes. memwatch takes a capture (heap profile, goroutine dump, timeline) when this happens; check its newest threshold-* or rise capture. A single expensive query is the usual cause of short spikes."
+              summary: "Dgraph alpha dgraph/alpha-0 memory spiked to 95% of its limit"
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "memwatch saw a peak above 90% of the limit within its window, possibly between Prometheus scrapes. memwatch takes a capture (heap profile, goroutine dump, timeline) when this happens; check its newest threshold-* or rise capture. A single expensive query is the usual cause of short spikes."
+              summary: "Dgraph alpha dgraph/alpha-1 memory spiked to 92% of its limit"
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-3}
+            exp_annotations:
+              description: "memwatch saw a peak above 90% of the limit within its window, possibly between Prometheus scrapes. memwatch takes a capture (heap profile, goroutine dump, timeline) when this happens; check its newest threshold-* or rise capture. A single expensive query is the usual cause of short spikes."
+              summary: "Dgraph alpha dgraph/alpha-3 memory spiked to 95% of its limit"
+
+  # --- DgraphMemoryGrowthTrend ------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '2147483648x1700'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '2147483648x1700'
+      # alpha-1 grows ~120MB/h from 512MiB: about 6GB more within 48h.
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '536870912+1000000x1700'
+      - series: 'container_memory_rss{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '536870912x1700'
+    alert_rule_test:
+      - eval_time: 13h30m
+        alertname: DgraphMemoryGrowthTrend
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "Anonymous memory has grown steadily over the last 12 hours. Compare memwatch's periodic heap profiles with `go tool pprof -diff_base <early>/heap.pb.gz <late>/heap.pb.gz` (inuse_space) to find what is being retained."
+              summary: "Dgraph alpha dgraph/alpha-1 anonymous memory is on track to hit its limit within 48h"
+
+  # --- DgraphGoMemLimitAboveContainerLimit ------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '1073741824x20'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '1073741824x20'
+      - series: 'container_spec_memory_limit_bytes{namespace="dgraph",pod="alpha-2",container="dgraph-alpha"}'
+        values: '1073741824x20'
+      # alpha-1: GOMEMLIMIT=1200MiB with a 1GiB container limit. Fires.
+      - series: 'go_gc_gomemlimit_bytes{namespace="dgraph",pod="alpha-1",instance="10.0.0.2:8080"}'
+        values: '1258291200x20'
+      - series: 'dgraph_memory_inuse_bytes{namespace="dgraph",pod="alpha-1",instance="10.0.0.2:8080"}'
+        values: '209715200x20'
+      # alpha-0: GOMEMLIMIT unset (math.MaxInt64). No alert.
+      - series: 'go_gc_gomemlimit_bytes{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '9223372036854775807x20'
+      - series: 'dgraph_memory_inuse_bytes{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '209715200x20'
+      # alpha-2: GOMEMLIMIT=768MiB, below the limit. No alert.
+      - series: 'go_gc_gomemlimit_bytes{namespace="dgraph",pod="alpha-2",instance="10.0.0.3:8080"}'
+        values: '805306368x20'
+      - series: 'dgraph_memory_inuse_bytes{namespace="dgraph",pod="alpha-2",instance="10.0.0.3:8080"}'
+        values: '209715200x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DgraphGoMemLimitAboveContainerLimit
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "GOMEMLIMIT only bounds the Go heap, and here the Go runtime believes it has more room than the container does. The container will be OOM-killed before the Go garbage collector reacts. Set GOMEMLIMIT below the container limit, leaving room for off-heap memory (see dgraph:alpha_offheap_bytes)."
+              summary: "GOMEMLIMIT on dgraph/alpha-1 is at or above the container memory limit"
+
+  # --- DgraphFrequentRestarts -------------------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="dgraph",pod="alpha-1",container="dgraph-alpha"}'
+        values: '0x60 1 2 3 4 5 5x30'
+      - series: 'kube_pod_container_status_restarts_total{namespace="dgraph",pod="alpha-0",container="dgraph-alpha"}'
+        values: '0x60 1 2 2x30'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: DgraphFrequentRestarts
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              summary: "Dgraph alpha dgraph/alpha-1 restarted 5 times in the last hour"
+
+  # --- DgraphPendingQueriesHigh -----------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'dgraph_pending_queries_total{namespace="dgraph",pod="alpha-1",instance="10.0.0.2:8080"}'
+        values: '150x20'
+      - series: 'dgraph_pending_queries_total{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '10x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DgraphPendingQueriesHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "Queries are piling up faster than the alpha completes them. That is often a few slow, expensive queries, which also raise memory. The count includes mutations."
+              summary: "Dgraph alpha dgraph/alpha-1 has 150 queries in flight"
+
+  # --- DgraphQueryLatencyHigh -------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      # alpha-1: most queries take 1-10s.
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-1",method="Server.Query",status="",le="1000"}'
+        values: '0+1x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-1",method="Server.Query",status="",le="10000"}'
+        values: '0+100x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-1",method="Server.Query",status="",le="+Inf"}'
+        values: '0+100x40'
+      # alpha-0: everything under 1s.
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Query",status="",le="1000"}'
+        values: '0+100x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Query",status="",le="10000"}'
+        values: '0+100x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Query",status="",le="+Inf"}'
+        values: '0+100x40'
+      # Slow mutations on alpha-0 don't count toward query latency.
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Mutate",status="",le="1000"}'
+        values: '0x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Mutate",status="",le="10000"}'
+        values: '0x40'
+      - series: 'dgraph_latency_bucket{namespace="dgraph",pod="alpha-0",method="Server.Mutate",status="",le="+Inf"}'
+        values: '0+100x40'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: DgraphQueryLatencyHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              summary: "Dgraph alpha dgraph/alpha-1 p99 query latency is 9.909s"
+
+  # --- DgraphNoRaftLeader -----------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'dgraph_raft_has_leader{namespace="dgraph",pod="alpha-1",instance="10.0.0.2:8080"}'
+        values: '0x10'
+      - series: 'dgraph_raft_has_leader{namespace="dgraph",pod="alpha-0",instance="10.0.0.1:8080"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: DgraphNoRaftLeader
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              summary: "Dgraph alpha dgraph/alpha-1 sees no Raft leader for its group"
+
+  # --- MemwatchCaptureTaken ---------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'memwatch_captures_total{namespace="dgraph",pod="alpha-1",container="memwatch",reason="threshold-85"}'
+        values: '0x10 1x10'
+      # Periodic baseline captures are routine. No alert.
+      - series: 'memwatch_captures_total{namespace="dgraph",pod="alpha-0",container="memwatch",reason="periodic"}'
+        values: '0x10 1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: MemwatchCaptureTaken
+        exp_alerts:
+          - exp_labels: {severity: info, namespace: dgraph, pod: alpha-1, reason: threshold-85}
+            exp_annotations:
+              description: "Download it with: kubectl -n dgraph port-forward pod/alpha-1 9095, then curl -sO -J localhost:9095/captures.tar.gz"
+              summary: "memwatch saved a threshold-85 capture for dgraph/alpha-1"
+
+  # --- MemwatchTargetDown -----------------------------------------------------------------------------------------
+  - interval: 30s
+    input_series:
+      - series: 'memwatch_target_up{namespace="dgraph",pod="alpha-1",container="memwatch"}'
+        values: '0x30'
+      - series: 'memwatch_target_up{namespace="dgraph",pod="alpha-0",container="memwatch"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: MemwatchTargetDown
+        exp_alerts:
+          - exp_labels: {severity: info, namespace: dgraph, pod: alpha-1}
+            exp_annotations:
+              description: "In proc mode, check that the pod has shareProcessNamespace: true. In http mode, check --alpha-url."
+              summary: "memwatch on dgraph/alpha-1 can't sample the alpha"
