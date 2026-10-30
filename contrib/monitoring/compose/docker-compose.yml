@@ -6,6 +6,9 @@
 #
 # Prometheus: http://localhost:9090   Grafana: http://localhost:3000 (anonymous admin)   memwatch: :9095/metrics
 # Captures land in ./captures.
+#
+# Every port is bound to 127.0.0.1. The alpha whitelists all addresses and Grafana gives anonymous users admin, so
+# don't publish them on other interfaces.
 name: dgraph-memwatch
 
 services:
@@ -31,7 +34,7 @@ services:
     mem_limit: 1g
     memswap_limit: 1g
     restart: unless-stopped
-    ports: ["8080:8080", "9080:9080"]
+    ports: ["127.0.0.1:8080:8080", "127.0.0.1:9080:9080"]
     volumes: [alpha:/dgraph]
     depends_on: [zero, pidns]
 
@@ -49,7 +52,7 @@ services:
       - --periodic=10m
     environment:
       MEMWATCH_LIMIT_BYTES: 1Gi # matches alpha's mem_limit
-    ports: ["9095:9095"]
+    ports: ["127.0.0.1:9095:9095"]
     volumes: ["./captures:/captures"]
     depends_on: [pidns]
 
@@ -69,7 +72,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     command: [--config.file=/etc/prometheus/prometheus.yml]
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../prometheus/dgraph-rules.yaml:/etc/prometheus/dgraph-rules.yaml:ro
@@ -80,7 +83,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     volumes:
       - ./grafana-provisioning:/etc/grafana/provisioning:ro
       - ../grafana:/var/lib/grafana/dashboards:ro

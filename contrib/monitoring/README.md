@@ -45,8 +45,9 @@ via kube-prometheus-stack, which also runs cAdvisor scraping and kube-state-metr
    docker push <registry>/memwatch:<tag>
    ```
 
-2. **Add the sidecar.** Edit `k8s/alpha-memwatch-patch.yaml`: set the image, and replace `ALPHA_CONTAINER` with
-   your alpha container's name. Then patch the StatefulSet. This restarts the alpha pods one at a time.
+2. **Add the sidecar.** Edit `k8s/alpha-memwatch-patch.yaml`: set the image, and replace `ALPHA_STATEFULSET` and
+   `ALPHA_CONTAINER` with your alpha StatefulSet's and container's names. Then patch the StatefulSet, or list the
+   file under `patches:` in a kustomization. This restarts the alpha pods one at a time.
 
    ```bash
    kubectl -n dgraph patch statefulset <alpha-statefulset> --patch-file k8s/alpha-memwatch-patch.yaml

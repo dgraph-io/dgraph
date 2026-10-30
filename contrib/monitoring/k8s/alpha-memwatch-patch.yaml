@@ -1,14 +1,21 @@
-# Strategic-merge patch that adds memwatch to the alpha StatefulSet. Apply with:
+# Strategic-merge patch that adds memwatch to the alpha StatefulSet. Apply it with either:
 #   kubectl -n dgraph patch statefulset <alpha-statefulset> --patch-file alpha-memwatch-patch.yaml
-# or list it under `patches:` in a kustomization.
+# or, in a kustomization:
+#   patches:
+#     - path: alpha-memwatch-patch.yaml
 #
 # Adjust before applying:
+#   - ALPHA_STATEFULSET below: the name of your alpha StatefulSet (`kubectl -n dgraph get statefulsets`).
 #   - ALPHA_CONTAINER below: the name of your alpha container (`kubectl get sts <name> -o
 #     jsonpath='{.spec.template.spec.containers[*].name}'`). The official Helm chart uses <release>-dgraph-alpha.
 #   - the image: build it with `docker build -f contrib/monitoring/memwatch/Dockerfile -t <registry>/memwatch:<tag> .`
 #     from the repository root and push it to a registry your cluster can pull from.
 #
 # Changing the pod template restarts the alpha pods one at a time.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ALPHA_STATEFULSET
 spec:
   template:
     spec:

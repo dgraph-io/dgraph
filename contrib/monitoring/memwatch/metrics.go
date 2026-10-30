@@ -25,7 +25,10 @@ type Metrics struct {
 	samplingMode *prometheus.GaugeVec
 }
 
-func NewMetrics() *Metrics {
+// NewMetrics registers memwatch's series. Every capture reason, including one per configured threshold, starts at
+// zero: increase() can't see a counter's first increment if the series only appears with it, so an alert on the
+// first capture of a new reason would never fire.
+func NewMetrics(thresholds []float64) *Metrics {
 	m := &Metrics{
 		reg: prometheus.NewRegistry(),
 		rss: prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -72,9 +75,11 @@ func NewMetrics() *Metrics {
 	}
 	m.reg.MustRegister(m.rss, m.windowMax, m.hwm, m.limit, m.targetUp, m.captures, m.captureErrs, m.restarts,
 		m.lastCapture, m.samplingMode)
-	// Pre-create the reasons so rate() works from the first capture.
 	for _, r := range []string{"rise", "periodic", "restart"} {
 		m.captures.WithLabelValues(r)
+	}
+	for _, th := range thresholds {
+		m.captures.WithLabelValues(thresholdReason(th))
 	}
 	return m
 }

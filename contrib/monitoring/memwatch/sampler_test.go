@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseStatus(t *testing.T) {
@@ -134,6 +135,31 @@ func writeProc(t *testing.T, root string, pid int, cmdline string, ppid int, rss
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// A slow alpha, or memwatch shutting down, must not look like the alpha going away: that would write a false restart
+// dump and reset the timeline right when memory is under pressure.
+func TestHTTPSamplerTimeoutIsNotRestart(t *testing.T) {
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-block:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(block)
+
+	hs := newHTTPSampler(srv.URL, 100*time.Millisecond)
+	if _, err := hs.Sample(context.Background()); err == nil || errors.Is(err, errNotFound) {
+		t.Fatalf("timeout: got %v, want a plain error", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := hs.Sample(ctx); err == nil || errors.Is(err, errNotFound) {
+		t.Fatalf("cancelled: got %v, want a plain error", err)
 	}
 }
 

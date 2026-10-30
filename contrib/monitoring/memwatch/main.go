@@ -50,7 +50,7 @@ func run(ctx context.Context, cfg *Config, log *slog.Logger) error {
 	if err := os.MkdirAll(cfg.OutDir, 0o755); err != nil {
 		return err
 	}
-	m := NewMetrics()
+	m := NewMetrics(cfg.Thresholds)
 	m.limit.Set(float64(cfg.LimitBytes))
 
 	mux := newMux(m)

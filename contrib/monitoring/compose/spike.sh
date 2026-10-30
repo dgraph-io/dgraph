@@ -17,7 +17,10 @@ LAYERS=$((DEPTH + 1))
 # Dgraph reports most failures as HTTP 200 with an "errors" field, so check the body as well as the status.
 dg() {
   local out
-  out=$(curl -sS "$@")
+  if ! out=$(curl -sS --fail-with-body "$@"); then
+    echo "request failed: ${out:0:300}" >&2
+    exit 1
+  fi
   if [[ "$out" == *'"errors"'* ]]; then
     echo "request failed: ${out:0:300}" >&2
     exit 1
