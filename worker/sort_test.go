@@ -1794,6 +1794,12 @@ func newDiffH(t *testing.T) *diffH {
 		lp: string   @lang .
 		ls: [string] @index(term) .
 	`), 1))
+	prevPar := x.WorkerConfig.IntraMutationParallelism
+	prevEPW := x.WorkerConfig.IntraMutationEdgesPerWorker
+	t.Cleanup(func() {
+		x.WorkerConfig.IntraMutationParallelism = prevPar
+		x.WorkerConfig.IntraMutationEdgesPerWorker = prevEPW
+	})
 	x.WorkerConfig.IntraMutationParallelism = x.IntraMutationParallelism{Workers: 8}
 	x.WorkerConfig.IntraMutationEdgesPerWorker = 1
 	return &diffH{t: t, ps: ps, ts: 10}
@@ -1810,18 +1816,16 @@ func (h *diffH) dump() map[string]string {
 	for it.Rewind(); it.Valid(); it.Next() {
 		key := it.Item().KeyCopy(nil)
 		pk, err := x.Parse(key)
-		if err != nil || !(pk.IsData() || pk.IsIndex() || pk.IsReverse() || pk.IsCountOrCountRev()) {
+		if err != nil || (!pk.IsData() && !pk.IsIndex() && !pk.IsReverse() && !pk.IsCountOrCountRev()) {
 			continue
 		}
 		pl, err := posting.GetNoStore(key, math.MaxUint64)
-		if err != nil {
-			continue
-		}
+		require.NoError(h.t, err)
 		var parts []string
-		_ = pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+		require.NoError(h.t, pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
 			parts = append(parts, fmt.Sprintf("u%d:v%x:l%s:t%d", p.Uid, p.Value, p.LangTag, p.PostingType))
 			return nil
-		})
+		}))
 		sort.Strings(parts)
 		if len(parts) > 0 {
 			out[fmt.Sprintf("%x", key)] = fmt.Sprintf("%v", parts)
