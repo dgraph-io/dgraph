@@ -119,9 +119,10 @@ func (p *procSampler) find() (int, error) {
 		if err != nil {
 			continue
 		}
-		ppid, _ := statusValue(status, "PPid")
+		ppidField, _ := statusField(status, "PPid")
+		ppid, _ := strconv.Atoi(ppidField)
 		rss, _ := statusValue(status, "VmRSS")
-		cands = append(cands, candidate{pid: pid, ppid: int(ppid), rss: rss})
+		cands = append(cands, candidate{pid: pid, ppid: ppid, rss: rss})
 	}
 	isParent := make(map[int]bool, len(cands))
 	for _, c := range cands {
@@ -144,6 +145,16 @@ func (p *procSampler) find() (int, error) {
 
 // statusValue returns the first number on the given line of /proc/<pid>/status.
 func statusValue(status []byte, key string) (uint64, bool) {
+	field, ok := statusField(status, key)
+	if !ok {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(field, 10, 64)
+	return v, err == nil
+}
+
+// statusField returns the first whitespace-separated field on the given line of /proc/<pid>/status.
+func statusField(status []byte, key string) (string, bool) {
 	sc := bufio.NewScanner(bytes.NewReader(status))
 	for sc.Scan() {
 		k, rest, ok := strings.Cut(sc.Text(), ":")
@@ -152,12 +163,11 @@ func statusValue(status []byte, key string) (uint64, bool) {
 		}
 		parts := strings.Fields(rest)
 		if len(parts) == 0 {
-			return 0, false
+			return "", false
 		}
-		v, err := strconv.ParseUint(parts[0], 10, 64)
-		return v, err == nil
+		return parts[0], true
 	}
-	return 0, false
+	return "", false
 }
 
 // matchCmdline reports whether argv belongs to the process we're looking for. The first match word must equal the

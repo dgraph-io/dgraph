@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -85,25 +84,22 @@ func listCaptures(outDir string) ([]captureInfo, error) {
 	return out, nil
 }
 
-// selectCaptures returns the capture directories to archive: all of them, or the one named. A name must be an
-// existing directory directly inside outDir, so a request can't reach anything else on the filesystem.
+// selectCaptures returns the capture directories to archive: all of them, or the one named. The name is only
+// compared against the directory listing, never joined into a path, so a request can't reach anything outside
+// outDir.
 func selectCaptures(outDir, name string) ([]string, error) {
-	if name != "" {
-		if name != filepath.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
-			return nil, fmt.Errorf("invalid capture name %q", name)
-		}
-		if fi, err := os.Stat(filepath.Join(outDir, name)); err != nil || !fi.IsDir() {
-			return nil, fmt.Errorf("no capture named %q", name)
-		}
-		return []string{name}, nil
-	}
 	dirs, err := listCaptures(outDir)
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, len(dirs))
-	for i, d := range dirs {
-		names[i] = d.name
+	var names []string
+	for _, d := range dirs {
+		if name == "" || d.name == name {
+			names = append(names, d.name)
+		}
+	}
+	if name != "" && len(names) == 0 {
+		return nil, fmt.Errorf("no capture named %q", name)
 	}
 	return names, nil
 }
