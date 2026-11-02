@@ -48,6 +48,10 @@ type LogWriter struct {
 	file   *os.File
 	writer *bufio.Writer
 	closer *z.Closer
+	// lastBackup is the timestamp used in the most recent backup file name.
+	// Backup names have millisecond resolution; two rotations inside the same
+	// millisecond would otherwise rename onto the same file and lose the first.
+	lastBackup time.Time
 	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
@@ -206,7 +210,7 @@ func (l *LogWriter) rotate() error {
 
 	if _, err := os.Stat(l.FilePath); err == nil {
 		// move the existing file
-		newname := backupName(l.FilePath)
+		newname := backupName(l.FilePath, l.nextBackupTime())
 		if err := os.Rename(l.FilePath, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
@@ -214,6 +218,18 @@ func (l *LogWriter) rotate() error {
 
 	l.manageChannel <- true
 	return l.open()
+}
+
+// nextBackupTime returns the timestamp for a new backup file name. It is strictly
+// later than the previous one at the resolution of backupTimeFormat, so
+// consecutive rotations never pick the same name. Caller must hold l.mu.
+func (l *LogWriter) nextBackupTime() time.Time {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	if !now.After(l.lastBackup) {
+		now = l.lastBackup.Add(time.Millisecond)
+	}
+	l.lastBackup = now
+	return now
 }
 
 func (l *LogWriter) open() error {
@@ -306,10 +322,10 @@ func (l *LogWriter) open() error {
 	return nil
 }
 
-func backupName(name string) string {
+func backupName(name string, t time.Time) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().UTC().Format(backupTimeFormat)
+	timestamp := t.UTC().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 

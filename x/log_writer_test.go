@@ -12,12 +12,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +33,8 @@ func TestLogWriter(t *testing.T) {
 		Compress: false,
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
@@ -46,7 +48,8 @@ func TestLogWriterWithCompression(t *testing.T) {
 		Compress: true,
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
@@ -63,17 +66,17 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		EncryptionKey: []byte("1234567890123456"), // 16 bytes
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
 	for range 10000 {
 		n, err := lw.Write(msg)
 		require.NoError(t, err)
-		require.Equal(t, n, len(msg)+20, "write length is not equal")
+		require.Equal(t, len(msg)+20, n, "write length is not equal")
 	}
 
-	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
 	file, err := os.Open(path)
 	require.NoError(t, err)
@@ -116,43 +119,89 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	}
 }
 
+// TestLogWriterRotateBackupNamesUnique rotates faster than the millisecond
+// resolution of the backup file name. Every rotation must still end up in its
+// own backup file, and the names must still parse for the MaxAge cleanup.
+func TestLogWriterRotateBackupNamesUnique(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	require.NoError(t, err)
+
+	const rotations = 5
+	for i := range rotations {
+		_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
+		require.NoError(t, err)
+		lw.mu.Lock()
+		err = lw.rotate()
+		lw.mu.Unlock()
+		require.NoError(t, err)
+	}
+	require.NoError(t, lw.Close())
+
+	_, kept, err := processOldLogFiles(path, lw.MaxAge)
+	require.NoError(t, err)
+	require.Len(t, kept, rotations)
+}
+
 func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for range 10 {
+
+	// require must not be called from a non-test goroutine, so the writers
+	// report through a channel and the test asserts once they are done.
+	const writers, linesPerWriter = 10, 1000
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for range writers {
+		wg.Add(1)
 		go func() {
-			for range 1000 {
+			defer wg.Done()
+			for range linesPerWriter {
 				n, err := lw.Write(msg)
-				require.NoError(t, err)
-				require.Equal(t, n, len(msg), "write length is not equal")
+				if err != nil {
+					errs <- err
+					return
+				}
+				if n != len(msg) {
+					errs <- fmt.Errorf("wrote %d bytes, want %d", n, len(msg))
+					return
+				}
 			}
 		}()
 	}
-	time.Sleep(time.Second * 10)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
 	require.NoError(t, lw.Close())
-	files, err := os.ReadDir("./log_test")
+
+	require.Equal(t, writers*linesPerWriter, countLines(t, filepath.Dir(path)))
+}
+
+// countLines returns the number of lines across every plain or gzipped file in dir.
+func countLines(t *testing.T, dir string) int {
+	files, err := os.ReadDir(dir)
 	require.NoError(t, err)
 
 	lineCount := 0
 	for _, f := range files {
-		file, _ := os.Open(filepath.Join(filepath.Dir(path), f.Name()))
+		file, err := os.Open(filepath.Join(dir, f.Name()))
+		require.NoError(t, err)
 
-		var fileScanner *bufio.Scanner
-		if strings.HasSuffix(file.Name(), ".gz") {
+		var r io.Reader = file
+		if strings.HasSuffix(f.Name(), ".gz") {
 			gz, err := gzip.NewReader(file)
 			require.NoError(t, err)
-			all, err := io.ReadAll(gz)
-			require.NoError(t, err)
-			fileScanner = bufio.NewScanner(bytes.NewReader(all))
-			gz.Close()
-		} else {
-			fileScanner = bufio.NewScanner(file)
+			r = gz
 		}
-		for fileScanner.Scan() {
-			lineCount = lineCount + 1
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			lineCount++
 		}
+		require.NoError(t, scanner.Err())
+		require.NoError(t, file.Close())
 	}
-
-	require.Equal(t, lineCount, 10000)
+	return lineCount
 }
