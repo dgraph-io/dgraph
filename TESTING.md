@@ -87,7 +87,7 @@ programmatic control over local Dgraph clusters. Most newer integration2 and upg
 
 ## Module Structure
 
-The main module is `github.com/hypermodeinc/dgraph`
+The main module is `github.com/dgraph-io/dgraph`
 
 The codebase is organized into several key packages:
 
