@@ -205,6 +205,14 @@ func (l *LogWriter) rotate() error {
 		return nil
 	}
 
+	// Pick the backup name before touching the open file. A filesystem error
+	// here then leaves the current file open and the writer usable, instead of
+	// returning with a closed file that every later Write would fail on.
+	newname, err := l.nextBackupName()
+	if err != nil {
+		return fmt.Errorf("can't pick a backup name for log file: %s", err)
+	}
+
 	l.flush()
 	if err := l.file.Close(); err != nil {
 		return err
@@ -212,10 +220,6 @@ func (l *LogWriter) rotate() error {
 
 	if _, err := os.Stat(l.FilePath); err == nil {
 		// move the existing file
-		newname, err := l.nextBackupName()
-		if err != nil {
-			return fmt.Errorf("can't pick a backup name for log file: %s", err)
-		}
 		if err := os.Rename(l.FilePath, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
