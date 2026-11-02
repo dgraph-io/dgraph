@@ -10,8 +10,10 @@ import (
 	"compress/gzip"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +50,10 @@ type LogWriter struct {
 	file   *os.File
 	writer *bufio.Writer
 	closer *z.Closer
+	// lastBackup is the timestamp used in the most recent backup file name.
+	// Backup names have millisecond resolution; two rotations inside the same
+	// millisecond would otherwise rename onto the same file and lose the first.
+	lastBackup time.Time
 	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
@@ -199,6 +205,14 @@ func (l *LogWriter) rotate() error {
 		return nil
 	}
 
+	// Pick the backup name before touching the open file. A filesystem error
+	// here then leaves the current file open and the writer usable, instead of
+	// returning with a closed file that every later Write would fail on.
+	newname, err := l.nextBackupName()
+	if err != nil {
+		return fmt.Errorf("can't pick a backup name for log file: %s", err)
+	}
+
 	l.flush()
 	if err := l.file.Close(); err != nil {
 		return err
@@ -206,7 +220,6 @@ func (l *LogWriter) rotate() error {
 
 	if _, err := os.Stat(l.FilePath); err == nil {
 		// move the existing file
-		newname := backupName(l.FilePath)
 		if err := os.Rename(l.FilePath, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
@@ -214,6 +227,46 @@ func (l *LogWriter) rotate() error {
 
 	l.manageChannel <- true
 	return l.open()
+}
+
+// nextBackupName returns a backup file name that nothing on disk uses yet, so a
+// rotation can never rename onto an earlier backup. The timestamp is strictly
+// later than this writer's previous backup at the resolution of
+// backupTimeFormat, and a name that already exists, plain or compressed, is
+// skipped. The latter happens when a writer is re-initialised on the same path
+// while the previous writer's backups carry timestamps ahead of the clock.
+// Caller must hold l.mu.
+func (l *LogWriter) nextBackupName() (string, error) {
+	for {
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		if !now.After(l.lastBackup) {
+			now = l.lastBackup.Add(time.Millisecond)
+		}
+		l.lastBackup = now
+
+		name := backupName(l.FilePath, now)
+		taken, err := backupExists(name)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return name, nil
+		}
+	}
+}
+
+// backupExists reports whether name or its compressed form is already on disk.
+func backupExists(name string) (bool, error) {
+	for _, candidate := range []string{name, name + ".gz"} {
+		_, err := os.Lstat(candidate)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (l *LogWriter) open() error {
@@ -306,10 +359,10 @@ func (l *LogWriter) open() error {
 	return nil
 }
 
-func backupName(name string) string {
+func backupName(name string, t time.Time) string {
 	dir := filepath.Dir(name)
 	prefix, ext := prefixAndExt(name)
-	timestamp := time.Now().UTC().Format(backupTimeFormat)
+	timestamp := t.UTC().Format(backupTimeFormat)
 	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
 }
 
@@ -424,8 +477,13 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 			continue
 		}
 
-		_, e := prefixAndExt(fp)
-		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
+		// a compressed backup carries an extra .gz after the normal extension;
+		// a plain backup of a file that is itself named *.gz must keep its own
+		name := f.Name()
+		if strings.HasSuffix(name, defExt+".gz") {
+			name = strings.TrimSuffix(name, ".gz")
+		}
+		tsString := name[len(defPrefix) : len(name)-len(defExt)]
 		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue

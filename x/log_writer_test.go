@@ -12,10 +12,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +34,8 @@ func TestLogWriter(t *testing.T) {
 		Compress: false,
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
@@ -46,7 +49,8 @@ func TestLogWriterWithCompression(t *testing.T) {
 		Compress: true,
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
@@ -63,17 +67,17 @@ func TestLogWriterWithEncryption(t *testing.T) {
 		EncryptionKey: []byte("1234567890123456"), // 16 bytes
 	}
 
-	lw, _ = lw.Init()
+	lw, err := lw.Init()
+	require.NoError(t, err)
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
 	for range 10000 {
 		n, err := lw.Write(msg)
 		require.NoError(t, err)
-		require.Equal(t, n, len(msg)+20, "write length is not equal")
+		require.Equal(t, len(msg)+20, n, "write length is not equal")
 	}
 
-	time.Sleep(time.Second * 10)
 	require.NoError(t, lw.Close())
 	file, err := os.Open(path)
 	require.NoError(t, err)
@@ -116,43 +120,178 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	}
 }
 
+// TestLogWriterRotateBackupNamesUnique rotates faster than the millisecond
+// resolution of the backup file name. Every rotation must still end up in its
+// own backup file, and the names must still parse for the MaxAge cleanup.
+func TestLogWriterRotateBackupNamesUnique(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	require.NoError(t, err)
+
+	const rotations = 5
+	for i := range rotations {
+		_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
+		require.NoError(t, err)
+		lw.mu.Lock()
+		err = lw.rotate()
+		lw.mu.Unlock()
+		require.NoError(t, err)
+	}
+	require.NoError(t, lw.Close())
+
+	_, kept, err := processOldLogFiles(path, lw.MaxAge)
+	require.NoError(t, err)
+	require.Len(t, kept, rotations)
+}
+
+// TestLogWriterReinitKeepsEarlierBackups runs two writers on the same path back
+// to back, the way the audit logger is closed and re-initialised. The second
+// writer starts without knowledge of the first one's backup timestamps, which
+// may be ahead of the clock, and must still not rename onto any of its backups.
+func TestLogWriterReinitKeepsEarlierBackups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	const writers, rotations = 2, 3
+	for range writers {
+		lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+		require.NoError(t, err)
+		for i := range rotations {
+			_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
+			require.NoError(t, err)
+			lw.mu.Lock()
+			err = lw.rotate()
+			lw.mu.Unlock()
+			require.NoError(t, err)
+		}
+		require.NoError(t, lw.Close())
+	}
+
+	_, kept, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.Len(t, kept, writers*rotations)
+}
+
+// TestLogWriterRotateSkipsExistingBackups occupies every backup name, plain and
+// compressed, for the next second and then rotates once. The rotation must
+// leave all of them untouched and land in a name of its own.
+func TestLogWriterRotateSkipsExistingBackups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	const earlier = "earlier backup\n"
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	occupied := make([]string, 0, 1000)
+	for i := range 1000 {
+		name := backupName(path, start.Add(time.Duration(i)*time.Millisecond))
+		if i%2 == 1 {
+			name += ".gz"
+		}
+		require.NoError(t, os.WriteFile(name, []byte(earlier), 0o600))
+		occupied = append(occupied, name)
+	}
+
+	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	require.NoError(t, err)
+	_, err = lw.Write([]byte("fresh\n"))
+	require.NoError(t, err)
+	lw.mu.Lock()
+	err = lw.rotate()
+	lw.mu.Unlock()
+	require.NoError(t, err)
+	require.NoError(t, lw.Close())
+
+	for _, name := range occupied {
+		content, err := os.ReadFile(name)
+		require.NoError(t, err)
+		require.Equal(t, earlier, string(content), name)
+	}
+	_, kept, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.Len(t, kept, len(occupied)+1)
+}
+
+// TestProcessOldLogFilesSeesCompressedBackups checks that compressed backups
+// are classified by age like plain ones. Otherwise MaxAge never removes them.
+func TestProcessOldLogFilesSeesCompressedBackups(t *testing.T) {
+	// audit.gz: a plain backup already ends in .gz and must keep it.
+	// audit: no extension, so a compressed backup is <prefix>-<ts>.gz.
+	for _, base := range []string{"audit.log", "audit.gz", "audit"} {
+		t.Run(base, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), base)
+			now := time.Now().UTC()
+			old := now.Add(-72 * time.Hour)
+			oldPlain := backupName(path, old)
+			oldGz := backupName(path, old.Add(time.Second)) + ".gz"
+			recentPlain := backupName(path, now.Add(-2*time.Second))
+			recentGz := backupName(path, now.Add(-time.Second)) + ".gz"
+			for _, name := range []string{oldPlain, oldGz, recentPlain, recentGz} {
+				require.NoError(t, os.WriteFile(name, []byte("x\n"), 0o600))
+			}
+
+			toRemove, toKeep, err := processOldLogFiles(path, 1)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{filepath.Base(oldPlain), filepath.Base(oldGz)}, toRemove)
+			require.ElementsMatch(t, []string{filepath.Base(recentPlain), filepath.Base(recentGz)}, toKeep)
+		})
+	}
+}
+
 func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for range 10 {
+
+	// require must not be called from a non-test goroutine, so the writers
+	// report through a channel and the test asserts once they are done.
+	const writers, linesPerWriter = 10, 1000
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for range writers {
+		wg.Add(1)
 		go func() {
-			for range 1000 {
+			defer wg.Done()
+			for range linesPerWriter {
 				n, err := lw.Write(msg)
-				require.NoError(t, err)
-				require.Equal(t, n, len(msg), "write length is not equal")
+				if err != nil {
+					errs <- err
+					return
+				}
+				if n != len(msg) {
+					errs <- fmt.Errorf("wrote %d bytes, want %d", n, len(msg))
+					return
+				}
 			}
 		}()
 	}
-	time.Sleep(time.Second * 10)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
 	require.NoError(t, lw.Close())
-	files, err := os.ReadDir("./log_test")
+
+	require.Equal(t, writers*linesPerWriter, countLines(t, filepath.Dir(path)))
+}
+
+// countLines returns the number of lines across every plain or gzipped file in dir.
+func countLines(t *testing.T, dir string) int {
+	files, err := os.ReadDir(dir)
 	require.NoError(t, err)
 
 	lineCount := 0
 	for _, f := range files {
-		file, _ := os.Open(filepath.Join(filepath.Dir(path), f.Name()))
+		file, err := os.Open(filepath.Join(dir, f.Name()))
+		require.NoError(t, err)
 
-		var fileScanner *bufio.Scanner
-		if strings.HasSuffix(file.Name(), ".gz") {
+		var r io.Reader = file
+		if strings.HasSuffix(f.Name(), ".gz") {
 			gz, err := gzip.NewReader(file)
 			require.NoError(t, err)
-			all, err := io.ReadAll(gz)
-			require.NoError(t, err)
-			fileScanner = bufio.NewScanner(bytes.NewReader(all))
-			gz.Close()
-		} else {
-			fileScanner = bufio.NewScanner(file)
+			r = gz
 		}
-		for fileScanner.Scan() {
-			lineCount = lineCount + 1
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			lineCount++
 		}
+		require.NoError(t, scanner.Err())
+		require.NoError(t, file.Close())
 	}
-
-	require.Equal(t, lineCount, 10000)
+	return lineCount
 }
