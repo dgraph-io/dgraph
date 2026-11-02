@@ -10,8 +10,10 @@ import (
 	"compress/gzip"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,7 +212,10 @@ func (l *LogWriter) rotate() error {
 
 	if _, err := os.Stat(l.FilePath); err == nil {
 		// move the existing file
-		newname := backupName(l.FilePath, l.nextBackupTime())
+		newname, err := l.nextBackupName()
+		if err != nil {
+			return fmt.Errorf("can't pick a backup name for log file: %s", err)
+		}
 		if err := os.Rename(l.FilePath, newname); err != nil {
 			return fmt.Errorf("can't rename log file: %s", err)
 		}
@@ -220,16 +225,44 @@ func (l *LogWriter) rotate() error {
 	return l.open()
 }
 
-// nextBackupTime returns the timestamp for a new backup file name. It is strictly
-// later than the previous one at the resolution of backupTimeFormat, so
-// consecutive rotations never pick the same name. Caller must hold l.mu.
-func (l *LogWriter) nextBackupTime() time.Time {
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	if !now.After(l.lastBackup) {
-		now = l.lastBackup.Add(time.Millisecond)
+// nextBackupName returns a backup file name that nothing on disk uses yet, so a
+// rotation can never rename onto an earlier backup. The timestamp is strictly
+// later than this writer's previous backup at the resolution of
+// backupTimeFormat, and a name that already exists, plain or compressed, is
+// skipped. The latter happens when a writer is re-initialised on the same path
+// while the previous writer's backups carry timestamps ahead of the clock.
+// Caller must hold l.mu.
+func (l *LogWriter) nextBackupName() (string, error) {
+	for {
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		if !now.After(l.lastBackup) {
+			now = l.lastBackup.Add(time.Millisecond)
+		}
+		l.lastBackup = now
+
+		name := backupName(l.FilePath, now)
+		taken, err := backupExists(name)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return name, nil
+		}
 	}
-	l.lastBackup = now
-	return now
+}
+
+// backupExists reports whether name or its compressed form is already on disk.
+func backupExists(name string) (bool, error) {
+	for _, candidate := range []string{name, name + ".gz"} {
+		_, err := os.Lstat(candidate)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (l *LogWriter) open() error {

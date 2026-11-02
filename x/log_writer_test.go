@@ -144,6 +144,69 @@ func TestLogWriterRotateBackupNamesUnique(t *testing.T) {
 	require.Len(t, kept, rotations)
 }
 
+// TestLogWriterReinitKeepsEarlierBackups runs two writers on the same path back
+// to back, the way the audit logger is closed and re-initialised. The second
+// writer starts without knowledge of the first one's backup timestamps, which
+// may be ahead of the clock, and must still not rename onto any of its backups.
+func TestLogWriterReinitKeepsEarlierBackups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	const writers, rotations = 2, 3
+	for range writers {
+		lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+		require.NoError(t, err)
+		for i := range rotations {
+			_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
+			require.NoError(t, err)
+			lw.mu.Lock()
+			err = lw.rotate()
+			lw.mu.Unlock()
+			require.NoError(t, err)
+		}
+		require.NoError(t, lw.Close())
+	}
+
+	_, kept, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.Len(t, kept, writers*rotations)
+}
+
+// TestLogWriterRotateSkipsExistingBackups occupies every backup name, plain and
+// compressed, for the next second and then rotates once. The rotation must
+// leave all of them untouched and land in a name of its own.
+func TestLogWriterRotateSkipsExistingBackups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	const earlier = "earlier backup\n"
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	occupied := make([]string, 0, 1000)
+	for i := range 1000 {
+		name := backupName(path, start.Add(time.Duration(i)*time.Millisecond))
+		if i%2 == 1 {
+			name += ".gz"
+		}
+		require.NoError(t, os.WriteFile(name, []byte(earlier), 0o600))
+		occupied = append(occupied, name)
+	}
+
+	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	require.NoError(t, err)
+	_, err = lw.Write([]byte("fresh\n"))
+	require.NoError(t, err)
+	lw.mu.Lock()
+	err = lw.rotate()
+	lw.mu.Unlock()
+	require.NoError(t, err)
+	require.NoError(t, lw.Close())
+
+	for _, name := range occupied {
+		content, err := os.ReadFile(name)
+		require.NoError(t, err)
+		require.Equal(t, earlier, string(content), name)
+	}
+	_, kept, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.Len(t, kept, len(occupied)+1)
+}
+
 // TestProcessOldLogFilesSeesCompressedBackups checks that compressed backups
 // are classified by age like plain ones. Otherwise MaxAge never removes them.
 func TestProcessOldLogFilesSeesCompressedBackups(t *testing.T) {
