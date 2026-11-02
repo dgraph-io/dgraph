@@ -477,8 +477,12 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 			continue
 		}
 
-		// compressed backups carry a .gz after the normal extension
-		name := strings.TrimSuffix(f.Name(), ".gz")
+		// a compressed backup carries an extra .gz after the normal extension;
+		// a plain backup of a file that is itself named *.gz must keep its own
+		name := f.Name()
+		if strings.HasSuffix(name, defExt+".gz") {
+			name = strings.TrimSuffix(name, ".gz")
+		}
 		tsString := name[len(defPrefix) : len(name)-len(defExt)]
 		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {

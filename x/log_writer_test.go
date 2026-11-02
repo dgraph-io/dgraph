@@ -210,21 +210,27 @@ func TestLogWriterRotateSkipsExistingBackups(t *testing.T) {
 // TestProcessOldLogFilesSeesCompressedBackups checks that compressed backups
 // are classified by age like plain ones. Otherwise MaxAge never removes them.
 func TestProcessOldLogFilesSeesCompressedBackups(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "audit.log")
-	now := time.Now().UTC()
-	old := now.Add(-72 * time.Hour)
-	oldPlain := backupName(path, old)
-	oldGz := backupName(path, old.Add(time.Second)) + ".gz"
-	recentPlain := backupName(path, now.Add(-2*time.Second))
-	recentGz := backupName(path, now.Add(-time.Second)) + ".gz"
-	for _, name := range []string{oldPlain, oldGz, recentPlain, recentGz} {
-		require.NoError(t, os.WriteFile(name, []byte("x\n"), 0o600))
-	}
+	// audit.gz: a plain backup already ends in .gz and must keep it.
+	// audit: no extension, so a compressed backup is <prefix>-<ts>.gz.
+	for _, base := range []string{"audit.log", "audit.gz", "audit"} {
+		t.Run(base, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), base)
+			now := time.Now().UTC()
+			old := now.Add(-72 * time.Hour)
+			oldPlain := backupName(path, old)
+			oldGz := backupName(path, old.Add(time.Second)) + ".gz"
+			recentPlain := backupName(path, now.Add(-2*time.Second))
+			recentGz := backupName(path, now.Add(-time.Second)) + ".gz"
+			for _, name := range []string{oldPlain, oldGz, recentPlain, recentGz} {
+				require.NoError(t, os.WriteFile(name, []byte("x\n"), 0o600))
+			}
 
-	toRemove, toKeep, err := processOldLogFiles(path, 1)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{filepath.Base(oldPlain), filepath.Base(oldGz)}, toRemove)
-	require.ElementsMatch(t, []string{filepath.Base(recentPlain), filepath.Base(recentGz)}, toKeep)
+			toRemove, toKeep, err := processOldLogFiles(path, 1)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{filepath.Base(oldPlain), filepath.Base(oldGz)}, toRemove)
+			require.ElementsMatch(t, []string{filepath.Base(recentPlain), filepath.Base(recentGz)}, toKeep)
+		})
+	}
 }
 
 func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
