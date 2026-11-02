@@ -1805,6 +1805,7 @@ func newDiffH(t *testing.T) *diffH {
 		lv:  [uid]         @reverse .
 		lc:  [uid]         @reverse @count .
 		lp:  string        @lang .
+		li:  string        @lang @index(exact) .
 		ls:  [string]      @index(term) .
 		lf:  [string]      @index(fulltext) .
 		lt:  [string]      @index(trigram) .
@@ -2013,9 +2014,10 @@ func fmtEdges(edges []*pb.DirectedEdge) string {
 }
 
 // TestPipelineLegacyDifferential is the broad fuzz gate (discovery + acceptance)
-// over every non-vector shape in the schema. Star-deletes are excluded (they have
-// their own deterministic case), vectors have their own fuzz with a membership
-// compare, and password is excluded because bcrypt makes each seed ~100ms.
+// over every non-vector shape in the schema, star-deletes included, so every
+// batch mixes legacy-routed and batched predicates. Vectors have their own fuzz
+// with a membership compare, and password is excluded because bcrypt makes each
+// seed ~100ms.
 func TestPipelineLegacyDifferential(t *testing.T) {
 	h := newDiffH(t)
 	uids := []uint64{0x1, 0x2, 0x3, 0x4}
@@ -2028,6 +2030,7 @@ func TestPipelineLegacyDifferential(t *testing.T) {
 	bfs := []string{"1.5", "2.25", "-3.125"}
 	fls := []string{"0.5", "1.5", "2.5"}
 	fks := [][2]string{{"w", "1"}, {"w", "2"}, {"tag", `"x"`}}
+	starPreds := []string{"sv", "lv", "lc", "lp", "li", "ls", "lf", "lt", "geo", "bf", "bo", "fl", "su", "fs", "fu", "fr"}
 	gen := func(rng *rand.Rand) []*pb.DirectedEdge {
 		n := 3 + rng.Intn(8)
 		var edges []*pb.DirectedEdge
@@ -2037,7 +2040,7 @@ func TestPipelineLegacyDifferential(t *testing.T) {
 			uid := uids[rng.Intn(len(uids))]
 			del := rng.Intn(2) == 1
 			var e *pb.DirectedEdge
-			switch rng.Intn(15) {
+			switch rng.Intn(17) {
 			case 0:
 				e = eSetStr(h.A("sv"), uid, pick(strs))
 			case 1:
@@ -2068,12 +2071,20 @@ func TestPipelineLegacyDifferential(t *testing.T) {
 				e = eSetUid(h.A("fu"), uid, tgt())
 			case 14:
 				e = eSetUid(h.A("fr"), uid, tgt())
+			case 15:
+				e = eLangSet(h.A("li"), uid, pick(strs), pick(langs))
+			case 16:
+				e = eStarDel(h.A(pick(starPreds)), uid)
 			}
-			if del {
+			switch {
+			case e.Op == pb.DirectedEdge_DEL: // star-delete
+			case del:
 				e.Op = pb.DirectedEdge_DEL
-			} else if a := x.ParseAttr(e.Attr); a == "fs" || a == "fu" || a == "fr" {
-				fk := fks[rng.Intn(len(fks))]
-				e = withF(t, e, fk[0], fk[1])
+			default:
+				if a := x.ParseAttr(e.Attr); a == "fs" || a == "fu" || a == "fr" {
+					fk := fks[rng.Intn(len(fks))]
+					e = withF(t, e, fk[0], fk[1])
+				}
 			}
 			edges = append(edges, e)
 		}
@@ -2089,14 +2100,21 @@ func TestPipelineLegacyDifferential(t *testing.T) {
 		pipe := h.apply(true, edges)
 		if fmt.Sprintf("%v", legacy.data) != fmt.Sprintf("%v", pipe.data) {
 			mism++
-			for k := range symDiff(legacy.data, pipe.data) {
+			diff := symDiff(legacy.data, pipe.data)
+			for k := range diff {
 				if pk, err := x.Parse(mustHex(k)); err == nil {
 					byPred[x.ParseAttr(pk.Attr)]++
 				}
 			}
+			if mism <= 5 { // a few concrete examples make the tally actionable
+				t.Logf("seed %d diverged: %s", seed, fmtEdges(edges))
+				for k := range diff {
+					t.Logf("  key %s\n    legacy:   %s\n    pipeline: %s", k, legacy.data[k], pipe.data[k])
+				}
+			}
 		}
 	}
-	t.Logf("fuzz differential (no star): %d/%d seeds diverged; by predicate: %v", mism, iters, byPred)
+	t.Logf("fuzz differential: %d/%d seeds diverged; by predicate: %v", mism, iters, byPred)
 	require.Zero(t, mism, "pipeline must match legacy")
 }
 
@@ -2136,9 +2154,42 @@ func TestPipeline_StarDeleteThenSet(t *testing.T) {
 	})
 }
 
+// Star-deletes route their predicate through the legacy per-edge path for the
+// batch (Process pre-pass -> PredicatePipeline.legacy), which preserves order
+// against the SETs on the same list while the other predicates in the mutation
+// keep the batched path.
+func TestPipeline_StarDeleteRouting(t *testing.T) {
+	h := newDiffH(t)
+	sv, lv, lc, lp, ls, geo, v := h.A("sv"), h.A("lv"), h.A("lc"), h.A("lp"), h.A("ls"), h.A("geo"), h.A("vec")
+	h.caseSame(t, "star-then-set", batch(eStarDel(sv, 1), eSetStr(sv, 1, "a"))) // the replace pattern keeps the SET
+	h.caseSame(t, "interleaved",
+		batch(eSetStr(sv, 1, "a"), eStarDel(sv, 1), eSetStr(sv, 1, "b"), eStarDel(sv, 1), eSetStr(sv, 1, "c")))
+	h.caseSame(t, "committed+set+star", batch(eSetStr(sv, 1, "a")), batch(eSetStr(sv, 1, "b"), eStarDel(sv, 1)))
+	h.caseSame(t, "committed+star+set", batch(eSetStr(sv, 1, "a")), batch(eStarDel(sv, 1), eSetStr(sv, 1, "b")))
+	h.caseSame(t, "two-entities-one-star", batch(eSetStr(sv, 1, "a"), eSetStr(sv, 2, "b"), eStarDel(sv, 1)))
+	h.caseSame(t, "reverse-list", batch(eSetUid(lv, 1, 0x100), eSetUid(lv, 1, 0x101), eStarDel(lv, 1)))
+	h.caseSame(t, "reverse-list-committed",
+		batch(eSetUid(lv, 1, 0x100), eSetUid(lv, 2, 0x100)), batch(eStarDel(lv, 1), eSetUid(lv, 1, 0x102)))
+	h.caseSame(t, "count-list", batch(eSetUid(lc, 1, 0x100), eStarDel(lc, 1), eSetUid(lc, 1, 0x101)))
+	h.caseSame(t, "lang", batch(eLangSet(lp, 1, "b", "en"), eLangSet(lp, 1, "c", "de"), eStarDel(lp, 1), eLangSet(lp, 1, "d", "fr")))
+	h.caseSame(t, "indexed-list", batch(eSetStr(ls, 1, "c"), eStarDel(ls, 1), eSetStr(ls, 1, "d")))
+	h.caseSame(t, "vector", batch(eSetStr(v, 1, "[1,0,0]"), eStarDel(v, 1), eSetStr(v, 1, "[0,1,0]")))
+	// sv (star) and ls (indexed list) are legacy-routed; lv and geo stay batched.
+	h.caseSame(t, "mixed-mode-batch", batch(
+		eSetStr(sv, 1, "a"), eStarDel(sv, 1), eSetStr(sv, 1, "b"),
+		eSetUid(lv, 2, 0x100), eSetUid(lv, 2, 0x101),
+		eSetStr(geo, 3, geoP1),
+		eSetStr(ls, 4, "x"), eDelStr(ls, 4, "x"), eSetStr(ls, 4, "y"),
+	))
+}
+
 // Divergence class 2 — @count with repeated/multiple SETs changing a target's
-// in-degree. The @count index diverges from the reverse data (preliminary
-// analysis points at legacy being the stale side).
+// in-degree. The batched ProcessCount and legacy disagreed, and the evidence
+// points at LEGACY's count index being the stale side; that is unresolved.
+// @count predicates take the legacy path for now (routeToLegacy), so this case
+// passes by construction and the open question is parked: whether legacy's
+// count is right needs a semantic (not differential) check before @count is
+// promoted back to the batched path.
 func TestPipeline_CountDuplicateSets(t *testing.T) {
 	h := newDiffH(t)
 	lc := h.A("lc")
@@ -2150,28 +2201,54 @@ func TestPipeline_CountDuplicateSets(t *testing.T) {
 	})
 }
 
-// Divergence class 3 — @lang. A value-specific delete on one language tag
-// wrongly drops a DIFFERENT language's value in the pipeline.
+// Divergence class 3 — @lang. ProcessList keys a scalar @lang slot by
+// fingerprint(lang) and insertPosting is last-write-wins on that slot, so a
+// value-specific delete used to land regardless of the value it named: it
+// dropped a DIFFERENT value under the same tag, including an already committed
+// one. Legacy applies such a delete only when value and type match
+// (addMutationHelper); ProcessList now mirrors that (langDeleteMismatch).
 func TestPipeline_LangValueDelete(t *testing.T) {
 	h := newDiffH(t)
-	lp := h.A("lp")
-	h.requireSame([]*pb.DirectedEdge{
+	lp, li := h.A("lp"), h.A("li")
+	h.caseSame(t, "in-batch/nonmatching-del-other-tag-set", batch(
 		eLangSet(lp, 1, "b", "en"),
 		eLangSet(lp, 1, "c", "de"),
 		eLangDel(lp, 1, "c", "en"), // deletes nothing (en is "b"); de must remain
-	})
+	))
+	h.caseSame(t, "in-batch/set-set-del-old",
+		batch(eLangSet(lp, 1, "b", "en"), eLangSet(lp, 1, "c", "en"), eLangDel(lp, 1, "b", "en"))) // en stays "c"
+	h.caseSame(t, "in-batch/matching-del", batch(eLangSet(lp, 1, "b", "en"), eLangDel(lp, 1, "b", "en")))
+	h.caseSame(t, "committed/nonmatching-del", batch(eLangSet(lp, 1, "b", "en")), batch(eLangDel(lp, 1, "c", "en"))) // used to wipe "b"
+	h.caseSame(t, "committed/matching-del", batch(eLangSet(lp, 1, "b", "en")), batch(eLangDel(lp, 1, "b", "en")))
+	h.caseSame(t, "committed/double-del",
+		batch(eLangSet(lp, 1, "b", "en")), batch(eLangDel(lp, 1, "b", "en"), eLangDel(lp, 1, "b", "en")))
+	h.caseSame(t, "committed/del-then-set-same-tag",
+		batch(eLangSet(lp, 1, "b", "en")), batch(eLangDel(lp, 1, "b", "en"), eLangSet(lp, 1, "c", "en")))
+	h.caseSame(t, "committed/multi-tag-mixed",
+		batch(eLangSet(lp, 1, "b", "en"), eLangSet(lp, 1, "c", "de"), eLangSet(lp, 1, "d", "fr")),
+		batch(eLangDel(lp, 1, "x", "en"), eLangDel(lp, 1, "c", "de"), eLangSet(lp, 1, "e", "fr"))) // en kept, de gone, fr replaced
+	// With an index the ignored delete must not emit an index Del either.
+	h.caseSame(t, "indexed/committed-nonmatching-del", batch(eLangSet(li, 1, "b", "en")), batch(eLangDel(li, 1, "c", "en")))
+	h.caseSame(t, "indexed/committed-matching-del", batch(eLangSet(li, 1, "b", "en")), batch(eLangDel(li, 1, "b", "en")))
+	h.caseSame(t, "indexed/in-batch-churn",
+		batch(eLangSet(li, 1, "b", "en"), eLangDel(li, 1, "zz", "en"), eLangSet(li, 1, "c", "de")))
+	// Value-indexed @lang additionally takes the legacy path (routeToLegacy): the
+	// batched index pass cannot retract an in-batch overwritten tag value, so
+	// "b" would keep its index token here. Found by the fuzz (seed 432).
+	h.caseSame(t, "indexed/in-batch-same-tag-replace", batch(eLangSet(li, 1, "b", "de"), eLangSet(li, 1, "a", "de")))
 }
 
 // Divergence class 4 — value-indexed list. SET/DELETE churn on a
-// [string] @index(term) leaves a stale term in the index in the pipeline.
+// [string] @index(term) left a stale term in the index on the batched path,
+// also on committed data. Value-indexed lists take the legacy path for now
+// (routeToLegacy); these cases guard that routing until the batched path nets
+// in-batch set/delete correctly.
 func TestPipeline_IndexedListValueChurn(t *testing.T) {
 	h := newDiffH(t)
 	ls := h.A("ls")
-	h.requireSame([]*pb.DirectedEdge{
-		eSetStr(ls, 1, "c"),
-		eDelStr(ls, 1, "c"), // index entry for "c" must be removed
-		eSetStr(ls, 1, "d"),
-	})
+	h.caseSame(t, "in-batch", batch(eSetStr(ls, 1, "c"), eDelStr(ls, 1, "c"), eSetStr(ls, 1, "d"))) // "c" must leave the index
+	h.caseSame(t, "committed+churn", batch(eSetStr(ls, 1, "c")), batch(eSetStr(ls, 1, "c"), eDelStr(ls, 1, "c")))
+	h.caseSame(t, "committed+del-old-set-new", batch(eSetStr(ls, 1, "c")), batch(eDelStr(ls, 1, "c"), eSetStr(ls, 1, "d")))
 }
 
 // ---- shape coverage: builders ----
