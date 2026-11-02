@@ -131,7 +131,22 @@ func (mp *MutationPipeline) ProcessVectorIndex(ctx context.Context, pipeline *Pr
 	// short of a few hundred edges runs single-threaded on main. Match that
 	// here. (TestVectorTwoTxnWithoutCommit reliably reproduced the corruption
 	// on Linux CI when this used 10 workers.)
+	//
+	// Vector edges never reach ProcessList/ProcessSingle, so the schema-type
+	// conversion those paths perform (ValidateAndConvert, exactly as runMutation
+	// does on the legacy path) must happen here as well. An untyped vector — a
+	// JSON mutation, or RDF without ^^<xs:[]float32> — arrives as a STRING/DEFAULT
+	// literal; without the conversion it is stored verbatim as text and never
+	// makes it into the HNSW index. Typed input is already VFLOAT binary and the
+	// call is a no-op for it.
+	su, schemaExists := schema.State().Get(ctx, pipeline.attr)
 	for edge := range pipeline.edges {
+		if edge.Op != pb.DirectedEdge_DEL && !schemaExists {
+			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
+		}
+		if err := ValidateAndConvert(edge, &su); err != nil {
+			return err
+		}
 		uid := edge.Entity
 		key := x.DataKey(pipeline.attr, uid)
 		pl, err := mp.txn.Get(key)
