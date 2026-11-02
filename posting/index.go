@@ -112,6 +112,11 @@ type PredicatePipeline struct {
 	// the pre-budget behavior. A value k>=1 splits the merge-light passes
 	// (ProcessSingle's data-write, index tokenization) into k goroutines.
 	workers int
+	// legacy routes this predicate's edges through runMutation one at a time, in
+	// arrival order, inside this predicate's goroutine instead of the batched
+	// ProcessList/ProcessSingle paths. Process sets it when the batch carries a
+	// star-delete for the predicate; routeToLegacy covers the schema-driven cases.
+	legacy bool
 }
 
 func (pp *PredicatePipeline) close() {
@@ -369,8 +374,53 @@ type predicateInfo struct {
 	noConflict bool
 	hasUpsert  bool
 	isUid      bool
+	lang       bool
 
 	isSingleEdge bool
+}
+
+// langDeleteMismatch implements legacy's rule for a value-specific delete on a
+// scalar @lang predicate: the delete applies only if the value currently held
+// at that language slot has the same value and type. "Currently held" is the
+// in-batch posting for the slot when an earlier edge of this batch wrote one,
+// otherwise the committed posting (read at the txn's StartTs, exactly as
+// handleOldDeleteForList does). A slot with nothing live in it lets the delete
+// through, where it is a no-op, which is also what legacy does.
+func (mp *MutationPipeline) langDeleteMismatch(attr string, uid uint64, del *pb.Posting,
+	inBatch bool, pl *MutableLayer) (bool, error) {
+	var curr *pb.Posting
+	if inBatch {
+		for _, p := range pl.currentEntries.Postings {
+			if p.Uid == del.Uid {
+				curr = p
+				break
+			}
+		}
+	}
+	if curr != nil {
+		if curr.Op == Del {
+			return false, nil
+		}
+	} else {
+		l, err := mp.txn.Get(x.DataKey(attr, uid))
+		if err != nil {
+			return false, err
+		}
+		err = l.Iterate(mp.txn.StartTs, 0, func(p *pb.Posting) error {
+			if p.Uid == del.Uid {
+				curr = p
+			}
+			return nil
+		})
+		if err != nil {
+			return false, err
+		}
+		if curr == nil {
+			return false, nil
+		}
+	}
+	return !(bytes.Equal(curr.Value, del.Value) &&
+		types.TypeID(curr.ValType) == types.TypeID(del.ValType)), nil
 }
 
 // ProcessList handles list predicates (multi-valued) and language predicates.
@@ -413,6 +463,22 @@ func (mp *MutationPipeline) ProcessList(ctx context.Context, pipeline *Predicate
 		if mpost.PostingType != pb.Posting_REF {
 			edge.ValueId = FingerprintEdge(edge)
 			mpost.Uid = edge.ValueId
+		}
+
+		// A scalar @lang slot is keyed by fingerprint(lang), so a value-specific
+		// delete on a tag collides with whatever value that tag holds and
+		// insertPosting's last-write-wins would drop it regardless of the value
+		// named. Legacy (addMutationHelper) applies such a delete only when the
+		// stored value and type match and ignores it otherwise. Mirror that, and
+		// drop an ignored delete before either the data or the index pass sees it.
+		if su.Lang && !info.isList && edge.Op == pb.DirectedEdge_DEL && !isStarAll(edge.Value) {
+			ignore, err := mp.langDeleteMismatch(pipeline.attr, uid, mpost, exists, pl)
+			if err != nil {
+				return err
+			}
+			if ignore {
+				continue
+			}
 		}
 
 		pl.insertPosting(mpost, false)
@@ -1497,15 +1563,17 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
 // ProcessPredicate is the per-predicate goroutine entry point. It reads the schema once
 // for the predicate and routes to the appropriate processor:
 //
-//	vector index  → ProcessVectorIndex  (serial; HNSW cross-key writes are not concurrent-safe)
-//	list/lang     → ProcessList         (batched uid-map accumulation)
-//	scalar        → ProcessSingle       (batched uid-map accumulation)
+//	legacy-routed  → runMutation, edge by edge in arrival order (a star-delete in
+//	                 the batch, value-indexed list, @count; see routeToLegacy)
+//	vector index   → ProcessVectorIndex  (serial; HNSW cross-key writes are not concurrent-safe)
+//	list/lang      → ProcessList         (batched uid-map accumulation)
+//	scalar         → ProcessSingle       (batched uid-map accumulation)
 //	unknown schema → runMutation fallback (legacy, edge-by-edge)
 //
-// The fallback at the bottom of the function handles edges that are neither list nor
-// scalar — these are drained from the channel after ProcessList/ProcessSingle return,
-// though in practice ProcessList/ProcessSingle consume all edges so the channel is
-// already empty.
+// Legacy routing happens inside the predicate goroutine, so the mutation keeps its
+// cross-predicate parallelism and only that predicate gives up its within-predicate
+// fan-out. The runMutation loop at the bottom also drains anything the batched paths
+// leave behind (an unknown schema), as before.
 func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *PredicatePipeline) error {
 	defer pipeline.close()
 	ctx = schema.GetWriteContext(ctx)
@@ -1524,6 +1592,7 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 		info.hasUpsert = schema.State().HasUpsert(pipeline.attr)
 		info.isList = schema.State().IsList(pipeline.attr)
 		info.isUid = su.ValueType == pb.Posting_UID
+		info.lang = su.Lang
 		factorySpecs, err := schema.State().FactoryCreateSpec(ctx, pipeline.attr)
 		if err != nil {
 			return err
@@ -1531,6 +1600,27 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 		if len(factorySpecs) > 0 {
 			runForVectorIndex = true
 		}
+	}
+
+	// Shapes the batched paths do not yet handle correctly take the legacy
+	// per-edge path here, inside this predicate's goroutine. The channel
+	// delivers the predicate's edges in arrival order, which is the order legacy
+	// guarantees per (predicate, entity).
+	if pipeline.legacy || (ok && routeToLegacy(info)) {
+		for edge := range pipeline.edges {
+			// runMutation here does not convert — on the worker-side legacy path
+			// the conversion happens before it is called — so do what
+			// ProcessList/ProcessSingle do and convert to the schema type first.
+			if ok {
+				if err := ValidateAndConvert(edge, &su); err != nil {
+					return err
+				}
+			}
+			if err := runMutation(ctx, edge, mp.txn); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	if runForVectorIndex {
@@ -1566,6 +1656,31 @@ func (mp *MutationPipeline) ProcessPredicate(ctx context.Context, pipeline *Pred
 	}
 
 	return nil
+}
+
+// routeToLegacy reports whether a predicate's edges must take the legacy
+// per-edge path (runMutation, in arrival order) instead of the batched
+// ProcessList/ProcessSingle paths. The batched paths collapse postings by slot
+// with last-write-wins and compute deletes against the pre-batch state, which
+// the pipeline-vs-legacy differential (worker/sort_test.go) shows is wrong for:
+//
+//   - value-indexed lists, on any tokenizer: `SET v; DEL v` in one batch leaves
+//     v's tokens in the index, because InsertTokenizerIndexes sorts Dels before
+//     Sets (needed when old and new values share a token) and
+//     handleOldDeleteForList is a no-op for lists;
+//   - value-indexed @lang scalars: the same index pass emits a SET per raw
+//     posting and only retracts committed old values, so an in-batch replace of
+//     one tag (`SET b@de; SET a@de`) keeps b's token;
+//   - @count: the batched count index disagrees with legacy on repeated SETs and
+//     which side is right is unresolved, so production behaviour is kept until
+//     it is.
+//
+// Star-deletes are the remaining case; Process marks those predicates per batch
+// (PredicatePipeline.legacy) because that is a property of the batch, not of the
+// schema. A shape is promoted back to the batched path only once the
+// differential is green for it.
+func routeToLegacy(info predicateInfo) bool {
+	return ((info.isList || info.lang) && info.index) || info.count
 }
 
 func isStarAll(v []byte) bool {
@@ -1920,28 +2035,34 @@ func logWorkerGrant(ctx context.Context, workers, sizing, workCap, totalEdges in
 //	edge.Lang    — language tag (e.g. "en") or empty
 //	edge.Facets  — optional facet list
 //
-// Star-delete edges (entity=0, value="*") are handled inline before the fan-out
-// because they must run serially with respect to the data list they are clearing.
+// Star-delete edges (value="*") route their whole predicate through the legacy
+// per-edge path for this batch (see the pre-pass below), which keeps them in
+// arrival order with respect to the SETs on the same list.
 func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdge) error {
-	// handleDeleteAll calls schema.State().IsIndexed/IsReversed/HasCount, all of
-	// which only consult the pending mutSchema (the new schema with the index
-	// being built) when the context carries the isWrite flag. The legacy path
-	// in runMutation already calls schema.GetWriteContext at the top; the
-	// pipeline must do the same here, otherwise during a background index
-	// build a star-delete won't generate the index Del entries for the prior
-	// value, leaving stale uids in the index permanently.
+	// Schema lookups must see the pending mutSchema (the new schema with the
+	// index being built) during a background index build, which they only do
+	// when the context carries the isWrite flag. runMutation sets it at the top
+	// of the legacy path; do the same here so every goroutine below inherits it.
 	ctx = schema.GetWriteContext(ctx)
 
 	// Pre-pass: count edges per predicate so the global goroutine budget can be
-	// apportioned proportionally before any predicate goroutine starts. Star-delete
-	// edges are excluded — they are handled inline below and never reach a
-	// predicate goroutine. allocateWorkers returns nil when the budget is disabled
-	// (budget < 2), in which case every pred.workers stays 0 and the pipeline
-	// behaves exactly as the legacy one-goroutine-per-predicate path.
+	// apportioned proportionally before any predicate goroutine starts, and note
+	// which predicates carry a star-delete in this batch. Those predicates take
+	// the legacy per-edge path inside their goroutine (PredicatePipeline.legacy):
+	// the batched paths apply SETs after the fan-out, while a star-delete has to
+	// run in arrival order against the same list and handleDeleteAll only sees
+	// the pre-batch state, so `SET v; DELETE *` on one key would come out as
+	// delete-then-set and keep v. Star-deletes stay out of the counts because
+	// the legacy path ignores the worker grant. allocateWorkers returns nil when
+	// the budget is disabled (budget < 2), in which case every pred.workers stays
+	// 0 and the pipeline behaves exactly as the legacy one-goroutine-per-predicate
+	// path.
 	edgeCounts := make(map[string]int)
+	starPreds := make(map[string]bool)
 	totalEdges := 0
 	for _, edge := range edges {
 		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
+			starPreds[edge.Attr] = true
 			continue
 		}
 		edgeCounts[edge.Attr]++
@@ -1965,18 +2086,6 @@ func (mp *MutationPipeline) Process(ctx context.Context, edges []*pb.DirectedEdg
 	var sendErr error
 sendLoop:
 	for _, edge := range edges {
-		if edge.Op == pb.DirectedEdge_DEL && string(edge.Value) == x.Star {
-			l, err := mp.txn.Get(x.DataKey(edge.Attr, edge.Entity))
-			if err != nil {
-				sendErr = err
-				break sendLoop
-			}
-			if err = l.handleDeleteAll(ctx, edge, mp.txn); err != nil {
-				sendErr = err
-				break sendLoop
-			}
-			continue
-		}
 		pred, ok := predicates[edge.Attr]
 		if !ok {
 			pred = &PredicatePipeline{
@@ -1984,6 +2093,7 @@ sendLoop:
 				edges:   make(chan *pb.DirectedEdge, 1000),
 				wg:      &wg,
 				workers: workerAlloc[edge.Attr], // 0 when the budget is disabled
+				legacy:  starPreds[edge.Attr],
 			}
 			predicates[edge.Attr] = pred
 			wg.Add(1)
