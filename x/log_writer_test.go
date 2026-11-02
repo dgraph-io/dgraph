@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -141,6 +142,26 @@ func TestLogWriterRotateBackupNamesUnique(t *testing.T) {
 	_, kept, err := processOldLogFiles(path, lw.MaxAge)
 	require.NoError(t, err)
 	require.Len(t, kept, rotations)
+}
+
+// TestProcessOldLogFilesSeesCompressedBackups checks that compressed backups
+// are classified by age like plain ones. Otherwise MaxAge never removes them.
+func TestProcessOldLogFilesSeesCompressedBackups(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.log")
+	now := time.Now().UTC()
+	old := now.Add(-72 * time.Hour)
+	oldPlain := backupName(path, old)
+	oldGz := backupName(path, old.Add(time.Second)) + ".gz"
+	recentPlain := backupName(path, now.Add(-2*time.Second))
+	recentGz := backupName(path, now.Add(-time.Second)) + ".gz"
+	for _, name := range []string{oldPlain, oldGz, recentPlain, recentGz} {
+		require.NoError(t, os.WriteFile(name, []byte("x\n"), 0o600))
+	}
+
+	toRemove, toKeep, err := processOldLogFiles(path, 1)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{filepath.Base(oldPlain), filepath.Base(oldGz)}, toRemove)
+	require.ElementsMatch(t, []string{filepath.Base(recentPlain), filepath.Base(recentGz)}, toKeep)
 }
 
 func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {

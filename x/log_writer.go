@@ -440,8 +440,9 @@ func processOldLogFiles(fp string, maxAge int64) ([]string, []string, error) {
 			continue
 		}
 
-		_, e := prefixAndExt(fp)
-		tsString := f.Name()[len(defPrefix) : len(f.Name())-len(e)]
+		// compressed backups carry a .gz after the normal extension
+		name := strings.TrimSuffix(f.Name(), ".gz")
+		tsString := name[len(defPrefix) : len(name)-len(defExt)]
 		ts, err := time.Parse(backupTimeFormat, tsString)
 		if err != nil {
 			continue
