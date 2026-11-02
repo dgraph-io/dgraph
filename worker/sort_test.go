@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -24,7 +25,9 @@ import (
 	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	"github.com/dgraph-io/dgraph/v25/schema"
 	"github.com/dgraph-io/dgraph/v25/tok"
+	"github.com/dgraph-io/dgraph/v25/tok/hnsw"
 	"github.com/dgraph-io/dgraph/v25/types"
+	"github.com/dgraph-io/dgraph/v25/types/facets"
 	"github.com/dgraph-io/dgraph/v25/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -1778,6 +1781,16 @@ type diffH struct {
 	ts uint64
 }
 
+// snapshot is one path's committed state. data holds every data/index/reverse/
+// count posting (facets included). vec reduces the HNSW graph keys to "which
+// uids are in the vector index": the entry point and per-level adjacency depend
+// on insertion order and random level draws, so byte-comparing them would
+// produce false diffs between two correct runs.
+type snapshot struct {
+	data map[string]string
+	vec  map[string]bool
+}
+
 func newDiffH(t *testing.T) *diffH {
 	dir, err := os.MkdirTemp("", "pipediff_")
 	require.NoError(t, err)
@@ -1788,11 +1801,23 @@ func newDiffH(t *testing.T) *diffH {
 	posting.Init(ps, 0, false)
 	Init(ps)
 	require.NoError(t, schema.ParseBytes([]byte(`
-		sv: string   @index(exact) .
-		lv: [uid]    @reverse .
-		lc: [uid]    @reverse @count .
-		lp: string   @lang .
-		ls: [string] @index(term) .
+		sv:  string        @index(exact) .
+		lv:  [uid]         @reverse .
+		lc:  [uid]         @reverse @count .
+		lp:  string        @lang .
+		ls:  [string]      @index(term) .
+		lf:  [string]      @index(fulltext) .
+		lt:  [string]      @index(trigram) .
+		geo: geo           @index(geo) .
+		bf:  bigfloat      @index(bigfloat) .
+		bo:  bool          @index(bool) .
+		fl:  float         @index(float) .
+		pw:  password .
+		vec: float32vector @index(hnsw(metric:"euclidean")) .
+		su:  uid           @reverse .
+		fs:  string        @index(exact) .
+		fu:  [uid] .
+		fr:  [uid]         @reverse .
 	`), 1))
 	prevPar := x.WorkerConfig.IntraMutationParallelism
 	prevEPW := x.WorkerConfig.IntraMutationEdgesPerWorker
@@ -1807,8 +1832,9 @@ func newDiffH(t *testing.T) *diffH {
 
 func (h *diffH) A(p string) string { return x.AttrInRootNamespace(p) }
 
-func (h *diffH) dump() map[string]string {
-	out := map[string]string{}
+func (h *diffH) dump() snapshot {
+	s := snapshot{data: map[string]string{}, vec: map[string]bool{}}
+	pwAttr := h.A("pw")
 	txn := h.ps.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
@@ -1819,25 +1845,51 @@ func (h *diffH) dump() map[string]string {
 		if err != nil || (!pk.IsData() && !pk.IsIndex() && !pk.IsReverse() && !pk.IsCountOrCountRev()) {
 			continue
 		}
+		if strings.Contains(pk.Attr, hnsw.VecKeyword) {
+			if strings.HasSuffix(pk.Attr, hnsw.VecEntry) {
+				continue
+			}
+			if pk.IsData() {
+				s.vec[fmt.Sprintf("%d", pk.Uid)] = true
+			}
+			continue
+		}
 		pl, err := posting.GetNoStore(key, math.MaxUint64)
 		require.NoError(h.t, err)
 		var parts []string
 		require.NoError(h.t, pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
-			parts = append(parts, fmt.Sprintf("u%d:v%x:l%s:t%d", p.Uid, p.Value, p.LangTag, p.PostingType))
+			v := fmt.Sprintf("%x", p.Value)
+			if pk.Attr == pwAttr {
+				v = "PWHASH" // bcrypt is salted; the plaintext is verified separately
+			}
+			parts = append(parts, fmt.Sprintf("u%d:v%s:l%s:t%d:f%s",
+				p.Uid, v, p.LangTag, p.PostingType, fmtFacets(p.Facets)))
 			return nil
 		}))
 		sort.Strings(parts)
 		if len(parts) > 0 {
-			out[fmt.Sprintf("%x", key)] = fmt.Sprintf("%v", parts)
+			s.data[fmt.Sprintf("%x", key)] = fmt.Sprintf("%v", parts)
 		}
 	}
-	return out
+	return s
+}
+
+func fmtFacets(fs []*api.Facet) string {
+	if len(fs) == 0 {
+		return "-"
+	}
+	var s []string
+	for _, f := range fs {
+		s = append(s, fmt.Sprintf("%s=%d:%x", f.Key, f.ValType, f.Value))
+	}
+	sort.Strings(s)
+	return strings.Join(s, ",")
 }
 
 func cloneEdges(in []*pb.DirectedEdge) []*pb.DirectedEdge {
 	out := make([]*pb.DirectedEdge, len(in))
 	for i, e := range in {
-		out[i] = &pb.DirectedEdge{
+		c := &pb.DirectedEdge{
 			Entity:    e.Entity,
 			Attr:      e.Attr,
 			Value:     append([]byte(nil), e.Value...),
@@ -1846,45 +1898,77 @@ func cloneEdges(in []*pb.DirectedEdge) []*pb.DirectedEdge {
 			Lang:      e.Lang,
 			Op:        e.Op,
 		}
+		for _, f := range e.Facets {
+			c.Facets = append(c.Facets, &api.Facet{
+				Key:     f.Key,
+				Value:   append([]byte(nil), f.Value...),
+				ValType: f.ValType,
+				Tokens:  append([]string(nil), f.Tokens...),
+				Alias:   f.Alias,
+			})
+		}
+		out[i] = c
 	}
 	return out
 }
 
-func (h *diffH) apply(edges []*pb.DirectedEdge, pipeline bool) map[string]string {
+// apply wipes the store, applies the batches in order through the chosen path
+// (committing each one, so later batches act on committed data) and snapshots.
+func (h *diffH) apply(pipeline bool, batches ...[]*pb.DirectedEdge) snapshot {
 	require.NoError(h.t, h.ps.DropAll())
 	posting.ResetCache()
 	posting.Oracle().ResetTxns()
-	startTs, commitTs := h.ts, h.ts+1
-	h.ts += 10
-	ctx := schema.GetWriteContext(context.Background())
-	txn := posting.Oracle().RegisterStartTs(startTs)
-	if pipeline {
-		require.NoError(h.t, posting.NewMutationPipeline(txn).Process(ctx, cloneEdges(edges)))
-	} else {
-		es := cloneEdges(edges)
-		sort.SliceStable(es, func(i, j int) bool {
-			if es[i].Attr != es[j].Attr {
-				return es[i].Attr < es[j].Attr
+	for _, edges := range batches {
+		startTs, commitTs := h.ts, h.ts+1
+		h.ts += 10
+		ctx := schema.GetWriteContext(context.Background())
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		if pipeline {
+			require.NoError(h.t, posting.NewMutationPipeline(txn).Process(ctx, cloneEdges(edges)))
+		} else {
+			es := cloneEdges(edges)
+			sort.SliceStable(es, func(i, j int) bool {
+				if es[i].Attr != es[j].Attr {
+					return es[i].Attr < es[j].Attr
+				}
+				return es[i].Entity < es[j].Entity
+			})
+			for _, e := range es {
+				require.NoError(h.t, runMutation(ctx, e, txn))
 			}
-			return es[i].Entity < es[j].Entity
-		})
-		for _, e := range es {
-			require.NoError(h.t, runMutation(ctx, e, txn))
 		}
+		txn.Update()
+		w := posting.NewTxnWriter(h.ps)
+		require.NoError(h.t, txn.CommitToDisk(w, commitTs))
+		require.NoError(h.t, w.Flush())
+		txn.UpdateCachedKeys(commitTs)
 	}
-	txn.Update()
-	w := posting.NewTxnWriter(h.ps)
-	require.NoError(h.t, txn.CommitToDisk(w, commitTs))
-	require.NoError(h.t, w.Flush())
-	txn.UpdateCachedKeys(commitTs)
 	return h.dump()
 }
 
 // requireSame fails if the pipeline's committed state differs from legacy's.
-func (h *diffH) requireSame(edges []*pb.DirectedEdge) {
-	legacy := h.apply(edges, false)
-	pipe := h.apply(edges, true)
-	require.Equal(h.t, legacy, pipe, "pipeline diverged from legacy\n  edges: %s", fmtEdges(edges))
+// With several batches, later ones act on data the earlier ones committed.
+func (h *diffH) requireSame(batches ...[]*pb.DirectedEdge) {
+	legacy := h.apply(false, batches...)
+	pipe := h.apply(true, batches...)
+	var all []*pb.DirectedEdge
+	for _, b := range batches {
+		all = append(all, b...)
+	}
+	require.Equal(h.t, legacy.data, pipe.data, "pipeline diverged from legacy\n  edges: %s", fmtEdges(all))
+	require.Equal(h.t, legacy.vec, pipe.vec,
+		"pipeline diverged from legacy (vector-index membership)\n  edges: %s", fmtEdges(all))
+}
+
+// caseSame runs one case as an isolated subtest with the subtest's *testing.T,
+// so a failing case cannot abort its siblings.
+func (h *diffH) caseSame(t *testing.T, name string, batches ...[]*pb.DirectedEdge) {
+	t.Run(name, func(t *testing.T) {
+		hh := *h
+		hh.t = t
+		defer func() { h.ts = hh.ts }()
+		hh.requireSame(batches...)
+	})
 }
 
 // ---- edge builders ----
@@ -1928,52 +2012,70 @@ func fmtEdges(edges []*pb.DirectedEdge) string {
 	return fmt.Sprintf("%v", b)
 }
 
-// TestPipelineLegacyDifferential is the broad fuzz gate (discovery + acceptance).
-// Star-deletes are excluded here; they have their own deterministic case below.
+// TestPipelineLegacyDifferential is the broad fuzz gate (discovery + acceptance)
+// over every non-vector shape in the schema. Star-deletes are excluded (they have
+// their own deterministic case), vectors have their own fuzz with a membership
+// compare, and password is excluded because bcrypt makes each seed ~100ms.
 func TestPipelineLegacyDifferential(t *testing.T) {
 	h := newDiffH(t)
 	uids := []uint64{0x1, 0x2, 0x3, 0x4}
 	strs := []string{"a", "b", "c", "d"}
 	tgts := []uint64{0x100, 0x101, 0x102}
 	langs := []string{"en", "de", "fr"}
+	words := []string{"red apple", "green apple", "blue pear", "apple"}
+	tris := []string{"apple", "zebra", "maple", "ape"}
+	geos := []string{geoP1, geoP2}
+	bfs := []string{"1.5", "2.25", "-3.125"}
+	fls := []string{"0.5", "1.5", "2.5"}
+	fks := [][2]string{{"w", "1"}, {"w", "2"}, {"tag", `"x"`}}
 	gen := func(rng *rand.Rand) []*pb.DirectedEdge {
 		n := 3 + rng.Intn(8)
 		var edges []*pb.DirectedEdge
+		pick := func(ss []string) string { return ss[rng.Intn(len(ss))] }
+		tgt := func() uint64 { return tgts[rng.Intn(len(tgts))] }
 		for i := 0; i < n; i++ {
 			uid := uids[rng.Intn(len(uids))]
 			del := rng.Intn(2) == 1
-			switch rng.Intn(5) {
+			var e *pb.DirectedEdge
+			switch rng.Intn(15) {
 			case 0:
-				e := eSetStr(h.A("sv"), uid, strs[rng.Intn(len(strs))])
-				if del {
-					e.Op = pb.DirectedEdge_DEL
-				}
-				edges = append(edges, e)
+				e = eSetStr(h.A("sv"), uid, pick(strs))
 			case 1:
-				e := eSetUid(h.A("lv"), uid, tgts[rng.Intn(len(tgts))])
-				if del {
-					e.Op = pb.DirectedEdge_DEL
-				}
-				edges = append(edges, e)
+				e = eSetUid(h.A("lv"), uid, tgt())
 			case 2:
-				e := eSetUid(h.A("lc"), uid, tgts[rng.Intn(len(tgts))])
-				if del {
-					e.Op = pb.DirectedEdge_DEL
-				}
-				edges = append(edges, e)
+				e = eSetUid(h.A("lc"), uid, tgt())
 			case 3:
-				e := eLangSet(h.A("lp"), uid, strs[rng.Intn(len(strs))], langs[rng.Intn(len(langs))])
-				if del {
-					e.Op = pb.DirectedEdge_DEL
-				}
-				edges = append(edges, e)
+				e = eLangSet(h.A("lp"), uid, pick(strs), pick(langs))
 			case 4:
-				e := eSetStr(h.A("ls"), uid, strs[rng.Intn(len(strs))])
-				if del {
-					e.Op = pb.DirectedEdge_DEL
-				}
-				edges = append(edges, e)
+				e = eSetStr(h.A("ls"), uid, pick(strs))
+			case 5:
+				e = eSetStr(h.A("lf"), uid, pick(words))
+			case 6:
+				e = eSetStr(h.A("lt"), uid, pick(tris))
+			case 7:
+				e = eSetStr(h.A("geo"), uid, pick(geos))
+			case 8:
+				e = eSetStr(h.A("bf"), uid, pick(bfs))
+			case 9:
+				e = eSetStr(h.A("bo"), uid, pick([]string{"true", "false"}))
+			case 10:
+				e = eSetStr(h.A("fl"), uid, pick(fls))
+			case 11:
+				e = eSetUid(h.A("su"), uid, tgt())
+			case 12:
+				e = eSetStr(h.A("fs"), uid, pick(strs[:2]))
+			case 13:
+				e = eSetUid(h.A("fu"), uid, tgt())
+			case 14:
+				e = eSetUid(h.A("fr"), uid, tgt())
 			}
+			if del {
+				e.Op = pb.DirectedEdge_DEL
+			} else if a := x.ParseAttr(e.Attr); a == "fs" || a == "fu" || a == "fr" {
+				fk := fks[rng.Intn(len(fks))]
+				e = withF(t, e, fk[0], fk[1])
+			}
+			edges = append(edges, e)
 		}
 		return edges
 	}
@@ -1983,13 +2085,13 @@ func TestPipelineLegacyDifferential(t *testing.T) {
 	for seed := 0; seed < iters; seed++ {
 		rng := rand.New(rand.NewSource(int64(seed) + 1))
 		edges := gen(rng)
-		legacy := h.apply(edges, false)
-		pipe := h.apply(edges, true)
-		if fmt.Sprintf("%v", legacy) != fmt.Sprintf("%v", pipe) {
+		legacy := h.apply(false, edges)
+		pipe := h.apply(true, edges)
+		if fmt.Sprintf("%v", legacy.data) != fmt.Sprintf("%v", pipe.data) {
 			mism++
-			for k := range symDiff(legacy, pipe) {
+			for k := range symDiff(legacy.data, pipe.data) {
 				if pk, err := x.Parse(mustHex(k)); err == nil {
-					byPred[pk.Attr]++
+					byPred[x.ParseAttr(pk.Attr)]++
 				}
 			}
 		}
@@ -2070,4 +2172,196 @@ func TestPipeline_IndexedListValueChurn(t *testing.T) {
 		eDelStr(ls, 1, "c"), // index entry for "c" must be removed
 		eSetStr(ls, 1, "d"),
 	})
+}
+
+// ---- shape coverage: builders ----
+
+const (
+	geoP1 = `{"type":"Point","coordinates":[1.0,2.0]}`
+	geoP2 = `{"type":"Point","coordinates":[3.5,-4.25]}`
+)
+
+func batch(edges ...*pb.DirectedEdge) []*pb.DirectedEdge { return edges }
+
+// withF attaches facets built by facets.FacetFor: bare numbers parse as ints,
+// string values must be quoted (e.g. `"x"`).
+func withF(t *testing.T, e *pb.DirectedEdge, kv ...string) *pb.DirectedEdge {
+	for i := 0; i+1 < len(kv); i += 2 {
+		f, err := facets.FacetFor(kv[i], kv[i+1])
+		require.NoError(t, err)
+		e.Facets = append(e.Facets, f)
+	}
+	return e
+}
+
+// eSetVecTyped pre-converts the vector to VFLOAT binary — what typed RDF
+// ("..."^^<xs:[]float32>) delivers via chunker/rdf_parser.go — so
+// ValidateAndConvert is a no-op on both paths. Untyped input (JSON mutations,
+// RDF without the type) arrives as a STRING/DEFAULT literal; eSetStr covers it.
+func eSetVecTyped(t *testing.T, attr string, uid uint64, s string) *pb.DirectedEdge {
+	dst, err := types.Convert(types.Val{Tid: types.StringID, Value: []byte(s)}, types.VFloatID)
+	require.NoError(t, err)
+	b := types.ValueForType(types.BinaryID)
+	require.NoError(t, types.Marshal(dst, &b))
+	return &pb.DirectedEdge{Entity: uid, Attr: attr, Value: b.Value.([]byte),
+		ValueType: pb.Posting_VFLOAT, Op: pb.DirectedEdge_SET}
+}
+
+// Divergence class 4 on other tokenizers. Same mechanism as
+// TestPipeline_IndexedListValueChurn: a deleted value's tokens survive in the
+// index. Fulltext keeps the shared token "appl" correct (the case the
+// Dels-before-Sets sort in InsertTokenizerIndexes was written for) but leaks
+// the deleted value's own token "red". The trigram values share no trigrams, so
+// stale tokens cannot hide behind legitimate ones.
+func TestPipeline_IndexedListValueChurnFulltext(t *testing.T) {
+	h := newDiffH(t)
+	lf := h.A("lf")
+	h.caseSame(t, "churn-shared-token",
+		batch(eSetStr(lf, 1, "red apple"), eDelStr(lf, 1, "red apple"), eSetStr(lf, 1, "green apple")))
+	h.caseSame(t, "committed+churn",
+		batch(eSetStr(lf, 1, "red apple")), batch(eSetStr(lf, 1, "red apple"), eDelStr(lf, 1, "red apple")))
+	h.caseSame(t, "del-old-set-new-shared-token",
+		batch(eSetStr(lf, 1, "red apple")), batch(eDelStr(lf, 1, "red apple"), eSetStr(lf, 1, "green apple")))
+}
+
+func TestPipeline_IndexedListValueChurnTrigram(t *testing.T) {
+	h := newDiffH(t)
+	lt := h.A("lt")
+	h.caseSame(t, "churn", batch(eSetStr(lt, 1, "apple"), eDelStr(lt, 1, "apple"), eSetStr(lt, 1, "zebra")))
+	h.caseSame(t, "committed+churn",
+		batch(eSetStr(lt, 1, "apple")), batch(eSetStr(lt, 1, "apple"), eDelStr(lt, 1, "apple")))
+}
+
+// Vector values that arrive untyped (JSON mutations, RDF without
+// ^^<xs:[]float32>) must be converted to VFLOAT binary by the pipeline exactly
+// as runMutation does. ProcessVectorIndex used to skip ValidateAndConvert and
+// stored the literal text, which also left the vector out of the HNSW index.
+func TestPipeline_VectorUntypedValue(t *testing.T) {
+	h := newDiffH(t)
+	v := h.A("vec")
+	h.caseSame(t, "single-set", batch(eSetStr(v, 1, "[1.0, 0.0, 0.0]")))
+	h.caseSame(t, "set-replace-del", batch(
+		eSetStr(v, 1, "[1.0, 0.0, 0.0]"),
+		eSetStr(v, 1, "[0.0, 1.0, 0.0]"), // replace
+		eSetStr(v, 2, "[0.0, 0.0, 1.0]"),
+		eDelStr(v, 2, "[0.0, 0.0, 1.0]"), // matching delete
+	))
+	h.caseSame(t, "committed+replace",
+		batch(eSetStr(v, 1, "[1.0, 0.0, 0.0]")), batch(eSetStr(v, 1, "[0.5, 0.5, 0.0]")))
+	h.caseSame(t, "committed+star",
+		batch(eSetStr(v, 1, "[1.0, 0.0, 0.0]"), eSetStr(v, 2, "[0.0, 1.0, 0.0]")), batch(eStarDel(v, 1)))
+}
+
+// TestPipelineVectorDifferential fuzzes untyped vector SET/DEL mixes and
+// compares vector data exactly and HNSW membership (not adjacency).
+func TestPipelineVectorDifferential(t *testing.T) {
+	h := newDiffH(t)
+	v := h.A("vec")
+	vecs := []string{"[1,0,0]", "[0,1,0]", "[0,0,1]", "[0.5,0.5,0]", "[0.2,0.3,0.9]"}
+	const iters = 200
+	mism := 0
+	for seed := 0; seed < iters; seed++ {
+		rng := rand.New(rand.NewSource(int64(seed) + 1))
+		n := 2 + rng.Intn(6)
+		var edges []*pb.DirectedEdge
+		for i := 0; i < n; i++ {
+			e := eSetStr(v, uint64(1+rng.Intn(4)), vecs[rng.Intn(len(vecs))])
+			if rng.Intn(4) == 0 {
+				e.Op = pb.DirectedEdge_DEL
+			}
+			edges = append(edges, e)
+		}
+		legacy := h.apply(false, edges)
+		pipe := h.apply(true, edges)
+		if fmt.Sprintf("%v", legacy.data) != fmt.Sprintf("%v", pipe.data) ||
+			fmt.Sprintf("%v", legacy.vec) != fmt.Sprintf("%v", pipe.vec) {
+			mism++
+		}
+	}
+	t.Logf("vector fuzz: %d/%d seeds diverged", mism, iters)
+	require.Zero(t, mism, "pipeline must match legacy on vector data and index membership")
+}
+
+// TestPipelineShapes covers the predicate shapes the differential found clean,
+// in-batch and against committed data, so they stay guarded.
+func TestPipelineShapes(t *testing.T) {
+	h := newDiffH(t)
+	g, b, bo, fl, pw, su := h.A("geo"), h.A("bf"), h.A("bo"), h.A("fl"), h.A("pw"), h.A("su")
+	fs, fu, fr, v := h.A("fs"), h.A("fu"), h.A("fr"), h.A("vec")
+
+	h.caseSame(t, "Geo/set-replace-del", batch(eSetStr(g, 1, geoP1), eSetStr(g, 1, geoP2), eDelStr(g, 1, geoP2)))
+	h.caseSame(t, "Geo/committed+nonmatching-del", batch(eSetStr(g, 1, geoP1)), batch(eDelStr(g, 1, geoP2)))
+	h.caseSame(t, "Geo/committed+star", batch(eSetStr(g, 1, geoP1)), batch(eStarDel(g, 1)))
+
+	h.caseSame(t, "BigFloat/set-replace-del", batch(eSetStr(b, 1, "1.5"), eSetStr(b, 1, "2.25"), eDelStr(b, 1, "2.25")))
+	h.caseSame(t, "BigFloat/committed+nonmatching-del", batch(eSetStr(b, 1, "1.5")), batch(eDelStr(b, 1, "9.9")))
+
+	h.caseSame(t, "BoolFloat/in-batch", batch(
+		eSetStr(bo, 1, "true"), eSetStr(bo, 1, "false"), eDelStr(bo, 1, "false"),
+		eSetStr(fl, 2, "1.5"), eSetStr(fl, 2, "2.5"), eDelStr(fl, 2, "1.5"), // non-matching del
+	))
+	h.caseSame(t, "BoolFloat/committed+nonmatching-del", batch(eSetStr(fl, 2, "1.5")), batch(eDelStr(fl, 2, "7.5")))
+
+	// Password: bcrypt is salted, so the dump masks the hash; verify the
+	// plaintext against what each path stored. Passwords must be >= 6 chars.
+	for _, pipeline := range []bool{false, true} {
+		t.Run(fmt.Sprintf("Password/verify-plaintext/pipeline=%v", pipeline), func(t *testing.T) {
+			hh := *h
+			hh.t = t
+			hh.apply(pipeline, batch(eSetStr(pw, 1, "first1")), batch(eSetStr(pw, 1, "second")))
+			h.ts = hh.ts
+			pl, err := posting.GetNoStore(x.DataKey(pw, 1), math.MaxUint64)
+			require.NoError(t, err)
+			n := 0
+			require.NoError(t, pl.Iterate(math.MaxUint64, 0, func(p *pb.Posting) error {
+				n++
+				return types.VerifyPassword("second", string(p.Value))
+			}))
+			require.Equal(t, 1, n, "expected exactly one password posting")
+		})
+	}
+	h.caseSame(t, "Password/structure-replace", batch(eSetStr(pw, 1, "alpha1")), batch(eSetStr(pw, 1, "bravo2")))
+	h.caseSame(t, "Password/committed+star", batch(eSetStr(pw, 1, "alpha1")), batch(eStarDel(pw, 1)))
+
+	suDel := eSetUid(su, 1, 0x100)
+	suDel.Op = pb.DirectedEdge_DEL
+	h.caseSame(t, "SingleUidReverse/replace", batch(eSetUid(su, 1, 0x100), eSetUid(su, 1, 0x101))) // reverse must move
+	h.caseSame(t, "SingleUidReverse/committed+replace", batch(eSetUid(su, 1, 0x100)), batch(eSetUid(su, 1, 0x101)))
+	h.caseSame(t, "SingleUidReverse/committed+star", batch(eSetUid(su, 1, 0x100)), batch(eStarDel(su, 1)))
+	h.caseSame(t, "SingleUidReverse/committed+matching-del", batch(eSetUid(su, 1, 0x100)), batch(suDel))
+
+	h.caseSame(t, "Facets/scalar", batch(
+		withF(t, eSetStr(fs, 1, "a"), "w", "1"),
+		withF(t, eSetStr(fs, 1, "a"), "w", "2"), // same value, facet update
+		withF(t, eSetStr(fs, 2, "b"), "tag", `"x"`, "n", "7"),
+		eDelStr(fs, 2, "b"),
+	))
+	h.caseSame(t, "Facets/scalar-committed+facet-update",
+		batch(withF(t, eSetStr(fs, 1, "a"), "w", "1")), batch(withF(t, eSetStr(fs, 1, "a"), "w", "2")))
+	h.caseSame(t, "Facets/uid-list", batch(
+		withF(t, eSetUid(fu, 1, 0x100), "since", "2020"),
+		withF(t, eSetUid(fu, 1, 0x100), "since", "2021"), // facet replace on same target
+		withF(t, eSetUid(fu, 1, 0x101), "since", "2022"),
+		eSetUid(fu, 1, 0x102), // no facets
+	))
+	h.caseSame(t, "Facets/uid-list-committed+facet-update",
+		batch(withF(t, eSetUid(fu, 1, 0x100), "since", "2020")), batch(withF(t, eSetUid(fu, 1, 0x100), "since", "2021")))
+	h.caseSame(t, "Facets/uid-list-reverse", batch(
+		withF(t, eSetUid(fr, 1, 0x100), "since", "2020"),
+		withF(t, eSetUid(fr, 2, 0x100), "since", "2021"),
+		withF(t, eSetUid(fr, 1, 0x100), "since", "2022"), // facet replace; reverse posting must follow
+	))
+	h.caseSame(t, "Facets/uid-list-reverse-committed+facet-update",
+		batch(withF(t, eSetUid(fr, 1, 0x100), "since", "2020")), batch(withF(t, eSetUid(fr, 1, 0x100), "since", "2021")))
+
+	vDel := eSetVecTyped(t, v, 2, "[0.0, 0.0, 1.0]")
+	vDel.Op = pb.DirectedEdge_DEL
+	h.caseSame(t, "VectorTyped/single-set", batch(eSetVecTyped(t, v, 1, "[1.0, 0.0, 0.0]")))
+	h.caseSame(t, "VectorTyped/set-replace", batch(
+		eSetVecTyped(t, v, 1, "[1.0, 0.0, 0.0]"), eSetVecTyped(t, v, 1, "[0.0, 1.0, 0.0]"), eSetVecTyped(t, v, 2, "[0.0, 0.0, 1.0]")))
+	h.caseSame(t, "VectorTyped/committed+replace",
+		batch(eSetVecTyped(t, v, 1, "[1.0, 0.0, 0.0]")), batch(eSetVecTyped(t, v, 1, "[0.5, 0.5, 0.0]")))
+	h.caseSame(t, "VectorTyped/committed+star",
+		batch(eSetVecTyped(t, v, 1, "[1.0, 0.0, 0.0]"), eSetVecTyped(t, v, 2, "[0.0, 1.0, 0.0]")), batch(eStarDel(v, 1)))
+	h.caseSame(t, "VectorTyped/committed+matching-del", batch(eSetVecTyped(t, v, 2, "[0.0, 0.0, 1.0]")), batch(vDel))
 }
