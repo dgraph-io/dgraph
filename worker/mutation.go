@@ -365,12 +365,23 @@ func hasEdges(attr string, startTs uint64) bool {
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
-		// NOTE: This is NOT correct.
-		// An incorrect, but efficient way to quickly check if we have at least one non-empty
-		// posting. This does NOT consider those posting lists which can have multiple deltas
-		// summing up to an empty posting list. I'm leaving it as it is for now. But, this could
-		// cause issues because of this inaccuracy.
-		if it.Item().UserMeta()&posting.BitEmptyPosting == 0 {
+		item := it.Item()
+		meta := item.UserMeta()
+		if meta&posting.BitEmptyPosting != 0 {
+			continue
+		}
+		if meta&posting.BitCompletePosting != 0 {
+			return true
+		}
+		// The newest version is a delta, so the list may still sum up to empty (e.g. after all
+		// of its edges were deleted but before a rollup). Read the list to find out.
+		l, err := posting.GetNoStore(item.KeyCopy(nil), startTs)
+		if err != nil {
+			glog.Warningf("hasEdges: unable to read posting list for attr %s: %v", attr, err)
+			return true
+		}
+		empty, err := l.IsEmpty(startTs, 0)
+		if err != nil || !empty {
 			return true
 		}
 	}

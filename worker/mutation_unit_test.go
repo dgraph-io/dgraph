@@ -7,6 +7,7 @@ package worker
 
 import (
 	"context"
+	"math"
 	"os"
 	"reflect"
 	"testing"
@@ -250,4 +251,38 @@ func TestTypeSanityCheck(t *testing.T) {
 	err = typeSanityCheck(typeDef)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Field in type definition cannot have tokenizers")
+}
+
+func TestHasEdgesAfterDelete(t *testing.T) {
+	dir, err := os.MkdirTemp("", "storetest_")
+	x.Check(err)
+	defer os.RemoveAll(dir)
+
+	ps, err := badger.OpenManaged(badger.DefaultOptions(dir))
+	x.Check(err)
+	defer ps.Close()
+	pstore = ps
+	posting.Init(ps, 0, false)
+	Init(ps)
+	require.NoError(t, schema.ParseBytes([]byte("hasedges: [uid] ."), 1))
+
+	attr := x.AttrInRootNamespace("hasedges")
+	commit := func(startTs, commitTs uint64, op pb.DirectedEdge_Op) {
+		txn := posting.Oracle().RegisterStartTs(startTs)
+		edge := &pb.DirectedEdge{ValueId: 2, Attr: attr, Entity: 1, Op: op}
+		require.NoError(t, runMutation(context.Background(), edge, txn))
+		txn.Update()
+		writer := posting.NewTxnWriter(ps)
+		require.NoError(t, txn.CommitToDisk(writer, commitTs))
+		require.NoError(t, writer.Flush())
+	}
+
+	require.False(t, hasEdges(attr, math.MaxUint64))
+
+	commit(5, 6, pb.DirectedEdge_SET)
+	require.True(t, hasEdges(attr, math.MaxUint64))
+
+	// The newest version is now a delete delta, not an empty rollup.
+	commit(7, 8, pb.DirectedEdge_DEL)
+	require.False(t, hasEdges(attr, math.MaxUint64))
 }
