@@ -402,7 +402,7 @@ func summariesToManifests(summaries []*ManifestSummary) []*Manifest {
 
 // CreateManifestSummary writes a lightweight manifest_summary.json that omits
 // Groups and DropOperations. The full manifest.json is left untouched.
-func CreateManifestSummary(h UriHandler, master *MasterManifest) (retErr error) {
+func CreateManifestSummary(h UriHandler, master *MasterManifest) error {
 	summary := &MasterManifestSummary{
 		Manifests: make([]*ManifestSummary, len(master.Manifests)),
 	}
@@ -413,13 +413,14 @@ func CreateManifestSummary(h UriHandler, master *MasterManifest) (retErr error) 
 	if err != nil {
 		return errors.Wrap(err, "createManifestSummary failed to create tmp file")
 	}
-	defer func() {
-		if err := w.Close(); err != nil && retErr == nil {
-			retErr = err
-		}
-	}()
 	if err = json.NewEncoder(w).Encode(summary); err != nil {
+		_ = w.Close()
 		return err
+	}
+	// Close must complete before Rename. Remote handlers (S3) upload in the background and the object
+	// only exists once Close returns, so a deferred Close would rename the previous run's tmp file.
+	if err = w.Close(); err != nil {
+		return errors.Wrap(err, "createManifestSummary failed to close tmp file")
 	}
 	return errors.Wrapf(h.Rename(tmpManifestSummary, backupManifestSummary),
 		"MOVING TEMPORARY SUMMARY MANIFEST FAILED! Move %s to %s manually.",
