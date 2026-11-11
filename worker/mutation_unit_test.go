@@ -261,7 +261,16 @@ func TestHasEdgesAfterDelete(t *testing.T) {
 	pstore = ps
 	t.Cleanup(func() {
 		pstore = prevStore
+		// posting.Init above rebound posting's package-level store and
+		// memory layer to the temporary DB. Stop its monitor goroutine,
+		// close the temporary DB, then point posting back at the store
+		// the test found, so later tests do not read from a closed DB
+		// (e.g. TestExportRdf would die in x.Checkf on ErrDBClosed).
+		posting.Cleanup()
 		require.NoError(t, ps.Close())
+		if prevStore != nil {
+			posting.Init(prevStore, 0, false)
+		}
 	})
 	// Not using posting list cache
 	posting.Init(ps, 0, false)
