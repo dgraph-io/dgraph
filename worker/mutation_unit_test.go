@@ -254,14 +254,15 @@ func TestTypeSanityCheck(t *testing.T) {
 }
 
 func TestHasEdgesAfterDelete(t *testing.T) {
-	dir, err := os.MkdirTemp("", "storetest_")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
-
-	opt := badger.DefaultOptions(dir)
+	opt := badger.DefaultOptions(t.TempDir())
 	ps, err := badger.OpenManaged(opt)
 	require.NoError(t, err)
+	prevStore := pstore
 	pstore = ps
+	t.Cleanup(func() {
+		pstore = prevStore
+		require.NoError(t, ps.Close())
+	})
 	// Not using posting list cache
 	posting.Init(ps, 0, false)
 	Init(ps)

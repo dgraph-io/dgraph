@@ -352,6 +352,10 @@ func updateType(typeName string, t *pb.TypeUpdate, ts uint64) error {
 	return txn.CommitAt(ts, nil)
 }
 
+// hasEdges reports whether the predicate attr has any data visible at
+// startTs. A predicate whose values were all deleted counts as empty even
+// before rollup writes an empty posting list: the newest version of each key
+// is then a delete delta, which is folded and checked for emptiness.
 func hasEdges(attr string, startTs uint64) bool {
 	pk := x.ParsedKey{Attr: attr}
 	iterOpt := badger.DefaultIteratorOptions
