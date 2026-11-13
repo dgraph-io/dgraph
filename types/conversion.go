@@ -319,7 +319,11 @@ func Convert(from Val, toID TypeID) (Val, error) {
 				binary.LittleEndian.PutUint64(bs[:], u)
 				*res = bs[:]
 			case IntID:
-				if vc > math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(vc) {
+				// math.MaxInt64 (2^63-1) is not representable as a float64 and rounds up
+				// to 2^63, so comparing with > would let a value of 2^63 slip through and
+				// overflow on the int64(vc) conversion. Use >= to reject it. math.MinInt64
+				// (-2^63) is representable exactly, so < is correct for the lower bound.
+				if vc >= math.MaxInt64 || vc < math.MinInt64 || math.IsNaN(vc) {
 					return to, errors.Errorf("Float out of int64 range")
 				}
 				*res = int64(vc)

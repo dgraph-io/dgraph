@@ -641,6 +641,16 @@ func TestConvertFloatToInt(t *testing.T) {
 		{in: float64(0), out: int64(0)},
 		{in: float64(522638295213.3243), out: int64(522638295213)},
 		{in: float64(-522638295213.3243), out: int64(-522638295213)},
+		// Largest float64 strictly below 2^63 (2^63 - 1024) is a valid int64.
+		{in: float64(9223372036854774784), out: int64(9223372036854774784)},
+		// -2^63 is exactly representable and equals math.MinInt64, so it must convert.
+		{in: float64(math.MinInt64), out: int64(math.MinInt64)},
+		{
+			// 2^63 is greater than math.MaxInt64 (2^63-1) but equals float64(math.MaxInt64),
+			// so it must be rejected instead of silently overflowing.
+			in:      float64(9223372036854775808),
+			failure: "Float out of int64 range",
+		},
 		{
 			in:      math.NaN(),
 			failure: "Float out of int64 range",
