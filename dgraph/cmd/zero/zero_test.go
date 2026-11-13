@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -174,11 +174,11 @@ func TestZeroGracefulShutdown(t *testing.T) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 
-	inspect, err := cli.ContainerInspect(context.Background(), containerID)
+	inspect, err := cli.ContainerInspect(context.Background(), containerID, client.ContainerInspectOptions{})
 	require.NoError(t, err)
-	require.False(t, inspect.State.Running, "Container should not be running after stop")
+	require.False(t, inspect.Container.State.Running, "Container should not be running after stop")
 
-	if inspect.State.ExitCode == 137 {
+	if inspect.Container.State.ExitCode == 137 {
 		t.Errorf("Zero was killed (exit code 137) instead of shutting down gracefully. "+
 			"This may indicate a hanging goroutine or closer miscount. Shutdown took %v", shutdownDuration)
 	}
