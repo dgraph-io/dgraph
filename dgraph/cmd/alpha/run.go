@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip" // grpc compression
-	"google.golang.org/grpc/health"
 	hapi "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/dgraph-io/badger/v4"
@@ -436,7 +435,7 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *z.Closer) {
 
 	s := grpc.NewServer(opt...)
 	api.RegisterDgraphServer(s, &edgraph.Server{})
-	hapi.RegisterHealthServer(s, health.NewServer())
+	hapi.RegisterHealthServer(s, x.GRPCHealthServer())
 	worker.RegisterZeroProxyServer(s)
 	RegisterZanzibar(s)
 
