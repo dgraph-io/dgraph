@@ -52,8 +52,10 @@ func TestLogWriterWithCompression(t *testing.T) {
 	writeToLogWriterAndVerify(t, lw, path)
 }
 
-// if this test failed and you changed anything, please check the dgraph audit decrypt command.
-// The dgraph audit decrypt command uses the same decryption method
+// TestLogWriterWithEncryption decrypts every file the writer produced the way
+// the dgraph audit decrypt command does: each file opens with a header record
+// holding VerificationText, and every record carries its own IV. If this test
+// fails after a change to the format, check that command as well.
 func TestLogWriterWithEncryption(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log.enc")
 	lw := &LogWriter{
@@ -69,52 +71,52 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	msg := []byte("abcd")
 	msg = bytes.Repeat(msg, 256)
 	msg[1023] = '\n'
-	for range 10000 {
+	const lines = 10000
+	for range lines {
 		n, err := lw.Write(msg)
 		require.NoError(t, err)
 		require.Equal(t, len(msg)+20, n, "write length is not equal")
 	}
-
 	require.NoError(t, lw.Close())
-	file, err := os.Open(path)
-	require.NoError(t, err)
-	defer file.Close()
-	outPath := filepath.Join(filepath.Dir(path), "audit_out.log")
-	outfile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	require.NoError(t, err)
-	defer outfile.Close()
 
-	block, err := aes.NewCipher(lw.EncryptionKey)
+	files, err := os.ReadDir(filepath.Dir(path))
 	require.NoError(t, err)
-	stat, err := os.Stat(path)
-	require.NoError(t, err)
-	iv := make([]byte, aes.BlockSize)
-	_, err = file.ReadAt(iv, 0)
-	require.NoError(t, err)
-
-	var iterator int64 = 16
-	for {
-		length := make([]byte, 4)
-		_, err = file.ReadAt(length, iterator)
-		require.Nil(t, err)
-		iterator = iterator + 4
-		content := make([]byte, binary.BigEndian.Uint32(length))
-		_, err = file.ReadAt(content, iterator)
+	require.Greater(t, len(files), 1, "the writer never rotated")
+	records := 0
+	for _, f := range files {
+		data, err := os.ReadFile(filepath.Join(filepath.Dir(path), f.Name()))
 		require.NoError(t, err)
-		iterator = iterator + int64(binary.BigEndian.Uint32(length))
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(content, content)
-		//require.True(t, bytes.Equal(content, msg))
-		_, err = outfile.Write(content)
-		require.NoError(t, err)
-		if iterator >= stat.Size() {
-			break
+		plain := decryptRecords(t, lw.EncryptionKey, data)
+		require.NotEmpty(t, plain, f.Name())
+		require.Equal(t, VerificationText, string(plain[0]), "%s: header does not decrypt", f.Name())
+		for _, record := range plain[1:] {
+			require.Equal(t, msg, record, "%s: record does not decrypt", f.Name())
 		}
-		iv := make([]byte, 16)
-		_, err = file.ReadAt(iv, iterator)
-		require.NoError(t, err)
-		iterator = iterator + 16
+		records += len(plain) - 1
 	}
+	require.Equal(t, lines, records)
+}
+
+// decryptRecords splits an encrypted log file into its records, each of the
+// form [16]byte iv + [4]byte uint32(len(p)) + p, and decrypts every record
+// with its own IV.
+func decryptRecords(t *testing.T, key, data []byte) [][]byte {
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+
+	var records [][]byte
+	for off := 0; off < len(data); {
+		require.GreaterOrEqual(t, len(data)-off, aes.BlockSize+4, "truncated record header at %d", off)
+		iv := data[off : off+aes.BlockSize]
+		n := int(binary.BigEndian.Uint32(data[off+aes.BlockSize : off+aes.BlockSize+4]))
+		off += aes.BlockSize + 4
+		require.LessOrEqual(t, off+n, len(data), "truncated record at %d", off)
+		plain := make([]byte, n)
+		cipher.NewCTR(block, iv).XORKeyStream(plain, data[off:off+n])
+		records = append(records, plain)
+		off += n
+	}
+	return records
 }
 
 // TestLogWriterRotateBackupNamesUnique rotates faster than the millisecond
