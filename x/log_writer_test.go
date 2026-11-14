@@ -264,16 +264,24 @@ func writeToLogWriterAndVerify(t *testing.T, lw *LogWriter, path string) {
 	}
 	require.NoError(t, lw.Close())
 
-	require.Equal(t, writers*linesPerWriter, countLines(t, filepath.Dir(path)))
+	// The line count alone is also right when Write never rotates or nothing
+	// gets compressed, so check both happened. Close waits for the running
+	// manageOldLogs, so the compressed files are complete by now.
+	lines, files, compressed := scanLogDir(t, filepath.Dir(path))
+	require.Greater(t, files, 1, "the writer never rotated")
+	if lw.Compress {
+		require.Greater(t, compressed, 0, "no backup was compressed")
+	}
+	require.Equal(t, writers*linesPerWriter, lines)
 }
 
-// countLines returns the number of lines across every plain or gzipped file in dir.
-func countLines(t *testing.T, dir string) int {
-	files, err := os.ReadDir(dir)
+// scanLogDir returns the number of lines across every plain or gzipped file in
+// dir, the number of files, and how many of them are gzipped.
+func scanLogDir(t *testing.T, dir string) (lines, files, compressed int) {
+	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
 
-	lineCount := 0
-	for _, f := range files {
+	for _, f := range entries {
 		file, err := os.Open(filepath.Join(dir, f.Name()))
 		require.NoError(t, err)
 
@@ -282,13 +290,15 @@ func countLines(t *testing.T, dir string) int {
 			gz, err := gzip.NewReader(file)
 			require.NoError(t, err)
 			r = gz
+			compressed++
 		}
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
-			lineCount++
+			lines++
 		}
 		require.NoError(t, scanner.Err())
 		require.NoError(t, file.Close())
+		files++
 	}
-	return lineCount
+	return lines, files, compressed
 }
