@@ -201,31 +201,30 @@ func TestLogWriterReinitKeepsEarlierBackups(t *testing.T) {
 	}
 }
 
-// TestLogWriterRotateSkipsExistingBackups occupies every backup name, plain and
-// compressed, for the next second and then rotates once. The rotation must
-// leave all of them untouched and land in a name of its own.
+// TestLogWriterRotateSkipsExistingBackups occupies the names a rotation at the
+// pinned clock reading would try first: a plain backup, a compressed one, and
+// one present in both forms. The rotation must leave all of them untouched
+// and land on the first free name. A compressed backup counts as taken
+// because compressing the new backup would otherwise overwrite it.
 func TestLogWriterRotateSkipsExistingBackups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
+	at, clock := pinnedClock()
 	const earlier = "earlier backup\n"
-	start := time.Now().UTC().Truncate(time.Millisecond)
-	occupied := make([]string, 0, 1000)
-	for i := range 1000 {
-		name := backupName(path, start.Add(time.Duration(i)*time.Millisecond))
-		if i%2 == 1 {
-			name += ".gz"
-		}
+	occupied := []string{
+		backupName(path, at),
+		backupName(path, at.Add(time.Millisecond)) + ".gz",
+		backupName(path, at.Add(2*time.Millisecond)),
+		backupName(path, at.Add(2*time.Millisecond)) + ".gz",
+	}
+	for _, name := range occupied {
 		require.NoError(t, os.WriteFile(name, []byte(earlier), 0o600))
-		occupied = append(occupied, name)
 	}
 
-	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	lw := &LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}
+	lw.now = clock
+	lw, err := lw.Init()
 	require.NoError(t, err)
-	_, err = lw.Write([]byte("fresh\n"))
-	require.NoError(t, err)
-	lw.mu.Lock()
-	err = lw.rotate()
-	lw.mu.Unlock()
-	require.NoError(t, err)
+	rotateWith(t, lw, "fresh\n")
 	require.NoError(t, lw.Close())
 
 	for _, name := range occupied {
@@ -233,6 +232,10 @@ func TestLogWriterRotateSkipsExistingBackups(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, earlier, string(content), name)
 	}
+	landed := backupName(path, at.Add(3*time.Millisecond))
+	content, err := os.ReadFile(landed)
+	require.NoError(t, err, "the rotation did not land on the first free name")
+	require.Equal(t, "fresh\n", string(content))
 	_, kept, err := processOldLogFiles(path, 1)
 	require.NoError(t, err)
 	require.Len(t, kept, len(occupied)+1)
