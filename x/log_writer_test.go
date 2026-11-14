@@ -25,8 +25,7 @@ import (
 )
 
 func TestLogWriter(t *testing.T) {
-	path, _ := filepath.Abs("./log_test/audit.log")
-	defer os.RemoveAll(filepath.Dir(path))
+	path := filepath.Join(t.TempDir(), "audit.log")
 	lw := &LogWriter{
 		FilePath: path,
 		MaxSize:  1,
@@ -40,8 +39,7 @@ func TestLogWriter(t *testing.T) {
 }
 
 func TestLogWriterWithCompression(t *testing.T) {
-	path, _ := filepath.Abs("./log_test/audit.log")
-	defer os.RemoveAll(filepath.Dir(path))
+	path := filepath.Join(t.TempDir(), "audit.log")
 	lw := &LogWriter{
 		FilePath: path,
 		MaxSize:  1,
@@ -57,8 +55,7 @@ func TestLogWriterWithCompression(t *testing.T) {
 // if this test failed and you changed anything, please check the dgraph audit decrypt command.
 // The dgraph audit decrypt command uses the same decryption method
 func TestLogWriterWithEncryption(t *testing.T) {
-	path, _ := filepath.Abs("./log_test/audit.log.enc")
-	defer os.RemoveAll(filepath.Dir(path))
+	path := filepath.Join(t.TempDir(), "audit.log.enc")
 	lw := &LogWriter{
 		FilePath:      path,
 		MaxSize:       1,
@@ -82,7 +79,7 @@ func TestLogWriterWithEncryption(t *testing.T) {
 	file, err := os.Open(path)
 	require.NoError(t, err)
 	defer file.Close()
-	outPath, _ := filepath.Abs("./log_test/audit_out.log")
+	outPath := filepath.Join(filepath.Dir(path), "audit_out.log")
 	outfile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	require.NoError(t, err)
 	defer outfile.Close()
