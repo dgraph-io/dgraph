@@ -119,47 +119,74 @@ func decryptRecords(t *testing.T, key, data []byte) [][]byte {
 	return records
 }
 
-// TestLogWriterRotateBackupNamesUnique rotates faster than the millisecond
-// resolution of the backup file name. Every rotation must still end up in its
-// own backup file, and the names must still parse for the MaxAge cleanup.
+// pinnedClock returns the current millisecond and a clock stuck on it. A writer
+// using that clock sees the same time at every rotation, so its backup names
+// collide at the resolution of backupTimeFormat on any storage.
+func pinnedClock() (time.Time, func() time.Time) {
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	return at, func() time.Time { return at }
+}
+
+// rotateWith writes content and rotates, so the backup created holds content.
+func rotateWith(t *testing.T, lw *LogWriter, content string) {
+	_, err := lw.Write([]byte(content))
+	require.NoError(t, err)
+	lw.mu.Lock()
+	err = lw.rotate()
+	lw.mu.Unlock()
+	require.NoError(t, err)
+}
+
+// TestLogWriterRotateBackupNamesUnique rotates five times at one clock
+// reading. Every rotation must end up in its own backup file, named one
+// millisecond after the previous one so MaxAge cleanup still parses it, and
+// every backup must still hold the line written before its rotation.
 func TestLogWriterRotateBackupNamesUnique(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
-	lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	lw := &LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}
+	at, clock := pinnedClock()
+	lw.now = clock
+	lw, err := lw.Init()
 	require.NoError(t, err)
 
 	const rotations = 5
+	want := make(map[string]string, rotations) // backup name -> content
 	for i := range rotations {
-		_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
-		require.NoError(t, err)
-		lw.mu.Lock()
-		err = lw.rotate()
-		lw.mu.Unlock()
-		require.NoError(t, err)
+		content := fmt.Sprintf("line %d\n", i)
+		rotateWith(t, lw, content)
+		want[backupName(path, at.Add(time.Duration(i)*time.Millisecond))] = content
 	}
 	require.NoError(t, lw.Close())
 
 	_, kept, err := processOldLogFiles(path, lw.MaxAge)
 	require.NoError(t, err)
 	require.Len(t, kept, rotations)
+	for name, content := range want {
+		got, err := os.ReadFile(name)
+		require.NoError(t, err)
+		require.Equal(t, content, string(got), name)
+	}
 }
 
 // TestLogWriterReinitKeepsEarlierBackups runs two writers on the same path back
-// to back, the way the audit logger is closed and re-initialised. The second
-// writer starts without knowledge of the first one's backup timestamps, which
-// may be ahead of the clock, and must still not rename onto any of its backups.
+// to back, the way the audit logger is closed and re-initialised, both at the
+// same clock reading. The first writer's backup names are then ahead of the
+// clock the second one sees. The second writer must skip every one of them
+// and leave their content alone.
 func TestLogWriterReinitKeepsEarlierBackups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.log")
+	at, clock := pinnedClock()
 	const writers, rotations = 2, 3
-	for range writers {
-		lw, err := (&LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}).Init()
+	want := make(map[string]string, writers*rotations) // backup name -> content
+	for w := range writers {
+		lw := &LogWriter{FilePath: path, MaxSize: 1, MaxAge: 1}
+		lw.now = clock
+		lw, err := lw.Init()
 		require.NoError(t, err)
 		for i := range rotations {
-			_, err := lw.Write(fmt.Appendf(nil, "line %d\n", i))
-			require.NoError(t, err)
-			lw.mu.Lock()
-			err = lw.rotate()
-			lw.mu.Unlock()
-			require.NoError(t, err)
+			content := fmt.Sprintf("writer %d line %d\n", w, i)
+			rotateWith(t, lw, content)
+			want[backupName(path, at.Add(time.Duration(len(want))*time.Millisecond))] = content
 		}
 		require.NoError(t, lw.Close())
 	}
@@ -167,6 +194,11 @@ func TestLogWriterReinitKeepsEarlierBackups(t *testing.T) {
 	_, kept, err := processOldLogFiles(path, 1)
 	require.NoError(t, err)
 	require.Len(t, kept, writers*rotations)
+	for name, content := range want {
+		got, err := os.ReadFile(name)
+		require.NoError(t, err)
+		require.Equal(t, content, string(got), name)
+	}
 }
 
 // TestLogWriterRotateSkipsExistingBackups occupies every backup name, plain and

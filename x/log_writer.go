@@ -50,6 +50,10 @@ type LogWriter struct {
 	file   *os.File
 	writer *bufio.Writer
 	closer *z.Closer
+	// now supplies the time for backup file names; nil means time.Now. Tests
+	// pin it so that rotations collide at the millisecond resolution of the
+	// name on any storage, instead of only when they finish inside one.
+	now func() time.Time
 	// To manage order of cleaning old logs files
 	manageChannel chan bool
 }
@@ -233,7 +237,11 @@ func (l *LogWriter) rotate() error {
 // by a previous writer on the same path are skipped the same way.
 // Caller must hold l.mu.
 func (l *LogWriter) nextBackupName() (string, error) {
-	for t := time.Now().UTC().Truncate(time.Millisecond); ; t = t.Add(time.Millisecond) {
+	now := time.Now
+	if l.now != nil {
+		now = l.now
+	}
+	for t := now().UTC().Truncate(time.Millisecond); ; t = t.Add(time.Millisecond) {
 		name := backupName(l.FilePath, t)
 		taken, err := backupExists(name)
 		if err != nil {
