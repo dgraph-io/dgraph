@@ -1626,6 +1626,17 @@ func rewriteObject(
 		// If we have reached this stage, we can be sure that we need to create a new
 		// node as part of the mutation. The new node is referenced as a blank node like
 		// "_:Project2" . myUID will store the variable generated to reference this node.
+		exclude := ""
+		if srcField != nil {
+			if invField := srcField.Inverse(); invField != nil {
+				exclude = invField.Name()
+			}
+		}
+		// Ref input types make all fields optional, so check the required ones here.
+		if err := typ.EnsureNonNulls(obj, exclude); err != nil {
+			retErrors = append(retErrors, err)
+			return nil, upsertVar, retErrors
+		}
 		newObj["dgraph.type"] = dgraphTypes
 		newObj["uid"] = myUID
 		action = defaultDirectiveAddAct
