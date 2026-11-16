@@ -75,6 +75,15 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType, query bo
 	return tok.GetTermTokens(funcArgs)
 }
 
+// CompareReChecksValues reports whether eq or an inequality (f) on attr is answered from a lossy
+// index, in which case handleCompareFunction re-reads the real values and drops uids after the
+// posting list was read. A tokenizer that cannot be picked counts as lossy, so the caller stays on
+// the safe side.
+func CompareReChecksValues(ctx context.Context, attr string, f string) bool {
+	t, err := pickTokenizer(ctx, attr, f)
+	return err != nil || t.IsLossy()
+}
+
 func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ctx, attr) {
