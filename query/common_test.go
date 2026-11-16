@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -386,7 +387,9 @@ func populateCluster(dc dgraphapi.Cluster) {
 	// Ngram indexing handling
 	ngramSupport, err := dgraphtest.IsHigherVersion(dc.GetVersion(), ngramVersionHash)
 	x.Panic(err)
-	if ngramSupport {
+	// populateCluster runs once per upgrade combo in the same process, so guard the append:
+	// a second call would otherwise submit the predicate twice and the schema alter fails.
+	if ngramSupport && !strings.Contains(testSchema, "description: string @index(ngram) .") {
 		testSchema += "\ndescription: string @index(ngram) ."
 	}
 
