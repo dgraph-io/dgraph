@@ -1,5 +1,6 @@
 # Jaeger 2.x tracing integration test
-# Tests OTLP HTTP export to Jaeger 2.x (jaeger:latest)
+# Tests OTLP HTTP export to Jaeger 2.x. The image is pinned: Jaeger 2.21.0 removed
+# the v1 query endpoints (/api/services, /api/traces) that jaeger2_test.go reads.
 # Note: Jaeger 2.x requires JAEGER_LISTEN_HOST=0.0.0.0 to expose OTLP externally
 version: "3.5"
 services:
@@ -24,7 +25,7 @@ services:
       service=alpha1;" --my=alpha1:7080 --zero=zero1:5080 --logtostderr -v=2 --security
       "whitelist=0.0.0.0/0;"
   jaeger:
-    image: jaegertracing/jaeger:latest
+    image: jaegertracing/jaeger:2.20.0
     environment:
       - JAEGER_LISTEN_HOST=0.0.0.0
     ports:

@@ -405,9 +405,10 @@ func getJaeger(version int) service {
 	if version == 2 {
 		// Jaeger v2.x uses OpenTelemetry Collector architecture with YAML config.
 		// OTLP receivers bind to localhost by default, so we need JAEGER_LISTEN_HOST=0.0.0.0
-		// for container environments.
+		// for container environments. The image is pinned: Jaeger 2.21.0 removed the v1
+		// query endpoints (/api/services, /api/traces) that the tracing tests read.
 		return service{
-			Image:         "jaegertracing/jaeger:latest",
+			Image:         "jaegertracing/jaeger:2.20.0",
 			ContainerName: containerName("jaeger"),
 			Ports: []string{
 				toPort(4318),
