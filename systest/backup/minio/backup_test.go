@@ -330,6 +330,17 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	require.NoError(t, err)
 	require.Equal(t, numExpectedDirs, len(manifest.Manifests))
 
+	// manifest_summary.json is published right after manifest.json and must describe the same
+	// set of backups. The temporary summary object must not be left behind in the bucket.
+	b, err = os.ReadFile(filepath.Join(backupDir, "manifest_summary.json"))
+	require.NoError(t, err)
+
+	var summary worker.MasterManifestSummary
+	err = json.Unmarshal(b, &summary)
+	require.NoError(t, err)
+	require.Equal(t, numExpectedDirs, len(summary.Manifests))
+	require.NoFileExists(t, filepath.Join(backupDir, "manifest_summary_tmp.json"))
+
 	return dirs
 }
 

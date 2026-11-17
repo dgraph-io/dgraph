@@ -301,6 +301,63 @@ func TestCreateManifestSummary(t *testing.T) {
 	require.NotContains(t, rawStr, `"drop_operations"`)
 }
 
+// deferredCloseHandler mimics the S3 handler: CreateFile returns a writer whose data only becomes
+// visible in the backing directory once Close is called, as with the background upload behind
+// s3Writer.
+type deferredCloseHandler struct {
+	*fileHandler
+	dir string
+}
+
+type deferredCloseWriter struct {
+	path string
+	buf  []byte
+}
+
+func (w *deferredCloseWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	return len(p), nil
+}
+
+func (w *deferredCloseWriter) Close() error {
+	return os.WriteFile(w.path, w.buf, 0644)
+}
+
+func (h *deferredCloseHandler) CreateFile(path string) (io.WriteCloser, error) {
+	return &deferredCloseWriter{path: filepath.Join(h.dir, path)}, nil
+}
+
+// TestCreateManifestSummary_DeferredUpload guards against renaming the temp file before the writer
+// is closed. On S3 that publishes the previous backup's summary, or fails on the first backup.
+func TestCreateManifestSummary_DeferredUpload(t *testing.T) {
+	tmpDir := t.TempDir()
+	fh, _ := testFileHandlerForDir(t, tmpDir)
+	h := &deferredCloseHandler{fileHandler: fh, dir: tmpDir}
+
+	mk := func(n uint64) *MasterManifest {
+		m := &MasterManifest{}
+		for i := uint64(1); i <= n; i++ {
+			m.Manifests = append(m.Manifests, &Manifest{
+				ManifestBase: ManifestBase{Type: "full", BackupId: "id1", BackupNum: i, ReadTs: 100 * i},
+			})
+		}
+		return m
+	}
+
+	// The first backup into an empty directory must succeed.
+	require.NoError(t, CreateManifestSummary(h, mk(1)))
+	// A second run must publish its own state, not the previous one.
+	require.NoError(t, CreateManifestSummary(h, mk(2)))
+
+	raw, err := os.ReadFile(filepath.Join(tmpDir, backupManifestSummary))
+	require.NoError(t, err)
+	var got MasterManifestSummary
+	require.NoError(t, json.Unmarshal(raw, &got))
+	require.Len(t, got.Manifests, 2)
+	require.Equal(t, uint64(2), got.Manifests[1].BackupNum)
+	require.NoFileExists(t, filepath.Join(tmpDir, tmpManifestSummary))
+}
+
 func TestListBackupManifests_UsesSummaryWhenPresent(t *testing.T) {
 	tmpDir := t.TempDir()
 	h, _ := testFileHandlerForDir(t, tmpDir)
