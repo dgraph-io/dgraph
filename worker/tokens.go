@@ -94,6 +94,10 @@ func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, e
 	if tokenizers == nil {
 		return nil, errors.Errorf("Schema state not found for %s.", attr)
 	}
+	// A vector-only index is indexed but has no scalar tokenizer; tokenizers[0] below would panic.
+	if len(tokenizers) == 0 {
+		return nil, errors.Errorf("Attribute %s has no scalar tokenizer for comparison.", attr)
+	}
 	for _, t := range tokenizers {
 		// If function is eq and we found a tokenizer that's !Lossy(), lets return it
 		switch f {

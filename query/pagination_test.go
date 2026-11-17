@@ -22,6 +22,7 @@ func initPaginationSchema(t *testing.T) {
 		lossyOnly: string @index(term) .
 		lossyAndExact: string @index(term, exact) .
 		sortable: int @index(int) .
+		vecOnly: float32vector @index(hnsw(metric:"euclidean")) .
 	`), 1))
 }
 
@@ -103,4 +104,19 @@ func TestPaginationPushdownNeedsTheWholeListSometimes(t *testing.T) {
 	unbounded(&SubGraph{Params: params{Count: 0, Offset: 7}})
 	unbounded(&SubGraph{Params: params{Count: 5, Offset: 7}, Filters: []*SubGraph{{}}})
 	unbounded(&SubGraph{Params: params{Count: 5, Offset: 7, Order: []*pb.Order{{Attr: "name"}}}})
+}
+
+// A predicate with only a vector index is indexed but has no scalar tokenizer, so picking one for eq
+// must report an error (which keeps the pushdown off) instead of indexing an empty slice.
+func TestPaginationPushdownVectorOnlyIndexDoesNotPanic(t *testing.T) {
+	initPaginationSchema(t)
+	sg := &SubGraph{
+		Attr:    "vecOnly",
+		SrcFunc: &Function{Name: "eq"},
+		Params:  params{Count: 5, Offset: 7},
+	}
+	require.NotPanics(t, func() {
+		first, _ := calculatePaginationParams(sg, x.RootNamespace)
+		require.Equal(t, int32(math.MaxInt32), first)
+	})
 }
