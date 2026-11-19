@@ -352,10 +352,15 @@ func updateType(typeName string, t *pb.TypeUpdate, ts uint64) error {
 	return txn.CommitAt(ts, nil)
 }
 
+// hasEdges reports whether the predicate attr has any data visible at
+// startTs. A predicate whose values were all deleted counts as empty even
+// before rollup writes an empty posting list: the newest version of each key
+// is then a delete delta, which is folded and checked for emptiness.
 func hasEdges(attr string, startTs uint64) bool {
 	pk := x.ParsedKey{Attr: attr}
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
+	iterOpt.AllVersions = true
 	iterOpt.Prefix = pk.DataPrefix()
 
 	txn := pstore.NewTransactionAt(startTs, false)
@@ -364,14 +369,46 @@ func hasEdges(attr string, startTs uint64) bool {
 	it := txn.NewIterator(iterOpt)
 	defer it.Close()
 
-	for it.Rewind(); it.Valid(); it.Next() {
-		// NOTE: This is NOT correct.
-		// An incorrect, but efficient way to quickly check if we have at least one non-empty
-		// posting. This does NOT consider those posting lists which can have multiple deltas
-		// summing up to an empty posting list. I'm leaving it as it is for now. But, this could
-		// cause issues because of this inaccuracy.
-		if it.Item().UserMeta()&posting.BitEmptyPosting == 0 {
+	var prevKey []byte
+	for it.Rewind(); it.Valid(); {
+		item := it.Item()
+		if bytes.Equal(item.Key(), prevKey) {
+			// Already checked this key. Skip its remaining versions.
+			it.Next()
+			continue
+		}
+		prevKey = append(prevKey[:0], item.Key()...)
+
+		switch {
+		case item.UserMeta()&posting.BitEmptyPosting > 0:
+			// An empty rollup: the posting list holds no data.
+			continue
+		case item.UserMeta()&posting.BitCompletePosting > 0:
+			// A complete rollup is non-empty by definition.
 			return true
+		default:
+			// The newest version is a delta, so the list may still be empty
+			// once all the deltas are folded together, e.g. when every value
+			// was deleted. Read the list and check instead of counting the
+			// key as data. Schema changes are rare, so the extra reads are
+			// affordable.
+			l, err := posting.ReadPostingList(item.KeyCopy(nil), it)
+			if err != nil {
+				if err == posting.ErrInvalidKey {
+					// Part of a split list; the main key covers it.
+					continue
+				}
+				// If the list cannot be read, fall back to counting the
+				// key as data, as before.
+				return true
+			}
+			empty, err := l.IsEmpty(startTs, 0)
+			if err != nil {
+				return true
+			}
+			if !empty {
+				return true
+			}
 		}
 	}
 	return false
