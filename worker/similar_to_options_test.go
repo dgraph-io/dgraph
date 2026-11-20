@@ -127,3 +127,36 @@ func TestParseSimilarToOptions_MisspelledKey(t *testing.T) {
 	require.Contains(t, err.Error(), "Unknown option in similar_to")
 	require.Contains(t, err.Error(), "distanc_threshold")
 }
+
+func TestParseSimilarToOptions_FilterMarker(t *testing.T) {
+	fc := &functionContext{}
+	err := parseSimilarToOptions([]string{"filter", "1"}, fc)
+	require.NoError(t, err)
+	require.True(t, fc.vsHasFilter)
+	require.Equal(t, 0, fc.vsEfOverride)
+	require.Nil(t, fc.vsDistanceThreshold)
+}
+
+func TestParseSimilarToOptions_FilterWithEfAndThreshold(t *testing.T) {
+	fc := &functionContext{}
+	err := parseSimilarToOptions([]string{"ef", "48", "filter", "1", "distance_threshold", "0.25"}, fc)
+	require.NoError(t, err)
+	require.True(t, fc.vsHasFilter)
+	require.Equal(t, 48, fc.vsEfOverride)
+	require.NotNil(t, fc.vsDistanceThreshold)
+	require.InDelta(t, 0.25, *fc.vsDistanceThreshold, 1e-9)
+}
+
+func TestParseSimilarToOptions_DuplicateFilter(t *testing.T) {
+	fc := &functionContext{}
+	err := parseSimilarToOptions([]string{"filter", "1", "filter", "1"}, fc)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Duplicate key in similar_to options")
+}
+
+func TestParseSimilarToOptions_NoFilterLeavesFlagFalse(t *testing.T) {
+	fc := &functionContext{}
+	err := parseSimilarToOptions([]string{"ef", "16"}, fc)
+	require.NoError(t, err)
+	require.False(t, fc.vsHasFilter, "absent filter option must keep accept-all behavior")
+}
