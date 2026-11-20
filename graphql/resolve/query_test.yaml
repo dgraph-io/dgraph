@@ -3423,7 +3423,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(Product.productVector, 3, val(v1))) {
+      var(func: similar_to(Product.productVector, 3, val(v1))) @filter(type(Product)) {
         v2 as Product.productVector
         distance as math(sqrt((v2 - v1) dot (v2 - v1)))
       }
@@ -3454,7 +3454,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(ProjectCosine.description_v, 3, val(v1))) {
+      var(func: similar_to(ProjectCosine.description_v, 3, val(v1))) @filter(type(ProjectCosine)) {
         v2 as ProjectCosine.description_v
         distance as math(1.0 - ((v1 dot v2) / sqrt( (v1 dot v1) * (v2 dot v2) )))
       }
@@ -3509,7 +3509,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(ProjectDotProduct.description_v, 3, val(v1))) {
+      var(func: similar_to(ProjectDotProduct.description_v, 3, val(v1))) @filter(type(ProjectDotProduct)) {
         v2 as ProjectDotProduct.description_v
         distance as math(1.0 - (v1 dot v2))
       }
@@ -3640,7 +3640,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(Product.productVector, 5, val(v1), ef: 64)) {
+      var(func: similar_to(Product.productVector, 5, val(v1), ef: 64)) @filter(type(Product)) {
         v2 as Product.productVector
         distance as math(sqrt((v2 - v1) dot (v2 - v1)))
       }
@@ -3671,7 +3671,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(Product.productVector, 10, val(v1), distance_threshold: 0.5)) {
+      var(func: similar_to(Product.productVector, 10, val(v1), distance_threshold: 0.5)) @filter(type(Product)) {
         v2 as Product.productVector
         distance as math(sqrt((v2 - v1) dot (v2 - v1)))
       }
@@ -3702,7 +3702,7 @@
       var() {
         v1 as max(val(vec))
       }
-      var(func: similar_to(Product.productVector, 8, val(v1), ef: 128, distance_threshold: 0.75)) {
+      var(func: similar_to(Product.productVector, 8, val(v1), ef: 128, distance_threshold: 0.75)) @filter(type(Product)) {
         v2 as Product.productVector
         distance as math(sqrt((v2 - v1) dot (v2 - v1)))
       }

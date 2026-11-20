@@ -1086,7 +1086,8 @@ func searchValidation(
 		// don't clash with each other.
 		searchType := parseSearchType(searchArg)
 		searchIndex := builtInFilters[searchType]
-		if len(searchIndex) == 0 {
+		// HNSW is a supported search type without an ordinary filter type.
+		if _, ok := supportedSearches[searchType]; !ok {
 			errs = append(errs, gqlerror.ErrorPosf(
 				dir.Position,
 				"Type %s; Field %s: the argument to @search '%s' is not among "+

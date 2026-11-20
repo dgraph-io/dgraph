@@ -622,32 +622,54 @@ func rewriteAsGet(
 	return dgQuery
 }
 
+// similarByIDReference looks up only the reference vector, independently of the candidate projection.
+type similarByIDReference struct {
+	schema.Query
+}
+
+// ArgValue applies user filters to candidates, never to the reference vector lookup.
+func (q similarByIDReference) ArgValue(name string) any {
+	if name == schema.FilterArgName {
+		return nil
+	}
+	return q.Query.ArgValue(name)
+}
+
+// SelectionSet prevents candidate fields and their auth queries from constraining the reference.
+func (q similarByIDReference) SelectionSet() []schema.Field {
+	return nil
+}
+
+// Cascade applies only to the returned candidates, not the internal reference lookup.
+func (q similarByIDReference) Cascade() []string {
+	return nil
+}
+
 // rewriteAsSimilarByIdQuery
 //
 // rewrites SimilarById graphQL query to nested DQL query blocks
 // Example rewrittern query:
 //
-//			query {
-//			    var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
-//			        vec as Product.embedding
-//			    }
-//			    var() {
-//			        v1 as max(val(vec))
-//			    }
-//			    var(func: similar_to(Product.embedding, 8, val(v1))) {
-//			        v2 as Product.embedding
-//			        distance as math((v2 - v1) dot (v2 - v1))
-//			    }
-//			    querySimilarProductById(func: uid(distance)
-//	             @filter(Product.id != "0528012398"), orderasc: val(distance)) {
-//			        Product.id : Product.id
-//			        Product.description : Product.description
-//			        Product.title : Product.title
-//			        Product.imageUrl : Product.imageUrl
-//			        Product.vector_distance : val(distance)
-//			        dgraph.uid : uid
-//			    }
-//		 }
+//		query {
+//		    var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
+//		        vec as Product.embedding
+//		    }
+//		    var() {
+//		        v1 as max(val(vec))
+//		    }
+//		    var(func: similar_to(Product.embedding, 8, val(v1))) {
+//		        v2 as Product.embedding
+//		        distance as math((v2 - v1) dot (v2 - v1))
+//		    }
+//		    querySimilarProductById(func: uid(distance), orderasc: val(distance)) {
+//		        Product.id : Product.id
+//		        Product.description : Product.description
+//		        Product.title : Product.title
+//		        Product.imageUrl : Product.imageUrl
+//		        Product.vector_distance : val(distance)
+//		        dgraph.uid : uid
+//		    }
+//	 }
 func rewriteAsSimilarByIdQuery(
 	query schema.Query,
 	uid uint64,
@@ -674,15 +696,21 @@ func rewriteAsSimilarByIdQuery(
 	// var(func: eq(Product.id, "0528012398")) @filter(type(Product)) {
 	// 	vec as Product.embedding
 	// }
-	dgQuery := rewriteAsGet(query, uid, xidArgToVal, auth)
-	lastQuery := dgQuery[len(dgQuery)-1]
-	// Turn the root query into "var"
-	lastQuery.Attr = "var"
-	// Save the result to be later used for the last query block, sortQuery
-	result := lastQuery.Children
+	referenceQuery := similarByIDReference{Query: query}
+	referenceAuth := *auth
+	referenceAuth.parentVarName = typ.Name() + "ReferenceRoot"
+	referenceAuth.hasAuthRules = hasAuthRules(referenceQuery, &referenceAuth)
+	referenceAuth.hasCascade = false
+	dgQuery := rewriteAsGet(referenceQuery, uid, xidArgToVal, &referenceAuth)
+	if referenceAuth.evaluateStaticRules(typ) == schema.Negative {
+		return dgQuery
+	}
+	// Auth blocks follow the result block; only the authorized result may provide the vector.
+	reference := dgQuery[0]
+	reference.Attr = "var"
 
 	// define the variable "vec" for the search vector
-	lastQuery.Children = []*dql.GraphQuery{{
+	reference.Children = []*dql.GraphQuery{{
 		Attr: pred,
 		Var:  "vec",
 	}}
@@ -737,21 +765,24 @@ func rewriteAsSimilarByIdQuery(
 		)
 	}
 
-	similarQuery := &dql.GraphQuery{
-		Attr: "var",
-		Children: []*dql.GraphQuery{
-			{
-				Var:  "v2",
-				Attr: pred,
-			},
-			{
-				Var:  "distance",
-				Attr: distanceFormula,
-			},
+	// Candidate visibility is independent of the reference UID and of the selected fields.
+	candidateQueries := rewriteAsQuery(query, auth)
+	similarQuery := candidateQueries[0]
+	result := similarQuery.Children
+	similarQuery.Attr = "var"
+	addToFilterTree(similarQuery, &dql.FilterTree{Func: similarQuery.Func})
+	similarQuery.Func = &dql.Function{
+		Name: "similar_to",
+		Args: similarToArgs,
+	}
+	similarQuery.Children = []*dql.GraphQuery{
+		{
+			Var:  "v2",
+			Attr: pred,
 		},
-		Func: &dql.Function{
-			Name: "similar_to",
-			Args: similarToArgs,
+		{
+			Var:  "distance",
+			Attr: distanceFormula,
 		},
 	}
 
@@ -790,11 +821,15 @@ func rewriteAsSimilarByIdQuery(
 			Name: "uid",
 			Args: []dql.Arg{{Value: "distance"}},
 		},
-		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Order:   []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Cascade: similarQuery.Cascade,
 	}
+	similarQuery.Cascade = nil
 	addArgumentsToField(sortQuery, query)
 
-	dgQuery = append(dgQuery, aggQuery, similarQuery, sortQuery)
+	dgQuery = append(dgQuery, aggQuery)
+	dgQuery = append(dgQuery, candidateQueries...)
+	dgQuery = append(dgQuery, sortQuery)
 	return dgQuery
 }
 
@@ -821,12 +856,16 @@ func rewriteAsSimilarByIdQuery(
 func rewriteAsSimilarByEmbeddingQuery(
 	query schema.Query, auth *authRewriter) []*dql.GraphQuery {
 
+	typ := query.Type()
 	dgQuery := rewriteAsQuery(query, auth)
+	// A query denied by static RBAC rules is already rewritten to an empty block.
+	if auth.evaluateStaticRules(typ) == schema.Negative {
+		return dgQuery
+	}
 
 	// Remember dgQuery[0].Children as result type for the last block
 	// in the rewritten query
 	result := dgQuery[0].Children
-	typ := query.Type()
 
 	// Get all the arguments from graphQL query
 	similarBy := query.ArgValue(schema.SimilarByArgName).(string)
@@ -849,7 +888,9 @@ func rewriteAsSimilarByEmbeddingQuery(
 	// Save vectorString as a query variable, $search_vector
 	queryArgs := dgQuery[0].Args
 	if queryArgs == nil {
+		// Auth rewriting moves the query arguments to its root block.
 		queryArgs = make(map[string]string)
+		dgQuery[0].Args = queryArgs
 	}
 	queryArgs["$search_vector"] = " float32vector = \"" + string(vecStr) + "\""
 	thisFilter := &dql.FilterTree{
@@ -933,8 +974,10 @@ func rewriteAsSimilarByEmbeddingQuery(
 			Name: "uid",
 			Args: []dql.Arg{{Value: "distance"}},
 		},
-		Order: []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Order:   []*pb.Order{{Attr: "val(distance)", Desc: false}},
+		Cascade: dgQuery[0].Cascade,
 	}
+	dgQuery[0].Cascade = nil
 
 	dgQuery = append(dgQuery, sortQuery)
 	return dgQuery
