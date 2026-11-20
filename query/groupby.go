@@ -139,7 +139,10 @@ func aggregateGroup(grp *groupResult, child *SubGraph) (types.Val, error) {
 			continue
 		}
 
-		if len(child.valueMatrix[idx].Values) == 0 {
+		// valueMatrix can be shorter than SrcUIDs for coordinator-synthesized value
+		// variables (e.g. fused scores), which never populate a full matrix — guard
+		// the index or an aggregation over such a var panics.
+		if idx >= len(child.valueMatrix) || len(child.valueMatrix[idx].Values) == 0 {
 			continue
 		}
 		v := child.valueMatrix[idx].Values[0]

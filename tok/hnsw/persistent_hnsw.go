@@ -266,6 +266,20 @@ func (ph *persistentHNSW[T]) SearchWithOptions(
 	maxResults int,
 	opts index.VectorIndexOptions[T],
 ) ([]uint64, error) {
+	uids, _, err := ph.SearchWithOptionsScored(ctx, c, query, maxResults, opts)
+	return uids, err
+}
+
+// SearchWithOptionsScored is SearchWithOptions that also returns a higher-is-better
+// similarity score for each returned uid (positionally aligned). See
+// index.ScoredSearchOptions.
+func (ph *persistentHNSW[T]) SearchWithOptionsScored(
+	ctx context.Context,
+	c index.CacheType,
+	query []T,
+	maxResults int,
+	opts index.VectorIndexOptions[T],
+) ([]uint64, []float64, error) {
 	if opts.Filter == nil {
 		opts.Filter = index.AcceptAll[T]
 	}
@@ -279,7 +293,7 @@ func (ph *persistentHNSW[T]) SearchWithOptions(
 	var startVec []T
 	entry, err := ph.PickStartNode(ctx, c, &startVec)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Upper layers use efUpper (override if provided)
@@ -296,13 +310,13 @@ func (ph *persistentHNSW[T]) SearchWithOptions(
 		layerResult, err := ph.searchPersistentLayer(
 			c, level, entry, startVec, query, filterOut, efUpper, opts.Filter)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		layerResult.updateFinalMetrics(r)
 		entry = layerResult.bestNeighbor().index
 		layerResult.updateFinalPath(r)
 		if err = ph.getVecFromUid(entry, c, &startVec); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -315,13 +329,14 @@ func (ph *persistentHNSW[T]) SearchWithOptions(
 	layerResult, err := ph.searchPersistentLayer(
 		c, ph.maxLevels-1, entry, startVec, query, filterOut, candidateK, opts.Filter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	layerResult.updateFinalMetrics(r)
 	layerResult.updateFinalPath(r)
 
 	// Build final neighbor list with optional threshold, limited to maxResults.
 	res := make([]uint64, 0, maxResults)
+	scores := make([]float64, 0, maxResults)
 	for _, n := range layerResult.neighbors {
 		if maxResults == 0 {
 			break
@@ -347,23 +362,38 @@ func (ph *persistentHNSW[T]) SearchWithOptions(
 			}
 		}
 		res = append(res, n.index)
+		scores = append(scores, ph.simType.similarityScore(n.value))
 		if len(res) >= maxResults {
 			break
 		}
 	}
 
 	r.Metrics[searchTime] = uint64(time.Now().UnixMilli() - start)
-	return res, nil
+	return res, scores, nil
 }
 
 // SearchWithUidAndOptions is analogous to SearchWithUid but applies per‑call options.
 func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
-	_ context.Context,
+	ctx context.Context,
 	c index.CacheType,
 	queryUid uint64,
 	maxResults int,
 	opts index.VectorIndexOptions[T],
 ) ([]uint64, error) {
+	uids, _, err := ph.SearchWithUidAndOptionsScored(ctx, c, queryUid, maxResults, opts)
+	return uids, err
+}
+
+// SearchWithUidAndOptionsScored is SearchWithUidAndOptions that also returns a
+// higher-is-better similarity score for each returned uid (positionally aligned).
+// See index.ScoredSearchOptions.
+func (ph *persistentHNSW[T]) SearchWithUidAndOptionsScored(
+	_ context.Context,
+	c index.CacheType,
+	queryUid uint64,
+	maxResults int,
+	opts index.VectorIndexOptions[T],
+) ([]uint64, []float64, error) {
 	if opts.Filter == nil {
 		opts.Filter = index.AcceptAll[T]
 	}
@@ -373,12 +403,12 @@ func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
 	var queryVec []T
 	if err := ph.getVecFromUid(queryUid, c, &queryVec); err != nil {
 		if errors.Is(err, errFetchingPostingList) {
-			return []uint64{}, nil
+			return []uint64{}, []float64{}, nil
 		}
-		return []uint64{}, err
+		return []uint64{}, []float64{}, err
 	}
 	if len(queryVec) == 0 {
-		return []uint64{}, nil
+		return []uint64{}, []float64{}, nil
 	}
 	filterOut := !opts.Filter(queryVec, queryVec, queryUid)
 	candidateK := maxResults
@@ -388,9 +418,10 @@ func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
 	lr, err := ph.searchPersistentLayer(
 		c, ph.maxLevels-1, queryUid, queryVec, queryVec, filterOut, candidateK, opts.Filter)
 	if err != nil {
-		return []uint64{}, err
+		return []uint64{}, []float64{}, err
 	}
 	res := make([]uint64, 0, maxResults)
+	scores := make([]float64, 0, maxResults)
 	for _, n := range lr.neighbors {
 		if maxResults == 0 {
 			break
@@ -413,11 +444,12 @@ func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
 			}
 		}
 		res = append(res, n.index)
+		scores = append(scores, ph.simType.similarityScore(n.value))
 		if len(res) >= maxResults {
 			break
 		}
 	}
-	return res, nil
+	return res, scores, nil
 }
 
 // SearchWithUid searches the HNSW graph for the nearest neighbors of the query UID
@@ -548,11 +580,54 @@ func (ph *persistentHNSW[T]) SearchWithPath(
 	}
 	layerResult.updateFinalMetrics(r)
 	layerResult.updateFinalPath(r)
-	layerResult.addFinalNeighbors(r)
+	layerResult.addFinalNeighbors(r, ph.simType)
 	t := time.Now().UnixMilli()
 	elapsed := t - start
 	r.Metrics[searchTime] = uint64(elapsed)
 	return r, nil
+}
+
+// SearchScored is Search that also returns a higher-is-better similarity score for
+// each returned uid (positionally aligned with the neighbor uids). It preserves the
+// exact candidate-exploration behavior of Search (unlike the options-based path),
+// so scoring an otherwise plain query does not change which neighbors are returned.
+func (ph *persistentHNSW[T]) SearchScored(ctx context.Context, c index.CacheType, query []T,
+	maxResults int, filter index.SearchFilter[T]) ([]uint64, []float64, error) {
+	r, err := ph.SearchWithPath(ctx, c, query, maxResults, filter)
+	if err != nil {
+		return nil, nil, err
+	}
+	return r.Neighbors, r.Distances, nil
+}
+
+// SearchWithUidScored is SearchWithUid that also returns a higher-is-better
+// similarity score for each returned uid (positionally aligned), preserving
+// SearchWithUid's exact neighbor selection.
+func (ph *persistentHNSW[T]) SearchWithUidScored(_ context.Context, c index.CacheType,
+	queryUid uint64, maxResults int, filter index.SearchFilter[T]) ([]uint64, []float64, error) {
+	var queryVec []T
+	if err := ph.getVecFromUid(queryUid, c, &queryVec); err != nil {
+		if errors.Is(err, errFetchingPostingList) {
+			return []uint64{}, []float64{}, nil
+		}
+		return []uint64{}, []float64{}, err
+	}
+	if len(queryVec) == 0 {
+		return []uint64{}, []float64{}, nil
+	}
+	shouldFilterOutQueryVec := !filter(queryVec, queryVec, queryUid)
+	r, err := ph.searchPersistentLayer(
+		c, ph.maxLevels-1, queryUid, queryVec, queryVec, shouldFilterOutQueryVec, maxResults, filter)
+	if err != nil {
+		return []uint64{}, []float64{}, err
+	}
+	uids := make([]uint64, 0, len(r.neighbors))
+	scores := make([]float64, 0, len(r.neighbors))
+	for _, n := range r.neighbors {
+		uids = append(uids, n.index)
+		scores = append(scores, ph.simType.similarityScore(n.value))
+	}
+	return uids, scores, nil
 }
 
 // InsertToPersistentStorage inserts a node into the HNSW graph and returns the
