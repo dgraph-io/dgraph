@@ -2158,3 +2158,74 @@
         Person.id : uid
       }
     }
+
+- name: Similarity query by embedding with graph auth rule
+  gqlquery: |
+    query {
+      querySimilarVectorDocumentByEmbedding(by: embedding, topK: 2, vector: [0.1, 0.2]) {
+        id
+        title
+        vector_distance
+      }
+    }
+  jwtvar:
+    USER: "user1"
+  dgquery: |-
+    query querySimilarVectorDocumentByEmbedding($search_vector:  float32vector = "[0.1,0.2]") {
+      var(func: similar_to(VectorDocument.embedding, 2, $search_vector)) @filter(uid(VectorDocumentRoot)) {
+        v2 as VectorDocument.embedding
+        distance as math(1.0 - ((($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector)) * (v2 dot v2) )))
+      }
+      VectorDocumentRoot as var(func: uid(VectorDocument_1)) @filter(uid(VectorDocument_Auth2))
+      VectorDocument_1 as var(func: type(VectorDocument))
+      VectorDocument_Auth2 as var(func: uid(VectorDocument_1)) @filter(eq(VectorDocument.owner, "user1")) @cascade {
+        VectorDocument.id : uid
+      }
+      querySimilarVectorDocumentByEmbedding(func: uid(distance), orderasc: val(distance)) {
+        VectorDocument.id : uid
+        VectorDocument.title : VectorDocument.title
+        VectorDocument.vector_distance : val(distance)
+      }
+    }
+
+- name: Similarity query by embedding with RBAC rule true
+  gqlquery: |
+    query {
+      querySimilarAdminVectorDocumentByEmbedding(by: embedding, topK: 2, vector: [0.1, 0.2]) {
+        id
+        title
+        vector_distance
+      }
+    }
+  jwtvar:
+    ROLE: "ADMIN"
+  dgquery: |-
+    query querySimilarAdminVectorDocumentByEmbedding($search_vector:  float32vector = "[0.1,0.2]") {
+      var(func: similar_to(AdminVectorDocument.embedding, 2, $search_vector)) @filter(uid(AdminVectorDocumentRoot)) {
+        v2 as AdminVectorDocument.embedding
+        distance as math(1.0 - ((($search_vector) dot v2) / sqrt( (($search_vector) dot ($search_vector)) * (v2 dot v2) )))
+      }
+      AdminVectorDocumentRoot as var(func: uid(AdminVectorDocument_1))
+      AdminVectorDocument_1 as var(func: type(AdminVectorDocument))
+      querySimilarAdminVectorDocumentByEmbedding(func: uid(distance), orderasc: val(distance)) {
+        AdminVectorDocument.id : uid
+        AdminVectorDocument.title : AdminVectorDocument.title
+        AdminVectorDocument.vector_distance : val(distance)
+      }
+    }
+
+- name: Similarity query by embedding with RBAC rule false
+  gqlquery: |
+    query {
+      querySimilarAdminVectorDocumentByEmbedding(by: embedding, topK: 2, vector: [0.1, 0.2]) {
+        id
+        title
+        vector_distance
+      }
+    }
+  jwtvar:
+    ROLE: "USER"
+  dgquery: |-
+    query {
+      querySimilarAdminVectorDocumentByEmbedding()
+    }
