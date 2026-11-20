@@ -439,6 +439,18 @@ func (a *AuthMeta) FetchJWKs() error {
 	return nil
 }
 
+// keyIDOf reports a raw JWK's kid for log messages, since a key that failed to
+// parse cannot be asked for one.
+func keyIDOf(jwk json.RawMessage) string {
+	var header struct {
+		Kid string `json:"kid"`
+	}
+	if err := json.Unmarshal(jwk, &header); err != nil || header.Kid == "" {
+		return "key with no kid"
+	}
+	return "kid " + header.Kid
+}
+
 // FetchJWK fetches the JSON web Key set for the JWKUrl at a given index.
 func (a *AuthMeta) FetchJWK(i int) error {
 	if len(a.JWKUrls) <= i {
@@ -475,13 +487,31 @@ func (a *AuthMeta) FetchJWK(i int) error {
 		return err
 	}
 
-	a.jwkSet[i] = &jose.JSONWebKeySet{Keys: make([]jose.JSONWebKey, len(jwkArray.JWKs))}
-	for k, jwk := range jwkArray.JWKs {
-		err = a.jwkSet[i].Keys[k].UnmarshalJSON(jwk)
-		if err != nil {
-			return err
+	// Skip keys go-jose cannot parse rather than discarding the whole set.
+	// go-jose 4.1.6 began rejecting RSA moduli over MaxRSAModulusBits (4096),
+	// and one such key in a JWKS used to fail FetchJWKs, which fails
+	// NewHandler, which stops the GraphQL schema loading at all. A key that
+	// cannot be parsed cannot verify anything either way, so dropping it only
+	// loses tokens signed by that key, while the rest of the set keeps working.
+	set := &jose.JSONWebKeySet{}
+	var skipped []string
+	for _, jwk := range jwkArray.JWKs {
+		var key jose.JSONWebKey
+		if err := key.UnmarshalJSON(jwk); err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s (%v)", keyIDOf(jwk), err))
+			continue
 		}
+		set.Keys = append(set.Keys, key)
 	}
+	if len(set.Keys) == 0 && len(jwkArray.JWKs) > 0 {
+		return errors.Errorf("no usable key in the JWK set at %s: %s",
+			a.JWKUrls[i], strings.Join(skipped, "; "))
+	}
+	if len(skipped) > 0 {
+		glog.Warningf("authorization: ignoring %d unusable key(s) in the JWK set at %s: %s",
+			len(skipped), a.JWKUrls[i], strings.Join(skipped, "; "))
+	}
+	a.jwkSet[i] = set
 
 	// Try to Parse the Remaining time in the expiry of signing keys
 	// from the `max-age` directive in the `Cache-Control` Header
