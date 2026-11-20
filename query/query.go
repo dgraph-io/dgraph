@@ -32,6 +32,9 @@ import (
 	"github.com/dgraph-io/dgraph/v25/x"
 )
 
+// defaultRetrieveCount is the default number of results to retrieve for a query when pagination arguments are not specified.
+const defaultRetrieveCount = 1000
+
 /*
  * QUERY:
  * Let's take this query from GraphQL as example:
@@ -663,6 +666,10 @@ func treeCopy(gq *dql.GraphQuery, sg *SubGraph) error {
 func (args *params) addCascadePaginationArguments(gq *dql.GraphQuery) {
 	args.Cascade.First, _ = strconv.Atoi(gq.Args["first"])
 	delete(gq.Args, "first")
+	if args.Cascade.First == 0 {
+		// Default to a only retrieve up to a set number of results.
+		args.Cascade.First = defaultRetrieveCount
+	}
 	args.Cascade.Offset, _ = strconv.Atoi(gq.Args["offset"])
 	delete(gq.Args, "offset")
 }
@@ -2529,10 +2536,13 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		}
 	}
 
-	// Todo: fix offset for cascade queries.
 	if sg.Params.Count == 0 {
-		// Only retrieve up to 1000 results by default.
-		sg.Params.Count = 1000
+		// Default to a only retrieve up to a set number of results
+		sg.Params.Count = defaultRetrieveCount
+		if sg.Params.Cascade != nil && len(sg.Params.Cascade.Fields) > 0 {
+			sg.Params.Count = sg.Params.Cascade.First
+			sg.Params.Offset = sg.Params.Cascade.Offset
+		}
 	}
 
 	x.AssertTrue(len(sg.Params.Order) > 0)
