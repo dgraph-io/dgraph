@@ -44,12 +44,19 @@ func workerPort() int {
 	return x.Config.PortOffset + x.PortInternal
 }
 
+var limiterOnce sync.Once
+
 // Init initializes this package.
 func Init(ps *badger.DB) {
 	pstore = ps
-	// needs to be initialized after group config
-	limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
-	go limiter.bleed()
+	// needs to be initialized after group config. Created once per process:
+	// bleed runs for the life of the process on the package-level limiter, so a
+	// second Init (tests re-initialise the package per test) must not overwrite
+	// the struct underneath it or start another bleed goroutine.
+	limiterOnce.Do(func() {
+		limiter = rateLimiter{c: sync.NewCond(&sync.Mutex{}), max: int(x.WorkerConfig.Raft.GetInt64("pending-proposals"))}
+		go limiter.bleed()
+	})
 
 	grpcOpts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(x.GrpcMaxSize),
