@@ -974,3 +974,26 @@ type Home @auth(
     favouriteMember: HomeMember
 }
 # union testing - end
+
+# Asset and Tenant are used to test the auth seed optimization in query rewriting.
+# The single-hop auth rule (queryAsset → inTenant → tenantId) enables the rewriter to
+# replace the full type scan with an index-backed seed traversal.
+type Asset @auth(
+    query: { rule: """
+        query($TENANT: String!) {
+            queryAsset {
+                inTenant(filter: { tenantId: { eq: $TENANT } }) { id }
+            }
+        }
+    """ }
+) {
+    id: ID!
+    name: String! @search(by: [term])
+    inTenant: Tenant! @hasInverse(field: assets)
+}
+
+type Tenant {
+    id: ID!
+    tenantId: String! @search(by: [hash])
+    assets: [Asset]
+}
