@@ -947,7 +947,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 	}
 
 	// first is to limit how many results we want.
-	first, offset := calculatePaginationParams(sg)
+	first, offset := calculatePaginationParams(sg, namespace)
 	ns, err := x.ExtractNamespace(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While ordering and paginating")
@@ -986,7 +986,7 @@ func createTaskQuery(ctx context.Context, sg *SubGraph) (*pb.Query, error) {
 
 // calculatePaginationParams returns the (count, offset) of result
 // we need to proceed query further down.
-func calculatePaginationParams(sg *SubGraph) (int32, int32) {
+func calculatePaginationParams(sg *SubGraph, namespace uint64) (int32, int32) {
 	// by default count is zero. (zero will retrieve all the results)
 	count := math.MaxInt32
 	// In order to limit we have to make sure that the this level met the following conditions
@@ -1011,8 +1011,13 @@ func calculatePaginationParams(sg *SubGraph) (int32, int32) {
 	shouldExclude := false
 	if sg.SrcFunc != nil {
 		switch sg.SrcFunc.Name {
-		case "regexp", "alloftext", "allofterms", "match", "ngram":
+		case "regexp", "alloftext", "allofterms", "match", "ngram", "allof",
+			"near", "within", "contains", "intersects":
 			shouldExclude = true
+		case "eq", "le", "lt", "ge", "gt", "between":
+			// These re-check the real values after the read when the index is lossy.
+			attr := x.NamespaceAttr(namespace, sg.Attr)
+			shouldExclude = worker.CompareReChecksValues(context.Background(), attr, sg.SrcFunc.Name)
 		default:
 			shouldExclude = false
 		}
