@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,17 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 	return tokens, nil
 }
 
+// addDeadNode appends uid to the HNSW dead-node list unless it is already
+// present, reporting whether the list changed. The dead set is persisted as a
+// single posting that is rewritten in full on every vector delete, so skipping
+// already-recorded uids keeps repeated deletes from bloating it with duplicates.
+func addDeadNode(deadNodes []uint64, uid uint64) ([]uint64, bool) {
+	if slices.Contains(deadNodes, uid) {
+		return deadNodes, false
+	}
+	return append(deadNodes, uid), true
+}
+
 // addIndexMutations adds mutation(s) for a single term, to maintain the index,
 // but only for the given tokenizers.
 // TODO - See if we need to pass op as argument as t should already have Op.
@@ -128,27 +140,31 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 			}
 			var deadNodes []uint64
 			deadData, _ := pl.Value(txn.StartTs)
-			if deadData.Value == nil {
-				deadNodes = append(deadNodes, uid)
-			} else {
+			if deadData.Value != nil {
 				deadNodes, err = hnsw.ParseEdges(string(deadData.Value.([]byte)))
 				if err != nil {
 					return []*pb.DirectedEdge{}, err
 				}
-				deadNodes = append(deadNodes, uid)
 			}
-			deadNodesBytes, marshalErr := json.Marshal(deadNodes)
-			if marshalErr != nil {
-				return []*pb.DirectedEdge{}, marshalErr
-			}
-			edge := &pb.DirectedEdge{
-				Entity:    1,
-				Attr:      deadAttr,
-				Value:     deadNodesBytes,
-				ValueType: pb.Posting_ValType(0),
-			}
-			if err := pl.addMutation(ctx, txn, edge); err != nil {
-				return nil, err
+			// The dead set is a single growing posting. Skip uids already
+			// recorded as dead so repeated deletes (delete/reinsert churn, or a
+			// Raft re-apply of the same mutation) don't append duplicates and
+			// re-marshal the whole blob with no effect.
+			updated, changed := addDeadNode(deadNodes, uid)
+			if changed {
+				deadNodesBytes, marshalErr := json.Marshal(updated)
+				if marshalErr != nil {
+					return []*pb.DirectedEdge{}, marshalErr
+				}
+				edge := &pb.DirectedEdge{
+					Entity:    1,
+					Attr:      deadAttr,
+					Value:     deadNodesBytes,
+					ValueType: pb.Posting_ValType(0),
+				}
+				if err := pl.addMutation(ctx, txn, edge); err != nil {
+					return nil, err
+				}
 			}
 		}
 
