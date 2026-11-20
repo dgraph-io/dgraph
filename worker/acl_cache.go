@@ -50,11 +50,11 @@ var AclCachePtr = &AclCache{
 	userPredPerms: make(map[string]map[string]int32),
 }
 
-func (cache *AclCache) GetUserPredPerms(userId string) map[string]int32 {
+func (cache *AclCache) GetUserPredPerms(ns uint64, userId string) map[string]int32 {
 	cache.RLock()
 	defer cache.RUnlock()
 
-	perms, found := cache.userPredPerms[userId]
+	perms, found := cache.userPredPerms[x.NamespaceAttr(ns, userId)]
 	if !found {
 		return nil
 	}
@@ -89,7 +89,9 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 	// user-bob  ->
 	//          friend  -> 7
 	// the reason is so that we can efficiently determine a list of predicates (allowedPreds)
-	// to which user has access for their queries
+	// to which user has access for their queries.
+	// Note: Outer keys for both maps are namespace-qualified (x.NamespaceAttr(ns, ...))
+	// to ensure strict isolation across multi-tenant namespaces.
 
 	// predPerms is the map, described above in First, that maps a single
 	// predicate to a submap, and the submap maps a group to a permission
@@ -117,18 +119,19 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 		}
 
 		for _, user := range users {
-			if _, found := userPredPerms[user.UserID]; !found {
-				userPredPerms[user.UserID] = make(map[string]int32)
+			userKey := x.NamespaceAttr(ns, user.UserID)
+			if _, found := userPredPerms[userKey]; !found {
+				userPredPerms[userKey] = make(map[string]int32)
 			}
 			// For each user we store all the permissions available to that user
 			// via different groups. Therefore we take OR if the user already has
 			// a permission for a predicate
 			for _, acl := range acls {
 				aclPred := x.NamespaceAttr(ns, acl.Predicate)
-				if _, found := userPredPerms[user.UserID][aclPred]; found {
-					userPredPerms[user.UserID][aclPred] |= acl.Perm
+				if _, found := userPredPerms[userKey][aclPred]; found {
+					userPredPerms[userKey][aclPred] |= acl.Perm
 				} else {
-					userPredPerms[user.UserID][aclPred] = acl.Perm
+					userPredPerms[userKey][aclPred] = acl.Perm
 				}
 			}
 		}
@@ -144,14 +147,9 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 		}
 	}
 
-	for userID, perms := range AclCachePtr.userPredPerms {
-		for k := range perms {
-			if x.ParseNamespace(k) == ns {
-				delete(perms, k)
-			}
-		}
-		if len(perms) == 0 {
-			delete(AclCachePtr.userPredPerms, userID)
+	for k := range AclCachePtr.userPredPerms {
+		if x.ParseNamespace(k) == ns {
+			delete(AclCachePtr.userPredPerms, k)
 		}
 	}
 
@@ -160,17 +158,8 @@ func (cache *AclCache) Update(ns uint64, groups []acl.Group) {
 		AclCachePtr.predPerms[k] = v
 	}
 
-	// User IDs are namespace-local, so the same ID can exist in multiple namespaces. Merge the
-	// namespaced predicates instead of replacing permissions collected from another namespace.
-	for userID, newPerms := range userPredPerms {
-		perms, found := AclCachePtr.userPredPerms[userID]
-		if !found {
-			perms = make(map[string]int32)
-			AclCachePtr.userPredPerms[userID] = perms
-		}
-		for predicate, permission := range newPerms {
-			perms[predicate] = permission
-		}
+	for k, v := range userPredPerms {
+		AclCachePtr.userPredPerms[k] = v
 	}
 }
 
