@@ -1,2 +1,14 @@
 wiki
 .github
+
+# Large, build-irrelevant paths. `make dgraph` only compiles Go + jemalloc, so
+# none of these belong in the build context. dgraphtest/datafiles alone is ~24GB
+# of LDBC/test fixtures and will fill the Docker VM disk if copied in.
+dgraphtest/datafiles
+dgraphtest/binaries
+
+# Local build artifacts. NOTE: do NOT ignore `linux/` here -- both local-image
+# and local-image-jemalloc stage the built binary there for contrib/Dockerfile's
+# `ADD linux /usr/local/bin`, and ignoring it breaks that step.
+dgraph/dgraph
+test-results.xml
