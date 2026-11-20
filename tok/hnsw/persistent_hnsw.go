@@ -8,9 +8,11 @@ package hnsw
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/v25/protos/pb"
 	c "github.com/dgraph-io/dgraph/v25/tok/constraints"
 	"github.com/dgraph-io/dgraph/v25/tok/index"
 	opt "github.com/dgraph-io/dgraph/v25/tok/options"
@@ -32,6 +34,7 @@ type persistentHNSW[T c.Float] struct {
 	// layer for UUID 65443. The result will be a neighboring UUID.
 	nodeAllEdges map[uint64][][]uint64
 	deadNodes    map[uint64]struct{}
+	cache        index.CacheType
 }
 
 func GetPersistantOptions[T c.Float](o opt.Options) string {
@@ -110,6 +113,65 @@ func (ph *persistentHNSW[T]) applyOptions(o opt.Options) error {
 			isSimilarityMetric: false}
 	}
 	return nil
+}
+
+func (ph *persistentHNSW[T]) NumBuildPasses() int {
+	return 0
+}
+
+func (ph *persistentHNSW[T]) SetNumPasses(int) {
+}
+
+func (ph *persistentHNSW[T]) Dimension() int {
+	return 0
+}
+
+func (ph *persistentHNSW[T]) SetDimension(schema *pb.SchemaUpdate, dimension int) {
+	glog.Info("not implemented")
+}
+
+func (ph *persistentHNSW[T]) NumIndexPasses() int {
+	return 1
+}
+
+func (ph *persistentHNSW[T]) NumSeedVectors() int {
+	return 0
+}
+
+func (ph *persistentHNSW[T]) StartBuild(caches []index.CacheType) {
+	ph.nodeAllEdges = make(map[uint64][][]uint64)
+	ph.cache = caches[0]
+}
+
+func (ph *persistentHNSW[T]) EndBuild() []int {
+	ph.nodeAllEdges = nil
+	ph.cache = nil
+	return []int{0}
+}
+
+func (ph *persistentHNSW[T]) NumThreads() int {
+	return 1
+}
+
+func (ph *persistentHNSW[T]) BuildInsert(ctx context.Context, uid uint64, vec []T) error {
+	newPh := &persistentHNSW[T]{
+		maxLevels:      ph.maxLevels,
+		efConstruction: ph.efConstruction,
+		efSearch:       ph.efSearch,
+		pred:           ph.pred,
+		vecEntryKey:    ph.vecEntryKey,
+		vecKey:         ph.vecKey,
+		vecDead:        ph.vecDead,
+		simType:        ph.simType,
+		floatBits:      ph.floatBits,
+		nodeAllEdges:   make(map[uint64][][]uint64),
+		cache:          ph.cache,
+	}
+	_, err := newPh.Insert(ctx, ph.cache, uid, vec)
+	return err
+}
+
+func (ph *persistentHNSW[T]) AddSeedVector(vec []T) {
 }
 
 func (ph *persistentHNSW[T]) emptyFinalResultWithError(e error) (
@@ -420,6 +482,63 @@ func (ph *persistentHNSW[T]) SearchWithUidAndOptions(
 	return res, nil
 }
 
+type resultRow[T c.Float] struct {
+	uid  uint64
+	dist T
+}
+
+// MergeResults takes a list of UIDs and returns the maxResults nearest neighbors
+// in order of increasing distance. It returns an error if any of the UIDs are
+// not present in the index.
+//
+// The filter parameter is not used by this method.
+//
+// This method is part of the index.MultipleIndex interface.
+func (ph *persistentHNSW[T]) MergeResults(ctx context.Context, c index.CacheType, list []uint64, query []T, maxResults int, filter index.SearchFilter[T]) ([]uint64, error) {
+	var result []resultRow[T]
+
+	for i := range list {
+		var vec []T
+		err := ph.getVecFromUid(list[i], c, &vec)
+		if err != nil {
+			// A UID can remain in a shard's result set after its data key was
+			// removed (deleted but not yet cleaned from the graph). Skip it and
+			// keep returning the surviving neighbors rather than aborting the
+			// whole query; only genuine errors propagate.
+			if errors.Is(err, errNilVector) {
+				continue
+			}
+			return nil, err
+		}
+		if len(vec) == 0 {
+			continue
+		}
+
+		dist, err := ph.simType.distanceScore(vec, query, ph.floatBits)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, resultRow[T]{
+			uid:  list[i],
+			dist: dist,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].dist < result[j].dist
+	})
+
+	uids := []uint64{}
+	for i := range maxResults {
+		if i >= len(result) {
+			break
+		}
+		uids = append(uids, result[i].uid)
+	}
+
+	return uids, nil
+}
+
 // SearchWithUid searches the HNSW graph for the nearest neighbors of the query UID
 // and returns the traversal path and the nearest neighbors
 func (ph *persistentHNSW[T]) SearchWithUid(_ context.Context, c index.CacheType, queryUid uint64,
@@ -496,9 +615,80 @@ func (ph *persistentHNSW[T]) PickStartNode(
 	}
 
 	if len(*startVec) == 0 {
+		// The persisted entry node's vector is gone (it was deleted). Pick a
+		// replacement that is a MEMBER OF THIS INDEX'S GRAPH by walking the dead
+		// entry's own adjacency (ph.vecKey) to the nearest live node. For a
+		// partitioned cluster sub-index ph.pred is the shared base predicate
+		// across every cluster, so calculateNewEntryVec's scan of ph.pred could
+		// return a vector that belongs to a different cluster — searching this
+		// cluster from a non-member entry reaches nothing and orphans the whole
+		// cluster. The graph walk stays within the cluster.
+		newEntry, lerr := ph.liveEntryFromGraph(c, entry, startVec)
+		if lerr == nil {
+			return newEntry, nil
+		}
+		if !errors.Is(lerr, errNoLiveGraphEntry) {
+			// A real read failure during the walk: surface it rather than
+			// falling back to the base-predicate scan.
+			return 0, lerr
+		}
+		// The dead entry has no surviving in-graph component: the base-predicate
+		// scan. Correct for monolithic; a last resort otherwise.
 		return ph.calculateNewEntryVec(ctx, c, startVec)
 	}
 	return entry, err
+}
+
+// liveEntryFromGraph walks this index's own graph keyspace (ph.vecKey) starting
+// from deadEntry and returns the first node whose vector is still live, loading
+// it into startVec. It stays within a single (possibly partitioned) graph, so
+// the replacement entry is always a member of the graph being searched.
+//
+// It returns errNoLiveGraphEntry when the walk finds no live node, which callers
+// treat as "nothing to recover" and may handle with a base-predicate scan. Any
+// other error is a real read failure and is returned as-is: a transient failure
+// must not be mistaken for an absent vector, or the caller would fall back to the
+// cross-graph base scan this walk exists to avoid.
+func (ph *persistentHNSW[T]) liveEntryFromGraph(
+	c index.CacheType, deadEntry uint64, startVec *[]T) (uint64, error) {
+
+	seen := map[uint64]struct{}{deadEntry: {}}
+	queue := []uint64{deadEntry}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		var edges [][]uint64
+		ok, err := populateEdgeDataFromKeyWithCacheType(ph.vecKey, cur, c, &edges)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			continue
+		}
+		for _, level := range edges {
+			for _, n := range level {
+				if n == notAUid {
+					continue
+				}
+				if _, visited := seen[n]; visited {
+					continue
+				}
+				seen[n] = struct{}{}
+				verr := ph.getVecFromUid(n, c, startVec)
+				if verr == nil && len(*startVec) != 0 {
+					// A neighbor with a live vector is a valid in-graph entry.
+					return n, nil
+				}
+				if verr != nil && !errors.Is(verr, errNilVector) {
+					// A genuine read failure, not an absent vector.
+					return 0, verr
+				}
+				queue = append(queue, n)
+			}
+		}
+	}
+	return 0, errNoLiveGraphEntry
 }
 
 // SearchWithPath allows persistentHNSW to implement index.OptionalIndexSupport.
@@ -565,6 +755,9 @@ func (ph *persistentHNSW[T]) Insert(ctx context.Context, c index.CacheType,
 	}
 	_, edges, err := ph.insertHelper(ctx, tc, inUuid, inVec)
 	return edges, err
+}
+func (ph *persistentHNSW[T]) GetCentroids() [][]T {
+	return nil
 }
 
 // InsertToPersistentStorage inserts a node into the HNSW graph and returns the
