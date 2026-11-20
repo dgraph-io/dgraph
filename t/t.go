@@ -26,12 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/docker/docker/client"
 	"github.com/golang/glog"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
@@ -1064,21 +1061,21 @@ func removeAllTestContainers() {
 		wg.Add(1)
 		go func(c container.Summary) {
 			defer wg.Done()
-			o := container.StopOptions{Timeout: &dur}
-			err := cli.ContainerStop(ctxb, c.ID, o)
+			o := client.ContainerStopOptions{Timeout: &dur}
+			_, err := cli.ContainerStop(ctxb, c.ID, o)
 			fmt.Printf("Stopped container %s with error: %v\n", c.Names[0], err)
 
-			err = cli.ContainerRemove(ctxb, c.ID, container.RemoveOptions{})
+			_, err = cli.ContainerRemove(ctxb, c.ID, client.ContainerRemoveOptions{})
 			fmt.Printf("Removed container %s with error: %v\n", c.Names[0], err)
 		}(c)
 	}
 	wg.Wait()
 
-	networks, err := cli.NetworkList(ctxb, network.ListOptions{})
+	networks, err := cli.NetworkList(ctxb, client.NetworkListOptions{})
 	x.Check(err)
-	for _, n := range networks {
+	for _, n := range networks.Items {
 		if strings.HasPrefix(n.Name, getGlobalPrefix()) {
-			if err := cli.NetworkRemove(ctxb, n.ID); err != nil {
+			if _, err := cli.NetworkRemove(ctxb, n.ID, client.NetworkRemoveOptions{}); err != nil {
 				fmt.Printf("Error: %v while removing network: %+v\n", err, n)
 			} else {
 				fmt.Printf("Removed network: %s\n", n.Name)
@@ -1086,12 +1083,12 @@ func removeAllTestContainers() {
 		}
 	}
 
-	o := volume.ListOptions{Filters: filters.Args{}}
+	o := client.VolumeListOptions{Filters: client.Filters{}}
 	volumes, err := cli.VolumeList(ctxb, o)
 	x.Check(err)
-	for _, v := range volumes.Volumes {
+	for _, v := range volumes.Items {
 		if strings.HasPrefix(v.Name, getGlobalPrefix()) {
-			if err := cli.VolumeRemove(ctxb, v.Name, true); err != nil {
+			if _, err := cli.VolumeRemove(ctxb, v.Name, client.VolumeRemoveOptions{Force: true}); err != nil {
 				fmt.Printf("Error: %v while removing volume: %+v\n", err, v)
 			} else {
 				fmt.Printf("Removed volume: %s\n", v.Name)
