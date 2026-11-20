@@ -7,6 +7,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -112,18 +113,21 @@ func handleError(err error, isRetry bool) {
 		fmt.Printf("Connection has been possibly interrupted. Got error: %v."+
 			" Will retry after %s.\n", err, dur.Round(time.Second))
 		time.Sleep(dur)
-	case strings.Contains(s.Message(), "x509"):
-		x.Fatalf("%v", s.Message())
-	case s.Code() == codes.Aborted:
+	// Checked before the x509 match below: an abort message can name a predicate, and a predicate
+	// called e.g. x509cert must not make an abort fatal. dgo flattens the Aborted status to
+	// ErrAborted (or, from dgraph-io/dgo#288, an error wrapping it), so check for that too.
+	case s.Code() == codes.Aborted || errors.Is(err, dgo.ErrAborted):
 		if !isRetry && opt.verbose {
 			fmt.Printf("Transaction aborted. Will retry in background.\n")
 		}
+	case strings.Contains(s.Message(), "x509"):
+		x.Fatalf("%v", s.Message())
 	case strings.Contains(s.Message(), "Server overloaded."):
 		//nolint:gosec // random generator in closed set does not require cryptographic precision
 		dur := time.Duration(1+rand.Intn(10)) * time.Minute
 		fmt.Printf("Server is overloaded. Will retry after %s.\n", dur.Round(time.Minute))
 		time.Sleep(dur)
-	case err != x.ErrConflict && err != dgo.ErrAborted:
+	case !errors.Is(err, x.ErrConflict):
 		fmt.Printf("Error while mutating: %v s.Code %v\n", s.Message(), s.Code())
 	}
 }

@@ -18,6 +18,8 @@ import (
 	"go.opentelemetry.io/otel"
 	attribute "go.opentelemetry.io/otel/attribute"
 	trace "go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/dgraph-io/dgo/v250/protos/api"
@@ -120,10 +122,19 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	}
 }
 
+// errStaleStartTs is returned by Oracle.commit when the start timestamp is below startTxnTs. It is
+// decided under the same lock as the conflict check, so the late abort path in Server.commit reports
+// what the oracle actually saw. Re-reading startTxnTs afterwards could mislabel the abort, because
+// purgeBelow and updateStartTxnTs can both move it in between.
+var errStaleStartTs = errors.New("transaction start timestamp is stale")
+
 func (o *Oracle) commit(src *api.TxnContext) error {
 	o.Lock()
 	defer o.Unlock()
 
+	if o.isStaleStartTs(src) {
+		return errStaleStartTs
+	}
 	if o.hasConflict(src) {
 		return x.ErrConflict
 	}
@@ -324,13 +335,11 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 		return err
 	}
 
-	// There might be race between this proposal trying to commit and predicate
-	// move aborting it. A predicate move, triggered by Zero, would abort all
-	// pending transactions.  At the same time, a client which has already done
-	// mutations, can proceed to commit it. A race condition can happen here,
-	// with both proposing their respective states, only one can succeed after
-	// the proposal is done. So, check again to see the fate of the transaction
-	// here.
+	// This proposal can race with an abort proposed for the same start ts elsewhere: a TryAbort
+	// from an Alpha (schema update, drop-predicate, or the idle-transaction reaper), or a client
+	// Discard of the same transaction. Both sides propose their respective states and only one
+	// can succeed, so check again to see the fate of the transaction here. (A predicate move does
+	// not abort pending transactions; it blocks their commits in checkPreds instead.)
 	src.CommitTs = s.orc.commitTs(src.StartTs)
 	if src.CommitTs == 0 {
 		src.Aborted = true
@@ -338,56 +347,272 @@ func (s *Server) proposeTxn(ctx context.Context, src *api.TxnContext) error {
 	return nil
 }
 
+// Abort-reason codes. When Zero decides to abort a transaction it surfaces the category to the
+// client as the prefix of a codes.Aborted gRPC status message, formatted as "<code>: <detail>".
+// api.TxnContext (external dgo module) has no field for the reason, so the reason rides on the
+// error instead; the status code stays codes.Aborted, so existing abort handling is unaffected.
+// Client support for parsing these prefixes into an AbortReason enum is proposed in
+// dgraph-io/dgraph4j#290, dgraph-io/pydgraph#307 and dgraph-io/dgo#288; keep the server and
+// those parsers in sync.
+//
+// These three codes are the entire published vocabulary. A cause that cannot be mapped onto one of
+// them emits the detail with *no* prefix (abortReasonUncategorized) rather than borrowing a code
+// that would imply the wrong remedy. Each of those client parsers maps an absent or unrecognized
+// prefix to UNKNOWN, so "no category" is a supported and truthful answer. Withholding
+// also keeps a later phase purely additive: naming a new category then only adds precision to
+// something that was already UNKNOWN, and never reclassifies a code clients have shipped against.
+const (
+	// abortReasonUncategorized means the server knows what happened and says so in the detail,
+	// but the cause does not correspond to any published category. It is not "the server does not
+	// know" — it is "there is no code for this yet".
+	abortReasonUncategorized = ""
+	abortReasonConflict      = "conflict"
+	abortReasonStaleStartTs  = "stale-startts"
+	abortReasonPredicateMove = "predicate-move"
+)
+
+// Human-readable details, one per cause. Every message a client can receive for a server-decided
+// abort is declared here rather than at its call site, so the published surface is a single block:
+// adding a new abort means adding a constant next to the existing vocabulary, where the category it
+// should pair with is visible. Entries ending in Fmt are format strings and must be given their
+// arguments; the others are complete. abortReason frames each one as
+// "<category>: Transaction has been aborted. Please retry. <detail>".
+//
+//	category         detail
+//	───────────────  ──────────────────────────────────────────────────────────
+//	conflict         abortDetailConflict
+//	stale-startts    abortDetailStaleStartTs
+//	predicate-move   abortDetailPredicateBlockedFmt, abortDetailGroupMismatchFmt
+//	(withheld)       abortDetailMissingGroupIDFmt, abortDetailBadGroupIDFmt,
+//	                 abortDetailTabletNilFmt, abortDetailPreAborted, and
+//	                 ctx.Err() — the last supplied by the Go runtime, so it is
+//	                 not declared here
+const (
+	// A conflict is the one category the server cannot narrow. Every conflict key reaching Zero is a
+	// farm.Fingerprint64(key)^uid produced by GetConflictKey (posting/list.go), so by the time
+	// hasConflict matches one, which key produced it is already unrecoverable. Naming the
+	// possibilities is therefore the most this category can honestly say, and it is worth saying: a
+	// caller who set a single scalar value has no reason to expect that the index and count keys
+	// *derived* from it can conflict too.
+	//
+	// Exactly three kinds of key carry a conflict — data, index and count. Reverse keys carry none:
+	// IsReverse is a distinct ByteType, so a reverse key matches no case in GetConflictKey's switch,
+	// falls to default, and addConflictKey drops the resulting zero. Do not add "reverse" here.
+	//
+	// @upsert is named separately because it is a *rule*, not a fourth kind of key. HasUpsert is
+	// tested ahead of every IsData/IsIndex case, so on an @upsert predicate the existing data and
+	// index keys switch to getKey(key, 0) — the uid drops out and any two transactions writing the
+	// same value collide on the shared index key. That is the uniqueness mechanism, and in
+	// upsert-heavy ingest it is the most likely cause of this abort, which is why it is worth the
+	// extra sentence.
+	//
+	// abortReason puts abortLegacyMessage in front of this, so the wire message still starts with the
+	// sentence that dgraph/cmd/alpha/upsert_test.go, query/query4_test.go and systest/unique_test.go
+	// match against the live server.
+	abortDetailConflict = "Another transaction committed to one of the same keys. The conflicting " +
+		"key cannot be identified: it may be the data key written directly, or an index or count " +
+		"key derived from it. On an @upsert predicate the uid is excluded, so any two transactions " +
+		"writing the same value conflict"
+	// A start timestamp goes stale for two different reasons, so this detail deliberately names
+	// both rather than asserting one. Zero raises startTxnTs either when a Zero becomes leader and
+	// renews its leases (updateLeases, assign.go) or when it trims its conflict map while applying
+	// a snapshot (purgeBelow via applySnapshot, raft.go) — the second is not a leader change at
+	// all. Both mean the same thing to a caller: this transaction's start timestamp is older than
+	// the oldest timestamp Zero can still validate against, so retry with a fresh transaction.
+	abortDetailStaleStartTs = "Its start timestamp is older than the oldest timestamp Zero can " +
+		"still validate (Zero leader change, or its conflict map was trimmed at a snapshot)"
+
+	// Reported when proposeTxn comes back with the transaction already aborted while this commit
+	// decided nothing itself — i.e. something else proposed an abort for the same start timestamp
+	// before this commit was arbitrated. Zero records no cause when that happens (an abort proposal
+	// carries only timestamps), so the category is withheld and the detail names the possibilities
+	// instead of guessing. None of them is a predicate *move* — a move blocks commits in checkPreds
+	// before a commit timestamp is leased, and never aborts pending transactions — so
+	// predicate-move would be the wrong label. The known producers are:
+	//
+	//   - a schema or type update on a predicate the transaction touched, which cancels pending
+	//     transactions so the index can be rebuilt (detectPendingTxns, worker/draft.go)
+	//   - a drop-predicate (S * * delete) on a predicate the transaction touched (same function)
+	//   - the Alpha leader ageing out transactions idle longer than --limit "txn-abort-after"
+	//     (abortOldTransactions, worker/draft.go)
+	//   - a client Discard of the same transaction racing this commit, which reaches commit()'s own
+	//     src.Aborted early return and proposes the abort there
+	//
+	// The first three reach Zero through TryAbort (blockingAbort, worker/draft.go).
+	//
+	// Before this was handled, commit() returned nil here and the abort reached the client as a
+	// bare dgo.ErrAborted with no reason at all.
+	abortDetailPreAborted = "It was already aborted before this commit was decided, for example " +
+		"because a schema update or a drop-predicate cancelled pending transactions on a predicate " +
+		"it touched, the server aged it out after --limit \"txn-abort-after\" of idleness, or the " +
+		"client discarded it concurrently"
+
+	// Details produced by checkPreds. The wording predates the abort-reason work, but commit() used to
+	// discard these errors, so clients have never seen them. The predicate argument is the name as
+	// the user wrote it (see displayPred), not the namespaced attribute.
+	abortDetailMissingGroupIDFmt   = "Unable to find group id in %s"
+	abortDetailBadGroupIDFmt       = "unable to parse group id from %s"
+	abortDetailTabletNilFmt        = "Tablet for %s is nil"
+	abortDetailPredicateBlockedFmt = "Commits on predicate %s are blocked due to predicate move"
+	abortDetailGroupMismatchFmt    = "Mutation done in group: %d. Predicate %s assigned to %d"
+)
+
+// abortLegacyMessage is the text of every abort from a server without abort reasons, and the text
+// of dgo.ErrAborted. abortReason puts it in front of every detail, so each abort message still
+// contains it. Clients that recognise aborts by message text rely on that: the dgraph-js-http
+// client treats an HTTP error as an abort only when its message contains "abort" and "retry", and
+// rethrows anything else as a hard failure. Tests in this repo and user log-scrapers also
+// substring-match it. Never change it, and never emit an abort that bypasses abortReason.
+const abortLegacyMessage = "Transaction has been aborted. Please retry"
+
+// abortReason builds the wire string the client parses: "<code>: <legacy sentence>. <detail>". An
+// empty code drops the "<code>: " prefix, so the client reports no category, but the message still
+// starts with the legacy sentence a server without this feature sent for every abort.
+func abortReason(code, detail string) string {
+	msg := abortLegacyMessage + ". " + detail
+	if code == abortReasonUncategorized {
+		return msg
+	}
+	return code + ": " + msg
+}
+
+// conflictAbortReason returns the wire reason for an abort decided by hasConflict, distinguishing a
+// write-write conflict from a stale start timestamp. See isStaleStartTs for what "stale" means.
+func conflictAbortReason(stale bool) string {
+	if stale {
+		return abortReason(abortReasonStaleStartTs, abortDetailStaleStartTs)
+	}
+	return abortReason(abortReasonConflict, abortDetailConflict)
+}
+
+// lateAbortReason returns the wire reason for an abort decided after the commit timestamp was
+// leased, and false if nothing aborted the transaction. orcErr is Oracle.commit's verdict and ctxErr
+// is the request context's error, read after it. Two unrelated causes can abort here. An oracle
+// rejection takes precedence: the oracle would have aborted the transaction whatever the context
+// said, so that is the honest cause to report.
+func lateAbortReason(orcErr, ctxErr error) (string, bool) {
+	switch {
+	case orcErr != nil:
+		// Oracle.commit re-runs the conflict check, and a start timestamp that went stale since the
+		// early check in commit() (a lease renewal or snapshot purge in between) is not a write-write
+		// conflict. Oracle.commit reports that case as errStaleStartTs so it can be told apart.
+		return conflictAbortReason(errors.Is(orcErr, errStaleStartTs)), true
+	case ctxErr != nil:
+		// The context was cancelled or timed out; no conflict occurred. No published category
+		// describes this, so report the context's own message with no category rather than claiming
+		// a conflict that did not happen. The gRPC status code stays codes.Aborted because the
+		// transaction genuinely did abort; switching to Canceled or DeadlineExceeded would change
+		// retry behaviour for clients that already treat Aborted as retryable.
+		return abortReason(abortReasonUncategorized, ctxErr.Error()), true
+	}
+	return "", false
+}
+
+// isStaleStartTs reports whether this transaction's start timestamp (src.StartTs) is below the
+// floor Zero can still validate against (startTxnTs). hasConflict aborts such a transaction, but
+// the cause is not a write-write conflict, so it is reported under its own category. See
+// abortDetailStaleStartTs for the two ways that floor rises. Callers must hold at least a read
+// lock on the oracle.
+func (o *Oracle) isStaleStartTs(src *api.TxnContext) bool {
+	return src.StartTs < o.startTxnTs
+}
+
+// checkPreds reports whether any predicate this transaction touched is unusable, in which case the
+// transaction must be aborted. It returns the abort category alongside the error because its exits
+// are unrelated causes, not degrees of one cause: only a group mismatch and a blocked tablet are
+// predicate moves. A malformed entry in preds, or a predicate that no group serves, are different
+// failures needing different remedies — retrying a malformed predicate key can never succeed — so
+// those return abortReasonUncategorized rather than claiming a move that did not happen. Every exit
+// still aborts the transaction, exactly as before; only the reported category changes.
+//
+// Each entry in preds is a "<group id>-<namespaced predicate>" string built by the Alpha
+// (LocalCache.fillPreds).
+func (s *Server) checkPreds(preds []string) (string, error) {
+	for _, pkey := range preds {
+		splits := strings.SplitN(pkey, "-", 2)
+		if len(splits) < 2 {
+			return abortReasonUncategorized, errors.Errorf(abortDetailMissingGroupIDFmt, pkey)
+		}
+		// ParseUint with bitSize 32 rather than Atoi: group ids are uint32 everywhere, so this
+		// bounds the value to the type it is compared against below and rejects negatives, which
+		// Atoi accepted and the uint32 conversion silently wrapped (CodeQL go/incorrect-integer-conversion).
+		gid, err := strconv.ParseUint(splits[0], 10, 32)
+		if err != nil {
+			return abortReasonUncategorized, errors.Wrapf(err, abortDetailBadGroupIDFmt, pkey)
+		}
+		pred := splits[1]
+		if strings.Contains(pred, hnsw.VecKeyword) {
+			pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
+		}
+		// Checked before the tablet lookup because blockTablet holds for the entire duration of a
+		// move: movePredicate defers its unblock past the tablet reassignment proposal, so this is
+		// the authoritative signal that a move is in flight. Checking it first means an in-flight
+		// move can never be reported as anything else, and it lets the tablet == nil case below mean
+		// only "no group serves this predicate" and never "it is moving".
+		if s.isBlocked(pred) {
+			return abortReasonPredicateMove, errors.Errorf(abortDetailPredicateBlockedFmt,
+				displayPred(pred))
+		}
+		tablet := s.ServingTablet(pred)
+		if tablet == nil {
+			return abortReasonUncategorized, errors.Errorf(abortDetailTabletNilFmt, displayPred(pred))
+		}
+		// The predicate finished moving to another group while this transaction was open: the
+		// mutation was written against group gid, but the predicate now belongs elsewhere.
+		if tablet.GroupId != uint32(gid) {
+			return abortReasonPredicateMove, errors.Errorf(abortDetailGroupMismatchFmt,
+				gid, displayPred(pred), tablet.GroupId)
+		}
+	}
+	return abortReasonUncategorized, nil
+}
+
+// displayPred turns a namespaced attribute ("0-name") into the predicate name the user wrote
+// ("name") for use in an abort detail. Preds is client-supplied, so unlike x.ParseAttr this must not
+// assume the separator is present: a missing separator or an empty name returns the input as is.
+func displayPred(pred string) string {
+	if _, attr, ok := strings.Cut(pred, x.NsSeparator); ok && attr != "" {
+		return attr
+	}
+	return pred
+}
+
 func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(attribute.Int64("startTs", int64(src.StartTs)))
 	if src.Aborted {
+		// The client discarded this transaction itself (a Discard call), so the server decided
+		// nothing and there is no reason to report.
 		return s.proposeTxn(ctx, src)
+	}
+
+	// abortWithReason marks the transaction aborted, proposes it (advancing the watermark exactly as
+	// the previous code did), and then surfaces the categorized reason to the caller as a gRPC
+	// Aborted status. proposeTxn still runs identically — only the post-propose return changes.
+	abortWithReason := func(reason string) error {
+		span.SetAttributes(attribute.Bool("abort", true))
+		src.Aborted = true
+		if err := s.proposeTxn(ctx, src); err != nil {
+			return err
+		}
+		return status.Error(codes.Aborted, reason)
 	}
 
 	// Use the start timestamp to check if we have a conflict, before we need to assign a commit ts.
 	s.orc.RLock()
 	conflict := s.orc.hasConflict(src)
+	// hasConflict also aborts a transaction whose start timestamp is too old to validate, which is
+	// not a write-write conflict, so it is reported under its own category. See isStaleStartTs.
+	stale := s.orc.isStaleStartTs(src)
 	s.orc.RUnlock()
 	if conflict {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
+		return abortWithReason(conflictAbortReason(stale))
 	}
 
-	checkPreds := func() error {
-		// Check if any of these tablets is being moved. If so, abort the transaction.
-		for _, pkey := range src.Preds {
-			splits := strings.SplitN(pkey, "-", 2)
-			if len(splits) < 2 {
-				return errors.Errorf("Unable to find group id in %s", pkey)
-			}
-			gid, err := strconv.Atoi(splits[0])
-			if err != nil {
-				return errors.Wrapf(err, "unable to parse group id from %s", pkey)
-			}
-			pred := splits[1]
-			if strings.Contains(pred, hnsw.VecKeyword) {
-				pred = pred[0:strings.Index(pred, hnsw.VecKeyword)]
-			}
-			tablet := s.ServingTablet(pred)
-			if tablet == nil {
-				return errors.Errorf("Tablet for %s is nil", pred)
-			}
-			if tablet.GroupId != uint32(gid) {
-				return errors.Errorf("Mutation done in group: %d. Predicate %s assigned to %d",
-					gid, pred, tablet.GroupId)
-			}
-			if s.isBlocked(pred) {
-				return errors.Errorf("Commits on predicate %s are blocked due to predicate move", pred)
-			}
-		}
-		return nil
-	}
-	if err := checkPreds(); err != nil {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-		return s.proposeTxn(ctx, src)
+	if reason, err := s.checkPreds(src.Preds); err != nil {
+		// checkPreds already builds a specific, human-readable message for each cause. Forward it
+		// instead of discarding it, tagged with whichever category that cause justifies.
+		return abortWithReason(abortReason(reason, err.Error()))
 	}
 
 	num := pb.Num{Val: 1, Type: pb.Num_TXN_TS}
@@ -402,16 +627,33 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	span.SetAttributes(attribute.Int64("nodeId", int64(s.Node.Id)))
 	span.AddEvent(fmt.Sprintf("TXN Context: %+v", src))
 
-	if err := s.orc.commit(src); err != nil {
-		span.SetAttributes(attribute.Bool("abort", true))
-		src.Aborted = true
-	}
-	if err := ctx.Err(); err != nil {
+	// Past this point the transaction already holds a commit timestamp, so an abort here is a "late"
+	// abort. See lateAbortReason for how its cause is reported.
+	reason, aborted := lateAbortReason(s.orc.commit(src), ctx.Err())
+	if aborted {
 		span.SetAttributes(attribute.Bool("abort", true))
 		src.Aborted = true
 	}
 	// Propose txn should be used to set watermark as done.
-	return s.proposeTxn(ctx, src)
+	if err := s.proposeTxn(ctx, src); err != nil {
+		return err
+	}
+	if aborted {
+		return status.Error(codes.Aborted, reason)
+	}
+	// proposeTxn sets src.Aborted when it finds no commit timestamp for this transaction, meaning
+	// something aborted it out of band while this commit was in flight: a TryAbort from a schema
+	// update, a drop-predicate, or the idle-transaction reaper, or a concurrent client Discard of the
+	// same transaction. Nothing above set `aborted`, because
+	// this commit itself decided to proceed. Returning nil here (as this did previously) loses the
+	// abort entirely: CommitOverNetwork then sees tctx.Aborted with no error and falls through to a
+	// bare dgo.ErrAborted, so the caller learns nothing. Report it instead.
+	if src.Aborted {
+		span.SetAttributes(attribute.Bool("abort", true))
+		return status.Error(codes.Aborted,
+			abortReason(abortReasonUncategorized, abortDetailPreAborted))
+	}
+	return nil
 }
 
 // CommitOrAbort either commits a transaction or aborts it.
