@@ -2506,3 +2506,25 @@
           "Booking.hotel": "provided"
         }
       cond: "@if(gt(len(x), 0))"
+
+- name: Update set with a new nested node missing a required field
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": { "id": ["0x1"] },
+        "set": { "posts": [ { "text": "no title here" } ] }
+      }
+    }
+  explanation:
+    A new Post without XID or ID is created under the author. Post requires title, so the mutation
+    must fail instead of creating a Post with no title.
+  error2:
+    message: |-
+      failed to rewrite mutation payload because type Post requires a value for field title, but no value present
