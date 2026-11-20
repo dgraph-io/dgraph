@@ -390,6 +390,11 @@ func populateCluster(dc dgraphapi.Cluster) {
 		testSchema += "\ndescription: string @index(ngram) ."
 	}
 
+	// BM25 indexing - uses same version gate as ngram for now
+	if ngramSupport {
+		testSchema += "\ndescription_bm25: string @index(bm25) ."
+	}
+
 	setSchema(testSchema)
 
 	err = addTriplesToCluster(`
@@ -1005,6 +1010,18 @@ func populateCluster(dc dgraphapi.Cluster) {
 		<413> <description> "Text processing algorithms analyze linguistic patterns" .
 		<414> <description> "Advanced machine learning techniques improve accuracy" .
 		<415> <description> "Linguistic analysis helps understand text meaning" .
+	`)
+	x.Panic(err)
+
+	// Add data for BM25 tests - uses separate predicate to avoid conflicts
+	err = addTriplesToCluster(`
+		<501> <description_bm25> "The quick brown fox jumps over the lazy dog" .
+		<502> <description_bm25> "A quick brown fox leaps over a sleeping dog" .
+		<503> <description_bm25> "fox fox fox" .
+		<504> <description_bm25> "The lazy dog sleeps under the warm sun all day long in the garden" .
+		<505> <description_bm25> "Dogs are loyal companions to humans and families everywhere" .
+		<506> <description_bm25> "Quick movements help foxes catch their prey in the wild" .
+		<507> <description_bm25> "Brown foxes are quick and agile animals in the forest" .
 	`)
 	x.Panic(err)
 }

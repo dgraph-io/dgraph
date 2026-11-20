@@ -68,6 +68,10 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 
 	var tokens []string
 	for _, it := range info.tokenizers {
+		// BM25 tokenizer is handled separately in addBM25IndexMutations.
+		if it.Identifier() == tok.IdentBM25 {
+			continue
+		}
 		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
@@ -179,6 +183,17 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 		}
 	}
 
+	// Check if any tokenizer is BM25 and handle separately.
+	for _, it := range info.tokenizers {
+		if _, ok := tok.GetTokenizerForLang(it, info.edge.GetLang()).(tok.BM25Tokenizer); ok {
+			if err := txn.addBM25IndexMutations(ctx, info); err != nil {
+				return []*pb.DirectedEdge{}, err
+			}
+			// Continue to process remaining non-BM25 tokenizers below.
+			continue
+		}
+	}
+
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
@@ -213,6 +228,58 @@ func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, tok
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
+}
+
+// addBM25IndexMutations handles index mutations for the BM25 tokenizer. Unlike
+// other tokenizers, each BM25 index posting carries a value that packs the term
+// frequency together with the document length (see encodeBM25Value). The postings
+// are written through the standard delta path (plist.addMutation), so BM25 rides
+// Dgraph's normal posting-list machinery — MVCC, deltas, rollup, splits, backup —
+// with no separate storage path. Corpus statistics (document count and total term
+// count, from which the average document length is derived) are kept in bucketed
+// stats posting lists keyed by uid%NumBM25StatsBuckets to avoid a single write-hot
+// key while preserving conflict detection per bucket.
+//
+// Updates are driven entirely by the caller (AddMutationWithIndex), which issues a
+// DEL for the previous value followed by a SET for the new one. The DEL re-tokenizes
+// the old value and removes its postings and stats contribution; the SET adds the new
+// ones. We therefore never need to detect updates here.
+func (txn *Txn) addBM25IndexMutations(ctx context.Context, info *indexMutationInfo) error {
+	attr := info.edge.Attr
+	uid := info.edge.Entity
+	lang := info.edge.GetLang()
+
+	schemaType, err := schema.State().TypeOf(attr)
+	if err != nil || !schemaType.IsScalar() {
+		return errors.Errorf("Cannot BM25 index attribute %s of type object.", attr)
+	}
+
+	sv, err := types.Convert(info.val, schemaType)
+	if err != nil {
+		return err
+	}
+
+	bm25Tok := tok.BM25Tokenizer{}
+	termFreqs, docLen, err := bm25Tok.TokensWithFrequency(sv.Value, lang)
+	if err != nil {
+		return err
+	}
+
+	// Skip documents that tokenize to zero terms (e.g., all stopwords).
+	if docLen == 0 {
+		return nil
+	}
+
+	for term, tf := range termFreqs {
+		if err := txn.addBM25TermPosting(ctx, attr, term, uid, tf, docLen, info.op); err != nil {
+			return err
+		}
+	}
+
+	if info.op == pb.DirectedEdge_DEL {
+		return txn.updateBM25Stats(ctx, attr, uid, -1, -int64(docLen))
+	}
+	return txn.updateBM25Stats(ctx, attr, uid, 1, int64(docLen))
 }
 
 // countParams is sent to updateCount function. It is used to update the count index.
@@ -666,6 +733,14 @@ func prefixesToDeleteTokensFor(attr, tokenizerName string, hasLang bool) ([][]by
 	prefix = append(prefix, tokenizer.Identifier())
 	prefixes = append(prefixes, prefix)
 
+	// BM25 stores corpus statistics under a reserved token prefix separate from its
+	// term-posting (IdentBM25) prefix, so deleting only the tokenizer-identifier
+	// prefix above would orphan the stats and double-count on rebuild. Delete the
+	// stats prefix (and its split variant) alongside the term postings.
+	if tokenizerName == "bm25" {
+		prefixes = append(prefixes, x.BM25StatsPrefix(attr, false), x.BM25StatsPrefix(attr, true))
+	}
+
 	return prefixes, nil
 }
 
@@ -678,6 +753,20 @@ type rebuilder struct {
 	// The posting list passed here is the on disk version. It is not coming
 	// from the LRU cache.
 	fn func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error)
+
+	// bm25Acc, when non-nil, collects BM25 corpus statistics across the rebuild's
+	// per-thread transactions so they can be flushed once as a single writer. Set by
+	// rebuildTokIndex when a BM25 tokenizer is being rebuilt. See Txn.bm25Acc.
+	bm25Acc *bm25StatsAccum
+}
+
+// newRebuildTxn creates a transaction for the streaming rebuild, propagating the
+// shared BM25 stats accumulator (nil for non-BM25 rebuilds) so per-thread stats
+// updates are collected rather than lost across cache resets.
+func (r *rebuilder) newRebuildTxn() *Txn {
+	txn := NewTxn(r.startTs)
+	txn.bm25Acc = r.bm25Acc
+	return txn
 }
 
 func (r *rebuilder) RunWithoutTemp(ctx context.Context) error {
@@ -941,7 +1030,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	txns := make([]*Txn, maxThreadIds)
 	for i := range txns {
-		txns[i] = NewTxn(r.startTs)
+		txns[i] = r.newRebuildTxn()
 	}
 
 	stream.FinishThread = func(threadId int) (*bpb.KVList, error) {
@@ -961,7 +1050,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			}
 			kvs = append(kvs, &kv)
 		}
-		txns[threadId] = NewTxn(r.startTs)
+		txns[threadId] = r.newRebuildTxn()
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 
@@ -1020,7 +1109,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			kvs = append(kvs, &kv)
 		}
 
-		txns[threadId] = NewTxn(r.startTs)
+		txns[threadId] = r.newRebuildTxn()
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 
@@ -1040,6 +1129,25 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	start := time.Now()
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
+	}
+	// Flush the BM25 corpus statistics accumulated across all rebuild threads as a
+	// single writer. They are written into the temp store as ordinary delta postings
+	// so the second phase rolls them up into pstore at r.startTs alongside the term
+	// postings — no separate commit path, and no per-thread last-write-wins loss.
+	if r.bm25Acc != nil {
+		flushTxn := NewTxn(r.startTs)
+		flushTxn.cache = NewLocalCache(r.startTs)
+		if err := r.bm25Acc.flush(ctx, flushTxn, r.attr); err != nil {
+			return err
+		}
+		flushTxn.Update()
+		for key, data := range flushTxn.cache.deltas {
+			counter++
+			e := &badger.Entry{Key: []byte(key), Value: data, UserMeta: BitDeltaPosting}
+			if err := tmpWriter.SetEntryAt(e, counter); err != nil {
+				return errors.Wrap(err, "error writing bm25 stats to temp index")
+			}
+		}
 	}
 	if err := tmpWriter.Flush(); err != nil {
 		return err
@@ -1446,6 +1554,14 @@ func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
 
 	pk := x.ParsedKey{Attr: rb.Attr}
 	builder := rebuilder{attr: rb.Attr, prefix: pk.DataPrefix(), startTs: rb.StartTs}
+	// BM25 corpus statistics must be aggregated across the rebuild's per-thread
+	// transactions and flushed once; a per-thread read-modify-write counter would
+	// undercount. Route stats through a shared accumulator when rebuilding bm25.
+	for _, tokenizer := range tokenizers {
+		if tokenizer.Identifier() == tok.IdentBM25 {
+			builder.bm25Acc = newBM25StatsAccum()
+		}
+	}
 	builder.fn = func(uid uint64, pl *List, txn *Txn) ([]*pb.DirectedEdge, error) {
 		edge := pb.DirectedEdge{Attr: rb.Attr, Entity: uid}
 		edges := []*pb.DirectedEdge{}
