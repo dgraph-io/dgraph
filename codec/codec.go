@@ -168,6 +168,7 @@ func (d *Decoder) UnpackBlock() []uint64 {
 	d.uids = append(d.uids, last)
 
 	tmpUids := make([]uint32, 4)
+	var pad [17]byte
 	var sum uint64
 	encData := block.Deltas
 
@@ -181,9 +182,11 @@ func (d *Decoder) UnpackBlock() []uint64 {
 			//
 			// We should NEVER write to encData, because it references block.Deltas, which is laid
 			// out on an allocator.
-			tmp := make([]byte, 17)
-			copy(tmp, encData)
-			encData = tmp
+			// pad is reused for each group at the end of the block. encData can
+			// already point into pad, and copy handles the overlap.
+			n := copy(pad[:], encData)
+			clear(pad[n:])
+			encData = pad[:]
 		}
 
 		groupvarint.Decode4(tmpUids, encData)
