@@ -52,8 +52,9 @@ func GetEncAclKeys(config *viper.Viper) (*Keys, error) {
 			return nil, fmt.Errorf("error reading encryption key from file: %s: %s", encKeyFile, err)
 		}
 	}
-	if l := len(encKey); encKey != nil && l != 16 && l != 32 && l != 64 {
-		return nil, fmt.Errorf("encryption key must have length of 16, 32, or 64 bytes, got %d bytes instead", l)
+	// AES (and Badger) accept 16, 24 or 32 byte keys for AES-128, AES-192 and AES-256.
+	if l := len(encKey); encKey != nil && l != 16 && l != 24 && l != 32 {
+		return nil, fmt.Errorf("encryption key must have length of 16, 24, or 32 bytes, got %d bytes instead", l)
 	}
 
 	aclSecretFile := aclSuperFlag.GetPath(flagAclKeyFile)
