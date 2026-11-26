@@ -19,19 +19,23 @@ import (
 	"strings"
 	"time"
 
-	oc_prom "contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/dustin/go-humanize"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/otlptranslator"
 	"github.com/spf13/viper"
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/bridge/opencensus"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	traceTel "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
@@ -469,18 +473,21 @@ func init() {
 		collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile("/.*")})))
 	promRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	pe, err := oc_prom.NewExporter(oc_prom.Options{
-		// includes a process_* metrics, a GoCollector for go_* metrics, and the badger_* metrics.
-		Registry:  promRegistry,
-		Namespace: "dgraph",
-		OnError:   func(err error) { glog.Errorf("%v", err) },
-	})
-	Checkf(err, "Failed to create OpenCensus Prometheus exporter: %v", err)
-	view.RegisterExporter(pe)
+	pe, err := otelprom.New(
+		otelprom.WithRegisterer(promRegistry),
+		otelprom.WithoutScopeInfo(),
+		otelprom.WithoutTargetInfo(),
+		otelprom.WithNamespace("dgraph"),
+		otelprom.WithTranslationStrategy(otlptranslator.UnderscoreEscapingWithoutSuffixes),
+		otelprom.WithProducer(opencensus.NewMetricProducer()),
+	)
+	Checkf(err, "Failed to create OpenTelemetry Prometheus exporter: %v", err)
+	_ = sdkmetric.NewMeterProvider(sdkmetric.WithReader(pe))
+	metricsHandler := promhttp.HandlerFor(promRegistry, promhttp.HandlerOpts{})
 
 	// Exposing metrics at /metrics, which is the usual standard, as well as at the old endpoint
-	http.Handle("/metrics", pe)
-	http.Handle("/debug/prometheus_metrics", pe)
+	http.Handle("/metrics", metricsHandler)
+	http.Handle("/debug/prometheus_metrics", metricsHandler)
 }
 
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
