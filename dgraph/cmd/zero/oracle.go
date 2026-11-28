@@ -94,8 +94,10 @@ func (o *Oracle) purgeBelow(minTs uint64) {
 	o.Lock()
 	defer o.Unlock()
 
-	// Set startTxnTs so that every txn with start ts less than this, would be aborted.
-	o.startTxnTs = minTs
+	// Raise startTxnTs so that every txn with start ts less than minTs would be aborted. Never
+	// lower it: a new leader sets it above every ts the previous leader could have handed out
+	// and resets keyCommit, so lowering it would let those txns commit without conflict checks.
+	o.startTxnTs = max(o.startTxnTs, minTs)
 
 	// Dropping would be cheaper if abort/commits map is sharded
 	for ts := range o.commits {
